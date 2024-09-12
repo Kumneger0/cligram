@@ -1,0 +1,12 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "debug",
+      "type": "node",
+      "request": "attach",
+      "skipFiles": ["<node_internals>/**"],
+      "outFiles": ["${workspaceFolder}/dist/**/*.js"]
+    }
+  ]
+}
