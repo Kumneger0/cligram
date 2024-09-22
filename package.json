@@ -32,7 +32,7 @@
     "bundle": "tsup src/index.ts",
     "compile": "tsc",
     "compile:watch": "tsc -w",
-    "dev": "nodemon --watch src --watch test --ext ts,json --exec 'pnpm bundle && pnpm start'",
+    "dev": "nodemon --watch src --watch test --ext ts,json --exec 'pnpm bundle'",
     "debug": "pnpm bundle && node --enable-source-maps --inspect-brk ./dist/index.js",
     "debug:test": "node --inspect-brk ./node_modules/.bin/jest --runInBand .",
     "format": "prettier . --write",

@@ -7,6 +7,7 @@ import { config } from "dotenv";
 
 import path from "node:path";
 import fs from "node:fs";
+import { LogLevel } from "telegram/extensions/Logger.js";
 
 config();
 
@@ -14,7 +15,6 @@ const apiId = process.env.TELEGRAM_API_ID;
 const apiHash = process.env.TELEGRAM_API_HASH;
 
 export const session = getUserSession();
-
 const stringSession = new StringSession(session ?? "");
 
 export async function getTelegramClient() {
@@ -22,8 +22,8 @@ export async function getTelegramClient() {
     connectionRetries: 5,
   });
 
+  client.setLogLevel(LogLevel.NONE);
   if (session) return client;
-
   await client.start({
     phoneNumber: async () => {
       const phoneNumber = await input.text("Please enter your number: ");
@@ -34,9 +34,7 @@ export async function getTelegramClient() {
       return password;
     },
     phoneCode: async () => {
-      const phoneCode = await input.text(
-        "Please enter the code you received: "
-      );
+      const phoneCode = await input.text("Please enter the code you received: ");
       return phoneCode;
     },
     onError: (err) => console.error("Authentication error:", err),
