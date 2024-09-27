@@ -1,24 +1,24 @@
 {
-  "extends": "@tsconfig/node20/tsconfig.json",
-  "compilerOptions": {
-    "target": "ES6",
-    "lib": ["DOM", "ES6", "DOM.Iterable", "ScriptHost", "ES2016.Array.Include"],
-    "outDir": "build",
-    "baseUrl": ".",
-    "allowUnusedLabels": false,
-    "allowUnreachableCode": false,
-    "noFallthroughCasesInSwitch": true,
-    "noUncheckedIndexedAccess": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "forceConsistentCasingInFileNames": true,
-    "declaration": true,
-    "sourceMap": true,
-    "resolveJsonModule": true,
-    "jsx": "react",
+	"extends": "@tsconfig/node20/tsconfig.json",
+	"compilerOptions": {
+		"target": "ES6",
+		"lib": ["DOM", "ES6", "DOM.Iterable", "ScriptHost", "ES2016.Array.Include"],
+		"outDir": "build",
+		"baseUrl": ".",
+		"allowUnusedLabels": false,
+		"allowUnreachableCode": false,
+		"noFallthroughCasesInSwitch": true,
+		"noUncheckedIndexedAccess": true,
+		"noUnusedLocals": true,
+		"noUnusedParameters": true,
+		"forceConsistentCasingInFileNames": true,
+		"declaration": true,
+		"sourceMap": true,
+		"resolveJsonModule": true,
+		"jsx": "react",
 
-    "esModuleInterop": true
-  },
-  "include": ["src", "test", "babel.config.cjs"],
-  "exclude": ["dist", "node_modules"]
+		"esModuleInterop": true
+	},
+	"include": ["src", "test", "babel.config.cjs", "globals"],
+	"exclude": ["dist", "node_modules"]
 }
