@@ -2,7 +2,7 @@ import { FormattedMessage } from '@/types.js';
 
 const MAX_WIDTH = 50; // Approximate character width equivalent to 500px
 
-export function formatMessage(message: FormattedMessage, index: number): string[] {
+export function formatMessage(message: FormattedMessage): string[] {
     const { sender, content, isFromMe } = message;
     const padding = isFromMe ? '' : '  ';
     const header = `${padding}${sender}:`;
@@ -11,7 +11,6 @@ export function formatMessage(message: FormattedMessage, index: number): string[
     return [
         header,
         ...wrappedContent.map(line => `${padding}${line}`),
-        '' // Empty line for spacing between messages
     ];
 }
 

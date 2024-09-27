@@ -1,9 +1,9 @@
 import blessed from 'blessed';
 import contrib from 'blessed-contrib';
 import { TelegramClient } from 'telegram';
-import { initializeSidebar, sidebar } from './sidebar.js';
 import { chatBox, initializeChatBox } from './chatBox.js';
 import { initializeInputBox } from './inputBox.js';
+import { initializeSidebar, namesList } from './sidebar.js';
 
 export let screen: blessed.Widgets.Screen;
 export let grid: contrib.grid;
@@ -27,12 +27,13 @@ export async function initializeUI(client: TelegramClient) {
         if (focusOnSidebar) {
             chatBox.focus();
         } else {
-            sidebar.focus();
+            namesList.focus();
         }
         focusOnSidebar = !focusOnSidebar;
         screen?.render();
     });
 
-    sidebar?.focus();
     screen?.render();
+    namesList.focus();
+
 }

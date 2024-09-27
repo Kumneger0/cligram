@@ -3,7 +3,6 @@ import blessed from 'blessed';
 import * as initializeUI from './initializeUI.js';
 import * as types from '../types.js';
 
-
 export let chatBox: blessed.Widgets.ListElement;
 let currentLine = 0;
 
@@ -45,7 +44,7 @@ export function initializeChatBox() {
 
 export function updateChatBox(newContent?: types.FormattedMessage[]) {
     if (newContent) {
-        const formattedMessages = newContent.flatMap((msg, index) => formatMessage(msg, index));
+        const formattedMessages = newContent.flatMap((msg, _index) => formatMessage(msg));
         (chatBox as blessed.Widgets.ListElement).setItems(formattedMessages);
         (chatBox as blessed.Widgets.ListElement).scrollTo(formattedMessages.length - 1);
     }
