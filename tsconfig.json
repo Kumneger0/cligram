@@ -5,6 +5,7 @@
 		"lib": ["DOM", "ES6", "DOM.Iterable", "ScriptHost", "ES2016.Array.Include"],
 		"outDir": "build",
 		"baseUrl": ".",
+		"moduleResolution": "Bundler",
 		"allowUnusedLabels": false,
 		"allowUnreachableCode": false,
 		"noFallthroughCasesInSwitch": true,
@@ -16,8 +17,10 @@
 		"sourceMap": true,
 		"resolveJsonModule": true,
 		"jsx": "react",
-
-		"esModuleInterop": true
+		"esModuleInterop": true,
+		"paths": {
+			"@/*": ["src/*"]
+		}
 	},
 	"include": ["src", "test", "babel.config.cjs", "globals"],
 	"exclude": ["dist", "node_modules"]
