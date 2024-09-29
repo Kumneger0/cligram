@@ -10,6 +10,7 @@ export interface FormattedMessage {
     sender: string;
     content: string;
     isFromMe: boolean;
+    media: Buffer | null
 }
 
 export const eventClassNames = ['UpdateUserStatus', 'UpdateShortMessage'] as const;
@@ -52,55 +53,7 @@ interface Message {
     replyTo: null;
     date: number;
     message: string;
-    media: {
-        flags: number;
-        nopremium: boolean;
-        spoiler: boolean;
-        video: boolean;
-        round: boolean;
-        voice: boolean;
-        document: {
-            flags: number;
-            id: string;
-            accessHash: string;
-            fileReference: {
-                type: 'Buffer';
-                data: number[];
-            };
-            date: number;
-            mimeType: string;
-            size: string;
-            thumbs: (
-                | {
-                    type: 'i';
-                    bytes: {
-                        type: 'Buffer';
-                        data: number[];
-                    };
-                    className: string;
-                }
-                | {
-                    type: 'm';
-                    w: number;
-                    h: number;
-                    size: number;
-                    className: string;
-                }
-            )[];
-            videoThumbs: null;
-            dcId: number;
-            attributes: {
-                w?: number;
-                h?: number;
-                fileName?: string;
-                className: string;
-            }[];
-            className: string;
-        };
-        altDocument: null;
-        ttlSeconds: null;
-        className: string;
-    };
+    media: MessageMedia;
     replyMarkup: null;
     entities: null;
     views: number;
@@ -115,6 +68,59 @@ interface Message {
     quickReplyShortcutId: null;
     className: string;
 }
+
+
+export type MessageMedia = {
+    flags: number;
+    nopremium: boolean;
+    spoiler: boolean;
+    video: boolean;
+    round: boolean;
+    voice: boolean;
+    document: {
+        flags: number;
+        id: string;
+        accessHash: string;
+        fileReference: {
+            type: 'Buffer';
+            data: number[];
+        };
+        date: number;
+        mimeType: string;
+        size: string;
+        thumbs: (
+                | {
+                    type: 'i';
+                    bytes: {
+                        type: 'Buffer';
+                        data: number[];
+                    };
+                    className: string;
+                }
+            | {
+                type: 'm';
+                w: number;
+                h: number;
+                size: number;
+                className: string;
+            }
+        )[];
+        videoThumbs: null;
+        dcId: number;
+        attributes: {
+            w?: number;
+            h?: number;
+            fileName?: string;
+            className: string;
+        }[];
+        className: string;
+    };
+    altDocument: null;
+    ttlSeconds: null;
+    className: string;
+
+}
+
 
 export default Message;
 

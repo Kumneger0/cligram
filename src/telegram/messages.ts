@@ -1,9 +1,10 @@
 import { TelegramClient, Api } from 'telegram';
 import { MessagesSlice, User } from '../lib/types/index.js';
-import { ChatUser, FormattedMessage, eventClassNames } from '../types.js';
+import { ChatUser, FormattedMessage, MessageMedia, eventClassNames } from '../types.js';
 import { getUserChats, getUserInfo } from './client.js';
 import { rerenderSidebar, selectedName } from '../ui/sidebar.js';
 import { getTelegramClient } from '../lib/utils/auth.js';
+import { downloadMedia } from '@/lib/utils/handleMedia.js';
 
 export async function getConversationHistory(
     { accessHash, firstName, peerId: userId }: ChatUser,
@@ -22,15 +23,19 @@ export async function getConversationHistory(
         })
     )) as unknown as MessagesSlice;
 
-    return result.messages.reverse().map(
-        (message): FormattedMessage => ({
-            sender: message.out ? 'you' : firstName,
-            content: message.message,
-            isFromMe: message.out
-        })
-    );
-}
+    return await Promise.all(result.messages.reverse().map(
+        async (message): Promise<FormattedMessage> => {
+            const media = message.media as MessageMedia
 
+            return ({
+                sender: message.out ? 'you' : firstName,
+                content: message.message,
+                isFromMe: message.out,
+                media: media ? await downloadMedia({ media, size: 'large' }) : null,
+            })
+        }
+    ))
+}
 export const listenForUserMessages = async (client: TelegramClient) => {
     if (!client.connected) await client.connect();
     console.log('Listening for messages');
