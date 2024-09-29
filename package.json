@@ -1,32 +1,23 @@
 {
-	"name": "nodejs-typescript-modern-starter",
+	"name": "Telegram-cli",
 	"version": "1.0.0",
 	"main": "dist/src/index.js",
 	"type": "module",
 	"typings": "dist/src/index.d.ts",
 	"bin": {
-		"nodejs-typescript-modern-starter": "dist/src/index.js",
-		"ntms": "dist/src/index.js"
-	},
-	"repository": {
-		"type": "git",
-		"url": "git+https://github.com/xddq/schema2typebox.git"
+		"Telegram-cli": "dist/src/index.js",
+		"tgCli": "dist/src/index.js"
 	},
 	"keywords": [
 		"nodejs",
 		"typescript",
-		"modern",
-		"starter",
-		"nodejs typescript modern starter",
-		"debugging",
+		"Telegram",
 		"ts",
 		"esbuild",
 		"prettier",
-		"typescript5",
-		"CI/CD",
 		"minimal"
 	],
-	"author": "Pierre Dahmani <hi@pierre-dev.com>",
+	"author": "kumneger wondimu <kumnegerwondimu@gmail.com>",
 	"license": "MIT",
 	"scripts": {
 		"bundle": "tsup src/index.ts",
@@ -78,6 +69,7 @@
 		"react": "^18.3.1",
 		"react-devtools-core": "^5.3.1",
 		"telegram": "^2.24.11",
+		"term-size": "^4.0.0",
 		"terminal-image": "^3.0.0"
 	}
 }
