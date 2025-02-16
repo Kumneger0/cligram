@@ -16,19 +16,17 @@ async function renderImage(imageBuffer: Buffer): Promise<string> {
 			preserveAspectRatio: true
 		});
 
-		const clipboard = (await import('clipboardy')).default;
-		clipboard.writeSync(string);
 		return string;
 	} catch (error) {
-		const clipboard = (await import('clipboardy')).default;
-		clipboard.writeSync(
-			!!error &&
-				typeof error === 'object' &&
-				'message' in error &&
-				typeof error.message === 'string'
-				? error.message
-				: 'Unknown error'
-		);
+		// const clipboard = (await import('clipboardy')).default;
+		// clipboard.writeSync(
+		// 	!!error &&
+		// 		typeof error === 'object' &&
+		// 		'message' in error &&
+		// 		typeof error.message === 'string'
+		// 		? error.message
+		// 		: 'Unknown error'
+		// );
 		process.exit(1);
 	}
 }
@@ -50,7 +48,7 @@ export async function formatMessage(message: FormattedMessage): Promise<string> 
 }
 
 export function wrapText(text: string, maxWidth: number): string[] {
-	const words = text.split(' ');
+	const words = text?.split(' ') ?? [];
 	const lines: string[] = [];
 	let currentLine = '';
 
