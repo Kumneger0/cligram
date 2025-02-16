@@ -31,7 +31,7 @@ export async function getConversationHistory(
                 sender: message.out ? 'you' : firstName,
                 content: message.message,
                 isFromMe: message.out,
-                media: media ? await downloadMedia({ media, size: 'large' }) : null,
+                media: media && media.className == 'MessageMediaPhoto' ? await downloadMedia({ media, size: 'large' }) : null,
             })
         }
     ))

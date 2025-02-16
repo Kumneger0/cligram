@@ -110,30 +110,30 @@ interface Message {
 	offline: boolean;
 	id: number;
 	fromId: { userId: string; className: string } | null;
-	fromBoostsApplied: any; // Adjust type as needed
+	fromBoostsApplied: unknown; // Adjust type as needed
 	peerId: { userId: string; className: string };
-	savedPeerId: any; // Adjust type as needed
-	fwdFrom: any; // Adjust type as needed
-	viaBotId: any; // Adjust type as needed
-	viaBusinessBotId: any; // Adjust type as needed
-	replyTo: any; // Adjust type as needed
+	savedPeerId: unknown; // Adjust type as needed
+	fwdFrom: unknown; // Adjust type as needed
+	viaBotId: unknown; // Adjust type as needed
+	viaBusinessBotId: unknown; // Adjust type as needed
+	replyTo: unknown; // Adjust type as needed
 	date: number;
 	message: string;
-	media: any; // Adjust type as needed
-	replyMarkup: any; // Adjust type as needed
-	entities: any; // Adjust type as needed
-	views: any; // Adjust type as needed
-	forwards: any; // Adjust type as needed
-	replies: any; // Adjust type as needed
+	media: unknown; // Adjust type as needed
+	replyMarkup: unknown; // Adjust type as needed
+	entities: unknown; // Adjust type as needed
+	views: unknown; // Adjust type as needed
+	forwards: unknown; // Adjust type as needed
+	replies: unknown; // Adjust type as needed
 	editDate: number | null;
-	postAuthor: any; // Adjust type as needed
-	groupedId: any; // Adjust type as needed
-	reactions: any; // Adjust type as needed
-	restrictionReason: any; // Adjust type as needed
-	ttlPeriod: any; // Adjust type as needed
-	quickReplyShortcutId: any; // Adjust type as needed
-	effect: any; // Adjust type as needed
-	factcheck: any; // Adjust type as needed
+	postAuthor: unknown; // Adjust type as needed
+	groupedId: unknown; // Adjust type as needed
+	reactions: unknown; // Adjust type as needed
+	restrictionReason: unknown; // Adjust type as needed
+	ttlPeriod: unknown; // Adjust type as needed
+	quickReplyShortcutId: unknown; // Adjust type as needed
+	effect: unknown; // Adjust type as needed
+	factcheck: unknown; // Adjust type as needed
 	className: string;
 }
 
