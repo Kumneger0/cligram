@@ -23,7 +23,7 @@
 		"bundle": "tsup src/index.ts",
 		"compile": "tsc",
 		"compile:watch": "tsc -w",
-		"dev": "nodemon --watch src --watch test --ext ts,json --exec 'pnpm bundle'",
+		"dev": "bun --watch src/index.ts",
 		"debug": "pnpm bundle && node --enable-source-maps --inspect-brk ./dist/index.js",
 		"debug:test": "node --inspect-brk ./node_modules/.bin/jest --runInBand .",
 		"format": "prettier . --write",
@@ -34,10 +34,6 @@
 		"test": "jest --runInBand ."
 	},
 	"devDependencies": {
-		"@babel/core": "7.25.2",
-		"@babel/plugin-transform-modules-commonjs": "^7.26.3",
-		"@babel/preset-env": "7.25.4",
-		"@babel/preset-typescript": "7.24.7",
 		"@jest/globals": "29.7.0",
 		"@tsconfig/node20": "20.1.4",
 		"@types/jest": "29.5.12",
@@ -55,19 +51,13 @@
 		"typescript": "5.5.4"
 	},
 	"dependencies": {
-		"@babel/cli": "^7.26.4",
-		"@babel/preset-react": "^7.26.3",
 		"@types/blessed": "^0.1.25",
-		"@types/ink": "^2.0.3",
-		"@types/react": "^18.3.18",
 		"blessed": "^0.1.81",
 		"blessed-contrib": "^4.11.0",
 		"clipboardy": "^4.0.0",
 		"dotenv": "^16.4.7",
 		"ink": "^5.1.0",
 		"input": "^1.0.1",
-		"react": "^18.3.1",
-		"react-devtools-core": "^5.3.2",
 		"telegram": "^2.26.16",
 		"term-size": "^4.0.0",
 		"terminal-image": "^3.1.1"
