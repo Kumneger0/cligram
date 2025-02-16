@@ -37,7 +37,6 @@ export const handleMediaDownload = async (
     const buffer = await client.downloadMedia(media as unknown as Api.TypeMessageMedia, {
         progressCallback: (progress, total) => {
             const percent = (Number(progress) / Number(total)) * 100;
-            console.log('percent', percent);
         },
         thumb: size === 'small' ? 0 : undefined
     });

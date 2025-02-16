@@ -25,13 +25,15 @@ export async function getConversationHistory(
 
     return await Promise.all(result.messages.reverse().map(
         async (message): Promise<FormattedMessage> => {
-            const media = message.media as MessageMedia
+            // const media = message.media as MessageMedia
 
             return ({
                 sender: message.out ? 'you' : firstName,
                 content: message.message,
                 isFromMe: message.out,
-                media: media && media.className == 'MessageMediaPhoto' ? await downloadMedia({ media, size: 'large' }) : null,
+                //TODO: implement media download later after updatin the layout
+                media: null
+                // media: media && media.className == 'MessageMediaPhoto' ? await downloadMedia({ media, size: 'large' }) : null,
             })
         }
     ))
