@@ -48,7 +48,7 @@ export function initializeChatBox() {
 export async function updateChatBox(newContent?: types.FormattedMessage[]) {
 	if (newContent) {
 		const allMessgesToDisplay = newContent.filter(({ content }) => !!content)
-			.map(({ content, isFromMe, sender }) => isFromMe ? content : `${sender} ${content}`);
+			.map(({ content, isFromMe, sender }) => isFromMe ? `you: ${content}` : `${sender}: ${content}`);
 		chatBox.setContent(allMessgesToDisplay.join('\n'));
 		(chatBox as blessed.Widgets.ListElement).scrollTo(newContent.length - 1);
 		chatBox.setScrollPerc(100);
