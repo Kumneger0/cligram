@@ -1,14 +1,29 @@
 import { Api, TelegramClient } from 'telegram';
 import { MessagesSlice, User } from '../lib/types/index';
-import { getTelegramClient } from '../lib/utils/auth';
 import { ChatUser, FormattedMessage, eventClassNames } from '../types';
 import { getUserChats, getUserInfo } from './client';
 
+
+
+export const sendMessage = async (client: TelegramClient, userToSend: { peerId: bigInt.BigInteger, accessHash: bigInt.BigInteger }, message: string) => {
+    if (!client.connected) await client.connect();
+    client.sendMessage(
+        new Api.InputPeerUser({
+            userId: userToSend?.peerId,
+            accessHash: userToSend?.accessHash
+        }),
+        {
+            message: message
+        }
+    );
+};
+
+
 export async function getConversationHistory(
+    client: TelegramClient,
 	{ accessHash, firstName, peerId: userId }: ChatUser,
 	limit: number = 100
 ): Promise<FormattedMessage[]> {
-	const client = await getTelegramClient();
 	if (!client.connected) await client.connect();
 
 	const result = (await client.invoke(
