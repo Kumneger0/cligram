@@ -4,11 +4,11 @@ A Telegram CLI client built with TypeScript and Node.js.
 
 ## Features
 
--   Chat with multiple users
--   Send messages
--   Download media
--   Display media in the terminal
--   Display media in the browser
+- Chat with multiple users
+- Send messages
+- Download media
+- Display media in the terminal
+- Display media in the browser
 
 ## Installation
 
