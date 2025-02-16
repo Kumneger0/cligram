@@ -1,9 +1,11 @@
 import { getUserChats } from '@/telegram/client';
-import { getConversationHistory, listenForUserMessages } from '@/telegram/messages';
+import { getConversationHistory, listenForUserMessages, sendMessage } from '@/telegram/messages';
 import { ChatUser, FormattedMessage } from '@/types';
 import { Box, render, Text, useFocus, useInput } from 'ink';
+import TextInput from 'ink-text-input';
 import React, { useEffect, useState } from 'react';
 import { TelegramClient } from 'telegram';
+
 
 type TGCliContextType = {
     client: TelegramClient;
@@ -34,7 +36,7 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client }) => {
     return (
         <TGCliProvider client={client} selectedUser={selectedUser} setSelectedUser={setSelectedUser}>
             {/* @ts-ignore */}
-            <Box borderStyle="round" borderColor="green" flexDirection="row" minHeight={20} height={30}>
+            <Box borderStyle="round" borderColor="green" flexDirection="row" minHeight={20} height={40}>
                 {/* @ts-ignore */}
                 <Box width={'30%'} flexDirection="column" borderRightstyle="round" borderRightColor="green">
                     <Sidebar />
@@ -49,6 +51,8 @@ function Sidebar() {
     const { setSelectedUser, client, selectedUser } = useTGCli();
     const [activeChat, setActiveChat] = useState<ChatUser | null>(null);
     const [chatUsers, setChatUsers] = useState<ChatUser[]>([]);
+    const [offset, setOffset] = useState(0);
+
     const { isFocused } = useFocus();
 
     useEffect(() => {
@@ -75,16 +79,20 @@ function Sidebar() {
             const currentIndex = chatUsers.findIndex(({ peerId }) => peerId === activeChat?.peerId);
             const nextUser = chatUsers[currentIndex - 1];
             if (nextUser) {
+                setOffset((prev) => Math.max(prev - 1, 0));
                 setActiveChat(nextUser);
             }
         } else if (key.downArrow) {
             const currentIndex = chatUsers.findIndex(({ peerId }) => peerId === activeChat?.peerId);
             const nextUser = chatUsers[currentIndex + 1];
+            setOffset((prev) => Math.min(prev + 1, chatUsers.length - 50));
             if (nextUser) {
                 setActiveChat(nextUser);
             }
         }
     });
+
+    const visibleChats = chatUsers.slice(offset, offset + 50);
 
     return (
         // @ts-expect-error
@@ -98,7 +106,7 @@ function Sidebar() {
             <Text color="blue" bold>
                 Chats
             </Text>
-            {chatUsers.map(({ firstName, peerId }) => (
+            {visibleChats.map(({ firstName, peerId }) => (
                 <Text color={activeChat?.peerId == peerId ? 'green' : 'white'} key={String(peerId)}>
                     {activeChat?.peerId == peerId && isFocused ? '>' : null} {firstName}
                 </Text>
@@ -108,12 +116,14 @@ function Sidebar() {
 }
 
 function ChatArea() {
-    const { selectedUser } = useTGCli();
+    const { selectedUser, client } = useTGCli();
     const [conversation, setConversation] = useState<FormattedMessage[]>([]);
 
     const [activeMessage, setActiveMessage] = useState<FormattedMessage | null>(null);
     const { isFocused } = useFocus();
     const selectedUserPeerID = String(selectedUser?.peerId);
+
+    const [offset, setOffset] = useState(0);
 
     useInput((_, key) => {
         if (!isFocused) return;
@@ -137,26 +147,40 @@ function ChatArea() {
 
     useEffect(() => {
         if (!selectedUser) return;
-        getConversationHistory(selectedUser).then(setConversation);
+        getConversationHistory(client, selectedUser).then(setConversation);
     }, [selectedUserPeerID]);
 
+    useInput((_, key) => {
+        if (!isFocused) return;
+        if (key.downArrow) {
+            setOffset((prev) => Math.min(prev + 1, conversation.length - 50));
+        } else if (key.upArrow) {
+            setOffset((prev) => Math.max(prev - 1, 0));
+        }
+    });
+
+    const visibleMessages = conversation.slice(offset, offset + 50);
+
     return (
-        <>
+        //   @ts-ignore 
+        <Box flexDirection='column' height='100%'
+            width={'70%'}
+        >
             {/* @ts-ignore */}
             <Box
-                width={'70%'}
+                width={'100%'}
                 height={'90%'}
-                overflowY="visible"
-                borderLeftColor={isFocused ? 'green' : ''}
-                borderLeft={isFocused}
+                overflowY="hidden"
+                borderStyle={isFocused ? 'classic' : undefined}
                 flexDirection="column"
                 gap={2}
+                paddingLeft={2}
             >
                 <Text color="blue" bold>
                     {selectedUser?.firstName}
                 </Text>
-                {conversation ? (
-                    conversation.map((message) => {
+                {visibleMessages ? (
+                    visibleMessages.map((message) => {
                         return (
                             // @ts-expect-error
                             <Box key={message.id} border width={'30%'}>
@@ -171,9 +195,39 @@ function ChatArea() {
                     <Text>No conversation</Text>
                 )}
             </Box>
-        </>
+            <MessageInput />
+        </Box>
     );
 }
+
+
+
+function MessageInput() {
+    const [message, setMessage] = useState('');
+    const { client, selectedUser } = useTGCli()
+    const { isFocused } = useFocus();
+
+    return (
+        // @ts-expect-error
+        <Box>
+            {/* @ts-ignore */}
+            <Box marginRight={1}>
+                <Text>Write A message:</Text>
+            </Box>
+
+            <TextInput onSubmit={async (_) => {
+                if (selectedUser) {
+                    await sendMessage(client, { peerId: selectedUser.peerId, accessHash: selectedUser.accessHash }, message)
+                    setMessage('')
+                }
+            }} placeholder='Write a message' value={message} onChange={setMessage} focus={isFocused} />
+        </Box>
+    );
+}
+
+
+
+
 
 export function initializeUI(client: TelegramClient) {
     render(<TGCli client={client} />);
