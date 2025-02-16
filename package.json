@@ -51,13 +51,13 @@
 		"typescript": "5.5.4"
 	},
 	"dependencies": {
-		"@types/blessed": "^0.1.25",
-		"blessed": "^0.1.81",
-		"blessed-contrib": "^4.11.0",
+		"@types/ink": "^2.0.3",
+		"@types/react": "^19.0.8",
 		"clipboardy": "^4.0.0",
 		"dotenv": "^16.4.7",
-		"ink": "^5.1.0",
+		"ink": "^4.1.0",
 		"input": "^1.0.1",
+		"react": "18.2.0",
 		"telegram": "^2.26.16",
 		"term-size": "^4.0.0",
 		"terminal-image": "^3.1.1"
