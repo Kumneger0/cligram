@@ -1,6 +1,6 @@
 import { FormattedMessage } from '@/types.js';
 
-const MAX_WIDTH = 50; 
+const MAX_WIDTH = 50;
 
 async function renderImage(imageBuffer: Buffer): Promise<string> {
 	const terminalSize = (await import('term-size')).default;
