@@ -1,4 +1,3 @@
-import { formatMessage } from '@/lib/utils/textFormatting.js';
 import blessed from 'blessed';
 import * as types from '../types.js';
 import * as initializeUI from './initializeUI.js';
@@ -48,14 +47,10 @@ export function initializeChatBox() {
 
 export async function updateChatBox(newContent?: types.FormattedMessage[]) {
 	if (newContent) {
-		const formattedMessages = await Promise.all(
-			newContent.flatMap((msg, _index) => formatMessage(msg))
-		);
-
-		chatBox.setContent(formattedMessages.join('\n'));
-
-		(chatBox as blessed.Widgets.ListElement).setItems(formattedMessages);
-		(chatBox as blessed.Widgets.ListElement).scrollTo(formattedMessages.length - 1);
+		const allMessgesToDisplay = newContent.filter(({ content }) => !!content)
+			.map(({ content, isFromMe, sender }) => isFromMe ? content : `${sender} ${content}`);
+		chatBox.setContent(allMessgesToDisplay.join('\n'));
+		(chatBox as blessed.Widgets.ListElement).scrollTo(newContent.length - 1);
 		chatBox.setScrollPerc(100);
 	}
 	initializeUI.screen.render();
