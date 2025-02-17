@@ -3,6 +3,7 @@ export interface ChatUser {
 	isBot: boolean;
 	peerId: bigInt.BigInteger;
 	accessHash: bigInt.BigInteger;
+	unreadCount: number;
 }
 
 export interface FormattedMessage {
