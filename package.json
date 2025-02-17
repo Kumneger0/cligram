@@ -53,9 +53,11 @@
 	"dependencies": {
 		"@types/ink": "^2.0.3",
 		"@types/react": "^19.0.8",
+		"chalk": "^5.4.1",
 		"clipboardy": "^4.0.0",
 		"dotenv": "^16.4.7",
 		"ink": "^4.1.0",
+		"ink-spinner": "^5.0.0",
 		"ink-text-input": "^6.0.0",
 		"input": "^1.0.1",
 		"react": "18.2.0",
