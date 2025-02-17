@@ -1,11 +1,11 @@
 import { getUserChats } from '@/telegram/client';
-import { getConversationHistory, listenForUserMessages, sendMessage } from '@/telegram/messages';
+import { getAllMessages, listenForUserMessages, sendMessage } from '@/telegram/messages';
 import { ChatUser, FormattedMessage } from '@/types';
 import { Box, render, Text, useFocus, useInput } from 'ink';
+import Spinner from 'ink-spinner';
 import TextInput from 'ink-text-input';
 import React, { useEffect, useState } from 'react';
 import { TelegramClient } from 'telegram';
-
 
 type TGCliContextType = {
     client: TelegramClient;
@@ -35,13 +35,11 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client }) => {
 
     return (
         <TGCliProvider client={client} selectedUser={selectedUser} setSelectedUser={setSelectedUser}>
-            {/* @ts-ignore */}
-            <Box borderStyle="round" borderColor="green" flexDirection="row" minHeight={20} height={40}>
-                {/* @ts-ignore */}
-                <Box width={'30%'} flexDirection="column" borderRightstyle="round" borderRightColor="green">
+            <Box borderStyle="round" borderColor="green" flexDirection="row" minHeight={20} height={30}>
+                <Box width={'30%'} flexDirection="column" borderRightColor="green">
                     <Sidebar />
                 </Box>
-                <ChatArea />
+                <ChatArea key={selectedUser?.peerId.toString() ?? 'defualt-key'} />
             </Box>
         </TGCliProvider>
     );
@@ -95,7 +93,6 @@ function Sidebar() {
     const visibleChats = chatUsers.slice(offset, offset + 50);
 
     return (
-        // @ts-expect-error
         <Box
             width={'40%'}
             flexDirection="column"
@@ -118,8 +115,10 @@ function Sidebar() {
 function ChatArea() {
     const { selectedUser, client } = useTGCli();
     const [conversation, setConversation] = useState<FormattedMessage[]>([]);
-
+    const [offsetId, setOffsetId] = useState<number | undefined>(undefined);
     const [activeMessage, setActiveMessage] = useState<FormattedMessage | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
+
     const { isFocused } = useFocus();
     const selectedUserPeerID = String(selectedUser?.peerId);
 
@@ -147,13 +146,34 @@ function ChatArea() {
 
     useEffect(() => {
         if (!selectedUser) return;
-        getConversationHistory(client, selectedUser).then(setConversation);
+        setIsLoading(true);
+
+        getAllMessages(client, selectedUser).then(async (conversation) => {
+            setConversation(conversation);
+            setOffsetId(conversation?.[0]?.id);
+            setIsLoading(false);
+        });
     }, [selectedUserPeerID]);
 
     useInput((_, key) => {
         if (!isFocused) return;
+
         if (key.downArrow) {
-            setOffset((prev) => Math.min(prev + 1, conversation.length - 50));
+            setOffset((prev) => Math.min(prev + 1, conversation.length - 20));
+            const atEnd = offset === conversation.length - 20;
+            if (atEnd && selectedUser) {
+                const appendMessages = async () => {
+                    const newMessages = await getAllMessages(client, selectedUser, offsetId);
+                    const updatedConversation = [...conversation, ...newMessages];
+                    setConversation(
+                        updatedConversation.filter(
+                            ({ id }, i) => updatedConversation.findIndex((c) => c.id == id) === i
+                        )
+                    );
+                    setOffsetId(newMessages?.[0]?.id);
+                };
+                appendMessages();
+            }
         } else if (key.upArrow) {
             setOffset((prev) => Math.max(prev - 1, 0));
         }
@@ -161,73 +181,90 @@ function ChatArea() {
 
     const visibleMessages = conversation.slice(offset, offset + 50);
 
+    if (isLoading) {
+
+        return (
+            <Text>
+                <Text color="green">
+                    <Spinner type="dots" />
+                </Text>
+                {' Loading conversations...'}
+            </Text>
+        );
+    }
+
     return (
-        //   @ts-ignore 
-        <Box flexDirection='column' height='100%'
-            width={'70%'}
-        >
-            {/* @ts-ignore */}
+        <Box flexDirection="column" height="100%" width={'70%'}>
             <Box
                 width={'100%'}
                 height={'90%'}
                 overflowY="hidden"
                 borderStyle={isFocused ? 'classic' : undefined}
                 flexDirection="column"
-                gap={2}
+                gap={1}
                 paddingLeft={2}
             >
                 <Text color="blue" bold>
                     {selectedUser?.firstName}
                 </Text>
-                {visibleMessages ? (
-                    visibleMessages.map((message) => {
-                        return (
-                            // @ts-expect-error
-                            <Box key={message.id} border width={'30%'}>
-                                {activeMessage?.id == message.id && isFocused ? (
-                                    <Text color={'green'}>{'>  '}</Text>
-                                ) : null}
-                                <Text>{message.content}</Text>
-                            </Box>
-                        );
-                    })
-                ) : (
-                    <Text>No conversation</Text>
-                )}
+                {visibleMessages.map((message) => {
+                    return (
+                        <Box
+                            alignSelf={message.isFromMe ? 'flex-end' : 'flex-start'}
+                            key={message.id}
+                            width={'30%'}
+                            height={'auto'}
+                            flexShrink={0}
+                            flexGrow={0}
+                        >
+                            {activeMessage?.id == message.id && isFocused ? (
+                                <Text color={'green'}>{'>  '}</Text>
+                            ) : null}
+                            <Text
+                                backgroundColor={activeMessage?.id === message.id && isFocused ? 'blue' : ''}
+                                color={activeMessage?.id === message.id && isFocused ? 'white' : ''}
+                            >
+                                {message.content}
+                            </Text>
+                        </Box>
+                    );
+                })}
             </Box>
             <MessageInput />
         </Box>
     );
 }
 
-
-
 function MessageInput() {
     const [message, setMessage] = useState('');
-    const { client, selectedUser } = useTGCli()
+    const { client, selectedUser } = useTGCli();
     const { isFocused } = useFocus();
 
     return (
-        // @ts-expect-error
-        <Box>
-            {/* @ts-ignore */}
+        <Box borderStyle={isFocused ? 'classic' : undefined}>
             <Box marginRight={1}>
                 <Text>Write A message:</Text>
             </Box>
 
-            <TextInput onSubmit={async (_) => {
-                if (selectedUser) {
-                    await sendMessage(client, { peerId: selectedUser.peerId, accessHash: selectedUser.accessHash }, message)
-                    setMessage('')
-                }
-            }} placeholder='Write a message' value={message} onChange={setMessage} focus={isFocused} />
+            <TextInput
+                onSubmit={async (_) => {
+                    if (selectedUser) {
+                        await sendMessage(
+                            client,
+                            { peerId: selectedUser.peerId, accessHash: selectedUser.accessHash },
+                            message
+                        );
+                        setMessage('');
+                    }
+                }}
+                placeholder="Write a message"
+                value={message}
+                onChange={setMessage}
+                focus={isFocused}
+            />
         </Box>
     );
 }
-
-
-
-
 
 export function initializeUI(client: TelegramClient) {
     render(<TGCli client={client} />);
