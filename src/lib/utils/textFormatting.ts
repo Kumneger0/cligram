@@ -10,7 +10,7 @@ async function renderImage(imageBuffer: Buffer): Promise<string> {
 		const maxWidth = Math.floor(columns * 0.8); // Use 80% of terminal width
 		const maxHeight = Math.floor(rows * 0.8);
 
-		const string = await terminalImage.buffer(imageBuffer, {
+		const string = await terminalImage.buffer(new Uint8Array(imageBuffer), {
 			width: maxWidth,
 			height: maxHeight,
 			preserveAspectRatio: true
@@ -29,22 +29,6 @@ async function renderImage(imageBuffer: Buffer): Promise<string> {
 		// );
 		process.exit(1);
 	}
-}
-
-export async function formatMessage(message: FormattedMessage): Promise<string> {
-	const { sender, content, isFromMe, media } = message;
-	const padding = isFromMe ? '' : '  ';
-	const header = `${padding}${sender}:`;
-	const wrappedContent = wrapText(content, MAX_WIDTH - padding.length);
-
-	let formattedMessage = header + '\n';
-	formattedMessage += wrappedContent.map((line) => `${padding}${line}`).join('\n');
-
-	if (media) {
-		const image = await renderImage(media);
-		formattedMessage = image;
-	}
-	return formattedMessage;
 }
 
 export function wrapText(text: string, maxWidth: number): string[] {

@@ -6,6 +6,7 @@ import Spinner from 'ink-spinner';
 import TextInput from 'ink-text-input';
 import React, { ComponentRef, useCallback, useEffect, useRef, useState } from 'react';
 import { TelegramClient } from 'telegram';
+import notifier from 'node-notifier';
 
 type TGCliContextType = {
     client: TelegramClient;
@@ -33,9 +34,12 @@ export const useTGCli = () => {
 const TGCli: React.FC<{ client: TelegramClient }> = ({ client }) => {
     const [selectedUser, setSelectedUser] = useState<ChatUser | null>(null);
 
+
+
+
     return (
         <TGCliProvider client={client} selectedUser={selectedUser} setSelectedUser={setSelectedUser}>
-            <Box borderStyle="round" borderColor="green" flexDirection="row" minHeight={20} height={30}>
+            <Box borderStyle="round" borderColor="green" flexDirection="row" minHeight={20} height={40}>
                 <Box width={'30%'} flexDirection="column" borderRightColor="green">
                     <Sidebar />
                 </Box>
@@ -57,6 +61,18 @@ function Sidebar() {
         const sender = message.sender;
         const content = message.content;
         const isFromMe = message.isFromMe;
+
+        if (!message.isFromMe) {
+            notifier.notify(
+                {
+                    title: `TGCli - ${sender} sent you a message!`,
+                    message: content,
+                    sound: true,
+                },
+
+            );
+
+        } 
         setChatUsers((prev) => prev.map((user) => {
             if (user.firstName === sender) {
                 return {
@@ -137,6 +153,7 @@ function ChatArea() {
     const [activeMessage, setActiveMessage] = useState<FormattedMessage | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const coversationRef = useRef<ComponentRef<typeof Box>>(null);
+    const [newMessage, setNewMessage] = useState<string>('');
 
 
     const { isFocused } = useFocus();
@@ -172,6 +189,13 @@ function ChatArea() {
             setOffsetId(conversation?.[0]?.id);
             setIsLoading(false);
         });
+        listenForUserMessages(client, (message) => {
+            const from = message.sender;
+            if (from === selectedUser?.firstName) {
+                setConversation((prev) => [...prev, message]);
+                setOffsetId(message.id);
+            }
+        })
     }, [selectedUserPeerID]);
 
     useInput((_, key) => {
@@ -202,12 +226,14 @@ function ChatArea() {
 
     if (isLoading) {
         return (
-            <Text>
-                <Text color="green">
-                    <Spinner type="dots" />
+            <Box height={40} justifyContent='center' alignItems='center' width={'100%'}>
+                <Text>
+                    <Text color="green">
+                        <Spinner type="dots" />
+                    </Text>
+                    {' Loading conversations...'}
                 </Text>
-                {' Loading conversations...'}
-            </Text>
+            </Box>
         );
     }
 
@@ -234,29 +260,45 @@ function ChatArea() {
                             width={'30%'}
                             height={'auto'}
                             flexShrink={0}
+                            flexDirection='column'
                             flexGrow={0}
                         >
                             {activeMessage?.id == message.id && isFocused ? (
                                 <Text color={'green'}>{'>  '}</Text>
                             ) : null}
+                            <Box flexDirection='column'>
                             <Text
                                 backgroundColor={activeMessage?.id === message.id && isFocused ? 'blue' : ''}
                                 color={activeMessage?.id === message.id && isFocused ? 'white' : ''}
                             >
-                                {message.content}
-                            </Text>
+                                    {message.media && <Text>{message.media}</Text>}
+                                </Text>
+                                <Text wrap='wrap'>{message.content}</Text>
+                            </Box>
                         </Box>
                     );
                 })}
+                {newMessage && <Box alignSelf='flex-end' width={'30%'} height={'auto'} flexShrink={0} flexDirection='column' flexGrow={0}>
+                    <Text color='white'>{newMessage}</Text>
+                </Box>}
             </Box>
-            <MessageInput />
+            <MessageInput onSubmit={(message) => {
+                if (selectedUser) {
+                    setNewMessage(message);
+                    sendMessage(
+                        client,
+                        { peerId: selectedUser.peerId, accessHash: selectedUser.accessHash },
+                        message
+                    );
+                }
+            }} />
         </Box>
     );
 }
 
-function MessageInput() {
+function MessageInput({ onSubmit }: { onSubmit: (message: string) => void }) {
     const [message, setMessage] = useState('');
-    const { client, selectedUser } = useTGCli();
+    const { selectedUser } = useTGCli();
     const { isFocused } = useFocus();
 
     return (
@@ -268,11 +310,7 @@ function MessageInput() {
             <TextInput
                 onSubmit={async (_) => {
                     if (selectedUser) {
-                        await sendMessage(
-                            client,
-                            { peerId: selectedUser.peerId, accessHash: selectedUser.accessHash },
-                            message
-                        );
+                        onSubmit(message);
                         setMessage('');
                     }
                 }}
