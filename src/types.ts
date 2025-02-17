@@ -11,7 +11,7 @@ export interface FormattedMessage {
 	sender: string;
 	content: string;
 	isFromMe: boolean;
-	media: Buffer | null;
+	media: string | null;
 }
 
 export const eventClassNames = ['UpdateUserStatus', 'UpdateShortMessage'] as const;
