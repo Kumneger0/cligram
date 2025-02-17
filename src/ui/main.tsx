@@ -4,7 +4,7 @@ import { ChatUser, FormattedMessage } from '@/types';
 import { Box, render, Text, useFocus, useInput } from 'ink';
 import Spinner from 'ink-spinner';
 import TextInput from 'ink-text-input';
-import React, { useEffect, useState } from 'react';
+import React, { ComponentRef, useCallback, useEffect, useRef, useState } from 'react';
 import { TelegramClient } from 'telegram';
 
 type TGCliContextType = {
@@ -46,12 +46,30 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client }) => {
 };
 
 function Sidebar() {
-    const { setSelectedUser, client, selectedUser } = useTGCli();
+    const { setSelectedUser, client } = useTGCli();
     const [activeChat, setActiveChat] = useState<ChatUser | null>(null);
-    const [chatUsers, setChatUsers] = useState<ChatUser[]>([]);
+    const [chatUsers, setChatUsers] = useState<(ChatUser & { unreadCount: number })[]>([]);
     const [offset, setOffset] = useState(0);
 
     const { isFocused } = useFocus();
+
+    const onMessage = useCallback((message: Partial<FormattedMessage>) => {
+        const sender = message.sender;
+        const content = message.content;
+        const isFromMe = message.isFromMe;
+        setChatUsers((prev) => prev.map((user) => {
+            if (user.firstName === sender) {
+                return {
+                    ...user,
+                    unreadCount: user.unreadCount + 1,
+                    lastMessage: content,
+                    isFromMe
+                };
+            }
+            return user;
+        }));
+    }, []);
+
 
     useEffect(() => {
         const getChats = async () => {
@@ -64,7 +82,7 @@ function Sidebar() {
             }
         };
         getChats().then(async () => {
-            listenForUserMessages(client, setChatUsers, selectedUser?.firstName || '');
+            listenForUserMessages(client, onMessage)
         });
     }, []);
 
@@ -103,9 +121,9 @@ function Sidebar() {
             <Text color="blue" bold>
                 Chats
             </Text>
-            {visibleChats.map(({ firstName, peerId }) => (
+            {visibleChats.map(({ firstName, peerId, unreadCount }) => (
                 <Text color={activeChat?.peerId == peerId ? 'green' : 'white'} key={String(peerId)}>
-                    {activeChat?.peerId == peerId && isFocused ? '>' : null} {firstName}
+                    {activeChat?.peerId == peerId && isFocused ? '>' : null} {firstName} {unreadCount > 0 && <Text color="red">({unreadCount})</Text>}
                 </Text>
             ))}
         </Box>
@@ -118,6 +136,8 @@ function ChatArea() {
     const [offsetId, setOffsetId] = useState<number | undefined>(undefined);
     const [activeMessage, setActiveMessage] = useState<FormattedMessage | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const coversationRef = useRef<ComponentRef<typeof Box>>(null);
+
 
     const { isFocused } = useFocus();
     const selectedUserPeerID = String(selectedUser?.peerId);
@@ -147,7 +167,6 @@ function ChatArea() {
     useEffect(() => {
         if (!selectedUser) return;
         setIsLoading(true);
-
         getAllMessages(client, selectedUser).then(async (conversation) => {
             setConversation(conversation);
             setOffsetId(conversation?.[0]?.id);
@@ -182,7 +201,6 @@ function ChatArea() {
     const visibleMessages = conversation.slice(offset, offset + 50);
 
     if (isLoading) {
-
         return (
             <Text>
                 <Text color="green">
@@ -210,6 +228,7 @@ function ChatArea() {
                 {visibleMessages.map((message) => {
                     return (
                         <Box
+                            ref={coversationRef}
                             alignSelf={message.isFromMe ? 'flex-end' : 'flex-start'}
                             key={message.id}
                             width={'30%'}

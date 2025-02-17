@@ -67,6 +67,9 @@ export async function getConversationHistory(
 ): Promise<FormattedMessage[]> {
 	if (!client.connected) await client.connect();
 
+
+
+
 	const result = (await client.invoke(
 		new Api.messages.GetHistory({
 			peer: new Api.InputPeerUser({
@@ -95,8 +98,7 @@ export async function getConversationHistory(
 }
 export const listenForUserMessages = async (
 	client: TelegramClient,
-	setUserChats: React.Dispatch<React.SetStateAction<ChatUser[]>>,
-	selectedName: string
+	onMessage: (message: Partial<FormattedMessage>) => void
 ) => {
 	if (!client.connected) await client.connect();
 	console.log('Listening for messages');
@@ -105,21 +107,17 @@ export const listenForUserMessages = async (
 		const userId = event.userId;
 		if (userId) {
 			const user = (await getUserInfo(client, userId)) as unknown as User;
-
 			const isNewMessage =
 				(event.className as (typeof eventClassNames)[number]) === 'UpdateShortMessage';
 
 			if (isNewMessage) {
-				if (user.firstName !== selectedName) {
-					const users = await getUserChats(client);
-					const userChats = users
-						.filter(({ isBot }) => !isBot)
-						.map(({ firstName, ...rest }) => ({
-							firstName: firstName === selectedName ? firstName + ' *' : firstName,
-							...rest
-						}));
-					setUserChats(userChats);
-				}
+				onMessage({
+					id: event.id,
+					sender: event.out ? 'you' : user.firstName,
+					content: event.message,
+					isFromMe: event.out,
+					media: null
+				});
 			}
 		}
 	});
