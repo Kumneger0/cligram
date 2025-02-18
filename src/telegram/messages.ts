@@ -39,7 +39,30 @@ export const deleteMessage = async (
 	}
 }
 
+export const editMessage = async (
+	client: TelegramClient,
+	userToSend: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger },
+	messageId: number,
+	newMessage: string
+) => {
+	try {
 
+		const entity = new Api.InputPeerUser({
+			userId: userToSend?.peerId,
+			accessHash: userToSend?.accessHash
+		})
+		const result = await client.invoke(
+			new Api.messages.EditMessage({
+				peer: entity,
+				id: messageId,
+				message: newMessage,
+			})
+		)
+		return result
+	} catch (err) {
+		console.log(err)
+	}
+}
 
 export async function getAllMessages(
 	client: TelegramClient,
@@ -92,40 +115,6 @@ export async function getAllMessages(
 
 	return orgnizedMessages;
 }
-
-// export async function getConversationHistory(
-// 	client: TelegramClient,
-// 	{ accessHash, firstName, peerId: userId }: ChatUser,
-// 	limit: number = 100
-// ): Promise<FormattedMessage[]> {
-// 	if (!client.connected) await client.connect();
-
-// 	const result = (await client.invoke(
-// 		new Api.messages.GetHistory({
-// 			peer: new Api.InputPeerUser({
-// 				userId: userId as unknown as bigInt.BigInteger,
-// 				accessHash
-// 			}),
-// 			limit
-// 		})
-// 	)) as unknown as MessagesSlice;
-
-// 	return await Promise.all(
-// 		result.messages.reverse().map(async (message): Promise<FormattedMessage> => {
-// 			const media = message.media as MessageMedia
-
-// 			return {
-// 				id: message.id,
-// 				sender: message.out ? 'you' : firstName,
-// 				content: message.message,
-// 				isFromMe: message.out,
-// 				//TODO: implement media download later after updatin the layout
-// 				media: null
-// 				// media: media && media.className == 'MessageMediaPhoto' ? await downloadMedia({ media, size: 'large' }) : null,
-// 			};
-// 		})
-// 	);
-// }
 export const listenForUserMessages = async (
 	client: TelegramClient,
 	onMessage: (message: FormattedMessage) => void
