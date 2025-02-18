@@ -1,14 +1,16 @@
 import { getUserChats } from '@/telegram/client';
-import { deleteMessage, getAllMessages, listenForUserMessages, sendMessage } from '@/telegram/messages';
+import { deleteMessage, editMessage, getAllMessages, listenForUserMessages, sendMessage } from '@/telegram/messages';
 import { ChatUser, FormattedMessage } from '@/types';
 import chalk from 'chalk';
-import { Box, render, Text, useFocus, useInput, } from 'ink';
+import { Box, render, Text, useFocus, useFocusManager, useInput, } from 'ink';
 import Spinner from 'ink-spinner';
 import TextInput from 'ink-text-input';
 import notifier from 'node-notifier';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { TelegramClient } from 'telegram';
 import { create } from 'zustand';
+
+const MessageInputId = 'MessageInputId';
 
 type MessageAction = {
     action: 'edit' | "delete" | 'reply',
@@ -20,7 +22,7 @@ type TGCliStore = {
     selectedUser: ChatUser | null;
     setSelectedUser: (selectedUser: ChatUser | null) => void;
     messageAction: MessageAction | null,
-    setMessageAction: (messageAction: MessageAction) => void
+    setMessageAction: (messageAction: MessageAction | null) => void
 }
 
 
@@ -33,14 +35,12 @@ const conversationStore = create<{ conversation: FormattedMessage[], setConversa
 const useTGCliStore = create<TGCliStore>((set) => (
     {
         client: null,
-        updateClient: (client: TelegramClient) => set((state) => ({ ...state, client })),
+        updateClient: (client) => set((state) => ({ ...state, client })),
         selectedUser: null,
-        setSelectedUser: (selectedUser: ChatUser | null) => set((state) => ({ ...state, selectedUser })),
+        setSelectedUser: (selectedUser) => set((state) => ({ ...state, selectedUser })),
         messageAction: null,
-        setMessageAction: (messageAction: MessageAction) => set((state) => ({ ...state, messageAction }))
+        setMessageAction: (messageAction) => set((state) => ({ ...state, messageAction }))
     }))
-
-
 
 
 
@@ -69,8 +69,6 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 function Sidebar() {
     const client = useTGCliStore((state) => state.client)!;
     const setSelectedUser = useTGCliStore((state) => state.setSelectedUser);
-
-
     const [activeChat, setActiveChat] = useState<ChatUser | null>(null);
     const [chatUsers, setChatUsers] = useState<(ChatUser & { unreadCount: number })[]>([]);
     const [offset, setOffset] = useState(0);
@@ -169,15 +167,14 @@ function ChatArea() {
     const selectedUserPeerID = String(selectedUser?.peerId);
     const client = useTGCliStore((state) => state.client)!;
     const { conversation, setConversation } = conversationStore((state) => state);
-
-
-
     const [offsetId, setOffsetId] = useState<number | undefined>(undefined);
     const [activeMessage, setActiveMessage] = useState<FormattedMessage | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const setMessageAction = useTGCliStore((state) => state.setMessageAction);
     const { isFocused } = useFocus();
+
+    const { focus } = useFocusManager()
 
     const [offset, setOffset] = useState(0);
 
@@ -188,7 +185,15 @@ function ChatArea() {
         if (input === 'd') {
             setMessageAction({ action: 'delete', id: activeMessage?.id! })
             setIsModalOpen(true)
+            return
         }
+        if (input === 'e') {
+            if (!activeMessage?.isFromMe) return
+            setMessageAction({ action: 'edit', id: activeMessage?.id! })
+            focus(MessageInputId)
+            return
+        }
+
         if (key.return) {
             //TODO: do something with the message
             setIsModalOpen(true);
@@ -360,8 +365,10 @@ const Modal: React.FC<{ onClose: () => void; children: React.ReactNode }> = ({
     const { isFocused } = useFocus({ autoFocus: true });
     const client = useTGCliStore((state) => state.client)!;
     const selectedUser = useTGCliStore((state) => state.selectedUser);
-    const msgAction = useTGCliStore((state) => state.messageAction);
+    const setMessageAction = useTGCliStore((state) => state.setMessageAction);
     const messageAction = useTGCliStore((state) => state.messageAction);
+
+
     const messageActionCurrentActiveKey = messageAction?.action;
     const { action, deleteMessageShortCuts, description } = messageActions.find(({ name }) => name === messageActionCurrentActiveKey)!;
     const { conversation, setConversation } = conversationStore((state) => state);
@@ -371,7 +378,7 @@ const Modal: React.FC<{ onClose: () => void; children: React.ReactNode }> = ({
             onClose()
             return
         }
-        const messageId = msgAction?.id
+        const messageId = messageAction?.id
         if (!messageId || !selectedUser) {
             console.log(messageId, selectedUser)
             return
@@ -379,6 +386,7 @@ const Modal: React.FC<{ onClose: () => void; children: React.ReactNode }> = ({
         action(client, messageId, selectedUser)
         const filterConversation = conversation.filter(({ id }) => id !== messageId)
         setConversation(filterConversation)
+        setMessageAction(null)
         onClose()
     })
 
@@ -426,9 +434,39 @@ const Modal: React.FC<{ onClose: () => void; children: React.ReactNode }> = ({
 
 function MessageInput({ onSubmit }: { onSubmit: (message: string) => void }) {
     const [message, setMessage] = useState('');
-
     const selectedUser = useTGCliStore((state) => state.selectedUser);
-    const { isFocused } = useFocus();
+    const { isFocused } = useFocus({ id: MessageInputId });
+    const messageAction = useTGCliStore((state) => state.messageAction);
+    const client = useTGCliStore((state) => state.client)!;
+    const setMessageAction = useTGCliStore((state) => state.setMessageAction);
+    const conversation = conversationStore((state) => state.conversation);
+    const messageContent = conversation.find(({ id }) => id === messageAction?.id)?.content
+
+    useLayoutEffect(() => {
+        setMessage(messageContent ?? '')
+    }, [messageAction?.id])
+
+
+    const edit = () => {
+        if (selectedUser) {
+            const newMessage = {
+                content: message,
+                media: null,
+                isFromMe: true,
+                id: messageAction?.id ?? Math.floor(Math.random() * 10000),
+                sender: 'you'
+            } satisfies FormattedMessage;
+            const updatedConversation = conversation.map((msg) => {
+                if (msg.id === messageAction?.id) {
+                    return newMessage
+                }
+                return msg
+            })
+            conversationStore.setState({ conversation: updatedConversation })
+            editMessage(client, selectedUser, messageAction?.id!, message)
+            setMessageAction(null)
+        }
+    }
 
     return (
         <Box borderStyle={isFocused ? 'classic' : undefined}>
@@ -439,7 +477,7 @@ function MessageInput({ onSubmit }: { onSubmit: (message: string) => void }) {
             <TextInput
                 onSubmit={async (_) => {
                     if (selectedUser) {
-                        onSubmit(message);
+                        messageAction?.action == 'edit' ? edit() : onSubmit(message);
                         setMessage('');
                     }
                 }}
