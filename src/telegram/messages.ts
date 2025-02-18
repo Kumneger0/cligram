@@ -9,17 +9,22 @@ import terminalImage from 'terminal-image';
 export const sendMessage = async (
 	client: TelegramClient,
 	userToSend: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger },
-	message: string
+	message: string,
+	isReply?: boolean | undefined,
+	replyToMessageId?: number,
 ) => {
 	if (!client.connected) await client.connect();
+
+	const sendMessageParam = {
+		message: message,
+		...isReply && { replyTo: replyToMessageId }
+	}
 	await client.sendMessage(
 		new Api.InputPeerUser({
 			userId: userToSend?.peerId,
 			accessHash: userToSend?.accessHash
 		}),
-		{
-			message: message
-		}
+		sendMessageParam
 	);
 };
 
@@ -63,6 +68,7 @@ export const editMessage = async (
 		console.log(err)
 	}
 }
+
 
 export async function getAllMessages(
 	client: TelegramClient,

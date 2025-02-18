@@ -194,6 +194,12 @@ function ChatArea() {
             return
         }
 
+        if (input === 'r') {
+            setMessageAction({ action: 'reply', id: activeMessage?.id! })
+            focus(MessageInputId)
+            return
+        }
+
         if (key.return) {
             //TODO: do something with the message
             setIsModalOpen(true);
@@ -441,8 +447,11 @@ function MessageInput({ onSubmit }: { onSubmit: (message: string) => void }) {
     const setMessageAction = useTGCliStore((state) => state.setMessageAction);
     const conversation = conversationStore((state) => state.conversation);
     const messageContent = conversation.find(({ id }) => id === messageAction?.id)?.content
+    const isReply = messageAction?.action === 'reply'
+
 
     useLayoutEffect(() => {
+        if (isReply) return
         setMessage(messageContent ?? '')
     }, [messageAction?.id])
 
@@ -470,6 +479,7 @@ function MessageInput({ onSubmit }: { onSubmit: (message: string) => void }) {
 
     return (
         <Box borderStyle={isFocused ? 'classic' : undefined}>
+            {isReply ? <Box><Text>Replay To: {messageContent}</Text></Box> : null}
             <Box marginRight={1}>
                 <Text>Write A message:</Text>
             </Box>
@@ -477,6 +487,20 @@ function MessageInput({ onSubmit }: { onSubmit: (message: string) => void }) {
             <TextInput
                 onSubmit={async (_) => {
                     if (selectedUser) {
+                        if (isReply) {
+                            const newMessage = {
+                                content: message,
+                                media: null,
+                                isFromMe: true,
+                                id: Math.floor(Math.random() * 10000),
+                                sender: 'you'
+                            } satisfies FormattedMessage;
+                            conversationStore.setState({ conversation: [...conversation, newMessage] });
+                            sendMessage(client, selectedUser, message, true, messageAction?.id)
+                            setMessage('')
+                            setMessageAction(null)
+                            return
+                        }
                         messageAction?.action == 'edit' ? edit() : onSubmit(message);
                         setMessage('');
                     }
