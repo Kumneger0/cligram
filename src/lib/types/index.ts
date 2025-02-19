@@ -1,3 +1,4 @@
+
 interface PeerNotifySettings {
 	flags: number;
 	showPreviews: boolean | null;
@@ -186,15 +187,15 @@ interface ChatUser {
 		wasOnline: number;
 		className: string;
 	};
-	botInfoVersion: any; // Adjust type as needed
-	restrictionReason: any; // Adjust type as needed
-	botInlinePlaceholder: any; // Adjust type as needed
-	langCode: any; // Adjust type as needed
-	emojiStatus: any; // Adjust type as needed
-	usernames: any; // Adjust type as needed
-	storiesMaxId: any; // Adjust type as needed
-	color: any; // Adjust type as needed
-	profileColor: any; // Adjust type as needed
+	botInfoVersion: any;
+	restrictionReason: any;
+	botInlinePlaceholder: any;
+	langCode: any;
+	emojiStatus: any;
+	usernames: any;
+	storiesMaxId: any;
+	color: any;
+	profileColor: any; 
 	className: string;
 }
 
@@ -202,10 +203,10 @@ export interface MessagesSlice {
 	flags: number;
 	inexact: boolean;
 	count: number;
-	nextRate: any; // Adjust type as needed
-	offsetIdOffset: any; // Adjust type as needed
+	nextRate: any;
+	offsetIdOffset: any; 
 	messages: Message[];
-	chats: any[]; // Adjust type as needed
+	chats: any[]; 
 	users: ChatUser[];
 	className: string;
 }
