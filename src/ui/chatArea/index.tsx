@@ -1,168 +1,14 @@
-import { getUserChats } from '@/telegram/client';
-import { deleteMessage, editMessage, getAllMessages, listenForUserMessages, sendMessage } from '@/telegram/messages';
-import { ChatUser, FormattedMessage } from '@/types';
-import chalk from 'chalk';
-import { Box, render, Text, useFocus, useFocusManager, useInput, } from 'ink';
-import Spinner from 'ink-spinner';
-import TextInput from 'ink-text-input';
-import notifier from 'node-notifier';
-import React, { useCallback, useEffect, useLayoutEffect, useState } from 'react';
-import { TelegramClient } from 'telegram';
-import { create } from 'zustand';
+import { conversationStore, useTGCliStore } from "@/lib/store";
+import { componenetFocusIds } from "@/lib/utils/consts";
+import { editMessage, getAllMessages, listenForUserMessages, sendMessage } from "@/telegram/messages";
+import { FormattedMessage } from "@/types";
+import { Box, Text, useFocus, useFocusManager, useInput } from "ink";
+import Spinner from "ink-spinner";
+import TextInput from "ink-text-input";
+import React, { useEffect, useLayoutEffect, useState } from "react";
+import { Modal } from "../modal/Modal";
 
-const MessageInputId = 'MessageInputId';
-
-type MessageAction = {
-    action: 'edit' | "delete" | 'reply',
-    id: number
-}
-type TGCliStore = {
-    client: TelegramClient | null,
-    updateClient: (client: TelegramClient) => void,
-    selectedUser: ChatUser | null;
-    setSelectedUser: (selectedUser: ChatUser | null) => void;
-    messageAction: MessageAction | null,
-    setMessageAction: (messageAction: MessageAction | null) => void
-}
-
-
-const conversationStore = create<{ conversation: FormattedMessage[], setConversation: (conversation: FormattedMessage[]) => void }>((set) => ({
-    conversation: [],
-    setConversation: (conversation) => set({ conversation })
-}))
-
-
-const useTGCliStore = create<TGCliStore>((set) => (
-    {
-        client: null,
-        updateClient: (client) => set((state) => ({ ...state, client })),
-        selectedUser: null,
-        setSelectedUser: (selectedUser) => set((state) => ({ ...state, selectedUser })),
-        messageAction: null,
-        setMessageAction: (messageAction) => set((state) => ({ ...state, messageAction }))
-    }))
-
-
-
-const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient }) => {
-    const selectedUser = useTGCliStore((state) => state.selectedUser);
-    const updateClient = useTGCliStore((state) => state.updateClient);
-    const client = useTGCliStore((state) => state.client);
-
-    useEffect(() => {
-        updateClient(TelegramClient)
-    }, [])
-
-    if (!client) return
-
-
-    return (
-        <Box borderStyle="round" borderColor="green" flexDirection="row" minHeight={20} height={30}>
-            <Box width={'30%'} flexDirection="column" borderRightColor="green">
-                <Sidebar />
-            </Box>
-            <ChatArea key={selectedUser?.peerId.toString() ?? 'defualt-key'} />
-        </Box>
-    );
-};
-
-function Sidebar() {
-    const client = useTGCliStore((state) => state.client)!;
-    const setSelectedUser = useTGCliStore((state) => state.setSelectedUser);
-    const [activeChat, setActiveChat] = useState<ChatUser | null>(null);
-    const [chatUsers, setChatUsers] = useState<(ChatUser & { unreadCount: number })[]>([]);
-    const [offset, setOffset] = useState(0);
-
-    const { isFocused } = useFocus();
-
-    const onMessage = useCallback((message: Partial<FormattedMessage>) => {
-        const sender = message.sender;
-        const content = message.content;
-        const isFromMe = message.isFromMe;
-
-        if (!message.isFromMe) {
-            notifier.notify({
-                title: `TGCli - ${sender} sent you a message!`,
-                message: content,
-                sound: true
-            });
-        }
-        setChatUsers((prev) =>
-            prev.map((user) => {
-                if (user.firstName === sender) {
-                    return {
-                        ...user,
-                        unreadCount: user.unreadCount + 1,
-                        lastMessage: content,
-                        isFromMe
-                    };
-                }
-                return user;
-            })
-        );
-    }, []);
-
-    useEffect(() => {
-        const getChats = async () => {
-            const users = (await getUserChats(client)).filter(
-                ({ isBot, firstName }) => !isBot && firstName
-            );
-            setChatUsers(users);
-            if (users.length > 0) {
-                setSelectedUser(users[0]!);
-            }
-        };
-        getChats().then(async () => {
-            listenForUserMessages(client, onMessage);
-        });
-    }, []);
-
-    useInput((_, key) => {
-        if (!isFocused) return;
-        if (key.return) {
-            setSelectedUser(activeChat);
-        }
-        if (key.upArrow) {
-            const currentIndex = chatUsers.findIndex(({ peerId }) => peerId === activeChat?.peerId);
-            const nextUser = chatUsers[currentIndex - 1];
-            if (nextUser) {
-                setOffset((prev) => Math.max(prev - 1, 0));
-                setActiveChat(nextUser);
-            }
-        } else if (key.downArrow) {
-            const currentIndex = chatUsers.findIndex(({ peerId }) => peerId === activeChat?.peerId);
-            const nextUser = chatUsers[currentIndex + 1];
-            setOffset((prev) => Math.min(prev + 1, chatUsers.length - 50));
-            if (nextUser) {
-                setActiveChat(nextUser);
-            }
-        }
-    });
-
-    const visibleChats = chatUsers.slice(offset, offset + 50);
-
-    return (
-        <Box
-            width={'40%'}
-            flexDirection="column"
-            height={'100%'}
-            borderStyle={isFocused ? 'round' : undefined}
-            borderColor={isFocused ? 'green' : ''}
-        >
-            <Text color="blue" bold>
-                Chats
-            </Text>
-            {visibleChats.map(({ firstName, peerId, unreadCount }) => (
-                <Text color={activeChat?.peerId == peerId ? 'green' : 'white'} key={String(peerId)}>
-                    {activeChat?.peerId == peerId && isFocused ? '>' : null} {firstName}{' '}
-                    {unreadCount > 0 && <Text color="red">({unreadCount})</Text>}
-                </Text>
-            ))}
-        </Box>
-    );
-}
-
-function ChatArea() {
+export function ChatArea() {
     const selectedUser = useTGCliStore((state) => state.selectedUser);
     const selectedUserPeerID = String(selectedUser?.peerId);
     const client = useTGCliStore((state) => state.client)!;
@@ -190,13 +36,13 @@ function ChatArea() {
         if (input === 'e') {
             if (!activeMessage?.isFromMe) return
             setMessageAction({ action: 'edit', id: activeMessage?.id! })
-            focus(MessageInputId)
+            focus(componenetFocusIds.messageInput)
             return
         }
 
         if (input === 'r') {
             setMessageAction({ action: 'reply', id: activeMessage?.id! })
-            focus(MessageInputId)
+            focus(componenetFocusIds.messageInput)
             return
         }
 
@@ -350,98 +196,11 @@ function ChatArea() {
     );
 }
 
-const messageActions = [
-    {
-        name: 'delete',
-        description: 'are u sure you want to delte',
-        deleteMessageShortCuts: {
-            'delete': 'y',
-            //TODO: allow user to chose delete only for him or for everyone
-        },
-        action: async (client: TelegramClient, messageId: number, selectedUser: ChatUser) => {
-            await deleteMessage(client, selectedUser, messageId)
-        }
-    },
-
-] as const
-
-const Modal: React.FC<{ onClose: () => void; children: React.ReactNode }> = ({
-    onClose,
-}) => {
-    const { isFocused } = useFocus({ autoFocus: true });
-    const client = useTGCliStore((state) => state.client)!;
-    const selectedUser = useTGCliStore((state) => state.selectedUser);
-    const setMessageAction = useTGCliStore((state) => state.setMessageAction);
-    const messageAction = useTGCliStore((state) => state.messageAction);
-
-
-    const messageActionCurrentActiveKey = messageAction?.action;
-    const { action, deleteMessageShortCuts, description } = messageActions.find(({ name }) => name === messageActionCurrentActiveKey)!;
-    const { conversation, setConversation } = conversationStore((state) => state);
-
-    useInput(async (_, key) => {
-        if (key.escape) {
-            onClose()
-            return
-        }
-        const messageId = messageAction?.id
-        if (!messageId || !selectedUser) {
-            console.log(messageId, selectedUser)
-            return
-        }
-        action(client, messageId, selectedUser)
-        const filterConversation = conversation.filter(({ id }) => id !== messageId)
-        setConversation(filterConversation)
-        setMessageAction(null)
-        onClose()
-    })
-
-
-    const bgColor = chalk.bgBlue(''.repeat(80));
-
-    return (
-        <Box borderColor={isFocused ? 'blue' : ""} borderStyle="round" flexDirection="column" width={80} height={20} justifyContent="center" alignItems="center">
-            <Box position='absolute'>
-                <Text color="blue" backgroundColor="white">{bgColor}</Text>
-            </Box>
-            <Box
-                flexDirection="column"
-                borderStyle="round"
-                borderColor={'blue'}
-                padding={1}
-                width={50}
-                alignItems="center"
-                justifyContent="center"
-                position='absolute'
-                marginTop={15} marginLeft={30} marginRight={30}
-            >
-                <Text color="blue" bold>
-                    {description}
-                </Text>
-                {Object.keys(deleteMessageShortCuts).map((key) => {
-                    return <Box key={key} gap={2}>
-                        <Text color="red" bold>
-                            {key}
-                        </Text>
-                        <Text color="green">
-                            {deleteMessageShortCuts[key as keyof typeof deleteMessageShortCuts]}
-                        </Text>
-                    </Box>
-                })}
-                <Box>
-                    <Text backgroundColor={'blue'} color={'white'}>
-                        (Press ESC to close)
-                    </Text>
-                </Box>
-            </Box>
-        </Box>
-    );
-};
 
 function MessageInput({ onSubmit }: { onSubmit: (message: string) => void }) {
     const [message, setMessage] = useState('');
     const selectedUser = useTGCliStore((state) => state.selectedUser);
-    const { isFocused } = useFocus({ id: MessageInputId });
+    const { isFocused } = useFocus({ id: componenetFocusIds.messageInput });
     const messageAction = useTGCliStore((state) => state.messageAction);
     const client = useTGCliStore((state) => state.client)!;
     const setMessageAction = useTGCliStore((state) => state.setMessageAction);
@@ -512,8 +271,4 @@ function MessageInput({ onSubmit }: { onSubmit: (message: string) => void }) {
             />
         </Box>
     );
-}
-
-export function initializeUI(client: TelegramClient) {
-    render(<TGCli client={client} />);
 }

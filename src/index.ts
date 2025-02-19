@@ -2,7 +2,7 @@
 import { LogLevel } from 'telegram/extensions/Logger';
 import { getTelegramClient } from './lib/utils/auth';
 // import { initializeUI } from './ui/initializeUI';
-import { initializeUI } from './ui/main';
+import { initializeUI } from './main';
 try {
 	getTelegramClient().then(async (client) => {
 		client.setLogLevel(LogLevel.NONE);

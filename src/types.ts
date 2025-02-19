@@ -1,3 +1,5 @@
+import { TelegramClient } from "telegram";
+
 export interface ChatUser {
 	firstName: string;
 	isBot: boolean;
@@ -171,4 +173,18 @@ interface PhotoSize {
 	h?: number;
 	size?: number;
 	sizes?: number[];
+}
+
+
+export type MessageAction = {
+	action: 'edit' | "delete" | 'reply',
+	id: number
+}
+export type TGCliStore = {
+	client: TelegramClient | null,
+	updateClient: (client: TelegramClient) => void,
+	selectedUser: ChatUser | null;
+	setSelectedUser: (selectedUser: ChatUser | null) => void;
+	messageAction: MessageAction | null,
+	setMessageAction: (messageAction: MessageAction | null) => void
 }
