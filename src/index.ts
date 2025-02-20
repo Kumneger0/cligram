@@ -1,7 +1,6 @@
-#!/usr/bin / env node
-import { LogLevel } from 'telegram/extensions/Logger';
+#!/bin/env node
+import { LogLevel } from 'telegram/extensions/Logger.js';
 import { getTelegramClient } from './lib/utils/auth';
-// import { initializeUI } from './ui/initializeUI';
 import { initializeUI } from './main';
 try {
 	getTelegramClient().then(async (client) => {

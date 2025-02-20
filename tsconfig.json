@@ -2,7 +2,7 @@
 	"extends": "@tsconfig/node20/tsconfig.json",
 	"compilerOptions": {
 		"target": "ES6",
-		"lib": ["DOM", "ES6", "DOM.Iterable", "ScriptHost", "ES2016.Array.Include"],
+		"lib": ["ES2022"],
 		"outDir": "build",
 		"baseUrl": ".",
 		"moduleResolution": "Bundler",
@@ -23,6 +23,6 @@
 			"@/*": ["src/*"]
 		}
 	},
-	"include": ["src", "test", "babel.config.cjs", "globals"],
+	"include": ["src"],
 	"exclude": ["dist", "node_modules"]
 }

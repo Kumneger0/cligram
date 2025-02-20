@@ -1,12 +1,18 @@
-import { conversationStore, useTGCliStore } from "@/lib/store";
-import { componenetFocusIds } from "@/lib/utils/consts";
-import { editMessage, getAllMessages, listenForUserMessages, sendMessage } from "@/telegram/messages";
-import { FormattedMessage } from "@/types";
-import { Box, Text, useFocus, useFocusManager, useInput } from "ink";
-import Spinner from "ink-spinner";
-import TextInput from "ink-text-input";
-import React, { useEffect, useLayoutEffect, useState } from "react";
-import { Modal } from "../modal/Modal";
+import { conversationStore, useTGCliStore } from '@/lib/store';
+import { formatLastSeen } from '@/lib/utils';
+import { componenetFocusIds } from '@/lib/utils/consts';
+import {
+    editMessage,
+    getAllMessages,
+    listenForEvents,
+    sendMessage
+} from '@/telegram/messages';
+import { FormattedMessage } from '@/types';
+import { Box, Text, useFocus, useFocusManager, useInput } from 'ink';
+import Spinner from 'ink-spinner';
+import TextInput from 'ink-text-input';
+import React, { useEffect, useLayoutEffect, useState } from 'react';
+import { Modal } from '../modal/Modal';
 
 export function ChatArea() {
     const selectedUser = useTGCliStore((state) => state.selectedUser);
@@ -19,51 +25,8 @@ export function ChatArea() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const setMessageAction = useTGCliStore((state) => state.setMessageAction);
     const { isFocused } = useFocus();
-
-    const { focus } = useFocusManager()
-
+    const { focus } = useFocusManager();
     const [offset, setOffset] = useState(0);
-
-
-    useInput((input, key) => {
-        if (!isFocused) return;
-
-        if (input === 'd') {
-            setMessageAction({ action: 'delete', id: activeMessage?.id! })
-            setIsModalOpen(true)
-            return
-        }
-        if (input === 'e') {
-            if (!activeMessage?.isFromMe) return
-            setMessageAction({ action: 'edit', id: activeMessage?.id! })
-            focus(componenetFocusIds.messageInput)
-            return
-        }
-
-        if (input === 'r') {
-            setMessageAction({ action: 'reply', id: activeMessage?.id! })
-            focus(componenetFocusIds.messageInput)
-            return
-        }
-
-        if (key.return) {
-            //TODO: do something with the message
-            setIsModalOpen(true);
-        }
-        if (key.upArrow) {
-            const currentIndex = conversation?.findIndex(({ id }) => id === activeMessage?.id);
-            const nextMessage = conversation[currentIndex - 1];
-            if (nextMessage) {
-                setActiveMessage(nextMessage);
-            }
-        } else if (key.downArrow) {
-            const currentIndex = conversation?.findIndex(({ id }) => id === activeMessage?.id);
-            const nextMessage = conversation[currentIndex + 1];
-            if (nextMessage) {
-                setActiveMessage(nextMessage);
-            }
-        }
-    });
 
     useEffect(() => {
         if (!selectedUser) return;
@@ -73,19 +36,44 @@ export function ChatArea() {
             setOffsetId(conversation?.[0]?.id);
             setIsLoading(false);
         });
-        listenForUserMessages(client, (message) => {
+        listenForEvents(client, {
+            onMessage: (message) => {
             const from = message.sender;
             if (from === selectedUser?.firstName) {
                 setConversation([...conversation, message]);
                 setOffsetId(message.id);
             }
+            }
         });
     }, [selectedUserPeerID]);
 
-    useInput((_, key) => {
+    useInput((input, key) => {
         if (!isFocused) return;
 
+        if (input === 'd') {
+            setMessageAction({ action: 'delete', id: activeMessage?.id! });
+            setIsModalOpen(true);
+            return;
+        }
+        if (input === 'e') {
+            if (!activeMessage?.isFromMe) return;
+            setMessageAction({ action: 'edit', id: activeMessage?.id! });
+            focus(componenetFocusIds.messageInput);
+            return;
+        }
+
+        if (input === 'r') {
+            setMessageAction({ action: 'reply', id: activeMessage?.id! });
+            focus(componenetFocusIds.messageInput);
+            return;
+        }
+
         if (key.downArrow) {
+            const currentIndex = conversation?.findIndex(({ id }) => id === activeMessage?.id);
+            const nextMessage = conversation[currentIndex + 1];
+            if (nextMessage) {
+                setActiveMessage(nextMessage);
+            }
             setOffset((prev) => Math.min(prev + 1, conversation.length - 20));
             const atEnd = offset === conversation.length - 20;
             if (atEnd && selectedUser) {
@@ -102,6 +90,11 @@ export function ChatArea() {
                 appendMessages();
             }
         } else if (key.upArrow) {
+            const currentIndex = conversation?.findIndex(({ id }) => id === activeMessage?.id);
+            const nextMessage = conversation[currentIndex - 1];
+            if (nextMessage) {
+                setActiveMessage(nextMessage);
+            }
             setOffset((prev) => Math.max(prev - 1, 0));
         }
     });
@@ -121,6 +114,8 @@ export function ChatArea() {
         );
     }
 
+    const selectedUserLastSeen = selectedUser?.lastSeen ? formatLastSeen(selectedUser?.lastSeen) : 'Unknown';
+
     return (
         <>
             {isModalOpen && (
@@ -129,8 +124,16 @@ export function ChatArea() {
                 </Modal>
             )}
 
-            {!isModalOpen &&
+            {!isModalOpen && (
                 <Box flexDirection="column" height="100%" width={'70%'}>
+                    <Box gap={1}>
+                        <Text color="blue" bold>
+                            {selectedUser?.firstName}
+                        </Text>
+                        <Text>
+                            {selectedUser?.isOnline ? 'Online' : `${selectedUserLastSeen}`}
+                        </Text>
+                    </Box>
                     <Box
                         width={'100%'}
                         height={'90%'}
@@ -140,9 +143,7 @@ export function ChatArea() {
                         gap={1}
                         paddingLeft={2}
                     >
-                        <Text color="blue" bold>
-                            {selectedUser?.firstName}
-                        </Text>
+
                         {visibleMessages.map((message) => {
                             return (
                                 <Box
@@ -164,14 +165,20 @@ export function ChatArea() {
                                         >
                                             {message.media && <Text>{message.media}</Text>}
                                         </Text>
-                                        <Text wrap="wrap" color={'white'} backgroundColor={activeMessage?.id == message.id && isFocused ? "blue" : ""}>{message.content}</Text>
+                                        <Text
+                                            wrap="wrap"
+                                            color={'white'}
+                                            backgroundColor={activeMessage?.id == message.id && isFocused ? 'blue' : ''}
+                                        >
+                                            {message.content}
+                                        </Text>
                                     </Box>
                                 </Box>
                             );
                         })}
                     </Box>
                     <MessageInput
-                        onSubmit={(message) => {
+                        onSubmit={async (message) => {
                             if (selectedUser) {
                                 const newMessage = {
                                     content: message,
@@ -181,7 +188,7 @@ export function ChatArea() {
                                     sender: 'you'
                                 } satisfies FormattedMessage;
                                 setConversation([...conversation, newMessage]);
-                                sendMessage(
+                                await sendMessage(
                                     client,
                                     { peerId: selectedUser.peerId, accessHash: selectedUser.accessHash },
                                     message
@@ -190,12 +197,10 @@ export function ChatArea() {
                         }}
                     />
                 </Box>
-            }
-
+            )}
         </>
     );
 }
-
 
 function MessageInput({ onSubmit }: { onSubmit: (message: string) => void }) {
     const [message, setMessage] = useState('');
@@ -205,15 +210,13 @@ function MessageInput({ onSubmit }: { onSubmit: (message: string) => void }) {
     const client = useTGCliStore((state) => state.client)!;
     const setMessageAction = useTGCliStore((state) => state.setMessageAction);
     const conversation = conversationStore((state) => state.conversation);
-    const messageContent = conversation.find(({ id }) => id === messageAction?.id)?.content
-    const isReply = messageAction?.action === 'reply'
-
+    const messageContent = conversation.find(({ id }) => id === messageAction?.id)?.content;
+    const isReply = messageAction?.action === 'reply';
 
     useLayoutEffect(() => {
-        if (isReply) return
-        setMessage(messageContent ?? '')
-    }, [messageAction?.id])
-
+        if (isReply) return;
+        setMessage(messageContent ?? '');
+    }, [messageAction?.id]);
 
     const edit = () => {
         if (selectedUser) {
@@ -226,49 +229,49 @@ function MessageInput({ onSubmit }: { onSubmit: (message: string) => void }) {
             } satisfies FormattedMessage;
             const updatedConversation = conversation.map((msg) => {
                 if (msg.id === messageAction?.id) {
-                    return newMessage
+                    return newMessage;
                 }
-                return msg
-            })
-            conversationStore.setState({ conversation: updatedConversation })
-            editMessage(client, selectedUser, messageAction?.id!, message)
-            setMessageAction(null)
+                return msg;
+            });
+            conversationStore.setState({ conversation: updatedConversation });
+            editMessage(client, selectedUser, messageAction?.id!, message);
+            setMessageAction(null);
         }
-    }
+    };
 
     return (
-        <Box borderStyle={isFocused ? 'classic' : undefined}>
-            {isReply ? <Box><Text>Replay To: {messageContent}</Text></Box> : null}
-            <Box marginRight={1}>
-                <Text>Write A message:</Text>
+        <Box borderStyle={isFocused ? 'classic' : undefined} flexDirection="column">
+            <Box>
+                {isReply ? <Text>Replay To: {messageContent}</Text> : <Text>Write A message:</Text>}
             </Box>
-
-            <TextInput
-                onSubmit={async (_) => {
-                    if (selectedUser) {
-                        if (isReply) {
-                            const newMessage = {
-                                content: message,
-                                media: null,
-                                isFromMe: true,
-                                id: Math.floor(Math.random() * 10000),
-                                sender: 'you'
-                            } satisfies FormattedMessage;
-                            conversationStore.setState({ conversation: [...conversation, newMessage] });
-                            sendMessage(client, selectedUser, message, true, messageAction?.id)
-                            setMessage('')
-                            setMessageAction(null)
-                            return
+            <Box>
+                <TextInput
+                    onSubmit={async (_) => {
+                        if (selectedUser) {
+                            if (isReply) {
+                                const newMessage = {
+                                    content: message,
+                                    media: null,
+                                    isFromMe: true,
+                                    id: Math.floor(Math.random() * 10000),
+                                    sender: 'you'
+                                } satisfies FormattedMessage;
+                                conversationStore.setState({ conversation: [...conversation, newMessage] });
+                                sendMessage(client, selectedUser, message, true, messageAction?.id);
+                                setMessage('');
+                                setMessageAction(null);
+                                return;
+                            }
+                            messageAction?.action == 'edit' ? edit() : onSubmit(message);
+                            setMessage('');
                         }
-                        messageAction?.action == 'edit' ? edit() : onSubmit(message);
-                        setMessage('');
-                    }
-                }}
-                placeholder="Write a message"
-                value={message}
-                onChange={setMessage}
-                focus={isFocused}
-            />
+                    }}
+                    placeholder="Write a message"
+                    value={message}
+                    onChange={setMessage}
+                    focus={isFocused}
+                />
+            </Box>
         </Box>
     );
 }

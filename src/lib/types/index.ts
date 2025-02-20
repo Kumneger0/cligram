@@ -1,4 +1,3 @@
-
 interface PeerNotifySettings {
 	flags: number;
 	showPreviews: boolean | null;
@@ -81,7 +80,10 @@ export interface User {
 	username: string;
 	phone: string | null;
 	photo: string | null;
-	status: string | null;
+	status: {
+		wasOnline: number;
+		className: string;
+	} | null
 	botInfoVersion: number;
 	restrictionReason: string | null;
 	botInlinePlaceholder: string | null;
@@ -195,7 +197,7 @@ interface ChatUser {
 	usernames: any;
 	storiesMaxId: any;
 	color: any;
-	profileColor: any; 
+	profileColor: any;
 	className: string;
 }
 
@@ -204,9 +206,9 @@ export interface MessagesSlice {
 	inexact: boolean;
 	count: number;
 	nextRate: any;
-	offsetIdOffset: any; 
+	offsetIdOffset: any;
 	messages: Message[];
-	chats: any[]; 
+	chats: any[];
 	users: ChatUser[];
 	className: string;
 }

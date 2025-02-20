@@ -1,4 +1,4 @@
-import { TelegramClient } from "telegram";
+import { TelegramClient } from 'telegram';
 
 export interface ChatUser {
 	firstName: string;
@@ -6,6 +6,8 @@ export interface ChatUser {
 	peerId: bigInt.BigInteger;
 	accessHash: bigInt.BigInteger;
 	unreadCount: number;
+	lastSeen: Date | null,
+	isOnline: boolean,
 }
 
 export interface FormattedMessage {
@@ -175,16 +177,15 @@ interface PhotoSize {
 	sizes?: number[];
 }
 
-
 export type MessageAction = {
-	action: 'edit' | "delete" | 'reply',
-	id: number
-}
+	action: 'edit' | 'delete' | 'reply';
+	id: number;
+};
 export type TGCliStore = {
-	client: TelegramClient | null,
-	updateClient: (client: TelegramClient) => void,
+	client: TelegramClient | null;
+	updateClient: (client: TelegramClient) => void;
 	selectedUser: ChatUser | null;
 	setSelectedUser: (selectedUser: ChatUser | null) => void;
-	messageAction: MessageAction | null,
-	setMessageAction: (messageAction: MessageAction | null) => void
-}
+	messageAction: MessageAction | null;
+	setMessageAction: (messageAction: MessageAction | null) => void;
+};

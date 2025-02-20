@@ -2,42 +2,39 @@
 
 A Telegram CLI client built with TypeScript and Node.js.
 
-## Features
-
-- Chat with multiple users
-- Send messages
-- Download media
-- Display media in the terminal
-- Display media in the browser
-
-## Installation
-
-1.  Clone the repository
-2.  Install dependencies with `pnpm install`
-3.  Run the application with `pnpm dev`
+> **Warning:** This project is still under development and may not be ready for production use.
 
 ## Usage
 
-1.  Start Telegram on your device
-2.  Run the application
-3.  Enter your phone number and password
-4.  Select a user to chat with
-5.  Send messages
-6.  Download media
-7.  Display media in the terminal
-8.  Display media in the browser
+This command-line interface (CLI) application offers an interactive environment with three primary components:
 
-## Contributing
+1. **Sidebar**: Displays a list of available chats.
+2. **Chat Area**: Shows the content of the selected chat.
+3. **Input Field**: Allows users to type and send messages.
 
-Contributions are welcome! If you find a bug or have a feature request, please open an issue or submit a pull request.
+Users can navigate between these components, with the currently focused component highlighted by a border.
 
-## License
+## Navigation
 
-This project is licensed under the MIT License.
+- **Switching Focus**: Press the **Tab** key to cycle focus between the Sidebar, Chat Area, and Input Field. The focused component is indicated by a border.
 
-# TODO
+- **Sidebar Navigation**: When the Sidebar is focused, use the **Up Arrow** and **Down Arrow** keys to move through the chat list.
 
-- [ ] Add support for group and channel chats
-- [ ] Add support for (images, videos, documents)
-- [ ] Add support for (delete, edit, reply) messages
-- [ ] Add support for (download, display) media
+- **Chat Area Navigation**: When the Chat Area is focused, navigate through the conversation history using the **Up Arrow** and **Down Arrow** keys. The currently selected message is highlighted with a blue background and white text.
+
+## User Interaction
+
+- **Input Field**: Focus on the Input Field to type your message. Press **Enter** to send the message.
+
+- **Message Actions**: While a message is selected in the Chat Area, you can perform the following actions:
+  - **Delete Message**: Press **D** to delete the selected message.
+  - **Edit Message**: Press **E** to edit the selected message.
+  - **Reply to Message**: Press **R** to reply to the selected message.
+
+## Visual Indicators
+
+- **Focus Border**: The currently focused component is highlighted with a border, indicating active focus.
+
+- **Selected Message Highlight**: In the Chat Area, the selected message is displayed with a blue background and white text for clear visibility.
+
+This design ensures an intuitive user experience, allowing efficient navigation and interaction within the CLI application.

@@ -15,20 +15,23 @@ export async function getUserChats(client: TelegramClient) {
 			limit: 30000
 		})
 	)) as unknown as MessagesResponse;
-
 	const userChats = result.dialogs.filter((dialog) => dialog.peer.className === 'PeerUser');
-
 	const users = await Promise.all(
 		userChats.map(async ({ peer, unreadCount }) => {
 			try {
 				const user = (await getUserInfo(client, peer.userId)) as unknown as User;
 				if (!user) return null;
+				const wasOnline = user.status?.wasOnline
+				const date = wasOnline ? new Date(wasOnline * 1000) : null
+
 				return {
 					firstName: user.firstName,
 					isBot: user.bot,
 					peerId: peer.userId,
 					accessHash: user.accessHash as unknown as bigInt.BigInteger,
-					unreadCount: unreadCount
+					unreadCount: unreadCount,
+					lastSeen: date,
+					isOnline: user.status?.className == 'UserStatusOnline'
 				};
 			} catch (err) {
 				console.error(err);
@@ -38,7 +41,6 @@ export async function getUserChats(client: TelegramClient) {
 	);
 
 	chatUsers = users.filter((user): user is NonNullable<typeof user> => user !== null);
-
 	return chatUsers.filter(({ isBot }) => !isBot);
 }
 

@@ -11,14 +11,14 @@ export const sendMessage = async (
 	userToSend: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger },
 	message: string,
 	isReply?: boolean | undefined,
-	replyToMessageId?: number,
+	replyToMessageId?: number
 ) => {
 	if (!client.connected) await client.connect();
 
 	const sendMessageParam = {
 		message: message,
-		...isReply && { replyTo: replyToMessageId }
-	}
+		...(isReply && { replyTo: replyToMessageId })
+	};
 	await client.sendMessage(
 		new Api.InputPeerUser({
 			userId: userToSend?.peerId,
@@ -34,15 +34,19 @@ export const deleteMessage = async (
 	messageId: number
 ) => {
 	try {
-		const result = await client.deleteMessages(new Api.InputPeerUser({
-			userId: userToSend?.peerId,
-			accessHash: userToSend?.accessHash
-		}), [Number(messageId)], { revoke: true })
-		return result
+		const result = await client.deleteMessages(
+			new Api.InputPeerUser({
+				userId: userToSend?.peerId,
+				accessHash: userToSend?.accessHash
+			}),
+			[Number(messageId)],
+			{ revoke: true }
+		);
+		return result;
 	} catch (err) {
-		console.log(err)
+		console.log(err);
 	}
-}
+};
 
 export const editMessage = async (
 	client: TelegramClient,
@@ -51,24 +55,22 @@ export const editMessage = async (
 	newMessage: string
 ) => {
 	try {
-
 		const entity = new Api.InputPeerUser({
 			userId: userToSend?.peerId,
 			accessHash: userToSend?.accessHash
-		})
+		});
 		const result = await client.invoke(
 			new Api.messages.EditMessage({
 				peer: entity,
 				id: messageId,
-				message: newMessage,
+				message: newMessage
 			})
-		)
-		return result
+		);
+		return result;
 	} catch (err) {
-		console.log(err)
+		console.log(err);
 	}
-}
-
+};
 
 export async function getAllMessages(
 	client: TelegramClient,
@@ -121,26 +123,45 @@ export async function getAllMessages(
 
 	return orgnizedMessages;
 }
-export const listenForUserMessages = async (
+export const listenForEvents = async (
 	client: TelegramClient,
-	onMessage: (message: FormattedMessage) => void
+	{ onMessage, onUserOnlineStatus }: {
+		onMessage: (message: FormattedMessage) => void,
+		onUserOnlineStatus?: (user: { "accessHash": string, "firstName": string, status: 'online' | 'offline', lastSeen?: number }) => void
+	}
 ) => {
 	if (!client.connected) await client.connect();
 	client.addEventHandler(async (event) => {
 		const userId = event.userId;
 		if (userId) {
 			const user = (await getUserInfo(client, userId)) as unknown as User;
-			const isNewMessage =
-				(event.className as (typeof eventClassNames)[number]) === 'UpdateShortMessage';
-
-			if (isNewMessage) {
-				onMessage({
-					id: event.id,
-					sender: event.out ? 'you' : user.firstName,
-					content: event.message,
-					isFromMe: event.out,
-					media: null
-				});
+			switch (event.status.className) {
+				case 'UpdateShortMessage':
+					onMessage({
+						id: event.id,
+						sender: event.out ? 'you' : user.firstName,
+						content: event.message,
+						isFromMe: event.out,
+						media: null
+					});
+					break;
+				case 'UserStatusOnline':
+					onUserOnlineStatus && onUserOnlineStatus({
+						accessHash: user.accessHash.toString(),
+						firstName: user.firstName,
+						status: 'online'
+					})
+					break;
+				case "UserStatusOffline":
+					onUserOnlineStatus && onUserOnlineStatus({
+						accessHash: user.accessHash.toString(),
+						firstName: user.firstName,
+						status: 'offline',
+						lastSeen: user.status?.wasOnline
+					})
+					break
+				default:
+					break;
 			}
 		}
 	});
