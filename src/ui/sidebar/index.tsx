@@ -2,7 +2,6 @@ import { useTGCliStore } from '@/lib/store';
 import { getUserChats } from '@/telegram/client';
 import { listenForEvents } from '@/telegram/messages';
 import { ChatUser, FormattedMessage } from '@/types';
-import { ca } from 'date-fns/locale';
 import { Box, Text, useFocus, useInput } from 'ink';
 import notifier from 'node-notifier';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -112,7 +111,7 @@ export function Sidebar() {
 
 	return (
 		<Box
-			width={'40%'}
+			width={'100%'}
 			flexDirection="column"
 			height={'100%'}
 			borderStyle={isFocused ? 'round' : undefined}

@@ -2,8 +2,8 @@
 import { useTGCliStore } from '@/lib/store';
 import { ChatArea } from '@/ui/chatArea';
 import { Sidebar } from '@/ui/sidebar';
-import { Box, render, Text, useFocus, useInput } from 'ink';
-import React, { useEffect } from 'react';
+import { Box, render, Text, useFocus, useInput, useStdout, useStderr } from 'ink';
+import React, { useEffect, useState } from 'react';
 import { TelegramClient } from 'telegram';
 import { getConfig, setConfig } from './lib/utils/auth';
 
@@ -43,7 +43,32 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 	const updateClient = useTGCliStore((state) => state.updateClient);
 	const config = getConfig()
 	const [showHelp, setShowHelp] = React.useState((String(config?.skipHelp) === 'false') || !!!(config?.skipHelp));
-    const client = useTGCliStore((state) => state.client);
+	const client = useTGCliStore((state) => state.client);
+
+
+
+	const { write, stdout } = useStdout();
+	const [size, setSize] = useState({
+		columns: stdout.columns,
+		rows: stdout.rows
+	});
+
+
+
+
+	useEffect(() => {
+		const handleResize = () => {
+			setSize({
+				columns: stdout.columns,
+				rows: stdout.rows
+			});
+		};
+
+		stdout.on('resize', handleResize);
+		return () => {
+			stdout.off('resize', handleResize);
+		};
+	}, [stdout]);
 
 	useInput((input, key) => {
 		if (!showHelp) return;
@@ -61,11 +86,14 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 
 	}, []);
 
-	if (!client) return;
+	if (!client) return;	
 	if (showHelp) return <HelpPage />;
+
+	const sidebarWidth = size.columns * (30 / 100)
+
 	return (<>
-		<Box borderStyle="round" borderColor="green" flexDirection="row" minHeight={20} height={30}>
-			<Box width={'30%'} flexDirection="column" borderRightColor="green">
+		<Box borderStyle="round" borderColor="green" flexDirection="row" minHeight={20} height={size.rows}>
+			<Box width={sidebarWidth} flexDirection="column" borderRightColor="green">
 				<Sidebar />
 			</Box>
 			<ChatArea key={selectedUser?.peerId.toString() ?? 'defualt-key'} />
