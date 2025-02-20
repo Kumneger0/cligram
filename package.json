@@ -1,54 +1,43 @@
 {
-	"name": "telegram-cli",
-	"version": "0.0.1",
-	"main": "dist/src/index.js",
+	"name": "tele-cli",
+	"version": "0.1.0",
+	"main": "dist/index.js",
 	"type": "module",
-	"typings": "dist/src/index.d.ts",
 	"bin": {
-		"telegram-cli": "dist/src/index.js",
-		"tgCli": "dist/src/index.js"
+		"telegram-cli": "dist/index.js",
+		"tele-cli": "dist/index.js"
 	},
 	"keywords": [
-		"nodejs",
-		"typescript",
-		"Telegram",
-		"ts",
-		"esbuild",
-		"prettier",
-		"minimal"
+		"Telegram"
 	],
 	"author": "kumneger wondimu <kumnegerwondimu@gmail.com>",
 	"license": "MIT",
+	"files": [
+		"dist"
+	],
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/kumneger0/TG-cli"
+	},
 	"scripts": {
-		"bundle": "tsup src/index.ts",
-		"compile": "tsc",
-		"compile:watch": "tsc -w",
 		"dev": "bun --watch src/index.ts",
-		"debug": "pnpm bundle && node --enable-source-maps --inspect-brk ./dist/index.js",
-		"debug:test": "node --inspect-brk ./node_modules/.bin/jest --runInBand .",
+		"build": "tsup src/index.ts --format esm --env.TELEGRAM_API_ID 24682818 --env.TELEGRAM_API_HASH ee686cb64073f7456e593e152c00e4bd",
+		"start": "bun src/index.ts",
 		"format": "prettier . --write",
 		"format:check": "prettier . --check",
 		"lint": "eslint . --fix",
-		"lint:check": "eslint .",
-		"start": "node ./dist/index.cjs",
-		"test": "jest --runInBand ."
+		"lint:check": "eslint ."
 	},
 	"devDependencies": {
-		"@jest/globals": "29.7.0",
-		"@tsconfig/node20": "20.1.4",
-		"@types/jest": "29.5.12",
-		"@types/node": "20.16.5",
 		"@typescript-eslint/eslint-plugin": "6.21.0",
 		"@typescript-eslint/parser": "6.21.0",
 		"esbuild": "0.21.3",
 		"eslint": "8.57.0",
 		"eslint-config-prettier": "9.1.0",
-		"jest": "29.7.0",
 		"nodemon": "3.1.4",
 		"prettier": "3.3.3",
-		"rimraf": "5.0.10",
-		"tsup": "^8.3.6",
-		"typescript": "5.5.4"
+		"typescript": "5.5.4",
+		"@types/bun": "^1.2.2"
 	},
 	"dependencies": {
 		"@types/ink": "^2.0.3",
@@ -57,15 +46,18 @@
 		"chalk": "^5.4.1",
 		"clipboardy": "^4.0.0",
 		"dotenv": "^16.4.7",
+		"esbuild-fix-imports-plugin": "^1.0.14",
 		"ink": "^5.1.0",
 		"ink-spinner": "^5.0.0",
 		"ink-text-input": "^6.0.0",
 		"input": "^1.0.1",
 		"node-notifier": "^10.0.1",
 		"react": "18.2.0",
+		"react-devtools-core": "^6.1.1",
 		"telegram": "^2.26.22",
 		"term-size": "^4.0.0",
 		"terminal-image": "^3.1.1",
+		"yoga-wasm-web": "^0.3.3",
 		"zustand": "^5.0.3"
 	}
 }

@@ -1,6 +1,7 @@
 import { TelegramClient } from 'telegram';
-import { StringSession } from 'telegram/sessions';
+import { StringSession } from 'telegram/sessions/index.js';
 
+//@ts-expect-error
 import input from 'input';
 
 import os from 'node:os';
@@ -16,8 +17,15 @@ config();
 const apiId = process.env.TELEGRAM_API_ID;
 const apiHash = process.env.TELEGRAM_API_HASH;
 
-export const session = getUserSession();
-const stringSession = new StringSession(session ?? '');
+type Config = {
+	session: string;
+	skipHelp: boolean;
+	skipUpdate: boolean;
+}
+
+export const tgCliConfig = getConfig();
+const session = tgCliConfig?.['session' as keyof typeof tgCliConfig]
+const stringSession = new StringSession(session as string ?? '');
 
 export async function getTelegramClient() {
 	const client = new TelegramClient(stringSession, Number(apiId), apiHash!, {
@@ -73,14 +81,38 @@ function setUserConfigration(configData: string) {
 	});
 }
 
-function getUserSession() {
+export function getConfig(): Config | null {
 	const [configFile] = getConfigFilePath();
 	if (!fs.existsSync(configFile)) {
 		return null;
 	}
-	const [key, value] = fs.readFileSync(configFile, 'utf-8').split('=');
-	if (!key || key !== 'session') {
-		return null;
-	}
-	return value;
+	const configContent = fs.readFileSync(configFile, 'utf-8');
+	const configEntries = configContent.split(';');
+	const config: Config = {
+		session: '',
+		skipHelp: false,
+		skipUpdate: false
+	}  
+
+	configEntries.forEach((entry) => {
+		const [key, value] = entry.split('=') as [keyof typeof config, string];
+		//@ts-ignore
+		config[key] = value as unknown as Config[keyof Config];
+	});
+
+	return config as Config;
+}
+
+
+export const setConfig = (key: keyof Config, value: string | boolean) => {
+	const config = getConfig();
+	const configToWrite = config ? { ...config, ...{ [key]: value } } : { [key]: value }
+
+
+	//@ts-ignore
+	config[key] = value;
+	const configData = Object.entries(configToWrite)
+		.map(([key, value]) => `${key}=${value}`)
+		.join(';');
+	setUserConfigration(configData);
 }
