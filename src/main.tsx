@@ -47,7 +47,7 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 
 
 
-	const { write, stdout } = useStdout();
+	const { stdout } = useStdout();
 	const [size, setSize] = useState({
 		columns: stdout.columns,
 		rows: stdout.rows
@@ -89,14 +89,17 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 	if (!client) return;	
 	if (showHelp) return <HelpPage />;
 
-	const sidebarWidth = size.columns * (30 / 100)
+	const sidebarWidth = size.columns * (30 / 100);
+	const chatAreaWidth = size.columns - sidebarWidth
+	const height = size.rows
+
 
 	return (<>
-		<Box borderStyle="round" borderColor="green" flexDirection="row" minHeight={20} height={size.rows}>
+		<Box borderStyle="round" borderColor="green" flexDirection="row" minHeight={20} height={height}>
 			<Box width={sidebarWidth} flexDirection="column" borderRightColor="green">
-				<Sidebar />
+				<Sidebar height={height} width={sidebarWidth} />
 			</Box>
-			<ChatArea key={selectedUser?.peerId.toString() ?? 'defualt-key'} />
+			<ChatArea height={height} width={chatAreaWidth} key={selectedUser?.peerId.toString() ?? 'defualt-key'} />
 		</Box>
 	</>
 	);

@@ -1,10 +1,16 @@
 import { downloadMedia } from '@/lib/utils/handleMedia';
-import { Api, TelegramClient } from 'telegram';
+import { Api, client, TelegramClient } from 'telegram';
 import { User } from '../lib/types/index';
 import { ChatUser, FormattedMessage, MessageMedia, eventClassNames } from '../types';
 import { getUserInfo } from './client';
 import terminalSize from 'term-size';
 import terminalImage from 'terminal-image';
+import { Raw } from 'telegram/events';
+
+
+
+
+
 
 export const sendMessage = async (
 	client: TelegramClient,
@@ -123,6 +129,7 @@ export async function getAllMessages(
 
 	return orgnizedMessages;
 }
+
 export const listenForEvents = async (
 	client: TelegramClient,
 	{ onMessage, onUserOnlineStatus }: {
@@ -131,13 +138,25 @@ export const listenForEvents = async (
 	}
 ) => {
 	if (!client.connected) await client.connect();
-	client.addEventHandler(async (event) => {
+
+
+	interface Event {
+		userId: bigInt.BigInteger;
+		className: string;
+		id: number;
+		message: string;
+		out: boolean;
+		status: {
+			className: string;
+		};
+	}
+	const hanlder = async (event: Event) => {
 		const userId = event.userId;
 		if (userId) {
 			const user = (await getUserInfo(client, userId)) as unknown as User;
-			switch (event.status.className) {
+			switch (event.className) {
 				case 'UpdateShortMessage':
-					onMessage({
+					onMessage && onMessage({
 						id: event.id,
 						sender: event.out ? 'you' : user.firstName,
 						content: event.message,
@@ -145,24 +164,34 @@ export const listenForEvents = async (
 						media: null
 					});
 					break;
-				case 'UserStatusOnline':
-					onUserOnlineStatus && onUserOnlineStatus({
-						accessHash: user.accessHash.toString(),
-						firstName: user.firstName,
-						status: 'online'
-					})
-					break;
-				case "UserStatusOffline":
-					onUserOnlineStatus && onUserOnlineStatus({
-						accessHash: user.accessHash.toString(),
-						firstName: user.firstName,
-						status: 'offline',
-						lastSeen: user.status?.wasOnline
-					})
+				case "UpdateUserStatus":
+					if (event.status.className === 'UserStatusOnline') {
+						onUserOnlineStatus && onUserOnlineStatus({
+							accessHash: user.accessHash.toString(),
+							firstName: user.firstName,
+							status: 'online'
+						})
+					}
+					if (event.status.className === 'UserStatusOffline') {
+						onUserOnlineStatus && onUserOnlineStatus({
+							accessHash: user.accessHash.toString(),
+							firstName: user.firstName,
+							status: 'offline',
+							lastSeen: user.status?.wasOnline
+						})
+					}
 					break
 				default:
+					console.log('unknown event', event)
 					break;
 			}
 		}
-	});
+	}
+
+	client.addEventHandler(hanlder);
+
+	return () => {
+		const event = new Raw({})
+		return client.removeEventHandler(hanlder, event)
+	}
 };

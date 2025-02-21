@@ -14,7 +14,7 @@ import TextInput from 'ink-text-input';
 import React, { useEffect, useLayoutEffect, useState } from 'react';
 import { Modal } from '../modal/Modal';
 
-export function ChatArea() {
+export function ChatArea({ height, width }: { height: number, width: number }) {
     const selectedUser = useTGCliStore((state) => state.selectedUser);
     const selectedUserPeerID = String(selectedUser?.peerId);
     const client = useTGCliStore((state) => state.client)!;
@@ -24,9 +24,12 @@ export function ChatArea() {
     const [isLoading, setIsLoading] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const setMessageAction = useTGCliStore((state) => state.setMessageAction);
-    const { isFocused } = useFocus();
+    const { isFocused } = useFocus({ id: componenetFocusIds.chatArea });
     const { focus } = useFocusManager();
     const [offset, setOffset] = useState(0);
+
+
+    const conversationAreaHieght = height * (70 / 100)
 
     useEffect(() => {
         if (!selectedUser) return;
@@ -35,19 +38,25 @@ export function ChatArea() {
             setConversation(conversation);
             setOffsetId(conversation?.[0]?.id);
             setIsLoading(false);
+            setActiveMessage(conversation.at(-1) ?? null)
         });
         listenForEvents(client, {
             onMessage: (message) => {
-            const from = message.sender;
-            if (from === selectedUser?.firstName) {
-                setConversation([...conversation, message]);
-                setOffsetId(message.id);
-            }
+                const from = message.sender;
+                if (from === selectedUser?.firstName) {
+                    setConversation([...conversation, message]);
+                    setOffsetId(message.id);
+                    setActiveMessage(message);
+                }
             }
         });
     }, [selectedUserPeerID]);
 
-    useInput((input, key) => {
+
+    const visibleMessages = conversation.slice(offset, offset + conversationAreaHieght);
+
+
+    useInput(async (input, key) => {
         if (!isFocused) return;
 
         if (input === 'd') {
@@ -68,38 +77,42 @@ export function ChatArea() {
             return;
         }
 
-        if (key.downArrow) {
+        if (key.upArrow || input == 'k') {
             const currentIndex = conversation?.findIndex(({ id }) => id === activeMessage?.id);
-            const nextMessage = conversation[currentIndex + 1];
-            if (nextMessage) {
-                setActiveMessage(nextMessage);
-            }
-            setOffset((prev) => Math.min(prev + 1, conversation.length - 20));
-            const atEnd = offset === conversation.length - 20;
-            if (atEnd && selectedUser) {
+            let nextMessage = conversation[currentIndex - 1];
+
+            if (offset == 0 && selectedUser) {
                 const appendMessages = async () => {
                     const newMessages = await getAllMessages(client, selectedUser, offsetId);
-                    const updatedConversation = [...conversation, ...newMessages];
+                    const updatedConversation = [...newMessages, ...conversation,];
                     setConversation(
                         updatedConversation.filter(
                             ({ id }, i) => updatedConversation.findIndex((c) => c.id == id) === i
                         )
                     );
+                    nextMessage = updatedConversation[currentIndex - 1];
                     setOffsetId(newMessages?.[0]?.id);
+                    setOffset(newMessages.length);
                 };
-                appendMessages();
+                await appendMessages();
+                return
             }
-        } else if (key.upArrow) {
-            const currentIndex = conversation?.findIndex(({ id }) => id === activeMessage?.id);
-            const nextMessage = conversation[currentIndex - 1];
             if (nextMessage) {
                 setActiveMessage(nextMessage);
             }
             setOffset((prev) => Math.max(prev - 1, 0));
+        } else if (key.downArrow || input === 'j') {
+            const currentIndex = conversation?.findIndex(({ id }) => id === activeMessage?.id);
+            const nextMessage = conversation[currentIndex + 1];
+            if (nextMessage) {
+                setActiveMessage(nextMessage);
+            }
+            const newOffset = Math.max(offset + 1, conversation.length - conversationAreaHieght);
+            if (offset < conversation.length - 1) {
+                setOffset(newOffset);
+            }
         }
     });
-
-    const visibleMessages = conversation.slice(offset, offset + 50);
 
     if (isLoading) {
         return (
@@ -116,6 +129,8 @@ export function ChatArea() {
 
     const selectedUserLastSeen = selectedUser?.lastSeen ? formatLastSeen(selectedUser?.lastSeen) : 'Unknown';
 
+
+
     return (
         <>
             {isModalOpen && (
@@ -125,7 +140,7 @@ export function ChatArea() {
             )}
 
             {!isModalOpen && (
-                <Box flexDirection="column" height="100%" width={'70%'}>
+                <Box flexDirection="column" height={height} width={width}>
                     <Box gap={1}>
                         <Text color="blue" bold>
                             {selectedUser?.firstName}
@@ -136,7 +151,7 @@ export function ChatArea() {
                     </Box>
                     <Box
                         width={'100%'}
-                        height={'90%'}
+                        height={conversationAreaHieght}
                         overflowY="hidden"
                         borderStyle={isFocused ? 'classic' : undefined}
                         flexDirection="column"
