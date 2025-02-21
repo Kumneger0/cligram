@@ -5,6 +5,7 @@ import { ChatUser } from '@/types';
 import { Box, Text, useFocus, useInput } from 'ink';
 import { TelegramClient } from 'telegram';
 import chalk from 'chalk';
+import { componenetFocusIds } from '@/lib/utils/consts';
 
 const messageActions = [
 	{
@@ -23,7 +24,7 @@ const messageActions = [
 export const Modal: React.FC<{ onClose: () => void; children: React.ReactNode }> = ({
 	onClose
 }) => {
-	const { isFocused } = useFocus({ autoFocus: true });
+	const { isFocused } = useFocus({ autoFocus: true, id: componenetFocusIds.modal });
 	const client = useTGCliStore((state) => state.client)!;
 	const selectedUser = useTGCliStore((state) => state.selectedUser);
 	const setMessageAction = useTGCliStore((state) => state.setMessageAction);

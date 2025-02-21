@@ -20,7 +20,7 @@
 		"url": "https://github.com/kumneger0/TG-cli"
 	},
 	"scripts": {
-		"dev": "bun --watch src/index.ts",
+		"dev": "tsx src/index.ts",
 		"build": "tsup src/index.ts --format esm --env.TELEGRAM_API_ID 24682818 --env.TELEGRAM_API_HASH ee686cb64073f7456e593e152c00e4bd",
 		"start": "bun src/index.ts",
 		"format": "prettier . --write",
