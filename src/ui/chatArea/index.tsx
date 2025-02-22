@@ -174,7 +174,7 @@ export function ChatArea({ height, width }: { height: number, width: number }) {
                                             backgroundColor={activeMessage?.id === message.id && isFocused ? 'blue' : ''}
                                             color={activeMessage?.id === message.id && isFocused ? 'white' : ''}
                                         >
-                                            {message.media && <Text wrap='end'>{message.media}</Text>}
+                                            {/* {message.media && <Text wrap='end'>{message.media}</Text>} */}
                                         </Text>
                                         <Text
                                             wrap="wrap"

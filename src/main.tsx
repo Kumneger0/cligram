@@ -51,8 +51,6 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 	});
 
 
-
-
 	useEffect(() => {
 		const handleResize = () => {
 			setSize({
@@ -67,7 +65,7 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 		};
 	}, [stdout]);
 
-	useInput((input, key) => {
+	useInput((input) => {
 		if (!showHelp) return;
 		if (input === 'c') {
 			setShowHelp(false);
