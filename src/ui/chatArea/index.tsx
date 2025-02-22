@@ -27,18 +27,16 @@ export function ChatArea({ height, width }: { height: number, width: number }) {
     const { isFocused } = useFocus({ id: componenetFocusIds.chatArea });
     const { focus } = useFocusManager();
     const [offset, setOffset] = useState(0);
-
-
     const conversationAreaHieght = height * (70 / 100)
 
     useEffect(() => {
         if (!selectedUser) return;
         setIsLoading(true);
-        getAllMessages(client, selectedUser).then(async (conversation) => {
+        getAllMessages({ client, user: selectedUser, chatAreaWidth: width }).then(async (conversation) => {
             setConversation(conversation);
             setOffsetId(conversation?.[0]?.id);
             setIsLoading(false);
-            setActiveMessage(conversation.at(-1) ?? null)
+            setActiveMessage(conversation.at(-1) ?? null);
         });
         listenForEvents(client, {
             onMessage: (message) => {
@@ -54,7 +52,6 @@ export function ChatArea({ height, width }: { height: number, width: number }) {
 
 
     const visibleMessages = conversation.slice(offset, offset + conversationAreaHieght);
-
 
     useInput(async (input, key) => {
         if (!isFocused) return;
@@ -83,7 +80,7 @@ export function ChatArea({ height, width }: { height: number, width: number }) {
 
             if (offset == 0 && selectedUser) {
                 const appendMessages = async () => {
-                    const newMessages = await getAllMessages(client, selectedUser, offsetId);
+                    const newMessages = await getAllMessages({client, user:selectedUser, offsetId, chatAreaWidth:width});
                     const updatedConversation = [...newMessages, ...conversation,];
                     setConversation(
                         updatedConversation.filter(
@@ -129,8 +126,6 @@ export function ChatArea({ height, width }: { height: number, width: number }) {
 
     const selectedUserLastSeen = selectedUser?.lastSeen ? formatLastSeen(selectedUser?.lastSeen) : 'Unknown';
 
-
-
     return (
         <>
             {isModalOpen && (
@@ -160,6 +155,7 @@ export function ChatArea({ height, width }: { height: number, width: number }) {
                     >
 
                         {visibleMessages.map((message) => {
+
                             return (
                                 <Box
                                     alignSelf={message.isFromMe ? 'flex-end' : 'flex-start'}
@@ -178,7 +174,7 @@ export function ChatArea({ height, width }: { height: number, width: number }) {
                                             backgroundColor={activeMessage?.id === message.id && isFocused ? 'blue' : ''}
                                             color={activeMessage?.id === message.id && isFocused ? 'white' : ''}
                                         >
-                                            {message.media && <Text>{message.media}</Text>}
+                                            {message.media && <Text wrap='end'>{message.media}</Text>}
                                         </Text>
                                         <Text
                                             wrap="wrap"
@@ -253,7 +249,6 @@ function MessageInput({ onSubmit }: { onSubmit: (message: string) => void }) {
             setMessageAction(null);
         }
     };
-
     return (
         <Box borderStyle={isFocused ? 'classic' : undefined} flexDirection="column">
             <Box>
