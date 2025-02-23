@@ -1,4 +1,4 @@
-#!/bin/env node
+#!/usr/bin/env bun
 import { LogLevel } from 'telegram/extensions/Logger.js';
 import { getTelegramClient, removeConfig } from './lib/utils/auth';
 import { initializeUI } from './main';

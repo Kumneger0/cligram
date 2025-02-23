@@ -7,7 +7,7 @@ import { Box, Text, useFocus, useInput } from 'ink';
 import notifier from 'node-notifier';
 import React, { useCallback, useEffect, useState } from 'react';
 
-export function Sidebar({ height, width }: { height: number, width: number }) {
+export function Sidebar({ height }: { height: number, width: number }) {
 	const client = useTGCliStore((state) => state.client)!;
 	const setSelectedUser = useTGCliStore((state) => state.setSelectedUser);
 	const selectedUser = useTGCliStore((state) => state.selectedUser)
@@ -15,7 +15,6 @@ export function Sidebar({ height, width }: { height: number, width: number }) {
 	const [activeChat, setActiveChat] = useState<ChatUser | null>(null);
 	const [chatUsers, setChatUsers] = useState<(ChatUser & { unreadCount: number })[]>([]);
 	const [offset, setOffset] = useState(0);
-
 	const { isFocused } = useFocus({ id: componenetFocusIds.sidebar });
 
 	const onMessage = useCallback((message: Partial<FormattedMessage>) => {
