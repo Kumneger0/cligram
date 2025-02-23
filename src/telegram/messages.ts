@@ -179,7 +179,6 @@ export const listenForEvents = async (
   }
 
   client.addEventHandler(hanlder);
-
   return () => {
     const event = new Raw({})
     return client.removeEventHandler(hanlder, event)
