@@ -22,6 +22,7 @@
 	},
 	"scripts": {
 		"dev": "bun --watch src/index.ts",
+		"roll": "rollup -c",
 		"build": "tsup src/index.ts --format esm --env.TELEGRAM_API_ID 24682818 --env.TELEGRAM_API_HASH ee686cb64073f7456e593e152c00e4bd",
 		"start": "bun src/index.ts",
 		"format": "prettier . --write",
@@ -41,6 +42,10 @@
 		"@types/bun": "^1.2.2"
 	},
 	"dependencies": {
+		"@rollup/plugin-commonjs": "^28.0.2",
+		"@rollup/plugin-json": "^6.1.0",
+		"@rollup/plugin-node-resolve": "^16.0.0",
+		"@rollup/plugin-wasm": "^6.2.2",
 		"@types/ink": "^2.0.3",
 		"@types/node-notifier": "^8.0.5",
 		"@types/react": "^19.0.8",
@@ -49,6 +54,7 @@
 		"clipboardy": "^4.0.0",
 		"dotenv": "^16.4.7",
 		"esbuild-fix-imports-plugin": "^1.0.14",
+		"esbuild-plugin-wasm": "^1.1.0",
 		"ink": "^5.1.0",
 		"ink-spinner": "^5.0.0",
 		"ink-text-input": "^6.0.0",
@@ -57,6 +63,7 @@
 		"node-notifier": "^10.0.1",
 		"react": "18.2.0",
 		"react-devtools-core": "^6.1.1",
+		"rollup": "^4.34.8",
 		"telegram": "^2.26.22",
 		"term-size": "^4.0.0",
 		"terminal-image": "^3.1.1",

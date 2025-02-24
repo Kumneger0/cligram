@@ -1,0 +1,33 @@
+name: Publish tele-cli
+
+on:
+  push:
+    branches:
+    - main
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Bun
+      uses: oven-sh/setup-bun@v1
+      with:
+        bun-version: latest
+        registry-url: 'https://registry.npmjs.org'
+
+    - name: Install Dependencies
+      run: bun install
+      working-directory: .
+
+    - name: build
+      run: bun run build
+      working-directory: .
+
+    - name: Publish to npm
+      run: npm publish
+      working-directory: .
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_SECRET }}
+        BUN_AUTH_TOKEN: ${{ secrets.NPM_SECRET }}
