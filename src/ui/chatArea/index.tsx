@@ -57,9 +57,6 @@ export function ChatArea({ height, width }: { height: number, width: number }) {
     return () => {
       unsubscribe()
       setConversation([])
-      setActiveMessage(null)
-      setOffset(0)
-      setOffsetId(undefined)
     }
   }, [selectedUserPeerID]);
 

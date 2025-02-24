@@ -34,7 +34,7 @@ cli(
         if (me.phone) {
           for (const signal of ['SIGINT', 'SIGTERM']) {
             process.on(signal, () => {
-              console.log('Cleaning up before exit.');
+              console.log('Cleaning up');
               disconnect(client)
             });
           }

@@ -1,50 +1,64 @@
 # Telegram CLI
 
-A Telegram CLI client built with TypeScript and Node.js.
+Telegram CLI client built with TypeScript and Node.js.
 
-> **Warning:** This project is still under development and may not be ready for production use.
+**Important Note:** Right now, you can only chat with personal chats. Groups, channels, and bots aren't supported yet, but I'm planning to add them in the future!
 
-## Usage
+## How to Use It
 
-This command-line interface (CLI) application offers an interactive environment with three primary components:
+When you fire it up, you get a cool interactive setup with three main parts:
 
-1. **Sidebar**: Displays a list of available chats.
-2. **Chat Area**: Shows the content of the selected chat.
-3. **Input Field**: Allows users to type and send messages.
+1.  **Sidebar**: That's where you see all your personal chats listed (takes up about 30% of your screen).
+2.  **Chat Area**: This is where the actual chat messages show up (takes up the other 70%).
+3.  **Help Page**: The first thing you'll see, it tells you how to get around.
 
-Users can navigate between these components, with the currently focused component highlighted by a border.
+## Initial Setup & Login/Logout
 
-## Navigation
+Before you can use the app, you'll need to login.
 
-- **Switching Focus**: Press the **Tab** key to cycle focus between the Sidebar, Chat Area, and Input Field. The focused component is indicated by a border.
+* **Login**: Use the command `tele-cli login` in your terminal. Follow the prompts to authenticate.
+* **Logout**: When you're done, use the command `tele-cli logout` to log out.
 
-### Sidebar Navigation
-Navigate through your chat list using:
-- **↑** or **k** - Move up
-- **↓** or **j** - Move down
+## First Time?
 
-The selected chat will be highlighted as you navigate through the list.
-## Chat Area Navigation
+When you start, you'll land on the Help Page. You've got two choices:
 
-- **Moving Through Messages:**
-  - Press the - **↑** key or **k** to move to an earlier message.
-  - Press the - **↓** Down Arrow** key or **j** to move to a later message.
+* Hit **c** to jump right into the main chat interface.
+* Hit **x** to go straight to the interface and skip the help page next time.
 
-The currently selected message is highlighted with a **blue background** and **white text**, so you can easily see which message is active.
+## The Look
 
+It's designed to fit your terminal size, so:
 
-## User Interaction
+* The sidebar gets 30% of the width.
+* The chat area fills the rest.
+* It uses the full height of your terminal.
+* You'll see nice rounded borders separating everything.
 
-- **Input Field**: Focus on the Input Field to type your message. Press **Enter** to send the message.
+## Getting Around
 
-- **Message Actions**: While a message is selected in the Chat Area, you can perform the following actions:
-  - **Delete Message**: Press **d** to delete the selected message.
-  - **Edit Message**: Press **e** to edit the selected message.
-  - **Reply to Message**: Press **r** to reply to the selected message.
+* **Switching Sides**: Press **Tab** to jump between the sidebar and the chat area.
+* The section you're on has a green border, so you know where you are.
 
-## Visual Indicators
+### Sidebar Stuff
 
-- **Focus Border**: The currently focused component is highlighted with a border, indicating active focus.
+* Use **↑** or **k** to move up the chat list.
+* Use **↓** or **j** to move down.
 
-- **Selected Message Highlight**: In the Chat Area, the selected message is displayed with a blue background and white text for clear visibility.
+### Chat Area Stuff
 
+* **Moving Through Messages:**
+    * **↑** or **k** for older messages.
+    * **↓** or **j** for newer messages.
+
+## Doing Things
+
+* **Message Actions**: When you've got a message selected in the chat area:
+    * **d** to delete it.
+    * **e** to edit it.
+    * **r** to reply to it.
+
+## What You'll See
+
+* **Green Borders**: The different parts have green borders.
+* **Resizing**: It changes size automatically when you change your terminal window.
