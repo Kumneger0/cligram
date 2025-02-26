@@ -6,8 +6,8 @@ export interface ChatUser {
 	peerId: bigInt.BigInteger;
 	accessHash: bigInt.BigInteger;
 	unreadCount: number;
-	lastSeen: Date | null,
-	isOnline: boolean,
+	lastSeen: Date | null;
+	isOnline: boolean;
 }
 
 export interface FormattedMessage {
@@ -16,6 +16,7 @@ export interface FormattedMessage {
 	content: string;
 	isFromMe: boolean;
 	media: string | null;
+	date: Date;
 }
 
 export const eventClassNames = ['UpdateUserStatus', 'UpdateShortMessage'] as const;

@@ -29,5 +29,4 @@ jobs:
       run: npm publish
       working-directory: .
       env:
-        NODE_AUTH_TOKEN: ${{ secrets.NPM_SECRET }}
         BUN_AUTH_TOKEN: ${{ secrets.NPM_SECRET }}

@@ -21,9 +21,7 @@ const messageActions = [
 	}
 ] as const;
 
-export const Modal: React.FC<{ onClose: () => void; children: React.ReactNode }> = ({
-	onClose
-}) => {
+export const Modal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 	const { isFocused } = useFocus({ autoFocus: true, id: componenetFocusIds.modal });
 	const client = useTGCliStore((state) => state.client)!;
 	const selectedUser = useTGCliStore((state) => state.selectedUser);
