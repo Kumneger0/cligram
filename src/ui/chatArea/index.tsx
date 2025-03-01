@@ -158,7 +158,12 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 		? formatLastSeen(selectedUser?.lastSeen)
 		: 'Unknown';
 
+
+
 	const groupedMessages = groupMessagesByDate(visibleMessages);
+
+
+
 	return (
 		<>
 			{isModalOpen && <Modal onClose={() => setIsModalOpen(false)} />}
@@ -207,18 +212,26 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 														}
 														color={activeMessage?.id === message.id && isFocused ? 'white' : ''}
 													>
-														{/* {message.media && <Text wrap='end'>{message.media}</Text>} */}
+														{message.media && <Text wrap="end">{message.media}</Text>}
 													</Text>
 													<Text
 														wrap="wrap"
 														color={'white'}
+														bold={!!message.document}
+														underline={!!message.document}
 														backgroundColor={
 															activeMessage?.id == message.id && isFocused ? 'blue' : ''
 														}
 													>
 														{message.content}
 													</Text>
-													<Text>{date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}</Text>
+													<Text>
+														{date.toLocaleTimeString([], {
+															hour: '2-digit',
+															minute: '2-digit',
+															hour12: true
+														})}
+													</Text>
 												</Box>
 											</Box>
 										);

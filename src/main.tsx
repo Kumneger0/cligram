@@ -98,7 +98,7 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 				borderColor="green"
 				flexDirection="row"
 				minHeight={20}
-				height={height}
+				height={height} 
 				width={size.columns}
 			>
 				<Box width={sidebarWidth} flexDirection="column" borderRightColor="green">
