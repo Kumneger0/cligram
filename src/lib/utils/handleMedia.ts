@@ -1,11 +1,12 @@
 import { Api, TelegramClient } from 'telegram';
 import Message, { MessageMediaPhoto } from '../../types';
 import { getTelegramClient } from './auth';
+import { Media } from '@/telegram/messages';
 
 type MediaSize = 'large' | 'small';
 
 type DownloadMediaArgs = {
-	media: Message['media'] | MessageMediaPhoto;
+	media: Message['media'] | MessageMediaPhoto | Media;
 	size: MediaSize;
 };
 
@@ -29,12 +30,11 @@ export const handleVideoDownload = async (): Promise<unknown> => {
 };
 export const handleMediaDownload = async (
 	client: TelegramClient,
-	media: Message['media'] | MessageMediaPhoto,
+	media: Message['media'] | MessageMediaPhoto | Media,
 	size: MediaSize
 ): Promise<Buffer | null> => {
 	const buffer = await client.downloadMedia(media as unknown as Api.TypeMessageMedia, {
-		progressCallback: (progress, total) => {
-			const percent = (Number(progress) / Number(total)) * 100;
+		progressCallback: (_progress, _total) => {
 		},
 		thumb: size === 'small' ? 0 : undefined
 	});
