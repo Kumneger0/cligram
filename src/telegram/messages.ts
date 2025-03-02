@@ -7,6 +7,16 @@ import { User } from '../lib/types/index';
 import { ChatUser, FormattedMessage } from '../types';
 import { getUserInfo } from './client';
 
+/**
+ * Sends a message to a Telegram user.
+ *
+ * @param client - The Telegram client instance.
+ * @param userToSend - An object containing the peer ID and access hash of the user to send the message to.
+ * @param message - The message text to send.
+ * @param isReply - (Optional) Indicates whether the message is a reply to another message.
+ * @param replyToMessageId - (Optional) The ID of the message to reply to.
+ * @returns An object containing the message ID and the result of the send operation.
+ */
 export const sendMessage = async (
 	client: TelegramClient,
 	userToSend: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger },
@@ -14,21 +24,41 @@ export const sendMessage = async (
 	isReply?: boolean | undefined,
 	replyToMessageId?: number
 ) => {
-	if (!client.connected) await client.connect();
+	try {
+		if (!client.connected) await client.connect();
 
-	const sendMessageParam = {
-		message: message,
-		...(isReply && { replyTo: replyToMessageId })
-	};
-	await client.sendMessage(
-		new Api.InputPeerUser({
-			userId: userToSend?.peerId,
-			accessHash: userToSend?.accessHash
-		}),
-		sendMessageParam
-	);
+		const sendMessageParam = {
+			message: message,
+			...(isReply && { replyTo: replyToMessageId })
+		};
+		const result = await client.sendMessage(
+			new Api.InputPeerUser({
+				userId: userToSend?.peerId,
+				accessHash: userToSend?.accessHash
+			}),
+			sendMessageParam
+		);
+		return {
+			messageId: result.id,
+			result
+		};
+	} catch (err) {
+		return {
+			messageId: null,
+			result: null
+		}
+	}
+
 };
 
+/**
+ * Deletes a message from a Telegram chat.
+ *
+ * @param client - The Telegram client instance.
+ * @param userToSend - An object containing the peer ID and access hash of the user to delete the message from.
+ * @param messageId - The ID of the message to be deleted.
+ * @returns The result of the message deletion operation.
+ */
 export const deleteMessage = async (
 	client: TelegramClient,
 	userToSend: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger },
@@ -45,10 +75,19 @@ export const deleteMessage = async (
 		);
 		return result;
 	} catch (err) {
-		console.log(err);
+		console.error(err);
 	}
 };
 
+/**
+ * Edits an existing message in a Telegram chat.
+ *
+ * @param client - The Telegram client instance.
+ * @param userToSend - An object containing the peer ID and access hash of the user to send the message to.
+ * @param messageId - The ID of the message to be edited.
+ * @param newMessage - The new message text to replace the existing message.
+ * @returns The result of the message edit operation.
+ */
 export const editMessage = async (
 	client: TelegramClient,
 	userToSend: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger },
@@ -69,7 +108,7 @@ export const editMessage = async (
 		);
 		return result;
 	} catch (err) {
-		console.log(err);
+		console.error(err);
 	}
 };
 
@@ -89,6 +128,15 @@ const getOrganizedDocument = () => {
 	}
 }
 
+/**
+ * Retrieves all messages from a Telegram chat for the specified user.
+ *
+ * @param client - The Telegram client instance.
+ * @param user - An object containing the user's access hash, peer ID, and first name.
+ * @param offsetId - The ID of the message to start retrieving messages from (optional).
+ * @param chatAreaWidth - The width of the chat area (optional).
+ * @returns An array of formatted messages.
+ */
 export async function getAllMessages({
 	client,
 	user: { accessHash, peerId: userId, firstName },

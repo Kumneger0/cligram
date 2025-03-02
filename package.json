@@ -25,12 +25,14 @@
 		"roll": "rollup -c",
 		"build": "tsup src/index.ts --format esm --env.TELEGRAM_API_ID 24682818 --env.TELEGRAM_API_HASH ee686cb64073f7456e593e152c00e4bd",
 		"start": "bun src/index.ts",
+		"test:": "vitest",
 		"format": "prettier . --write",
 		"format:check": "prettier . --check",
 		"lint": "eslint . --fix",
 		"lint:check": "eslint ."
 	},
 	"devDependencies": {
+		"@types/bun": "^1.2.2",
 		"@typescript-eslint/eslint-plugin": "6.21.0",
 		"@typescript-eslint/parser": "6.21.0",
 		"esbuild": "0.21.3",
@@ -39,7 +41,7 @@
 		"nodemon": "3.1.4",
 		"prettier": "3.3.3",
 		"typescript": "5.5.4",
-		"@types/bun": "^1.2.2"
+		"vitest": "^3.0.7"
 	},
 	"dependencies": {
 		"@rollup/plugin-commonjs": "^28.0.2",
