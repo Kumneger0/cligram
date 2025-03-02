@@ -18,11 +18,11 @@ jobs:
 
       - name: Build Docker image with environment variables
         run: |
-          docker build \
+          docker buildx build . \
             --build-arg TELEGRAM_API_ID=${{ secrets.TELEGRAM_API_ID }} \
             --build-arg TELEGRAM_API_HASH=${{ secrets.TELEGRAM_API_HASH }} \
-            --build-arg TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }} \
-            -t ${{ secrets.DOCKER_USERNAME }}/tele-cli:latest .
+            -t ${{ secrets.DOCKER_USERNAME }}/tele-cli:latest
+     
 
       - name: Push Docker image to Docker Hub
         run: docker push ${{ secrets.DOCKER_USERNAME }}/tele-cli:latest
