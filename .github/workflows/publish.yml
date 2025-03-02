@@ -20,6 +20,10 @@ jobs:
     - name: Install Dependencies
       run: bun install
       working-directory: .
+      
+    - name: Test
+      run: bun run test
+      working-directory: .
 
     - name: build
       run: bun run build
