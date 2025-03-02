@@ -48,3 +48,4 @@ jobs:
       working-directory: .
       env:
         BUN_AUTH_TOKEN: ${{ secrets.NPM_SECRET }}
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_SECRET }}
