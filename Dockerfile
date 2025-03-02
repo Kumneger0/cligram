@@ -16,4 +16,4 @@ RUN bun install
 COPY . .
 
 
-CMD ["bun", "src/index.ts"]
+ENTRYPOINT ["bun", "src/index.ts"]
