@@ -22,7 +22,7 @@ jobs:
       working-directory: .
       
     - name: Test
-      run: bun run test
+      run: bun test
       working-directory: .
 
     - name: build

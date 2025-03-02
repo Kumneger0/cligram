@@ -17,6 +17,13 @@ export interface FormattedMessage {
 	isFromMe: boolean;
 	media: string | null;
 	date: Date;
+	webPage?: {
+		url: string;
+		displayUrl: string | null;
+	} | null,
+	document?: {
+		document: string;
+	} | null
 }
 
 export const eventClassNames = ['UpdateUserStatus', 'UpdateShortMessage'] as const;
@@ -190,100 +197,3 @@ export type TGCliStore = {
 	messageAction: MessageAction | null;
 	setMessageAction: (messageAction: MessageAction | null) => void;
 };
-
-type Integer = bigint; // Assuming you have a way to handle big integers
-
-interface Media {
-	className: 'MessageMediaWebPage' | 'MessageMediaDocument' | 'MessageMediaPhoto' | null;
-	[key: string]: any;
-}
-
-interface MessageMediaWebPage extends Media {
-	className: 'MessageMediaWebPage';
-	flags: number;
-	forceLargeMedia: boolean;
-	forceSmallMedia: boolean;
-	manual: boolean;
-	safe: boolean;
-	webpage: WebPage;
-}
-
-interface MessageMediaDocument extends Media {
-	className: 'MessageMediaDocument';
-	flags: number;
-	nopremium: boolean;
-	spoiler: boolean;
-	document: Document;
-	ttlSeconds: number | null;
-}
-
-interface MessageMediaPhoto extends Media {
-	className: 'MessageMediaPhoto';
-	flags: number;
-	spoiler: boolean;
-	photo: Photo;
-	ttlSeconds: number | null;
-}
-
-type WebPage = WebPageDetails | WebPageEmpty;
-
-interface WebPageEmpty {
-	className: 'WebPageEmpty';
-	flags: number;
-	id: Integer;
-	url: string;
-}
-
-interface WebPageDetails {
-	className: 'WebPage';
-	flags: number;
-	hasLargeMedia: boolean;
-	id: Integer;
-	url: string;
-	displayUrl: string;
-	type: 'video' | 'telegram_bot' | 'telegram_user' | string;
-	siteName: string;
-	title: string;
-	description: string | null;
-	photo?: Photo;
-	embedUrl: string | null;
-	embedType: string | null;
-	embedWidth: number | null;
-	embedHeight: number | null;
-	duration: number | null;
-}
-
-interface Document {
-	className: 'Document';
-	flags: number;
-	id: Integer;
-	accessHash: Integer;
-	fileReference: Uint8Array;
-	date: number;
-	mimeType: string;
-	size: Integer;
-	dcId: number;
-	attributes: any[]; // Replace with specific attribute types if known
-}
-
-interface Photo {
-	className: 'Photo';
-	flags: number;
-	hasStickers: boolean;
-	id: Integer;
-	accessHash: Integer;
-	fileReference: Uint8Array;
-	date: number;
-	sizes: Size[];
-	dcId: number;
-}
-
-interface Size {
-	type: string;
-	width: number;
-	height: number;
-	size: number;
-}
-
-// Usage type:
-type TelegramMedia = MessageMediaWebPage | MessageMediaDocument | MessageMediaPhoto | null;

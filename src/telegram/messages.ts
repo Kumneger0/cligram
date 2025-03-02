@@ -189,7 +189,6 @@ export async function getAllMessages({
 					isFromMe: !!message.out,
 					media: imageString,
 					date,
-					WebPage,
 					document
 				};
 			})
