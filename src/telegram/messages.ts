@@ -171,7 +171,7 @@ export async function getAllMessages({
 						? await downloadMedia({ media, size: 'large' })
 						: null;
 
-				const WebPage = media && media.className == 'MessageMediaWebPage' ? getOrganizedWebPageMedia(media as MessageMediaWebPage) : null;
+				const webPage = media && media.className == 'MessageMediaWebPage' ? getOrganizedWebPageMedia(media as MessageMediaWebPage) : null;
 				const width = (chatAreaWidth ?? terminalSize().columns * (70 / 100)) / 2;
 				const document = media && media.className == 'MessageMediaDocument' ? getOrganizedDocument() : null
 				const date = new Date(message.date * 1000);
@@ -189,6 +189,7 @@ export async function getAllMessages({
 					isFromMe: !!message.out,
 					media: imageString,
 					date,
+					webPage,
 					document
 				};
 			})

@@ -1,0 +1,29 @@
+name: Publish tele-cli Docker Image
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      - name: Build Docker image with environment variables
+        run: |
+          docker build \
+            --build-arg TELEGRAM_API_ID=${{ secrets.TELEGRAM_API_ID }} \
+            --build-arg TELEGRAM_API_HASH=${{ secrets.TELEGRAM_API_HASH }} \
+            --build-arg TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }} \
+            -t ${{ secrets.DOCKER_USERNAME }}/tele-cli:latest .
+
+      - name: Push Docker image to Docker Hub
+        run: docker push ${{ secrets.DOCKER_USERNAME }}/tele-cli:latest
+
