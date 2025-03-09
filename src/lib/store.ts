@@ -11,6 +11,8 @@ export const conversationStore = create<{
 
 export const useTGCliStore = create<TGCliStore>((set) => ({
 	client: null,
+	currentChatType: 'PeerUser',
+	setCurrentChatType: (currentChatType) => set((state) => ({ ...state, currentChatType })),
 	updateClient: (client) => set((state) => ({ ...state, client })),
 	selectedUser: null,
 	setSelectedUser: (selectedUser) => set((state) => ({ ...state, selectedUser })),

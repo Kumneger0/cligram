@@ -34,8 +34,7 @@ export const handleMediaDownload = async (
 	size: MediaSize
 ): Promise<Buffer | null> => {
 	const buffer = await client.downloadMedia(media as unknown as Api.TypeMessageMedia, {
-		progressCallback: (_progress, _total) => {
-		},
+		progressCallback: (_progress, _total) => {},
 		thumb: size === 'small' ? 0 : undefined
 	});
 	return buffer as Buffer;
