@@ -177,67 +177,65 @@ export async function getAllMessages<T extends Dialog['peer']['className']>(
 	type: T
 ): Promise<T extends 'PeerUser' ? FormattedMessage[] : FormattedMessage[]> {
 	try {
+		if (!client.connected) await client.connect();
+		const messages = [];
 
+		for await (const message of client.iterMessages(
+			type == 'PeerUser'
+				? new Api.InputPeerUser({
+						userId: userId as unknown as bigInt.BigInteger,
+						accessHash: accessHash as unknown as bigInt.BigInteger
+					})
+				: new Api.InputPeerChannel({
+						channelId: userId as unknown as bigInt.BigInteger,
+						accessHash: accessHash as unknown as bigInt.BigInteger
+					}),
+			{ limit: 20, offsetId }
+		)) {
+			messages.push(message);
+		}
 
-	if (!client.connected) await client.connect();
-	const messages = [];
+		const orgnizedMessages = (
+			await Promise.all(
+				messages.reverse()?.map(async (message): Promise<FormattedMessage> => {
+					const media = message.media as unknown as Media;
 
-	for await (const message of client.iterMessages(
-		type == 'PeerUser'
-			? new Api.InputPeerUser({
-					userId: userId as unknown as bigInt.BigInteger,
-					accessHash: accessHash as unknown as bigInt.BigInteger
+					const buffer =
+						media && media.className == 'MessageMediaPhoto'
+							? await downloadMedia({ media, size: 'large' })
+							: null;
+
+					const webPage =
+						media && media.className == 'MessageMediaWebPage'
+							? getOrganizedWebPageMedia(media as MessageMediaWebPage)
+							: null;
+					const width = (chatAreaWidth ?? terminalSize().columns * (70 / 100)) / 2;
+					const document =
+						media && media.className == 'MessageMediaDocument' ? getOrganizedDocument() : null;
+					const date = new Date(message.date * 1000);
+					const imageString = await (buffer
+						? terminalImage.buffer(new Uint8Array(buffer), {
+								width
+							})
+						: null);
+
+					return {
+						id: message.id,
+						sender: message.out ? 'you' : userFirtNameOrChannelTitle,
+						content: document
+							? 'This Message is not supported by this Telegram client.'
+							: message.message,
+						isFromMe: !!message.out,
+						media: imageString,
+						date,
+						webPage,
+						document
+					};
 				})
-			: new Api.InputPeerChannel({
-					channelId: userId as unknown as bigInt.BigInteger,
-					accessHash: accessHash as unknown as bigInt.BigInteger
-				}),
-		{ limit: 20, offsetId }
-	)) {
-		messages.push(message);
-	}
-
-	const orgnizedMessages = (
-		await Promise.all(
-			messages.reverse()?.map(async (message): Promise<FormattedMessage> => {
-				const media = message.media as unknown as Media;
-
-				const buffer =
-					media && media.className == 'MessageMediaPhoto'
-						? await downloadMedia({ media, size: 'large' })
-						: null;
-
-				const webPage =
-					media && media.className == 'MessageMediaWebPage'
-						? getOrganizedWebPageMedia(media as MessageMediaWebPage)
-						: null;
-				const width = (chatAreaWidth ?? terminalSize().columns * (70 / 100)) / 2;
-				const document =
-					media && media.className == 'MessageMediaDocument' ? getOrganizedDocument() : null;
-				const date = new Date(message.date * 1000);
-				const imageString = await (buffer
-					? terminalImage.buffer(new Uint8Array(buffer), {
-							width
-						})
-					: null);
-
-				return {
-					id: message.id,
-					sender: message.out ? 'you' : userFirtNameOrChannelTitle,
-					content: document
-						? 'This Message is not supported by this Telegram client.'
-						: message.message,
-					isFromMe: !!message.out,
-					media: imageString,
-					date,
-					webPage,
-					document
-				};
-			})
+			)
 		)
-	)
-		?.map(({ content, ...rest }) => ({ content: content?.trim(), ...rest }))
-		?.filter((msg) => msg?.content?.length > 0);
+			?.map(({ content, ...rest }) => ({ content: content?.trim(), ...rest }))
+			?.filter((msg) => msg?.content?.length > 0);
 
 		return orgnizedMessages;
 	} catch (err) {
