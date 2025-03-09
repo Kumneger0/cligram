@@ -84,10 +84,9 @@ export function removeConfig() {
 	try {
 		const homeDir = os.homedir();
 		const configDir = path.join(homeDir, '.tg-cli');
-		const configFile = path.join(configDir, 'config.txt');
-		const configFileExists = fs.existsSync(configFile);
-		if (configFileExists) {
-			fs.rmSync(configFile);
+		const configDirExists = fs.existsSync(configDir);
+		if (configDirExists) {
+			fs.rmSync(configDir, { recursive: true });
 			return true;
 		}
 	} catch (err) {

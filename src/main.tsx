@@ -6,6 +6,8 @@ import { Box, render, Text, useFocus, useInput, useStdout } from 'ink';
 import React, { useEffect, useState } from 'react';
 import { TelegramClient } from 'telegram';
 import { getConfig, setConfig } from './lib/utils/auth';
+import { ChannelInfo } from './telegram/client';
+import { ChatUser } from './types';
 
 const HelpPage: React.FC = () => {
 	const { isFocused } = useFocus({ autoFocus: true });
@@ -48,6 +50,7 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 	const [showHelp, setShowHelp] = React.useState(
 		String(config?.skipHelp) === 'false' || !!!config?.skipHelp
 	);
+	const currentChatType = useTGCliStore((state) => state.currentChatType);
 	const client = useTGCliStore((state) => state.client);
 	const { stdout } = useStdout();
 	const [size, setSize] = useState({
@@ -89,7 +92,12 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 
 	const sidebarWidth = size.columns * (30 / 100);
 	const chatAreaWidth = size.columns - sidebarWidth;
-	const height = size.rows;
+	const height = size.rows - 1;
+
+	const currentlySelectedChatId =
+		currentChatType === 'PeerUser'
+			? (selectedUser as ChatUser)?.peerId
+			: (selectedUser as ChannelInfo)?.channelId;
 
 	return (
 		<>
@@ -97,8 +105,8 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 				borderStyle="round"
 				borderColor="green"
 				flexDirection="row"
-				minHeight={20}
-				height={height} 
+				minHeight={height}
+				height={height}
 				width={size.columns}
 			>
 				<Box width={sidebarWidth} flexDirection="column" borderRightColor="green">
@@ -107,7 +115,7 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 				<ChatArea
 					height={height}
 					width={chatAreaWidth}
-					key={selectedUser?.peerId.toString() ?? 'defualt-key'}
+					key={currentlySelectedChatId?.toString() ?? 'defualt-key'}
 				/>
 			</Box>
 		</>

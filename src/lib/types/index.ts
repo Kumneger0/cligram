@@ -16,6 +16,7 @@ interface PeerNotifySettings {
 interface PeerUser {
 	userId: bigInt.BigInteger;
 	className: 'PeerUser' | 'PeerChannel' | 'PeerChat';
+	channelId: bigInt.BigInteger;
 }
 
 export interface Dialog {
@@ -83,7 +84,7 @@ export interface User {
 	status: {
 		wasOnline: number;
 		className: string;
-	} | null
+	} | null;
 	botInfoVersion: number;
 	restrictionReason: string | null;
 	botInlinePlaceholder: string | null;
