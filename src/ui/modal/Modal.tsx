@@ -28,6 +28,8 @@ export const Modal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 	const setMessageAction = useTGCliStore((state) => state.setMessageAction);
 	const messageAction = useTGCliStore((state) => state.messageAction);
 
+	const currentChatType = useTGCliStore((state) => state.currentChatType);
+
 	const messageActionCurrentActiveKey = messageAction?.action;
 	const { action, deleteMessageShortCuts, description } = messageActions.find(
 		({ name }) => name === messageActionCurrentActiveKey
@@ -44,7 +46,9 @@ export const Modal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 			console.log(messageId, selectedUser);
 			return;
 		}
-		action(client, messageId, selectedUser);
+		if (currentChatType === 'PeerUser') {
+			action(client, messageId, selectedUser as ChatUser);
+		}
 		const filterConversation = conversation.filter(({ id }) => id !== messageId);
 		setConversation(filterConversation);
 		setMessageAction(null);

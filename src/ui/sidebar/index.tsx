@@ -1,21 +1,26 @@
 import { useTGCliStore } from '@/lib/store';
 import { componenetFocusIds } from '@/lib/utils/consts';
-import { getUserChats } from '@/telegram/client';
+import { ChannelInfo, getUserChats } from '@/telegram/client';
 import { listenForEvents } from '@/telegram/messages';
 import { ChatUser, FormattedMessage } from '@/types';
 import { Box, Text, useFocus, useInput } from 'ink';
 import notifier from 'node-notifier';
 import React, { useCallback, useEffect, useState } from 'react';
 
-export function Sidebar({ height }: { height: number, width: number }) {
+export function Sidebar({ height }: { height: number; width: number }) {
 	const client = useTGCliStore((state) => state.client)!;
 	const setSelectedUser = useTGCliStore((state) => state.setSelectedUser);
-	const selectedUser = useTGCliStore((state) => state.selectedUser)
+	const selectedUser = useTGCliStore((state) => state.selectedUser);
 
-	const [activeChat, setActiveChat] = useState<ChatUser | null>(null);
+	const [activeChat, setActiveChat] = useState<ChatUser | ChannelInfo | null>(null);
 	const [chatUsers, setChatUsers] = useState<(ChatUser & { unreadCount: number })[]>([]);
 	const [offset, setOffset] = useState(0);
 	const { isFocused } = useFocus({ id: componenetFocusIds.sidebar });
+
+	const [channels, setChannels] = useState<ChannelInfo[]>([]);
+
+	const currentChatType = useTGCliStore((state) => state.currentChatType);
+	const setCurrentChatType = useTGCliStore((state) => state.setCurrentChatType);
 
 	const onMessage = useCallback((message: Partial<FormattedMessage>) => {
 		const sender = message.sender;
@@ -26,7 +31,7 @@ export function Sidebar({ height }: { height: number, width: number }) {
 			notifier.notify({
 				title: `TGCli - ${sender} sent you a message!`,
 				message: content,
-				sound: true,
+				sound: true
 			});
 		}
 		setChatUsers((prev) =>
@@ -44,69 +49,140 @@ export function Sidebar({ height }: { height: number, width: number }) {
 		);
 	}, []);
 
-
-	const onUserOnlineStatus = ({ status, lastSeen, firstName }: { accessHash: string; firstName: string; status: "online" | "offline"; lastSeen?: number }) => {
-		if (firstName == selectedUser?.firstName) {
-			const date = lastSeen ? new Date(lastSeen * 1000) : null
-			const user = { ...selectedUser, isOnline: status == "online", lastSeen: date }
-			setSelectedUser(user)
+	const onUserOnlineStatus = ({
+		status,
+		lastSeen,
+		firstName
+	}: {
+		accessHash: string;
+		firstName: string;
+		status: 'online' | 'offline';
+		lastSeen?: number;
+	}) => {
+		if (
+			currentChatType === 'PeerUser' &&
+			selectedUser &&
+			'firstName' in selectedUser &&
+			firstName == selectedUser?.firstName
+		) {
+			const date = lastSeen ? new Date(lastSeen * 1000) : null;
+			const user = { ...selectedUser, isOnline: status == 'online', lastSeen: date };
+			setSelectedUser(user);
 		}
 		setChatUsers((prv) => {
 			const updatedData = prv.map((u) => {
 				if (u.firstName == firstName) {
-					const date = lastSeen ? new Date(lastSeen * 1000) : null
-					const user = { ...u, isOnline: status == "online", lastSeen: date }
-					return user
+					const date = lastSeen ? new Date(lastSeen * 1000) : null;
+					const user = { ...u, isOnline: status == 'online', lastSeen: date };
+					return user;
 				}
-				return u
-			})
-			return updatedData
-		})
-	}
+				return u;
+			});
+			return updatedData;
+		});
+	};
 
 	useEffect(() => {
-		let unsubscribe: () => void
+		let unsubscribe: () => void;
 		const getChats = async () => {
-			const users = (await getUserChats(client)).filter(
-				({ isBot, firstName }) => !isBot && firstName
-			);
-			setChatUsers(users);
-			if (users.length > 0) {
-				setSelectedUser(users[0]!);
+			const users = await getUserChats(client, currentChatType);
+			if (currentChatType === 'PeerChannel') {
+				setChannels(users as ChannelInfo[]);
+				setActiveChat(users[0] as ChannelInfo);
+			} else {
+				setChatUsers(users as ChatUser[]);
+				setActiveChat(users[0] as ChatUser);
 			}
 		};
 		getChats().then(async () => {
-			unsubscribe = await listenForEvents(client, { onMessage, onUserOnlineStatus });
+			if (currentChatType === 'PeerUser') {
+				unsubscribe = await listenForEvents(client, { onMessage, onUserOnlineStatus });
+			}
 		});
-		return () => unsubscribe()
+		return () => unsubscribe?.();
 	}, []);
 
 	useInput((input, key) => {
 		if (!isFocused) return;
+
+		if (input === 'c') {
+			setCurrentChatType('PeerChannel');
+		}
+		if (input === 'u') {
+			setCurrentChatType('PeerUser');
+		}
+
 		if (key.return) {
 			setSelectedUser(activeChat);
+			setOffset(0);
 		}
+
 		if (key.upArrow || input === 'k') {
-			const currentIndex = chatUsers.findIndex(({ peerId }) => peerId === activeChat?.peerId);
-			const nextUser = chatUsers[currentIndex - 1];
-			if (nextUser) {
-				setOffset((prev) => Math.max(prev - 1, 0));
-				setActiveChat(nextUser);
-			}
-		} else if (key.downArrow || input === 'j') {
-			const currentIndex = chatUsers.findIndex(({ peerId }) => peerId === activeChat?.peerId);
-			const nextUser = chatUsers[currentIndex + 1];
+			if (currentChatType === 'PeerUser') {
+				const currentIndex = chatUsers.findIndex(
+					({ peerId }) => peerId === (activeChat as ChatUser)?.peerId
+				);
 
-			if (currentIndex + 1 > height && chatUsers.length > height && currentIndex + 1 < chatUsers.length) {
-				setOffset((prev) => prev + 1);
-			}
+				console.log('currentIndex', currentIndex);
 
-			if (nextUser) {
-				setActiveChat(nextUser);
+				const nextUser = chatUsers[currentIndex - 1];
+				if (nextUser) {
+					setOffset((prev) => Math.max(prev - 1, 0));
+					setActiveChat(nextUser);
+				}
+			} else {
+				const currentSelectedId = (activeChat as ChannelInfo)?.channelId;
+				const currentIndex = channels.findIndex(({ channelId }) => channelId === currentSelectedId);
+				const nextChannel = channels[currentIndex - 1];
+				if (nextChannel) {
+					setOffset((prev) => Math.max(prev - 1, 0));
+					setActiveChat(nextChannel);
+				}
+			}
+		}
+
+		if (key.downArrow || input === 'j') {
+			if (currentChatType === 'PeerUser') {
+				const currentIndex = chatUsers.findIndex(
+					({ peerId }) => peerId === (activeChat as ChatUser)?.peerId
+				);
+
+				console.log('currentIndex', currentIndex);
+				const nextUser = chatUsers[currentIndex + 1];
+
+				if (
+					currentIndex + 1 > height &&
+					chatUsers.length > height &&
+					currentIndex + 1 < chatUsers.length
+				) {
+					setOffset((prev) => prev + 1);
+				}
+				if (nextUser) {
+					setActiveChat(nextUser);
+				}
+			} else {
+				const currentSelectedId = (activeChat as ChannelInfo)?.channelId;
+				const currentIndex = channels.findIndex(({ channelId }) => channelId === currentSelectedId);
+				const nextChannel = channels[currentIndex + 1];
+
+				if (
+					currentIndex + 1 > height &&
+					channels.length > height &&
+					currentIndex + 1 < channels.length
+				) {
+					setOffset((prev) => prev + 1);
+				}
+				if (nextChannel) {
+					setActiveChat(nextChannel);
+				}
 			}
 		}
 	});
-	const visibleChats = chatUsers.slice(offset, offset + height);
+
+	const visibleChats =
+		currentChatType === 'PeerUser'
+			? chatUsers.slice(offset, offset + height)
+			: channels.slice(offset, offset + height);
 
 	return (
 		<Box
@@ -117,16 +193,31 @@ export function Sidebar({ height }: { height: number, width: number }) {
 			borderColor={isFocused ? 'green' : ''}
 		>
 			<Text color="blue" bold>
-				Chats
+				{currentChatType === 'PeerUser' ? 'Chats' : 'Channels'}
 			</Text>
-			{visibleChats.map(({ firstName, peerId, unreadCount, isOnline }) => {
-				return <Box overflowY='hidden' key={String(peerId)} flexDirection="column">
-					<Text color={activeChat?.peerId == peerId ? 'green' : isOnline ? "yellow" : "white"} >
-						{activeChat?.peerId == peerId && isFocused ? '>' : null} {firstName}{' '}
-						{unreadCount > 0 && <Text color="red">({unreadCount})</Text>}
+			{visibleChats.map((chat) => {
+				const id =
+					currentChatType === 'PeerUser'
+						? (chat as ChatUser).peerId
+						: (chat as ChannelInfo).channelId;
+				const isOnline = currentChatType === 'PeerUser' ? (chat as ChatUser).isOnline : false;
+				const name =
+					currentChatType === 'PeerUser'
+						? (chat as ChatUser).firstName
+						: (chat as ChannelInfo).title;
+				const isSelected =
+					currentChatType === 'PeerUser'
+						? (activeChat as ChatUser)?.peerId == id
+						: (activeChat as ChannelInfo)?.channelId == id;
 
-					</Text>
-				</Box>
+				return (
+					<Box overflowY="hidden" key={String(id)} flexDirection="column">
+						<Text color={isSelected ? 'green' : isOnline ? 'yellow' : 'white'}>
+							{currentChatType === 'PeerUser' ? (isSelected && isFocused ? '>' : null) : null}{' '}
+							{name} {chat.unreadCount > 0 && <Text color="red">({chat.unreadCount})</Text>}
+						</Text>
+					</Box>
+				);
 			})}
 		</Box>
 	);

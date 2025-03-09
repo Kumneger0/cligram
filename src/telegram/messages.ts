@@ -3,26 +3,28 @@ import { Api, TelegramClient } from 'telegram';
 import { Raw } from 'telegram/events';
 import terminalSize from 'term-size';
 import terminalImage from 'terminal-image';
-import { User } from '../lib/types/index';
-import { ChatUser, FormattedMessage } from '../types';
+import { Dialog, User } from '../lib/types/index';
+import { FormattedMessage } from '../types';
 import { getUserInfo } from './client';
 
 /**
  * Sends a message to a Telegram user.
  *
  * @param client - The Telegram client instance.
- * @param userToSend - An object containing the peer ID and access hash of the user to send the message to.
+ * @param peerInfo - An object containing the peer ID and access hash of the user to send the message to.
  * @param message - The message text to send.
  * @param isReply - (Optional) Indicates whether the message is a reply to another message.
  * @param replyToMessageId - (Optional) The ID of the message to reply to.
+ * @param type - (Optional) The type of the peer to send the message to default is 'PeerUser'.
  * @returns An object containing the message ID and the result of the send operation.
  */
 export const sendMessage = async (
 	client: TelegramClient,
-	userToSend: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger },
+	peerInfo: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger },
 	message: string,
 	isReply?: boolean | undefined,
-	replyToMessageId?: number
+	replyToMessageId?: number,
+	type: Dialog['peer']['className'] = 'PeerUser'
 ) => {
 	try {
 		if (!client.connected) await client.connect();
@@ -32,10 +34,15 @@ export const sendMessage = async (
 			...(isReply && { replyTo: replyToMessageId })
 		};
 		const result = await client.sendMessage(
-			new Api.InputPeerUser({
-				userId: userToSend?.peerId,
-				accessHash: userToSend?.accessHash
-			}),
+			type == 'PeerUser'
+				? new Api.InputPeerUser({
+						userId: peerInfo?.peerId,
+						accessHash: peerInfo?.accessHash
+					})
+				: new Api.InputPeerChannel({
+						channelId: peerInfo?.peerId,
+						accessHash: peerInfo?.accessHash
+					}),
 			sendMessageParam
 		);
 		return {
@@ -46,30 +53,36 @@ export const sendMessage = async (
 		return {
 			messageId: null,
 			result: null
-		}
+		};
 	}
-
 };
 
 /**
  * Deletes a message from a Telegram chat.
  *
  * @param client - The Telegram client instance.
- * @param userToSend - An object containing the peer ID and access hash of the user to delete the message from.
+ * @param peerInfo - An object containing the peer ID and access hash of the user to delete the message from.
  * @param messageId - The ID of the message to be deleted.
+ * @param type - (Optional) The type of the peer to delete the message from default is 'PeerUser'.
  * @returns The result of the message deletion operation.
  */
 export const deleteMessage = async (
 	client: TelegramClient,
-	userToSend: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger },
-	messageId: number
+	peerInfo: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger },
+	messageId: number,
+	type: Dialog['peer']['className'] = 'PeerUser'
 ) => {
 	try {
 		const result = await client.deleteMessages(
-			new Api.InputPeerUser({
-				userId: userToSend?.peerId,
-				accessHash: userToSend?.accessHash
-			}),
+			type == 'PeerUser'
+				? new Api.InputPeerUser({
+						userId: peerInfo?.peerId,
+						accessHash: peerInfo?.accessHash
+					})
+				: new Api.InputPeerChannel({
+						channelId: peerInfo?.peerId,
+						accessHash: peerInfo?.accessHash
+					}),
 			[Number(messageId)],
 			{ revoke: true }
 		);
@@ -83,22 +96,29 @@ export const deleteMessage = async (
  * Edits an existing message in a Telegram chat.
  *
  * @param client - The Telegram client instance.
- * @param userToSend - An object containing the peer ID and access hash of the user to send the message to.
+ * @param peerInfo - An object containing the peer ID and access hash of the user to send the message to.
  * @param messageId - The ID of the message to be edited.
  * @param newMessage - The new message text to replace the existing message.
  * @returns The result of the message edit operation.
  */
 export const editMessage = async (
 	client: TelegramClient,
-	userToSend: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger },
+	peerInfo: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger },
 	messageId: number,
-	newMessage: string
+	newMessage: string,
+	type: Dialog['peer']['className'] = 'PeerUser'
 ) => {
 	try {
-		const entity = new Api.InputPeerUser({
-			userId: userToSend?.peerId,
-			accessHash: userToSend?.accessHash
-		});
+		const entity =
+			type == 'PeerUser'
+				? new Api.InputPeerUser({
+						userId: peerInfo?.peerId,
+						accessHash: peerInfo?.accessHash
+					})
+				: new Api.InputPeerChannel({
+						channelId: peerInfo?.peerId,
+						accessHash: peerInfo?.accessHash
+					});
 		const result = await client.invoke(
 			new Api.messages.EditMessage({
 				peer: entity,
@@ -112,95 +132,117 @@ export const editMessage = async (
 	}
 };
 
-
-const getOrganizedWebPageMedia = (media: MessageMediaWebPage): { url: string, displayUrl: string | null } => {
+const getOrganizedWebPageMedia = (
+	media: MessageMediaWebPage
+): { url: string; displayUrl: string | null } => {
 	return {
 		url: media.webpage.url,
-		displayUrl: 'displayUrl' in media.webpage ? media.webpage.displayUrl : null,
-	}
-}
+		displayUrl: 'displayUrl' in media.webpage ? media.webpage.displayUrl : null
+	};
+};
 
 const getOrganizedDocument = () => {
 	//TODO: need to work on this
 	// i need to figure how should i display this
 	return {
 		document: 'This file type is not supported by this Telegram client.'
-	}
-}
+	};
+};
 
 /**
- * Retrieves all messages from a Telegram chat for the specified user.
+ * Retrieves all messages from a Telegram chat for the specified user or channel.
  *
  * @param client - The Telegram client instance.
- * @param user - An object containing the user's access hash, peer ID, and first name.
+ * @param peerInfo - An object containing the user's access hash, peer ID, and first name.
  * @param offsetId - The ID of the message to start retrieving messages from (optional).
  * @param chatAreaWidth - The width of the chat area (optional).
  * @returns An array of formatted messages.
  */
-export async function getAllMessages({
-	client,
-	user: { accessHash, peerId: userId, firstName },
-	offsetId,
-	chatAreaWidth
-}: {
-	client: TelegramClient;
-	user: ChatUser;
-	offsetId?: number;
-	chatAreaWidth?: number;
-}): Promise<FormattedMessage[]> {
-	if (!client.connected) await client.connect();
-	const messages = [];
+export async function getAllMessages<T extends Dialog['peer']['className']>(
+	{
+		client,
+		peerInfo: { accessHash, peerId: userId, userFirtNameOrChannelTitle },
+		offsetId,
+		chatAreaWidth
+	}: {
+		client: TelegramClient;
+		peerInfo: {
+			accessHash: bigInt.BigInteger | string;
+			peerId: bigInt.BigInteger | string;
+			userFirtNameOrChannelTitle: string;
+		};
+		offsetId?: number;
+		chatAreaWidth?: number;
+	},
+	type: T
+): Promise<T extends 'PeerUser' ? FormattedMessage[] : FormattedMessage[]> {
+	try {
+		if (!client.connected) await client.connect();
+		const messages = [];
 
-	for await (const message of client.iterMessages(
-		new Api.InputPeerUser({
-			userId: userId as unknown as bigInt.BigInteger,
-			accessHash
-		}),
-		{ limit: 20, offsetId }
-	)) {
-		messages.push(message);
-	}
-
-	const orgnizedMessages = (
-		await Promise.all(
-			messages.reverse()?.map(async (message): Promise<FormattedMessage> => {
-				const media = message.media as unknown as Media;
-
-				const buffer =
-					media && media.className == 'MessageMediaPhoto'
-						? await downloadMedia({ media, size: 'large' })
-						: null;
-
-				const webPage = media && media.className == 'MessageMediaWebPage' ? getOrganizedWebPageMedia(media as MessageMediaWebPage) : null;
-				const width = (chatAreaWidth ?? terminalSize().columns * (70 / 100)) / 2;
-				const document = media && media.className == 'MessageMediaDocument' ? getOrganizedDocument() : null
-				const date = new Date(message.date * 1000);
-				const imageString = await (buffer
-					? terminalImage.buffer(new Uint8Array(buffer), {
-						width
+		for await (const message of client.iterMessages(
+			type == 'PeerUser'
+				? new Api.InputPeerUser({
+						userId: userId as unknown as bigInt.BigInteger,
+						accessHash: accessHash as unknown as bigInt.BigInteger
 					})
-					: null);
+				: new Api.InputPeerChannel({
+						channelId: userId as unknown as bigInt.BigInteger,
+						accessHash: accessHash as unknown as bigInt.BigInteger
+					}),
+			{ limit: 20, offsetId }
+		)) {
+			messages.push(message);
+		}
 
+		const orgnizedMessages = (
+			await Promise.all(
+				messages.reverse()?.map(async (message): Promise<FormattedMessage> => {
+					const media = message.media as unknown as Media;
 
-				return {
-					id: message.id,
-					sender: message.out ? 'you' : firstName,
-					content: document ? "This Message is not supported by this Telegram client." : message.message,
-					isFromMe: !!message.out,
-					media: imageString,
-					date,
-					webPage,
-					document
-				};
-			})
+					const buffer =
+						media && media.className == 'MessageMediaPhoto'
+							? await downloadMedia({ media, size: 'large' })
+							: null;
+
+					const webPage =
+						media && media.className == 'MessageMediaWebPage'
+							? getOrganizedWebPageMedia(media as MessageMediaWebPage)
+							: null;
+					const width = (chatAreaWidth ?? terminalSize().columns * (70 / 100)) / 2;
+					const document =
+						media && media.className == 'MessageMediaDocument' ? getOrganizedDocument() : null;
+					const date = new Date(message.date * 1000);
+					const imageString = await (buffer
+						? terminalImage.buffer(new Uint8Array(buffer), {
+								width
+							})
+						: null);
+
+					return {
+						id: message.id,
+						sender: message.out ? 'you' : userFirtNameOrChannelTitle,
+						content: document
+							? 'This Message is not supported by this Telegram client.'
+							: message.message,
+						isFromMe: !!message.out,
+						media: imageString,
+						date,
+						webPage,
+						document
+					};
+				})
+			)
 		)
-	)
-		?.map(({ content, ...rest }) => ({ content: content?.trim(), ...rest }))
-		?.filter((msg) => msg?.content?.length > 0);
+			?.map(({ content, ...rest }) => ({ content: content?.trim(), ...rest }))
+			?.filter((msg) => msg?.content?.length > 0);
 
-	return orgnizedMessages;
+		return orgnizedMessages;
+	} catch (err) {
+		console.error(err);
+		return [];
+	}
 }
-
 export const listenForEvents = async (
 	client: TelegramClient,
 	{
@@ -278,12 +320,10 @@ export const listenForEvents = async (
 	};
 };
 
-
-
 interface BaseMedia {
 	CONSTRUCTOR_ID: number;
 	SUBCLASS_OF_ID: number;
-	className: "MessageMediaWebPage" | "MessageMediaDocument" | "MessageMediaPhoto";
+	className: 'MessageMediaWebPage' | 'MessageMediaDocument' | 'MessageMediaPhoto';
 	classType: string;
 	flags: number;
 }
@@ -297,7 +337,6 @@ export interface MessageMediaWebPage extends BaseMedia {
 	safe: boolean;
 	webpage: WebPage | WebPageEmpty;
 }
-
 
 export interface WebPage {
 	CONSTRUCTOR_ID: number;
@@ -326,7 +365,6 @@ export interface WebPage {
 	attributes: any | null;
 }
 
-
 export interface WebPageEmpty {
 	CONSTRUCTOR_ID: number;
 	SUBCLASS_OF_ID: number;
@@ -336,7 +374,6 @@ export interface WebPageEmpty {
 	id: bigint;
 	url: string;
 }
-
 
 export interface MessageMediaDocument extends BaseMedia {
 	nopremium: boolean;
@@ -372,13 +409,11 @@ export interface Document {
 	attributes: any[];
 }
 
-
 export interface MessageMediaPhoto extends BaseMedia {
 	spoiler: boolean;
 	photo: Photo;
 	ttlSeconds: number | null;
 }
-
 
 interface Photo {
 	CONSTRUCTOR_ID: number;

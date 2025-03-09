@@ -28,7 +28,6 @@ cli(
 	},
 	async (_argv) => {
 		try {
-
 			const client = await getTelegramClient();
 			if (client) {
 				await client.connect();
