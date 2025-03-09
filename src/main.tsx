@@ -8,6 +8,7 @@ import { TelegramClient } from 'telegram';
 import { getConfig, setConfig } from './lib/utils/auth';
 import { ChannelInfo } from './telegram/client';
 import { ChatUser } from './types';
+import { SearchModal } from './ui/Search';
 
 const HelpPage: React.FC = () => {
 	const { isFocused } = useFocus({ autoFocus: true });
@@ -52,6 +53,9 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 	);
 	const currentChatType = useTGCliStore((state) => state.currentChatType);
 	const client = useTGCliStore((state) => state.client);
+
+	const searchMode = useTGCliStore((state) => state.searchMode);
+
 	const { stdout } = useStdout();
 	const [size, setSize] = useState({
 		columns: stdout.columns,
@@ -72,7 +76,7 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 		};
 	}, [stdout]);
 
-	useInput((input) => {
+	useInput((input, _key) => {
 		if (!showHelp) return;
 		if (input === 'c') {
 			setShowHelp(false);
@@ -112,11 +116,15 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 				<Box width={sidebarWidth} flexDirection="column" borderRightColor="green">
 					<Sidebar key={currentChatType} height={height} width={sidebarWidth} />
 				</Box>
-				<ChatArea
-					height={height}
-					width={chatAreaWidth}
-					key={currentlySelectedChatId?.toString() ?? 'defualt-key'}
-				/>
+				{searchMode ? (
+					<SearchModal height={height} width={chatAreaWidth} />
+				) : (
+					<ChatArea
+						height={height}
+						width={chatAreaWidth}
+						key={currentlySelectedChatId?.toString() ?? 'defualt-key'}
+					/>
+				)}
 			</Box>
 		</>
 	);
