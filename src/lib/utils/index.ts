@@ -5,7 +5,7 @@ import {
 	isThisYear,
 	format,
 	differenceInSeconds,
-	differenceInCalendarDays,
+	differenceInCalendarDays
 } from 'date-fns';
 
 export function formatLastSeen(date: Date) {
