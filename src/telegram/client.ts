@@ -20,6 +20,56 @@ async function getChannelInfo(client: TelegramClient, channelId: bigInt.BigInteg
 	return channel;
 }
 
+export async function searchUsers(client: TelegramClient, query: string) {
+	if (!client.connected) await client.connect();
+	const result = await client.invoke(
+		new Api.contacts.Search({
+			q: query,
+			limit: 3
+		})
+	);
+	const users = result.users
+		.filter((user) => user.className === 'User')
+		.map((user) => {
+			return {
+				firstName: user.firstName ?? '',
+				peerId: user.id,
+				accessHash: user.accessHash as unknown as bigInt.BigInteger,
+				isBot: user.bot ?? false,
+				unreadCount: 0,
+				lastSeen: null,
+				isOnline: false
+			} satisfies ChatUser;
+		});
+
+	const chats = result.chats
+		.filter((chat) => chat.className === 'Chat')
+		.map((chat) => ({
+			title: chat.title ?? '',
+			chatId: chat.id
+		}));
+
+	const channels = await Promise.all(
+		result.results
+			.filter((result) => result.className === 'PeerChannel')
+			.map(async (chann) => {
+				const channel = (await getChannelInfo(client, chann.channelId)) as unknown as Channel;
+				return {
+					title: channel.title,
+					username: channel.username,
+					channelId: channel.id.toString(),
+					accessHash: channel.accessHash.toString(),
+					isCreator: channel.creator,
+					isBroadcast: channel.broadcast,
+					participantsCount: channel.participantsCount,
+					unreadCount: 0
+				} satisfies ChannelInfo;
+			})
+	);
+
+	return { users, chats, channels };
+}
+
 export async function getUserChats<T extends Dialog['peer']['className']>(
 	client: TelegramClient,
 	type: T

@@ -6,6 +6,7 @@ import terminalImage from 'terminal-image';
 import { Dialog, User } from '../lib/types/index';
 import { FormattedMessage } from '../types';
 import { getUserInfo } from './client';
+import { IterMessagesParams } from 'telegram/client/messages';
 
 /**
  * Sends a message to a Telegram user.
@@ -174,7 +175,8 @@ export async function getAllMessages<T extends Dialog['peer']['className']>(
 		offsetId?: number;
 		chatAreaWidth?: number;
 	},
-	type: T
+	type: T,
+	iterParams?: Partial<IterMessagesParams>
 ): Promise<T extends 'PeerUser' ? FormattedMessage[] : FormattedMessage[]> {
 	try {
 		if (!client.connected) await client.connect();
@@ -190,7 +192,7 @@ export async function getAllMessages<T extends Dialog['peer']['className']>(
 						channelId: userId as unknown as bigInt.BigInteger,
 						accessHash: accessHash as unknown as bigInt.BigInteger
 					}),
-			{ limit: 20, offsetId }
+			{ limit: 20, offsetId, ...iterParams }
 		)) {
 			messages.push(message);
 		}
