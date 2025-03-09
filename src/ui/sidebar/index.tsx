@@ -16,6 +16,7 @@ export function Sidebar({ height }: { height: number; width: number }) {
 	const [chatUsers, setChatUsers] = useState<(ChatUser & { unreadCount: number })[]>([]);
 	const [offset, setOffset] = useState(0);
 	const { isFocused } = useFocus({ id: componenetFocusIds.sidebar });
+	const setSearchMode = useTGCliStore((state) => state.setSearchMode);
 
 	const [channels, setChannels] = useState<ChannelInfo[]>([]);
 
@@ -110,6 +111,10 @@ export function Sidebar({ height }: { height: number; width: number }) {
 		}
 		if (input === 'u') {
 			setCurrentChatType('PeerUser');
+		}
+
+		if (input === 'f') {
+			setSearchMode('CHANNELS_OR_ USERS');
 		}
 
 		if (key.return) {

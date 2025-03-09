@@ -10,6 +10,7 @@ import React, { useEffect, useLayoutEffect, useState } from 'react';
 import { Modal } from '../modal/Modal';
 import { Fragment } from 'react';
 import { ChannelInfo } from '@/telegram/client';
+import { SearchModal } from '../Search';
 const formatDate = (date: Date) =>
 	date.toLocaleDateString('en-US', {
 		month: 'short',
@@ -45,6 +46,7 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 	const [offset, setOffset] = useState(0);
 
 	const currentChatType = useTGCliStore((state) => state.currentChatType);
+	const setSearchMode = useTGCliStore((state) => state.setSearchMode);
 	const currentlySelectedChatId =
 		currentChatType === 'PeerUser'
 			? (selectedUser as ChatUser)?.peerId
@@ -121,6 +123,11 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 			setMessageAction({ action: 'delete', id: activeMessage?.id! });
 			setIsModalOpen(true);
 			return;
+		}
+
+		if (input === 'f') {
+			//TODO: set this conversation once after deciding how the result should be displayed
+			setSearchMode('CHANNELS_OR_ USERS');
 		}
 
 		if (input === 'e') {
@@ -220,6 +227,7 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 	return (
 		<>
 			{isModalOpen && <Modal onClose={() => setIsModalOpen(false)} />}
+
 			{!isModalOpen && (
 				<Box flexDirection="column" height={height} width={width}>
 					<Box gap={1}>

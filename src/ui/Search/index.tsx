@@ -1,0 +1,181 @@
+import { useTGCliStore } from '@/lib/store';
+import { componenetFocusIds } from '@/lib/utils/consts';
+import { ChannelInfo, searchUsers } from '@/telegram/client';
+import { getAllMessages } from '@/telegram/messages';
+import { ChatUser } from '@/types';
+import chalk from 'chalk';
+import debounce from 'debounce';
+import { Box, Text, useFocus, useInput } from 'ink';
+import TextInput from 'ink-text-input';
+import React, { useState } from 'react';
+
+type SearchResult = { type: 'user'; data: ChatUser } | { type: 'channel'; data: ChannelInfo };
+
+export const SearchModal: React.FC<{ height: number; width: number }> = ({ height, width }) => {
+	const { isFocused } = useFocus({ autoFocus: true, id: componenetFocusIds.searchModal });
+	const [query, setQuery] = useState('');
+	const setSearchMode = useTGCliStore((state) => state.setSearchMode);
+	const searchMode = useTGCliStore((state) => state.searchMode);
+	const client = useTGCliStore((state) => state.client);
+	const currentChatType = useTGCliStore((state) => state.currentChatType);
+	const setCurrentChatType = useTGCliStore((state) => state.setCurrentChatType);
+
+	const selectedUser = useTGCliStore((state) => state.selectedUser);
+
+	const setSelectedUser = useTGCliStore((state) => state.setSelectedUser);
+
+	const [combinedResults, setCombinedResults] = useState<SearchResult[]>([]);
+	const [activeIndex, setActiveIndex] = useState<number>(-1);
+
+	const debouncedSearch = debounce(async (query: string) => {
+		if (searchMode == 'CHANNELS_OR_ USERS') {
+			const results = await searchUsers(client!, query);
+			const combined: SearchResult[] = [
+				...results.users.map((user) => ({ type: 'user' as const, data: user })),
+				...results.channels.map((channel) => ({ type: 'channel' as const, data: channel }))
+			];
+			setCombinedResults(combined);
+			setActiveIndex(combined.length > 0 ? 0 : -1);
+		}
+		if (searchMode == 'CONVERSATION') {
+			const peerInfo =
+				currentChatType == 'PeerUser'
+					? {
+							accessHash: selectedUser!.accessHash,
+							peerId: (selectedUser! as ChatUser).peerId,
+							userFirtNameOrChannelTitle: (selectedUser! as ChatUser).firstName
+						}
+					: {
+							accessHash: selectedUser!.accessHash,
+							peerId: (selectedUser! as ChannelInfo).channelId,
+							userFirtNameOrChannelTitle: (selectedUser! as ChannelInfo).title
+						};
+			const messages = await getAllMessages(
+				{ client: client!, peerInfo, offsetId: 0, chatAreaWidth: 0 },
+				currentChatType,
+				{ search: query }
+			);
+		}
+	}, 1000);
+
+	useInput((input, key) => {
+		if (key.escape) {
+			setSearchMode(null);
+			return;
+		}
+
+		if (combinedResults.length === 0) return;
+
+		if (key.return) {
+			const result = combinedResults[activeIndex];
+			if (result?.type == 'user') {
+				if (currentChatType !== 'PeerUser') setCurrentChatType('PeerUser');
+				setSelectedUser(result.data);
+			}
+			if (result?.type == 'channel') {
+				if (currentChatType !== 'PeerChannel') setCurrentChatType('PeerChannel');
+				setSelectedUser(result.data);
+			}
+			setSearchMode(null);
+		}
+		if (key.upArrow || input === 'k') {
+			setActiveIndex((prev) => Math.max(0, prev - 1));
+		}
+		if (key.downArrow || input === 'j') {
+			setActiveIndex((prev) => Math.min(combinedResults.length - 1, prev + 1));
+		}
+	});
+
+	const bgColor = chalk.bgBlue(''.repeat(80));
+
+	const modalBackadropWidth = width * (80 / 100);
+	const modalBackadropHight = height * (80 / 100);
+
+	return (
+		<Box
+			borderColor={isFocused ? 'blue' : ''}
+			borderStyle="round"
+			flexDirection="column"
+			width={modalBackadropWidth}
+			height={modalBackadropHight}
+			justifyContent="center"
+			alignItems="center"
+		>
+			<Box position="absolute">
+				<Text color="blue" backgroundColor="white">
+					{bgColor}
+				</Text>
+			</Box>
+			<Box
+				flexDirection="column"
+				borderStyle="round"
+				borderColor={'blue'}
+				padding={1}
+				width={modalBackadropWidth * 0.8}
+				height={modalBackadropHight * 0.8}
+				alignItems="center"
+				justifyContent="center"
+				position="absolute"
+				marginTop={5}
+				marginLeft={30}
+				marginRight={30}
+			>
+				<Text color="blue" bold>
+					{searchMode == 'CHANNELS_OR_ USERS' ? 'Search Channels or Users' : 'Search Conversation'}
+				</Text>
+				<Box marginTop={1} width="100%" alignItems="center">
+					<Text color="white">/</Text>
+					<TextInput
+						value={query}
+						onChange={(value) => {
+							setQuery(value);
+							if (searchMode == 'CHANNELS_OR_ USERS') {
+								debouncedSearch(value);
+							}
+						}}
+						onSubmit={(value) => {
+							if (searchMode == 'CONVERSATION') {
+								debouncedSearch(value);
+							}
+						}}
+						placeholder="Type to search..."
+						focus={isFocused}
+					/>
+				</Box>
+				<Box flexDirection="column">
+					{searchMode == 'CHANNELS_OR_ USERS' &&
+						combinedResults.map((result, index) => (
+							<Text
+								key={result.type === 'user' ? result.data.peerId.toString() : result.data.channelId}
+								color={activeIndex === index ? 'green' : 'white'}
+							>
+								{activeIndex === index ? '> ' : '  '}
+								{result.type === 'user' ? result.data.firstName : result.data.title}
+								{result.type === 'channel' && ' (channel)'}
+							</Text>
+						))}
+				</Box>
+				<Box marginTop={2}>
+					<Text backgroundColor={'blue'} color={'white'}>
+						(Press ESC to close, Enter to search)
+					</Text>
+				</Box>
+				<Box marginTop={1} flexDirection="column" alignItems="center">
+					<Text color="gray">Search Navigation:</Text>
+					<Box gap={2}>
+						<Text color="red" bold>
+							j/k
+						</Text>
+						<Text color="green">navigate results</Text>
+					</Box>
+					<Box gap={2}>
+						<Text color="red" bold>
+							enter
+						</Text>
+						<Text color="green">select</Text>
+					</Box>
+				</Box>
+			</Box>
+		</Box>
+	);
+};

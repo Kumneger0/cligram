@@ -191,9 +191,14 @@ export type MessageAction = {
 	action: 'edit' | 'delete' | 'reply';
 	id: number;
 };
+
+type SeachMode = 'CONVERSATION' | 'CHANNELS_OR_ USERS' | null;
+
 export type TGCliStore = {
 	client: TelegramClient | null;
 	updateClient: (client: TelegramClient) => void;
+	searchMode: SeachMode;
+	setSearchMode: (searchMode: SeachMode) => void;
 	selectedUser: ChatUser | ChannelInfo | null;
 	setSelectedUser: (selectedUser: ChatUser | ChannelInfo | null) => void;
 	messageAction: MessageAction | null;
