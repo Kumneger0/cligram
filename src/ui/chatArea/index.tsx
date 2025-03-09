@@ -44,8 +44,6 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 	const [isModalOpen, setIsModalOpen] = useState(false);
 	const [offset, setOffset] = useState(0);
 
-	const conversationAreaHieght = height * (70 / 100);
-
 	const currentChatType = useTGCliStore((state) => state.currentChatType);
 	const currentlySelectedChatId =
 		currentChatType === 'PeerUser'
@@ -107,6 +105,12 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 			setConversation([]);
 		};
 	}, [selectedUserPeerID, currentChatType]);
+
+	const conversationAreaHieght =
+		currentChatType === 'PeerUser' ||
+		(currentChatType === 'PeerChannel' && (selectedUser as ChannelInfo)?.isCreator)
+			? height * (70 / 100)
+			: height * (90 / 100);
 
 	const visibleMessages = conversation.slice(offset, offset + conversationAreaHieght);
 
