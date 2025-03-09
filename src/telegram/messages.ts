@@ -34,13 +34,15 @@ export const sendMessage = async (
 			...(isReply && { replyTo: replyToMessageId })
 		};
 		const result = await client.sendMessage(
-			type == 'PeerUser' ? new Api.InputPeerUser({
-				userId: peerInfo?.peerId,
-				accessHash: peerInfo?.accessHash
-			}) : new Api.InputPeerChannel({
-				channelId: peerInfo?.peerId,
-				accessHash: peerInfo?.accessHash
-			}),
+			type == 'PeerUser'
+				? new Api.InputPeerUser({
+						userId: peerInfo?.peerId,
+						accessHash: peerInfo?.accessHash
+					})
+				: new Api.InputPeerChannel({
+						channelId: peerInfo?.peerId,
+						accessHash: peerInfo?.accessHash
+					}),
 			sendMessageParam
 		);
 		return {
@@ -72,13 +74,15 @@ export const deleteMessage = async (
 ) => {
 	try {
 		const result = await client.deleteMessages(
-			type == 'PeerUser' ? new Api.InputPeerUser({
-				userId: peerInfo?.peerId,
-				accessHash: peerInfo?.accessHash
-			}) : new Api.InputPeerChannel({
-				channelId: peerInfo?.peerId,
-				accessHash: peerInfo?.accessHash
-			}),
+			type == 'PeerUser'
+				? new Api.InputPeerUser({
+						userId: peerInfo?.peerId,
+						accessHash: peerInfo?.accessHash
+					})
+				: new Api.InputPeerChannel({
+						channelId: peerInfo?.peerId,
+						accessHash: peerInfo?.accessHash
+					}),
 			[Number(messageId)],
 			{ revoke: true }
 		);
@@ -105,13 +109,16 @@ export const editMessage = async (
 	type: Dialog['peer']['className'] = 'PeerUser'
 ) => {
 	try {
-		const entity = type == 'PeerUser' ? new Api.InputPeerUser({
-			userId: peerInfo?.peerId,
-			accessHash: peerInfo?.accessHash
-		}) : new Api.InputPeerChannel({
-			channelId: peerInfo?.peerId,
-			accessHash: peerInfo?.accessHash
-		});
+		const entity =
+			type == 'PeerUser'
+				? new Api.InputPeerUser({
+						userId: peerInfo?.peerId,
+						accessHash: peerInfo?.accessHash
+					})
+				: new Api.InputPeerChannel({
+						channelId: peerInfo?.peerId,
+						accessHash: peerInfo?.accessHash
+					});
 		const result = await client.invoke(
 			new Api.messages.EditMessage({
 				peer: entity,
@@ -142,7 +149,6 @@ const getOrganizedDocument = () => {
 	};
 };
 
-
 /**
  * Retrieves all messages from a Telegram chat for the specified user or channel.
  *
@@ -160,25 +166,32 @@ export async function getAllMessages<T extends Dialog['peer']['className']>(
 		chatAreaWidth
 	}: {
 		client: TelegramClient;
-			peerInfo: { accessHash: bigInt.BigInteger | string; peerId: bigInt.BigInteger | string, userFirtNameOrChannelTitle: string };
-			offsetId?: number;
-			chatAreaWidth?: number;
-		},
+		peerInfo: {
+			accessHash: bigInt.BigInteger | string;
+			peerId: bigInt.BigInteger | string;
+			userFirtNameOrChannelTitle: string;
+		};
+		offsetId?: number;
+		chatAreaWidth?: number;
+	},
 	type: T
 ): Promise<T extends 'PeerUser' ? FormattedMessage[] : FormattedMessage[]> {
+	try {
+
+
 	if (!client.connected) await client.connect();
 	const messages = [];
 
 	for await (const message of client.iterMessages(
 		type == 'PeerUser'
 			? new Api.InputPeerUser({
-				userId: userId as unknown as bigInt.BigInteger,
-				accessHash: accessHash as unknown as bigInt.BigInteger
-			})
+					userId: userId as unknown as bigInt.BigInteger,
+					accessHash: accessHash as unknown as bigInt.BigInteger
+				})
 			: new Api.InputPeerChannel({
-				channelId: userId as unknown as bigInt.BigInteger,
-				accessHash: accessHash as unknown as bigInt.BigInteger
-			}),
+					channelId: userId as unknown as bigInt.BigInteger,
+					accessHash: accessHash as unknown as bigInt.BigInteger
+				}),
 		{ limit: 20, offsetId }
 	)) {
 		messages.push(message);
@@ -204,8 +217,8 @@ export async function getAllMessages<T extends Dialog['peer']['className']>(
 				const date = new Date(message.date * 1000);
 				const imageString = await (buffer
 					? terminalImage.buffer(new Uint8Array(buffer), {
-						width
-					})
+							width
+						})
 					: null);
 
 				return {
@@ -226,7 +239,11 @@ export async function getAllMessages<T extends Dialog['peer']['className']>(
 		?.map(({ content, ...rest }) => ({ content: content?.trim(), ...rest }))
 		?.filter((msg) => msg?.content?.length > 0);
 
-	return orgnizedMessages;
+		return orgnizedMessages;
+	} catch (err) {
+		console.error(err);
+		return [];
+	}
 }
 export const listenForEvents = async (
 	client: TelegramClient,

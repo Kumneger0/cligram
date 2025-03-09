@@ -37,22 +37,24 @@ export async function getUserChats<T extends Dialog['peer']['className']>(
 
 	if (type === 'PeerChannel') {
 		const channels = result.dialogs.filter((dialog) => dialog.peer.className === 'PeerChannel');
-		const channelsInfo = (await Promise.all(
-			channels.map(async (chan) => {
-				const channel = (await getChannelInfo(client, chan.peer.channelId)) as unknown as Channel;
+		const channelsInfo = (
+			await Promise.all(
+				channels.map(async (chan) => {
+					const channel = (await getChannelInfo(client, chan.peer.channelId)) as unknown as Channel;
 
-				return {
-					title: channel.title,
-					username: channel.username,
-					channelId: channel.id.toString(),
-					accessHash: channel.accessHash.toString(),
-					isCreator: channel.creator,
-					isBroadcast: channel.broadcast,
-					participantsCount: channel.participantsCount,
-					unreadCount: 0
-				} satisfies ChannelInfo;
-			})
-		)).filter(({ isBroadcast }) => isBroadcast) as ChannelInfo[];
+					return {
+						title: channel.title,
+						username: channel.username,
+						channelId: channel.id.toString(),
+						accessHash: channel.accessHash.toString(),
+						isCreator: channel.creator,
+						isBroadcast: channel.broadcast,
+						participantsCount: channel.participantsCount,
+						unreadCount: 0
+					} satisfies ChannelInfo;
+				})
+			)
+		).filter(({ isBroadcast }) => isBroadcast) as ChannelInfo[];
 		return channelsInfo as unknown as Promise<T extends 'PeerChannel' ? ChannelInfo[] : ChatUser[]>;
 	}
 	if (type === 'PeerUser') {
@@ -82,7 +84,7 @@ export async function getUserChats<T extends Dialog['peer']['className']>(
 		);
 
 		chatUsers = users.filter((user): user is NonNullable<typeof user> => user !== null);
-		return chatUsers.filter(({ isBot }) => !isBot) as unknown as Promise<
+		return chatUsers.filter(({ isBot, firstName }) => !isBot && firstName) as unknown as Promise<
 			T extends 'PeerChannel' ? ChannelInfo[] : ChatUser[]
 		>;
 	}

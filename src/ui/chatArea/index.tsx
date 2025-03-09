@@ -77,7 +77,7 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 						userFirtNameOrChannelTitle:
 							currentChatType === 'PeerUser'
 								? (selectedUser as ChatUser).firstName
-								: (selectedUser as ChannelInfo).title,
+								: (selectedUser as ChannelInfo).title
 					},
 					chatAreaWidth: width
 				},
@@ -106,7 +106,7 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 			unsubscribe?.();
 			setConversation([]);
 		};
-	}, [selectedUserPeerID, currentChatType]); 
+	}, [selectedUserPeerID, currentChatType]);
 
 	const visibleMessages = conversation.slice(offset, offset + conversationAreaHieght);
 
@@ -132,26 +132,36 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 			return;
 		}
 
-
-
 		if (key.upArrow || input == 'k') {
 			const currentIndex = conversation?.findIndex(({ id }) => id === activeMessage?.id);
 			let nextMessage = conversation[currentIndex - 1];
 			if (offset == 0 && selectedUser) {
 				const appendMessages = async () => {
-					const peerId = currentChatType === 'PeerUser' ? (selectedUser as ChatUser).peerId : (selectedUser as ChannelInfo).channelId;
-					const accessHash = currentChatType === 'PeerUser' ? (selectedUser as ChatUser).accessHash : (selectedUser as ChannelInfo).accessHash;
-					const userFirtNameOrChannelTitle = currentChatType === 'PeerUser' ? (selectedUser as ChatUser).firstName : (selectedUser as ChannelInfo).title;
-					const newMessages = await getAllMessages({
-						client,
-						peerInfo: {
-							accessHash: accessHash as unknown as bigInt.BigInteger,
-							peerId: peerId as unknown as bigInt.BigInteger,
-							userFirtNameOrChannelTitle
+					const peerId =
+						currentChatType === 'PeerUser'
+							? (selectedUser as ChatUser).peerId
+							: (selectedUser as ChannelInfo).channelId;
+					const accessHash =
+						currentChatType === 'PeerUser'
+							? (selectedUser as ChatUser).accessHash
+							: (selectedUser as ChannelInfo).accessHash;
+					const userFirtNameOrChannelTitle =
+						currentChatType === 'PeerUser'
+							? (selectedUser as ChatUser).firstName
+							: (selectedUser as ChannelInfo).title;
+					const newMessages = await getAllMessages(
+						{
+							client,
+							peerInfo: {
+								accessHash: accessHash as unknown as bigInt.BigInteger,
+								peerId: peerId as unknown as bigInt.BigInteger,
+								userFirtNameOrChannelTitle
+							},
+							offsetId,
+							chatAreaWidth: width
 						},
-						offsetId,
-						chatAreaWidth: width
-					}, currentChatType);
+						currentChatType
+					);
 					const updatedConversation = [...newMessages, ...conversation];
 					setConversation(
 						updatedConversation.filter(
@@ -202,8 +212,6 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 			: '';
 
 	const groupedMessages = groupMessagesByDate(visibleMessages);
-
-
 
 	return (
 		<>
@@ -303,12 +311,14 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 										date: new Date()
 									} satisfies FormattedMessage;
 									setConversation([...conversation, newMessage]);
-									const id = currentChatType === 'PeerUser'
-										? (selectedUser as ChatUser).peerId
-										: (selectedUser as ChannelInfo).channelId;
-									const accessHash = currentChatType === 'PeerUser'
-										? (selectedUser as ChatUser).accessHash
-										: (selectedUser as ChannelInfo).accessHash;
+									const id =
+										currentChatType === 'PeerUser'
+											? (selectedUser as ChatUser).peerId
+											: (selectedUser as ChannelInfo).channelId;
+									const accessHash =
+										currentChatType === 'PeerUser'
+											? (selectedUser as ChatUser).accessHash
+											: (selectedUser as ChannelInfo).accessHash;
 									await sendMessage(
 										client,
 										{
@@ -323,7 +333,7 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 								}
 							}}
 						/>
-						)}
+					)}
 				</Box>
 			)}
 		</>

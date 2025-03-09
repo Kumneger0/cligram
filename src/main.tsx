@@ -110,7 +110,7 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 				width={size.columns}
 			>
 				<Box width={sidebarWidth} flexDirection="column" borderRightColor="green">
-					<Sidebar height={height} width={sidebarWidth} />
+					<Sidebar key={currentChatType} height={height} width={sidebarWidth} />
 				</Box>
 				<ChatArea
 					height={height}

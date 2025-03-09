@@ -93,9 +93,6 @@ export function Sidebar({ height }: { height: number; width: number }) {
 				setChatUsers(users as ChatUser[]);
 				setActiveChat(users[0] as ChatUser);
 			}
-			if (users.length > 0) {
-				setSelectedUser(users[0]!);
-			}
 		};
 		getChats().then(async () => {
 			if (currentChatType === 'PeerUser') {
@@ -103,7 +100,7 @@ export function Sidebar({ height }: { height: number; width: number }) {
 			}
 		});
 		return () => unsubscribe?.();
-	}, [currentChatType]);
+	}, []);
 
 	useInput((input, key) => {
 		if (!isFocused) return;
@@ -117,6 +114,7 @@ export function Sidebar({ height }: { height: number; width: number }) {
 
 		if (key.return) {
 			setSelectedUser(activeChat);
+			setOffset(0);
 		}
 
 		if (key.upArrow || input === 'k') {
@@ -124,6 +122,9 @@ export function Sidebar({ height }: { height: number; width: number }) {
 				const currentIndex = chatUsers.findIndex(
 					({ peerId }) => peerId === (activeChat as ChatUser)?.peerId
 				);
+
+				console.log('currentIndex', currentIndex);
+
 				const nextUser = chatUsers[currentIndex - 1];
 				if (nextUser) {
 					setOffset((prev) => Math.max(prev - 1, 0));
@@ -145,6 +146,8 @@ export function Sidebar({ height }: { height: number; width: number }) {
 				const currentIndex = chatUsers.findIndex(
 					({ peerId }) => peerId === (activeChat as ChatUser)?.peerId
 				);
+
+				console.log('currentIndex', currentIndex);
 				const nextUser = chatUsers[currentIndex + 1];
 
 				if (
