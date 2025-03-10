@@ -1,7 +1,6 @@
 import { Api, TelegramClient } from 'telegram';
-import Message, { MessageMediaPhoto } from '../../types';
 import { getTelegramClient } from './auth';
-import { Media } from '@/telegram/messages';
+import { Media, Message, MessageMediaPhoto } from '../types';
 
 type MediaSize = 'large' | 'small';
 
@@ -38,15 +37,4 @@ export const handleMediaDownload = async (
 		thumb: size === 'small' ? 0 : undefined
 	});
 	return buffer as Buffer;
-};
-
-export const downloadVideoThumbnail = async (client: TelegramClient, media: Message['media']) => {
-	if (!client.connected) await client.connect();
-	const thumbnail = media.document.thumbs;
-	if (!thumbnail) return;
-	const buffer = await client.downloadMedia(media as unknown as Api.TypeMessageMedia, {
-		thumb: 1
-	});
-	if (!buffer) return;
-	return buffer;
 };
