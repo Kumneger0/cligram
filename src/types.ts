@@ -167,6 +167,9 @@ export interface Photo {
 	videoSizes: null;
 	dcId: number;
 	className: string;
+	CONSTRUCTOR_ID: number;
+	SUBCLASS_OF_ID: number;
+	classType: string;
 }
 
 interface FileReference {
@@ -221,6 +224,7 @@ interface ChatPhoto {
 	photoId: Integer;
 	strippedThumb: Buffer;
 	dcId: number;
+
 }
 
 interface ChatBannedRights {
@@ -308,4 +312,93 @@ export interface Channel {
 	level: null | number;
 	subscriptionUntilDate: null | number;
 	botVerificationIcon: null | any;
+}
+
+interface BaseMedia {
+	CONSTRUCTOR_ID: number;
+	SUBCLASS_OF_ID: number;
+	className: 'MessageMediaWebPage' | 'MessageMediaDocument' | 'MessageMediaPhoto';
+	classType: string;
+	flags: number;
+}
+
+export type Media = MessageMediaWebPage | MessageMediaDocument | MessageMediaPhoto | null;
+
+export interface MessageMediaWebPage extends BaseMedia {
+	forceLargeMedia: boolean;
+	forceSmallMedia: boolean;
+	manual: boolean;
+	safe: boolean;
+	webpage: WebPage | WebPageEmpty;
+}
+
+export interface WebPage {
+	CONSTRUCTOR_ID: number;
+	SUBCLASS_OF_ID: number;
+	className: 'WebPage';
+	classType: string;
+	flags: number;
+	hasLargeMedia: boolean;
+	id: bigint;
+	url: string;
+	displayUrl: string;
+	hash: number;
+	type: string;
+	siteName: string;
+	title: string;
+	description: string | null;
+	photo: Photo;
+	embedUrl: string | null;
+	embedType: string | null;
+	embedWidth: number | null;
+	embedHeight: number | null;
+	duration: number | null;
+	author: string | null;
+	document: any | null;
+	cachedPage: any | null;
+	attributes: any | null;
+}
+
+export interface WebPageEmpty {
+	CONSTRUCTOR_ID: number;
+	SUBCLASS_OF_ID: number;
+	className: 'WebPageEmpty';
+	classType: string;
+	flags: number;
+	id: bigint;
+	url: string;
+}
+
+export interface MessageMediaDocument extends BaseMedia {
+	nopremium: boolean;
+	spoiler: boolean;
+	video: boolean;
+	round: boolean;
+	voice: boolean;
+	document: Document;
+	altDocuments: any | null;
+	videoCover: any | null;
+	videoTimestamp: any | null;
+	ttlSeconds: number | null;
+}
+
+/**
+ * Document interface.
+ */
+export interface Document {
+	CONSTRUCTOR_ID: number;
+	SUBCLASS_OF_ID: number;
+	className: 'Document';
+	classType: string;
+	flags: number;
+	id: bigint;
+	accessHash: bigint;
+	fileReference: Uint8Array;
+	date: number;
+	mimeType: string;
+	size: bigint;
+	thumbs: any | null;
+	videoThumbs: any | null;
+	dcId: number;
+	attributes: any[];
 }

@@ -1,4 +1,5 @@
 import { useTGCliStore } from '@/lib/store';
+import { ICONS } from '@/lib/utils';
 import { componenetFocusIds } from '@/lib/utils/consts';
 import { ChannelInfo, getUserChats } from '@/telegram/client';
 import { listenForEvents } from '@/telegram/messages';
@@ -201,25 +202,20 @@ export function Sidebar({ height }: { height: number; width: number }) {
 				{currentChatType === 'PeerUser' ? 'Chats' : 'Channels'}
 			</Text>
 			{visibleChats.map((chat) => {
-				const id =
-					currentChatType === 'PeerUser'
-						? (chat as ChatUser).peerId
-						: (chat as ChannelInfo).channelId;
+				const isChannel = currentChatType === 'PeerChannel';
+
+				const id = isChannel ? (chat as ChannelInfo).channelId : (chat as ChatUser).peerId;
 				const isOnline = currentChatType === 'PeerUser' ? (chat as ChatUser).isOnline : false;
-				const name =
-					currentChatType === 'PeerUser'
-						? (chat as ChatUser).firstName
-						: (chat as ChannelInfo).title;
+				const name = isChannel ? (chat as ChannelInfo).title : (chat as ChatUser).firstName;
 				const isSelected =
-					currentChatType === 'PeerUser'
-						? (activeChat as ChatUser)?.peerId == id
-						: (activeChat as ChannelInfo)?.channelId == id;
+					isChannel
+						? (activeChat as ChannelInfo)?.channelId == id
+						: (activeChat as ChatUser)?.peerId == id;
 
 				return (
 					<Box overflowY="hidden" key={String(id)} flexDirection="column">
 						<Text color={isSelected ? 'green' : isOnline ? 'yellow' : 'white'}>
-							{currentChatType === 'PeerUser' ? (isSelected && isFocused ? '>' : null) : null}{' '}
-							{name} {chat.unreadCount > 0 && <Text color="red">({chat.unreadCount})</Text>}
+							{isChannel ? ICONS.CHANNEL : ICONS.USER} {name} {chat.unreadCount > 0 && <Text color="red">({chat.unreadCount})</Text>}
 						</Text>
 					</Box>
 				);
