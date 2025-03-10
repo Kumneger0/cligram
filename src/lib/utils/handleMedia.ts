@@ -1,7 +1,6 @@
 import { Api, TelegramClient } from 'telegram';
-import Message, { MessageMediaPhoto } from '../../types';
+import Message, { Media, MessageMediaPhoto } from '../../types';
 import { getTelegramClient } from './auth';
-import { Media } from '@/telegram/messages';
 
 type MediaSize = 'large' | 'small';
 

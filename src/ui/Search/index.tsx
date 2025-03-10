@@ -1,4 +1,5 @@
 import { useTGCliStore } from '@/lib/store';
+import { ICONS } from '@/lib/utils';
 import { componenetFocusIds } from '@/lib/utils/consts';
 import { ChannelInfo, searchUsers } from '@/telegram/client';
 import { getAllMessages } from '@/telegram/messages';
@@ -20,7 +21,6 @@ export const SearchModal: React.FC<{ height: number; width: number }> = ({ heigh
 	const currentChatType = useTGCliStore((state) => state.currentChatType);
 	const setCurrentChatType = useTGCliStore((state) => state.setCurrentChatType);
 
-	const selectedUser = useTGCliStore((state) => state.selectedUser);
 
 	const setSelectedUser = useTGCliStore((state) => state.setSelectedUser);
 
@@ -38,23 +38,24 @@ export const SearchModal: React.FC<{ height: number; width: number }> = ({ heigh
 			setActiveIndex(combined.length > 0 ? 0 : -1);
 		}
 		if (searchMode == 'CONVERSATION') {
-			const peerInfo =
-				currentChatType == 'PeerUser'
-					? {
-							accessHash: selectedUser!.accessHash,
-							peerId: (selectedUser! as ChatUser).peerId,
-							userFirtNameOrChannelTitle: (selectedUser! as ChatUser).firstName
-						}
-					: {
-							accessHash: selectedUser!.accessHash,
-							peerId: (selectedUser! as ChannelInfo).channelId,
-							userFirtNameOrChannelTitle: (selectedUser! as ChannelInfo).title
-						};
-			const messages = await getAllMessages(
-				{ client: client!, peerInfo, offsetId: 0, chatAreaWidth: 0 },
-				currentChatType,
-				{ search: query }
-			);
+			// TODO: Implement conversation search
+			// const peerInfo =
+			// 	currentChatType == 'PeerUser'
+			// 		? {
+			// 				accessHash: selectedUser!.accessHash,
+			// 				peerId: (selectedUser! as ChatUser).peerId,
+			// 				userFirtNameOrChannelTitle: (selectedUser! as ChatUser).firstName
+			// 			}
+			// 		: {
+			// 				accessHash: selectedUser!.accessHash,
+			// 				peerId: (selectedUser! as ChannelInfo).channelId,
+			// 				userFirtNameOrChannelTitle: (selectedUser! as ChannelInfo).title
+			// 			};
+			// const messages = await getAllMessages(
+			// 	{ client: client!, peerInfo, offsetId: 0, chatAreaWidth: 0 },
+			// 	currentChatType,
+			// 	{ search: query }
+			// );
 		}
 	}, 1000);
 
@@ -124,7 +125,7 @@ export const SearchModal: React.FC<{ height: number; width: number }> = ({ heigh
 					{searchMode == 'CHANNELS_OR_ USERS' ? 'Search Channels or Users' : 'Search Conversation'}
 				</Text>
 				<Box marginTop={1} width="100%" alignItems="center">
-					<Text color="white">/</Text>
+					<Text color="white">{ICONS.SEARCH}</Text>
 					<TextInput
 						value={query}
 						onChange={(value) => {
@@ -150,8 +151,7 @@ export const SearchModal: React.FC<{ height: number; width: number }> = ({ heigh
 								color={activeIndex === index ? 'green' : 'white'}
 							>
 								{activeIndex === index ? '> ' : '  '}
-								{result.type === 'user' ? result.data.firstName : result.data.title}
-								{result.type === 'channel' && ' (channel)'}
+								{result.type === 'user' ? `${ICONS.USER} ${result.data.firstName}` : `${ICONS.CHANNEL} ${result.data.title}`}
 							</Text>
 						))}
 				</Box>
