@@ -3,8 +3,13 @@ import { Api, TelegramClient } from 'telegram';
 import { Raw } from 'telegram/events';
 import terminalSize from 'term-size';
 import terminalImage from 'terminal-image';
-import { Dialog, User } from '../lib/types/index';
-import { FormattedMessage } from '../types';
+import {
+	Dialog,
+	FormattedMessage,
+	Media,
+	MessageMediaWebPage,
+	TelegramUser
+} from '../lib/types/index';
 import { getUserInfo } from './client';
 import { IterMessagesParams } from 'telegram/client/messages';
 
@@ -177,7 +182,7 @@ export async function getAllMessages<T extends Dialog['peer']['className']>(
 	},
 	type: T,
 	iterParams?: Partial<IterMessagesParams>
-): Promise<T extends 'PeerUser' ? FormattedMessage[] : FormattedMessage[]> {
+): Promise<FormattedMessage[]> {
 	try {
 		if (!client.connected) await client.connect();
 		const messages = [];
@@ -276,7 +281,7 @@ export const listenForEvents = async (
 	const hanlder = async (event: Event) => {
 		const userId = event.userId;
 		if (userId) {
-			const user = (await getUserInfo(client, userId)) as unknown as User;
+			const user = (await getUserInfo(client, userId)) as unknown as TelegramUser;
 			switch (event.className) {
 				case 'UpdateShortMessage':
 					onMessage &&
@@ -321,114 +326,3 @@ export const listenForEvents = async (
 		return client.removeEventHandler(hanlder, event);
 	};
 };
-
-interface BaseMedia {
-	CONSTRUCTOR_ID: number;
-	SUBCLASS_OF_ID: number;
-	className: 'MessageMediaWebPage' | 'MessageMediaDocument' | 'MessageMediaPhoto';
-	classType: string;
-	flags: number;
-}
-
-export type Media = MessageMediaWebPage | MessageMediaDocument | MessageMediaPhoto | null;
-
-export interface MessageMediaWebPage extends BaseMedia {
-	forceLargeMedia: boolean;
-	forceSmallMedia: boolean;
-	manual: boolean;
-	safe: boolean;
-	webpage: WebPage | WebPageEmpty;
-}
-
-export interface WebPage {
-	CONSTRUCTOR_ID: number;
-	SUBCLASS_OF_ID: number;
-	className: 'WebPage';
-	classType: string;
-	flags: number;
-	hasLargeMedia: boolean;
-	id: bigint;
-	url: string;
-	displayUrl: string;
-	hash: number;
-	type: string;
-	siteName: string;
-	title: string;
-	description: string | null;
-	photo: Photo;
-	embedUrl: string | null;
-	embedType: string | null;
-	embedWidth: number | null;
-	embedHeight: number | null;
-	duration: number | null;
-	author: string | null;
-	document: any | null;
-	cachedPage: any | null;
-	attributes: any | null;
-}
-
-export interface WebPageEmpty {
-	CONSTRUCTOR_ID: number;
-	SUBCLASS_OF_ID: number;
-	className: 'WebPageEmpty';
-	classType: string;
-	flags: number;
-	id: bigint;
-	url: string;
-}
-
-export interface MessageMediaDocument extends BaseMedia {
-	nopremium: boolean;
-	spoiler: boolean;
-	video: boolean;
-	round: boolean;
-	voice: boolean;
-	document: Document;
-	altDocuments: any | null;
-	videoCover: any | null;
-	videoTimestamp: any | null;
-	ttlSeconds: number | null;
-}
-
-/**
- * Document interface.
- */
-export interface Document {
-	CONSTRUCTOR_ID: number;
-	SUBCLASS_OF_ID: number;
-	className: 'Document';
-	classType: string;
-	flags: number;
-	id: bigint;
-	accessHash: bigint;
-	fileReference: Uint8Array;
-	date: number;
-	mimeType: string;
-	size: bigint;
-	thumbs: any | null;
-	videoThumbs: any | null;
-	dcId: number;
-	attributes: any[];
-}
-
-export interface MessageMediaPhoto extends BaseMedia {
-	spoiler: boolean;
-	photo: Photo;
-	ttlSeconds: number | null;
-}
-
-interface Photo {
-	CONSTRUCTOR_ID: number;
-	SUBCLASS_OF_ID: number;
-	className: 'Photo';
-	classType: string;
-	flags: number;
-	hasStickers: boolean;
-	id: bigint;
-	accessHash: bigint;
-	fileReference: Uint8Array;
-	date: number;
-	sizes: any[];
-	videoSizes: null;
-	dcId: number;
-}

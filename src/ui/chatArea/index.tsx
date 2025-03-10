@@ -2,15 +2,12 @@ import { conversationStore, useTGCliStore } from '@/lib/store';
 import { formatLastSeen } from '@/lib/utils';
 import { componenetFocusIds } from '@/lib/utils/consts';
 import { editMessage, getAllMessages, listenForEvents, sendMessage } from '@/telegram/messages';
-import { ChatUser, FormattedMessage } from '@/types';
 import { Box, Text, useFocus, useFocusManager, useInput } from 'ink';
 import Spinner from 'ink-spinner';
 import TextInput from 'ink-text-input';
-import React, { useEffect, useLayoutEffect, useState } from 'react';
+import React, { Fragment, useEffect, useLayoutEffect, useState } from 'react';
 import { Modal } from '../modal/Modal';
-import { Fragment } from 'react';
-import { ChannelInfo } from '@/telegram/client';
-import { SearchModal } from '../Search';
+import { ChannelInfo, FormattedMessage, UserInfo } from '@/lib/types';
 const formatDate = (date: Date) =>
 	date.toLocaleDateString('en-US', {
 		month: 'short',
@@ -49,7 +46,7 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 	const setSearchMode = useTGCliStore((state) => state.setSearchMode);
 	const currentlySelectedChatId =
 		currentChatType === 'PeerUser'
-			? (selectedUser as ChatUser)?.peerId
+			? (selectedUser as UserInfo)?.peerId
 			: (selectedUser as ChannelInfo)?.channelId;
 
 	const selectedUserPeerID = String(currentlySelectedChatId);
@@ -60,11 +57,11 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 		let unsubscribe: () => void;
 		const id =
 			currentChatType === 'PeerUser'
-				? (selectedUser as ChatUser).peerId
+				? (selectedUser as UserInfo).peerId
 				: ((selectedUser as ChannelInfo).channelId as unknown as bigInt.BigInteger);
 		const accessHash =
 			currentChatType === 'PeerUser'
-				? (selectedUser as ChatUser).accessHash
+				? (selectedUser as UserInfo).accessHash
 				: ((selectedUser as ChannelInfo).accessHash as unknown as bigInt.BigInteger);
 
 		(async () => {
@@ -76,7 +73,7 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 						peerId: id,
 						userFirtNameOrChannelTitle:
 							currentChatType === 'PeerUser'
-								? (selectedUser as ChatUser).firstName
+								? (selectedUser as UserInfo).firstName
 								: (selectedUser as ChannelInfo).title
 					},
 					chatAreaWidth: width
@@ -92,7 +89,7 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 				unsubscribe = await listenForEvents(client, {
 					onMessage: (message) => {
 						const from = message.sender;
-						if (from === (selectedUser as ChatUser).firstName) {
+						if (from === (selectedUser as UserInfo).firstName) {
 							setConversation([...conversation, message]);
 							setOffsetId(message.id);
 							setActiveMessage(message);
@@ -150,15 +147,15 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 				const appendMessages = async () => {
 					const peerId =
 						currentChatType === 'PeerUser'
-							? (selectedUser as ChatUser).peerId
+							? (selectedUser as UserInfo).peerId
 							: (selectedUser as ChannelInfo).channelId;
 					const accessHash =
 						currentChatType === 'PeerUser'
-							? (selectedUser as ChatUser).accessHash
+							? (selectedUser as UserInfo).accessHash
 							: (selectedUser as ChannelInfo).accessHash;
 					const userFirtNameOrChannelTitle =
 						currentChatType === 'PeerUser'
-							? (selectedUser as ChatUser).firstName
+							? (selectedUser as UserInfo).firstName
 							: (selectedUser as ChannelInfo).title;
 					const newMessages = await getAllMessages(
 						{
@@ -217,8 +214,8 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 	}
 	const selectedUserLastSeen =
 		currentChatType === 'PeerUser'
-			? (selectedUser as ChatUser)?.lastSeen
-				? formatLastSeen((selectedUser as ChatUser)?.lastSeen!)
+			? (selectedUser as UserInfo)?.lastSeen
+				? formatLastSeen((selectedUser as UserInfo)?.lastSeen!)
 				: 'Unknown'
 			: '';
 
@@ -233,12 +230,12 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 					<Box gap={1}>
 						<Text color="blue" bold>
 							{currentChatType === 'PeerUser'
-								? (selectedUser as ChatUser)?.firstName
+								? (selectedUser as UserInfo)?.firstName
 								: (selectedUser as ChannelInfo)?.title}
 						</Text>
 						<Text>
 							{currentChatType === 'PeerUser'
-								? (selectedUser as ChatUser)?.isOnline
+								? (selectedUser as UserInfo)?.isOnline
 									? 'Online'
 									: `${selectedUserLastSeen}`
 								: ''}
@@ -325,11 +322,11 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 									setConversation([...conversation, newMessage]);
 									const id =
 										currentChatType === 'PeerUser'
-											? (selectedUser as ChatUser).peerId
+											? (selectedUser as UserInfo).peerId
 											: (selectedUser as ChannelInfo).channelId;
 									const accessHash =
 										currentChatType === 'PeerUser'
-											? (selectedUser as ChatUser).accessHash
+											? (selectedUser as UserInfo).accessHash
 											: (selectedUser as ChannelInfo).accessHash;
 									await sendMessage(
 										client,
@@ -388,7 +385,7 @@ function MessageInput({ onSubmit }: { onSubmit: (message: string) => void }) {
 			});
 			conversationStore.setState({ conversation: updatedConversation });
 			if (currentChatType === 'PeerUser') {
-				editMessage(client, selectedUser as ChatUser, messageAction?.id!, message);
+				editMessage(client, selectedUser as UserInfo, messageAction?.id!, message);
 			}
 			setMessageAction(null);
 		}
@@ -413,7 +410,7 @@ function MessageInput({ onSubmit }: { onSubmit: (message: string) => void }) {
 								} satisfies FormattedMessage;
 								conversationStore.setState({ conversation: [...conversation, newMessage] });
 								if (currentChatType === 'PeerUser') {
-									sendMessage(client, selectedUser as ChatUser, message, true, messageAction?.id);
+									sendMessage(client, selectedUser as UserInfo, message, true, messageAction?.id);
 								}
 								setMessage('');
 								setMessageAction(null);

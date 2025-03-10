@@ -1,5 +1,5 @@
-import { FormattedMessage, TGCliStore } from '@/types';
 import { create } from 'zustand';
+import { FormattedMessage, TGCliStore } from './types';
 
 export const conversationStore = create<{
 	conversation: FormattedMessage[];
