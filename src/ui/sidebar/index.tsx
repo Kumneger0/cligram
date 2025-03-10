@@ -1,9 +1,9 @@
 import { useTGCliStore } from '@/lib/store';
+import { ChannelInfo, FormattedMessage, UserInfo } from '@/lib/types';
 import { ICONS } from '@/lib/utils';
 import { componenetFocusIds } from '@/lib/utils/consts';
-import { ChannelInfo, getUserChats } from '@/telegram/client';
+import { getUserChats } from '@/telegram/client';
 import { listenForEvents } from '@/telegram/messages';
-import { ChatUser, FormattedMessage } from '@/types';
 import { Box, Text, useFocus, useInput } from 'ink';
 import notifier from 'node-notifier';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -13,8 +13,8 @@ export function Sidebar({ height }: { height: number; width: number }) {
 	const setSelectedUser = useTGCliStore((state) => state.setSelectedUser);
 	const selectedUser = useTGCliStore((state) => state.selectedUser);
 
-	const [activeChat, setActiveChat] = useState<ChatUser | ChannelInfo | null>(null);
-	const [chatUsers, setChatUsers] = useState<(ChatUser & { unreadCount: number })[]>([]);
+	const [activeChat, setActiveChat] = useState<UserInfo | ChannelInfo | null>(null);
+	const [chatUsers, setChatUsers] = useState<(UserInfo & { unreadCount: number })[]>([]);
 	const [offset, setOffset] = useState(0);
 	const { isFocused } = useFocus({ id: componenetFocusIds.sidebar });
 	const setSearchMode = useTGCliStore((state) => state.setSearchMode);
@@ -92,8 +92,8 @@ export function Sidebar({ height }: { height: number; width: number }) {
 				setChannels(users as ChannelInfo[]);
 				setActiveChat(users[0] as ChannelInfo);
 			} else {
-				setChatUsers(users as ChatUser[]);
-				setActiveChat(users[0] as ChatUser);
+				setChatUsers(users as UserInfo[]);
+				setActiveChat(users[0] as UserInfo);
 			}
 		};
 		getChats().then(async () => {
@@ -126,7 +126,7 @@ export function Sidebar({ height }: { height: number; width: number }) {
 		if (key.upArrow || input === 'k') {
 			if (currentChatType === 'PeerUser') {
 				const currentIndex = chatUsers.findIndex(
-					({ peerId }) => peerId === (activeChat as ChatUser)?.peerId
+					({ peerId }) => peerId === (activeChat as UserInfo)?.peerId
 				);
 
 				console.log('currentIndex', currentIndex);
@@ -150,7 +150,7 @@ export function Sidebar({ height }: { height: number; width: number }) {
 		if (key.downArrow || input === 'j') {
 			if (currentChatType === 'PeerUser') {
 				const currentIndex = chatUsers.findIndex(
-					({ peerId }) => peerId === (activeChat as ChatUser)?.peerId
+					({ peerId }) => peerId === (activeChat as UserInfo)?.peerId
 				);
 
 				console.log('currentIndex', currentIndex);
@@ -204,18 +204,18 @@ export function Sidebar({ height }: { height: number; width: number }) {
 			{visibleChats.map((chat) => {
 				const isChannel = currentChatType === 'PeerChannel';
 
-				const id = isChannel ? (chat as ChannelInfo).channelId : (chat as ChatUser).peerId;
-				const isOnline = currentChatType === 'PeerUser' ? (chat as ChatUser).isOnline : false;
-				const name = isChannel ? (chat as ChannelInfo).title : (chat as ChatUser).firstName;
-				const isSelected =
-					isChannel
-						? (activeChat as ChannelInfo)?.channelId == id
-						: (activeChat as ChatUser)?.peerId == id;
+				const id = isChannel ? (chat as ChannelInfo).channelId : (chat as UserInfo).peerId;
+				const isOnline = currentChatType === 'PeerUser' ? (chat as UserInfo).isOnline : false;
+				const name = isChannel ? (chat as ChannelInfo).title : (chat as UserInfo).firstName;
+				const isSelected = isChannel
+					? (activeChat as ChannelInfo)?.channelId == id
+					: (activeChat as UserInfo)?.peerId == id;
 
 				return (
 					<Box overflowY="hidden" key={String(id)} flexDirection="column">
 						<Text color={isSelected ? 'green' : isOnline ? 'yellow' : 'white'}>
-							{isChannel ? ICONS.CHANNEL : ICONS.USER} {name} {chat.unreadCount > 0 && <Text color="red">({chat.unreadCount})</Text>}
+							{isChannel ? ICONS.CHANNEL : ICONS.USER} {name}{' '}
+							{chat.unreadCount > 0 && <Text color="red">({chat.unreadCount})</Text>}
 						</Text>
 					</Box>
 				);

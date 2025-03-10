@@ -1,11 +1,11 @@
 import React from 'react';
 import { conversationStore, useTGCliStore } from '@/lib/store';
 import { deleteMessage } from '@/telegram/messages';
-import { ChatUser } from '@/types';
 import { Box, Text, useFocus, useInput } from 'ink';
 import { TelegramClient } from 'telegram';
 import chalk from 'chalk';
 import { componenetFocusIds } from '@/lib/utils/consts';
+import { UserInfo } from '@/lib/types';
 
 const messageActions = [
 	{
@@ -15,7 +15,7 @@ const messageActions = [
 			delete: 'y'
 			//TODO: allow user to chose delete only for him or for everyone
 		},
-		action: async (client: TelegramClient, messageId: number, selectedUser: ChatUser) => {
+		action: async (client: TelegramClient, messageId: number, selectedUser: UserInfo) => {
 			await deleteMessage(client, selectedUser, messageId);
 		}
 	}
@@ -47,7 +47,7 @@ export const Modal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 			return;
 		}
 		if (currentChatType === 'PeerUser') {
-			action(client, messageId, selectedUser as ChatUser);
+			action(client, messageId, selectedUser as UserInfo);
 		}
 		const filterConversation = conversation.filter(({ id }) => id !== messageId);
 		setConversation(filterConversation);
