@@ -6,9 +6,8 @@ import { Box, render, Text, useFocus, useInput, useStdout } from 'ink';
 import React, { useEffect, useState } from 'react';
 import { TelegramClient } from 'telegram';
 import { getConfig, setConfig } from './lib/utils/auth';
-import { ChannelInfo } from './telegram/client';
-import { ChatUser } from './types';
 import { SearchModal } from './ui/Search';
+import { ChannelInfo, UserInfo } from './lib/types';
 
 const HelpPage: React.FC = () => {
 	const { isFocused } = useFocus({ autoFocus: true });
@@ -100,7 +99,7 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 
 	const currentlySelectedChatId =
 		currentChatType === 'PeerUser'
-			? (selectedUser as ChatUser)?.peerId
+			? (selectedUser as UserInfo)?.peerId
 			: (selectedUser as ChannelInfo)?.channelId;
 
 	return (

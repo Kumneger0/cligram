@@ -3,8 +3,13 @@ import { Api, TelegramClient } from 'telegram';
 import { Raw } from 'telegram/events';
 import terminalSize from 'term-size';
 import terminalImage from 'terminal-image';
-import { Dialog, User } from '../lib/types/index';
-import { FormattedMessage, Media, MessageMediaWebPage } from '../types';
+import {
+	Dialog,
+	FormattedMessage,
+	Media,
+	MessageMediaWebPage,
+	TelegramUser
+} from '../lib/types/index';
 import { getUserInfo } from './client';
 import { IterMessagesParams } from 'telegram/client/messages';
 
@@ -177,7 +182,7 @@ export async function getAllMessages<T extends Dialog['peer']['className']>(
 	},
 	type: T,
 	iterParams?: Partial<IterMessagesParams>
-): Promise<T extends 'PeerUser' ? FormattedMessage[] : FormattedMessage[]> {
+): Promise<FormattedMessage[]> {
 	try {
 		if (!client.connected) await client.connect();
 		const messages = [];
@@ -276,7 +281,7 @@ export const listenForEvents = async (
 	const hanlder = async (event: Event) => {
 		const userId = event.userId;
 		if (userId) {
-			const user = (await getUserInfo(client, userId)) as unknown as User;
+			const user = (await getUserInfo(client, userId)) as unknown as TelegramUser;
 			switch (event.className) {
 				case 'UpdateShortMessage':
 					onMessage &&
@@ -321,4 +326,3 @@ export const listenForEvents = async (
 		return client.removeEventHandler(hanlder, event);
 	};
 };
-

@@ -1,16 +1,15 @@
 import { useTGCliStore } from '@/lib/store';
+import { ChannelInfo, UserInfo } from '@/lib/types';
 import { ICONS } from '@/lib/utils';
 import { componenetFocusIds } from '@/lib/utils/consts';
-import { ChannelInfo, searchUsers } from '@/telegram/client';
-import { getAllMessages } from '@/telegram/messages';
-import { ChatUser } from '@/types';
+import { searchUsers } from '@/telegram/client';
 import chalk from 'chalk';
 import debounce from 'debounce';
 import { Box, Text, useFocus, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import React, { useState } from 'react';
 
-type SearchResult = { type: 'user'; data: ChatUser } | { type: 'channel'; data: ChannelInfo };
+type SearchResult = { type: 'user'; data: UserInfo } | { type: 'channel'; data: ChannelInfo };
 
 export const SearchModal: React.FC<{ height: number; width: number }> = ({ height, width }) => {
 	const { isFocused } = useFocus({ autoFocus: true, id: componenetFocusIds.searchModal });
@@ -20,7 +19,6 @@ export const SearchModal: React.FC<{ height: number; width: number }> = ({ heigh
 	const client = useTGCliStore((state) => state.client);
 	const currentChatType = useTGCliStore((state) => state.currentChatType);
 	const setCurrentChatType = useTGCliStore((state) => state.setCurrentChatType);
-
 
 	const setSelectedUser = useTGCliStore((state) => state.setSelectedUser);
 
@@ -43,8 +41,8 @@ export const SearchModal: React.FC<{ height: number; width: number }> = ({ heigh
 			// 	currentChatType == 'PeerUser'
 			// 		? {
 			// 				accessHash: selectedUser!.accessHash,
-			// 				peerId: (selectedUser! as ChatUser).peerId,
-			// 				userFirtNameOrChannelTitle: (selectedUser! as ChatUser).firstName
+			// 				peerId: (selectedUser! as UserInfo).peerId,
+			// 				userFirtNameOrChannelTitle: (selectedUser! as UserInfo).firstName
 			// 			}
 			// 		: {
 			// 				accessHash: selectedUser!.accessHash,
@@ -151,7 +149,9 @@ export const SearchModal: React.FC<{ height: number; width: number }> = ({ heigh
 								color={activeIndex === index ? 'green' : 'white'}
 							>
 								{activeIndex === index ? '> ' : '  '}
-								{result.type === 'user' ? `${ICONS.USER} ${result.data.firstName}` : `${ICONS.CHANNEL} ${result.data.title}`}
+								{result.type === 'user'
+									? `${ICONS.USER} ${result.data.firstName}`
+									: `${ICONS.CHANNEL} ${result.data.title}`}
 							</Text>
 						))}
 				</Box>

@@ -36,7 +36,6 @@ export function formatLastSeen(date: Date) {
 	return `last seen on ${format(date, 'MMM d, yyyy')} at ${format(date, 'h:mm a')}`;
 }
 
-
 export const ICONS = {
 	USER: '👤',
 	CHANNEL: '📢',
