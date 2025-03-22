@@ -329,6 +329,8 @@ export type TGCliStore = {
 	setMessageAction: (messageAction: MessageAction | null) => void;
 	currentChatType: Dialog['peer']['className'];
 	setCurrentChatType: (currentChatType: Dialog['peer']['className']) => void;
+	currentlyFocused: 'chatArea' | 'sidebar' | null;
+	setCurrentlyFocused: (currentlyFocused: 'chatArea' | 'sidebar' | null) => void;
 };
 
 interface ChatPhoto {

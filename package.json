@@ -18,12 +18,11 @@
 	],
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/kumneger0/TG-cli"
+		"url": "https://github.com/kumneger0/tele-cli"
 	},
 	"scripts": {
 		"dev": "bun --watch src/index.ts",
-		"roll": "rollup -c",
-		"build": "tsup src/index.ts --format esm --env.TELEGRAM_API_ID 24682818 --env.TELEGRAM_API_HASH ee686cb64073f7456e593e152c00e4bd",
+		"build": "tsup src/index.ts --format esm",
 		"start": "bun src/index.ts",
 		"test:": "vitest",
 		"format": "prettier . --write",

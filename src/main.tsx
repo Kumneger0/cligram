@@ -5,9 +5,11 @@ import { Sidebar } from '@/ui/sidebar';
 import { Box, render, Text, useFocus, useInput, useStdout } from 'ink';
 import React, { useEffect, useState } from 'react';
 import { TelegramClient } from 'telegram';
+import { ChannelInfo, UserInfo } from './lib/types';
 import { getConfig, setConfig } from './lib/utils/auth';
 import { SearchModal } from './ui/Search';
-import { ChannelInfo, UserInfo } from './lib/types';
+import ShowKeyBinding from './ui/ShowKeyBinding';
+
 
 const HelpPage: React.FC = () => {
 	const { isFocused } = useFocus({ autoFocus: true });
@@ -46,6 +48,9 @@ const HelpPage: React.FC = () => {
 const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient }) => {
 	const selectedUser = useTGCliStore((state) => state.selectedUser);
 	const updateClient = useTGCliStore((state) => state.updateClient);
+	const currentlyFocused = useTGCliStore((state) => state.currentlyFocused);
+
+
 	const config = getConfig();
 	const [showHelp, setShowHelp] = React.useState(
 		String(config?.skipHelp) === 'false' || !!!config?.skipHelp
@@ -77,6 +82,7 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 
 	useInput((input, _key) => {
 		if (!showHelp) return;
+
 		if (input === 'c') {
 			setShowHelp(false);
 		}
@@ -84,7 +90,9 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 			setShowHelp(false);
 			setConfig('skipHelp', true);
 		}
-	});
+	},
+
+	);
 
 	useEffect(() => {
 		updateClient(TelegramClient);
@@ -125,6 +133,7 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 					/>
 				)}
 			</Box>
+			<ShowKeyBinding type={currentlyFocused ?? 'general'} />
 		</>
 	);
 };

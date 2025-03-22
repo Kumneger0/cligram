@@ -42,6 +42,8 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 	const [isModalOpen, setIsModalOpen] = useState(false);
 	const [offset, setOffset] = useState(0);
 
+	const setCurrentlyFocused = useTGCliStore((state) => state.setCurrentlyFocused);
+
 	const currentChatType = useTGCliStore((state) => state.currentChatType);
 	const setSearchMode = useTGCliStore((state) => state.setSearchMode);
 	const currentlySelectedChatId =
@@ -113,6 +115,12 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 
 	const visibleMessages = conversation.slice(offset, offset + conversationAreaHieght);
 
+	useEffect(() => {
+		if (isFocused) {
+			setCurrentlyFocused('chatArea')
+		}
+	}, [isFocused])
+
 	useInput(async (input, key) => {
 		if (!isFocused) return;
 
@@ -121,9 +129,7 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 			setIsModalOpen(true);
 			return;
 		}
-
-		if (input === 'f') {
-			//TODO: set this conversation once after deciding how the result should be displayed
+		if (key.ctrl && input === 'k') {
 			setSearchMode('CHANNELS_OR_ USERS');
 		}
 
@@ -361,6 +367,13 @@ function MessageInput({ onSubmit }: { onSubmit: (message: string) => void }) {
 	const isReply = messageAction?.action === 'reply';
 
 	const currentChatType = useTGCliStore((state) => state.currentChatType);
+	const setCurrentlyFocused = useTGCliStore((state) => state.setCurrentlyFocused);
+
+	useEffect(() => {
+		if (isFocused) {
+			setCurrentlyFocused(null)
+		}
+	}, [isFocused])
 
 	useLayoutEffect(() => {
 		if (isReply) return;

@@ -26,6 +26,7 @@ export const SearchModal: React.FC<{ height: number; width: number }> = ({ heigh
 	const [activeIndex, setActiveIndex] = useState<number>(-1);
 
 	const debouncedSearch = debounce(async (query: string) => {
+		if (query.length < 3) return
 		if (searchMode == 'CHANNELS_OR_ USERS') {
 			const results = await searchUsers(client!, query);
 			const combined: SearchResult[] = [
