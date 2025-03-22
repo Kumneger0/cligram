@@ -43,7 +43,6 @@ export const Modal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 		}
 		const messageId = messageAction?.id;
 		if (!messageId || !selectedUser) {
-			console.log(messageId, selectedUser);
 			return;
 		}
 		if (currentChatType === 'PeerUser') {

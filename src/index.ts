@@ -10,7 +10,6 @@ import { red } from 'kolorist';
 import { TelegramClient } from 'telegram';
 
 const rawArgv = process.argv.slice(2);
-
 const disconnect = async (client: TelegramClient) => {
 	await client.disconnect();
 	process.exit(0);

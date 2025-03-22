@@ -19,6 +19,10 @@ export function Sidebar({ height }: { height: number; width: number }) {
 	const { isFocused } = useFocus({ id: componenetFocusIds.sidebar });
 	const setSearchMode = useTGCliStore((state) => state.setSearchMode);
 
+	const setCurrentlyFocused = useTGCliStore((state) => state.setCurrentlyFocused);
+
+
+
 	const [channels, setChannels] = useState<ChannelInfo[]>([]);
 
 	const currentChatType = useTGCliStore((state) => state.currentChatType);
@@ -50,6 +54,13 @@ export function Sidebar({ height }: { height: number; width: number }) {
 			})
 		);
 	}, []);
+
+
+	useEffect(() => {
+		if (isFocused) {
+			setCurrentlyFocused('sidebar')
+		}
+	}, [isFocused])
 
 	const onUserOnlineStatus = ({
 		status,
@@ -107,15 +118,15 @@ export function Sidebar({ height }: { height: number; width: number }) {
 	useInput((input, key) => {
 		if (!isFocused) return;
 
+		if (key.ctrl && input === 'k') {
+			setSearchMode('CHANNELS_OR_ USERS');
+		}
+
 		if (input === 'c') {
 			setCurrentChatType('PeerChannel');
 		}
 		if (input === 'u') {
 			setCurrentChatType('PeerUser');
-		}
-
-		if (input === 'f') {
-			setSearchMode('CHANNELS_OR_ USERS');
 		}
 
 		if (key.return) {
@@ -129,7 +140,6 @@ export function Sidebar({ height }: { height: number; width: number }) {
 					({ peerId }) => peerId === (activeChat as UserInfo)?.peerId
 				);
 
-				console.log('currentIndex', currentIndex);
 
 				const nextUser = chatUsers[currentIndex - 1];
 				if (nextUser) {
@@ -153,7 +163,6 @@ export function Sidebar({ height }: { height: number; width: number }) {
 					({ peerId }) => peerId === (activeChat as UserInfo)?.peerId
 				);
 
-				console.log('currentIndex', currentIndex);
 				const nextUser = chatUsers[currentIndex + 1];
 
 				if (

@@ -19,5 +19,7 @@ export const useTGCliStore = create<TGCliStore>((set) => ({
 	selectedUser: null,
 	setSelectedUser: (selectedUser) => set((state) => ({ ...state, selectedUser })),
 	messageAction: null,
-	setMessageAction: (messageAction) => set((state) => ({ ...state, messageAction }))
+	setMessageAction: (messageAction) => set((state) => ({ ...state, messageAction })),
+	currentlyFocused: null,
+	setCurrentlyFocused: (currentlyFocused) => set((state) => ({ ...state, currentlyFocused }))
 }));
