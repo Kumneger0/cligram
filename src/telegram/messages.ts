@@ -197,7 +197,7 @@ export async function getAllMessages<T extends Dialog['peer']['className']>(
 						channelId: userId as unknown as bigInt.BigInteger,
 						accessHash: accessHash as unknown as bigInt.BigInteger
 					}),
-			{ limit: 20, offsetId, ...iterParams }
+			{ limit: 10, offsetId, ...iterParams }
 		)) {
 			messages.push(message);
 		}
@@ -314,7 +314,6 @@ export const listenForEvents = async (
 					}
 					break;
 				default:
-					console.log('unknown event', event);
 					break;
 			}
 		}
