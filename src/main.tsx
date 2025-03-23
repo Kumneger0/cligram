@@ -1,4 +1,3 @@
-#!/bin/env node
 import { useForwardMessageStore, useTGCliStore } from '@/lib/store';
 import { ChatArea } from '@/ui/chatArea';
 import { Sidebar } from '@/ui/sidebar';
