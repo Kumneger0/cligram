@@ -13,6 +13,54 @@ import {
 import { getUserInfo } from './client';
 import { IterMessagesParams } from 'telegram/client/messages';
 
+
+type ForwardMessageParams = {
+	fromPeer: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger };
+	id: number[];
+	toPeer: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger };
+	type: Dialog['peer']['className']
+}
+
+/**
+ * Forwards messages from one peer to another on Telegram.
+ *
+ * @param {TelegramClient} client - The Telegram client instance.
+ * @param {ForwardMessageParams} params - The parameters for forwarding the message.
+ * @param {Object} params.fromPeer - The peer from which the message is forwarded.
+ * @param {bigInt.BigInteger} params.fromPeer.peerId - The peer ID of the source.
+ * @param {bigInt.BigInteger} params.fromPeer.accessHash - The access hash of the source.
+ * @param {number[]} params.id - The IDs of the messages to forward.
+ * @param {Object} params.toPeer - The peer to which the message is forwarded.
+ * @param {bigInt.BigInteger} params.toPeer.peerId - The peer ID of the destination.
+ * @param {bigInt.BigInteger} params.toPeer.accessHash - The access hash of the destination.
+ * @param {Dialog['peer']['className']} params.type - The type of the peer (e.g., 'PeerUser' or 'PeerChannel').
+ * @returns {Promise<Api.messages.ForwardMessages>} The result of the forward operation.
+ */
+export async function forwardMessage(client: TelegramClient, params: ForwardMessageParams) {
+	const fromPeerEntity = params.type === 'PeerUser' ? new Api.InputPeerUser({
+		userId: params.fromPeer.peerId,
+		accessHash: params.fromPeer.accessHash
+	}) : new Api.InputPeerChannel({
+		channelId: params.fromPeer.peerId,
+		accessHash: params.fromPeer.accessHash
+	})
+
+	const toPeerEntity = new Api.InputPeerUser({
+		userId: params.toPeer.peerId,
+		accessHash: params.toPeer.accessHash
+	})
+
+	const result = await client.invoke(
+		new Api.messages.ForwardMessages({
+			fromPeer: fromPeerEntity,
+			id: params.id,
+			toPeer: toPeerEntity,
+		})
+	);
+	return result;
+}
+
+
 /**
  * Sends a message to a Telegram user.
  *
@@ -42,13 +90,13 @@ export const sendMessage = async (
 		const result = await client.sendMessage(
 			type == 'PeerUser'
 				? new Api.InputPeerUser({
-						userId: peerInfo?.peerId,
-						accessHash: peerInfo?.accessHash
-					})
+					userId: peerInfo?.peerId,
+					accessHash: peerInfo?.accessHash
+				})
 				: new Api.InputPeerChannel({
-						channelId: peerInfo?.peerId,
-						accessHash: peerInfo?.accessHash
-					}),
+					channelId: peerInfo?.peerId,
+					accessHash: peerInfo?.accessHash
+				}),
 			sendMessageParam
 		);
 		return {
@@ -82,13 +130,13 @@ export const deleteMessage = async (
 		const result = await client.deleteMessages(
 			type == 'PeerUser'
 				? new Api.InputPeerUser({
-						userId: peerInfo?.peerId,
-						accessHash: peerInfo?.accessHash
-					})
+					userId: peerInfo?.peerId,
+					accessHash: peerInfo?.accessHash
+				})
 				: new Api.InputPeerChannel({
-						channelId: peerInfo?.peerId,
-						accessHash: peerInfo?.accessHash
-					}),
+					channelId: peerInfo?.peerId,
+					accessHash: peerInfo?.accessHash
+				}),
 			[Number(messageId)],
 			{ revoke: true }
 		);
@@ -118,13 +166,13 @@ export const editMessage = async (
 		const entity =
 			type == 'PeerUser'
 				? new Api.InputPeerUser({
-						userId: peerInfo?.peerId,
-						accessHash: peerInfo?.accessHash
-					})
+					userId: peerInfo?.peerId,
+					accessHash: peerInfo?.accessHash
+				})
 				: new Api.InputPeerChannel({
-						channelId: peerInfo?.peerId,
-						accessHash: peerInfo?.accessHash
-					});
+					channelId: peerInfo?.peerId,
+					accessHash: peerInfo?.accessHash
+				});
 		const result = await client.invoke(
 			new Api.messages.EditMessage({
 				peer: entity,
@@ -190,13 +238,13 @@ export async function getAllMessages<T extends Dialog['peer']['className']>(
 		for await (const message of client.iterMessages(
 			type == 'PeerUser'
 				? new Api.InputPeerUser({
-						userId: userId as unknown as bigInt.BigInteger,
-						accessHash: accessHash as unknown as bigInt.BigInteger
-					})
+					userId: userId as unknown as bigInt.BigInteger,
+					accessHash: accessHash as unknown as bigInt.BigInteger
+				})
 				: new Api.InputPeerChannel({
-						channelId: userId as unknown as bigInt.BigInteger,
-						accessHash: accessHash as unknown as bigInt.BigInteger
-					}),
+					channelId: userId as unknown as bigInt.BigInteger,
+					accessHash: accessHash as unknown as bigInt.BigInteger
+				}),
 			{ limit: 10, offsetId, ...iterParams }
 		)) {
 			messages.push(message);
@@ -222,8 +270,8 @@ export async function getAllMessages<T extends Dialog['peer']['className']>(
 					const date = new Date(message.date * 1000);
 					const imageString = await (buffer
 						? terminalImage.buffer(new Uint8Array(buffer), {
-								width
-							})
+							width
+						})
 						: null);
 
 					return {
@@ -250,6 +298,16 @@ export async function getAllMessages<T extends Dialog['peer']['className']>(
 		return [];
 	}
 }
+/**
+ * Listens for events from the Telegram client and handles them accordingly.
+ * 
+ * @param {TelegramClient} client - The Telegram client instance to listen for events.
+ * @param {Object} handlers - An object containing handler functions for different events.
+ * @param {function(FormattedMessage): void} handlers.onMessage - A function to handle incoming messages.
+ * @param {function(Object): void} [handlers.onUserOnlineStatus] - A function to handle user online status updates.
+ * 
+ * @returns {function(): void} A function to remove the event handler when called.
+ */
 export const listenForEvents = async (
 	client: TelegramClient,
 	{
