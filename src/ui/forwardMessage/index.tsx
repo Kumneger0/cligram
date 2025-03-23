@@ -21,6 +21,15 @@ function ForwardMessageModal({ width, height }: { width: number, height: number 
 
     const setCurrentChatType = useTGCliStore((state) => state.setCurrentChatType)
 
+
+    const modalBackadropWidth = width * (80 / 100);
+    const modalBackadropHight = height * (80 / 100);
+
+    const forwardMessageModalHeight = Math.floor(modalBackadropHight * 0.8)
+    const forwardMessageModalWidth = Math.floor(modalBackadropWidth * 0.8)
+
+    const visibleChats = chats.slice(offset, offset + forwardMessageModalHeight * 0.5)
+
     useEffect(() => {
         const getChats = async () => {
             if (!client) return;
@@ -45,12 +54,13 @@ function ForwardMessageModal({ width, height }: { width: number, height: number 
             }
         }
         if (key.return) {
-            const chat = chats[activeIndex]
+            const chat = visibleChats[activeIndex]
             if (chat) {
                 ; (async () => {
                     try {
                         setCurrentChatType('PeerUser')
-                        setSelectedUser(chat)
+
+
                         await forwardMessage(client, {
                             fromPeer: {
                                 peerId: forwardMessageOptions?.fromPeer.peerId,
@@ -63,6 +73,7 @@ function ForwardMessageModal({ width, height }: { width: number, height: number 
                             },
                             type: forwardMessageOptions?.type
                         })
+                        setSelectedUser(chat)
                         setForwardMessageOptions(null)
                     } catch (err) {
                         console.error(err)
@@ -76,13 +87,7 @@ function ForwardMessageModal({ width, height }: { width: number, height: number 
     if (!client) return null
     if (!forwardMessageOptions) return null
 
-    const modalBackadropWidth = width * (80 / 100);
-    const modalBackadropHight = height * (80 / 100);
 
-    const forwardMessageModalHeight = Math.floor(modalBackadropHight * 0.8)
-    const forwardMessageModalWidth = Math.floor(modalBackadropWidth * 0.8)
-
-    const visibleChats = chats.slice(offset, offset + forwardMessageModalHeight * 0.5)
 
     return (<>
         <Box

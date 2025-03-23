@@ -1,55 +1,76 @@
 # Telegram CLI
 
-Telegram CLI client built with TypeScript and Node.js.
+This is a Telegram CLI client made with TypeScript and Node.js.
 
-**Important Note:** Right now, you can only chat with personal chats. Groups, channels, and bots aren't supported yet, but I'm planning to add them in the future!
+**Heads Up:** Right now, you can only chat with personal chats and channels. Group and bot support is coming soon!
 
 ## How to Use It
 
-When you fire it up, you get a cool interactive setup with three main parts:
+When you start it up, you'll see three main parts:
 
-1.  **Sidebar**: That's where you see all your personal chats listed (takes up about 30% of your screen).
-2.  **Chat Area**: This is where the actual chat messages show up (takes up the other 70%).
+1.  **Sidebar**: Lists all your personal chats (takes up about 30% of your screen).
+2.  **Chat Area**: Where the chat messages show up (takes up the other 70%).
 3.  **Help Page**: The first thing you'll see, it tells you how to get around.
 
-## Initial Setup & Login/Logout
+## Initial Setup
 
-Before you can use the app, you'll need to login.
+First, get your `api_id` and `api_hash` from [Telegram](https://my.telegram.org/apps).
 
-- **Login**: Use the command `tele-cli login` in your terminal. Follow the prompts to authenticate.
-- **Logout**: When you're done, use the command `tele-cli logout` to log out.
+### Set environment Variables
+If you're on a Unix-based system like Linux or macOS, set your `api_id` and `api_hash` in your `.zshrc` or `.bashrc` file:
+
+```bash
+export TELEGRAM_API_ID=your_api_id_from_telegram
+export TELEGRAM_API_HASH=your_api_hash_from_telegram
+```
+###  Set environment Variables (Windows)
+ go figure out by yourself
+
+### Installation with npm
+
+You'll need to have `bun` installed to use this package:
+
+```bash
+npm install -g tele-cli
+```
+
+## Using Docker
+
+Here's the Docker command to run the app:
+
+```bash
+docker run --rm -it -v tele_cli_data:/root/.tg-cli -e TELEGRAM_API_ID=$TELEGRAM_API_ID -e TELEGRAM_API_HASH=$TELEGRAM_API_HASH kumneger/tele-cli:latest
+```
+
+If the command is too long, you can create an alias to make it easier to use.
+
+## Before You Start
+
+- **Login**: Use `tele-cli login` in your terminal and follow the prompts.
+- **Logout**: Use `tele-cli logout` when you're done.
 
 ## First Time?
 
-When you start, you'll land on the Help Page. You've got two choices:
+When you start, you'll land on the Help Page. You can:
 
-- Hit **c** to jump right into the main chat interface.
-- Hit **x** to go straight to the interface and skip the help page next time.
+- Hit **c** to jump into the main chat interface.
+- Hit **x** to skip the help page next time.
 
 ## The Look
 
-It's designed to fit your terminal size, so:
-
-- The sidebar gets 30% of the width.
-- The chat area fills the rest.
-- It uses the full height of your terminal.
-- You'll see nice rounded borders separating everything.
+- Sidebar takes 30% of the width.
+- Chat area fills the rest.
+- Uses the full height of your terminal.
+- Nice rounded borders separate everything.
 
 ## Getting Around
 
-- **Switching Sides**: Press **Tab** to jump between the sidebar and the chat area.
-- The section you're on has a green border, so you know where you are.
-
-### Sidebar Stuff
-
-- Use **↑** or **k** to move up the chat list.
-- Use **↓** or **j** to move down.
-
-### Chat Area Stuff
-
-- **Moving Through Messages:**
-  - **↑** or **k** for older messages.
-  - **↓** or **j** for newer messages.
+- **Tab**: Switch between the sidebar and the chat area (active section has a green border).
+- **↑** or **k**: Move up (works in both chat list and messages).
+- **↓** or **j**: Move down (works in both chat list and messages).
+- **ctrl + k**  : To Open up search menu
+- **c**: Switch to Channels (Sidebar specific).
+- **u**: Switch back to users (Sidebar specific).
 
 ## Doing Things
 
@@ -57,8 +78,18 @@ It's designed to fit your terminal size, so:
   - **d** to delete it.
   - **e** to edit it.
   - **r** to reply to it.
+  - **f** to forward it.
 
-## What You'll See
+## Contributing Guidelines
 
-- **Green Borders**: The different parts have green borders.
-- **Resizing**: It changes size automatically when you change your terminal window.
+We welcome contributions to tele-cli! For detailed guidelines, please refer to the [CONTRIBUTING.md](CONTRIBUTING.md) file.
+
+If you encounter any issues or have suggestions, feel free to open an issue on our GitHub repository. This is also a great way to contribute to the project.
+
+Thank you for your interest in improving tele-cli!
+
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
