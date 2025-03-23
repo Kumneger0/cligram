@@ -333,6 +333,14 @@ export type TGCliStore = {
 	setCurrentlyFocused: (currentlyFocused: 'chatArea' | 'sidebar' | null) => void;
 };
 
+
+export type ForwardMessageOptions = {
+	fromPeer: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger };
+	id: number[];
+	type: Dialog['peer']['className']
+}
+
+
 interface ChatPhoto {
 	CONSTRUCTOR_ID: number;
 	SUBCLASS_OF_ID: number;

@@ -1,4 +1,5 @@
-import { conversationStore, useTGCliStore } from '@/lib/store';
+import { conversationStore, useForwardMessageStore, useTGCliStore } from '@/lib/store';
+import { ChannelInfo, FormattedMessage, UserInfo } from '@/lib/types';
 import { formatLastSeen } from '@/lib/utils';
 import { componenetFocusIds } from '@/lib/utils/consts';
 import { editMessage, getAllMessages, listenForEvents, sendMessage } from '@/telegram/messages';
@@ -6,8 +7,7 @@ import { Box, Text, useFocus, useFocusManager, useInput } from 'ink';
 import Spinner from 'ink-spinner';
 import TextInput from 'ink-text-input';
 import React, { Fragment, useEffect, useLayoutEffect, useState } from 'react';
-import { Modal } from '../modal/Modal';
-import { ChannelInfo, FormattedMessage, UserInfo } from '@/lib/types';
+import { MessageActionModal } from '../modal/Modal';
 const formatDate = (date: Date) =>
 	date.toLocaleDateString('en-US', {
 		month: 'short',
@@ -42,6 +42,8 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 	const [isModalOpen, setIsModalOpen] = useState(false);
 	const [offset, setOffset] = useState(0);
 
+	const setForwardMessageOptions = useForwardMessageStore((state) => state.setForwardMessageOptions);
+
 	const setCurrentlyFocused = useTGCliStore((state) => state.setCurrentlyFocused);
 
 	const currentChatType = useTGCliStore((state) => state.currentChatType);
@@ -57,6 +59,7 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 		if (!selectedUser) return;
 		setIsLoading(true);
 		let unsubscribe: () => void;
+
 		const id =
 			currentChatType === 'PeerUser'
 				? (selectedUser as UserInfo).peerId
@@ -109,7 +112,7 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 
 	const conversationAreaHieght =
 		currentChatType === 'PeerUser' ||
-		(currentChatType === 'PeerChannel' && (selectedUser as ChannelInfo)?.isCreator)
+			(currentChatType === 'PeerChannel' && (selectedUser as ChannelInfo)?.isCreator)
 			? height * (70 / 100)
 			: height * (90 / 100);
 
@@ -123,6 +126,17 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 
 	useInput(async (input, key) => {
 		if (!isFocused) return;
+
+		if (input === 'f') {
+			const peerId = currentlySelectedChatId as unknown as bigInt.BigInteger
+			const accessHash = selectedUser?.accessHash as unknown as bigInt.BigInteger
+
+			if (!peerId || !accessHash) return;
+
+			setForwardMessageOptions({ fromPeer: { peerId, accessHash }, id: [activeMessage?.id!], type: currentChatType });
+			focus(componenetFocusIds.forwardMessage);
+			return;
+		}
 
 		if (input === 'd') {
 			setMessageAction({ action: 'delete', id: activeMessage?.id! });
@@ -229,8 +243,7 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 
 	return (
 		<>
-			{isModalOpen && <Modal onClose={() => setIsModalOpen(false)} />}
-
+			{isModalOpen && <MessageActionModal onClose={() => setIsModalOpen(false)} />}
 			{!isModalOpen && (
 				<Box flexDirection="column" height={height} width={width}>
 					<Box gap={1}>
@@ -314,41 +327,41 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 					</Box>
 					{(currentChatType === 'PeerUser' ||
 						(currentChatType === 'PeerChannel' && (selectedUser as ChannelInfo)?.isCreator)) && (
-						<MessageInput
-							onSubmit={async (message) => {
-								if (selectedUser) {
-									const newMessage = {
-										content: message,
-										media: null,
-										isFromMe: true,
-										id: Math.floor(Math.random() * 10000),
-										sender: 'you',
-										date: new Date()
-									} satisfies FormattedMessage;
-									setConversation([...conversation, newMessage]);
-									const id =
-										currentChatType === 'PeerUser'
-											? (selectedUser as UserInfo).peerId
-											: (selectedUser as ChannelInfo).channelId;
-									const accessHash =
-										currentChatType === 'PeerUser'
-											? (selectedUser as UserInfo).accessHash
-											: (selectedUser as ChannelInfo).accessHash;
-									await sendMessage(
-										client,
-										{
-											peerId: id as unknown as bigInt.BigInteger,
-											accessHash: accessHash as unknown as bigInt.BigInteger
-										},
-										message,
-										undefined,
-										undefined,
-										currentChatType
-									);
-								}
-							}}
-						/>
-					)}
+							<MessageInput
+								onSubmit={async (message) => {
+									if (selectedUser) {
+										const newMessage = {
+											content: message,
+											media: null,
+											isFromMe: true,
+											id: Math.floor(Math.random() * 10000),
+											sender: 'you',
+											date: new Date()
+										} satisfies FormattedMessage;
+										setConversation([...conversation, newMessage]);
+										const id =
+											currentChatType === 'PeerUser'
+												? (selectedUser as UserInfo).peerId
+												: (selectedUser as ChannelInfo).channelId;
+										const accessHash =
+											currentChatType === 'PeerUser'
+												? (selectedUser as UserInfo).accessHash
+												: (selectedUser as ChannelInfo).accessHash;
+										await sendMessage(
+											client,
+											{
+												peerId: id as unknown as bigInt.BigInteger,
+												accessHash: accessHash as unknown as bigInt.BigInteger
+											},
+											message,
+											undefined,
+											undefined,
+											currentChatType
+										);
+									}
+								}}
+							/>
+						)}
 				</Box>
 			)}
 		</>
