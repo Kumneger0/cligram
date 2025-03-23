@@ -4,26 +4,25 @@ on:
   push:
     branches:
       - main
-  pull_request:
-    types: ['*']
 
 jobs:
   update_release_draft:
     runs-on: ubuntu-latest
     steps:
-       - name: Checkout repository
-         uses: actions/checkout@v2
+      - name: Checkout repository
+        uses: actions/checkout@v2
 
-       - name: Extract version from package.json
-         id: get_version
-         run: |
+      - name: Extract version from package.json
+        id: get_version
+        run: |
           # Extract the version using jq
           VERSION=$(jq -r '.version' package.json)
           echo "Extracted version: $VERSION"
           echo "::set-output name=version::$VERSION"
 
-       - uses: release-drafter/release-drafter@v6
-         with:
+      - name: Update Release Draft
+        uses: release-drafter/release-drafter@v6
+        with:
           config-name: release-drafter.yml
           version: ${{ steps.get_version.outputs.version }}
         env:
