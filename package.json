@@ -1,7 +1,7 @@
 {
 	"name": "tele-cli",
 	"description": "a telegram-cli",
-	"version": "0.4.3",
+	"version": "0.5.3",
 	"main": "dist/index.js",
 	"type": "module",
 	"bin": {
