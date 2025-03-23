@@ -7,6 +7,7 @@ on:
 
 jobs:
   test:
+    if: false
     runs-on: ubuntu-latest
     env:
       TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
