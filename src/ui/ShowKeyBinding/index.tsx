@@ -1,23 +1,57 @@
+import { useTGCliStore } from '@/lib/store'
 import { Box, Text } from 'ink'
 import React from 'react'
 
 const keyBindings = {
     general: {
-        'ctrl+k': 'Search',
-        "Tab": 'Switch focus'
+        'ctrl+k': {
+            mode: 'all',
+            description: 'Search'
+        },
+        "Tab": {
+            mode: 'all',
+            description: 'Switch focus'
+        }
     },
     chatArea: {
-        'r': 'Reply',
-        'd': 'Delete message',
-        'e': 'Edit message',
-        'j': 'Go down',
-        "k": "Go up",
+        'r': {
+            mode: 'PeerUser',
+            description: 'Reply'
+        },
+        'd': {
+            mode: 'PeerUser',
+            description: 'Delete message'
+        },
+        'e': {
+            mode: 'PeerUser',
+            description: 'Edit message'
+        },
+        'j': {
+            mode: 'all',
+            description: 'Go down'
+        },
+        "k": {
+            mode: 'all',
+            description: 'Go up'
+        },
     },
     sidebar: {
-        'j': 'Go down',
-        "k": "Go up",
-        "c": 'Switch to channels',
-        "u": 'Switch to users',
+        'j': {
+            mode: 'all',
+            description: 'Go down'
+        },
+        "k": {
+            mode: 'all',
+            description: 'Go up'
+        },
+        "c": {
+            mode: 'PeerUser',
+            description: 'Switch to channels'
+        },
+        "u": {
+            mode: 'PeerChannel',
+            description: 'Switch to users'
+        }
     }
 }
 
@@ -25,12 +59,17 @@ type ShowKeyBindingProps = {
     type: keyof typeof keyBindings
 }
 function ShowKeyBinding({ type }: ShowKeyBindingProps) {
-    const keyBindingToShow = type !== 'general' ? { ...keyBindings.general, ...keyBindings[type] } : keyBindings[type]
+    const currentChatType = useTGCliStore((state) => state.currentChatType)
+    const keyBindingToShow = Object.entries(type !== 'general' ? { ...keyBindings.general, ...keyBindings[type] } : keyBindings[type]).filter(([_key, value]) => {
+        if (value.mode === 'all') return true
+        if (value.mode === currentChatType) return true
+        return false
+    })
     return (
         <Box>
             <Text>
-                {Object.entries(keyBindingToShow).map(([key, value]) => (
-                    <Text color="blue" key={key}>{key} - {value}, {' '}</Text>
+                {keyBindingToShow.map(([key, value]) => (
+                    <Text color="blue" key={key}>{key} - {value.description}, {' '}</Text>
                 ))}
             </Text>
         </Box>

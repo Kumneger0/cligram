@@ -17,6 +17,8 @@ function ForwardMessageModal({ width, height }: { width: number, height: number 
     const forwardMessageOptions = useForwardMessageStore((state) => state.forwardMessageOptions)
     const setForwardMessageOptions = useForwardMessageStore((state) => state.setForwardMessageOptions)
 
+    const [offset, setOffset] = useState(0)
+
     const setCurrentChatType = useTGCliStore((state) => state.setCurrentChatType)
 
     useEffect(() => {
@@ -34,9 +36,13 @@ function ForwardMessageModal({ width, height }: { width: number, height: number 
         if (!forwardMessageOptions) return;
         if (key.upArrow || input === 'k') {
             setActiveIndex((prev) => Math.max(0, prev - 1));
+            setOffset((prev) => Math.max(0, prev - 1))
         }
         if (key.downArrow || input === 'j') {
-            setActiveIndex((prev) => Math.min(chats.length - 1, prev + 1));
+            const newOffset = Math.max(offset + 1, chats.length - forwardMessageModalHeight);
+            if (newOffset < chats.length) {
+                setOffset(newOffset)
+            }
         }
         if (key.return) {
             const chat = chats[activeIndex]
@@ -73,6 +79,11 @@ function ForwardMessageModal({ width, height }: { width: number, height: number 
     const modalBackadropWidth = width * (80 / 100);
     const modalBackadropHight = height * (80 / 100);
 
+    const forwardMessageModalHeight = Math.floor(modalBackadropHight * 0.8)
+    const forwardMessageModalWidth = Math.floor(modalBackadropWidth * 0.8)
+
+    const visibleChats = chats.slice(offset, offset + forwardMessageModalHeight * 0.5)
+
     return (<>
         <Box
             borderColor={isFocused ? 'blue' : ''}
@@ -93,8 +104,8 @@ function ForwardMessageModal({ width, height }: { width: number, height: number 
                 borderStyle="round"
                 borderColor={'blue'}
                 padding={1}
-                width={modalBackadropWidth * 0.8}
-                height={modalBackadropHight * 0.8}
+                width={forwardMessageModalWidth}
+                height={forwardMessageModalHeight}
                 alignItems="center"
                 justifyContent="center"
                 position="absolute"
@@ -107,7 +118,7 @@ function ForwardMessageModal({ width, height }: { width: number, height: number 
                         <Text>
                             Select a chat to forward message to
                         </Text>
-                        {chats.map((chat, index) => (
+                        {visibleChats.map((chat, index) => (
                             <Text key={chat.accessHash.toString()} color={activeIndex === index ? 'green' : 'white'}>
                                 {activeIndex === index ? '> ' : '  '}
                                 {chat.firstName}

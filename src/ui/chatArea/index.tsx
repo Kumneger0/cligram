@@ -119,7 +119,7 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 	const visibleMessages = conversation.slice(offset, offset + conversationAreaHieght);
 
 	useEffect(() => {
-		if (isFocused) {
+		if (isFocused) {	
 			setCurrentlyFocused('chatArea')
 		}
 	}, [isFocused])
