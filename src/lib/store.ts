@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { FormattedMessage, TGCliStore } from './types';
+import { FormattedMessage, ForwardMessageOptions, TGCliStore } from './types';
 
 export const conversationStore = create<{
 	conversation: FormattedMessage[];
@@ -22,4 +22,13 @@ export const useTGCliStore = create<TGCliStore>((set) => ({
 	setMessageAction: (messageAction) => set((state) => ({ ...state, messageAction })),
 	currentlyFocused: null,
 	setCurrentlyFocused: (currentlyFocused) => set((state) => ({ ...state, currentlyFocused }))
+}));
+
+
+export const useForwardMessageStore = create<{
+	forwardMessageOptions: ForwardMessageOptions | null;
+	setForwardMessageOptions: (forwardMessageOptions: ForwardMessageOptions | null) => void;
+}>((set) => ({
+	forwardMessageOptions: null,
+	setForwardMessageOptions: (forwardMessageOptions) => set((state) => ({ ...state, forwardMessageOptions }))
 }));

@@ -1,5 +1,5 @@
 #!/bin/env node
-import { useTGCliStore } from '@/lib/store';
+import { useForwardMessageStore, useTGCliStore } from '@/lib/store';
 import { ChatArea } from '@/ui/chatArea';
 import { Sidebar } from '@/ui/sidebar';
 import { Box, render, Text, useFocus, useInput, useStdout } from 'ink';
@@ -9,6 +9,7 @@ import { ChannelInfo, UserInfo } from './lib/types';
 import { getConfig, setConfig } from './lib/utils/auth';
 import { SearchModal } from './ui/Search';
 import ShowKeyBinding from './ui/ShowKeyBinding';
+import ForwardMessageModal from './ui/forwardMessage';
 
 
 const HelpPage: React.FC = () => {
@@ -50,6 +51,7 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 	const updateClient = useTGCliStore((state) => state.updateClient);
 	const currentlyFocused = useTGCliStore((state) => state.currentlyFocused);
 
+	const forwardMessageOptions = useForwardMessageStore((state) => state.forwardMessageOptions);
 
 	const config = getConfig();
 	const [showHelp, setShowHelp] = React.useState(
@@ -91,7 +93,6 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 			setConfig('skipHelp', true);
 		}
 	},
-
 	);
 
 	useEffect(() => {
@@ -110,6 +111,17 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 			? (selectedUser as UserInfo)?.peerId
 			: (selectedUser as ChannelInfo)?.channelId;
 
+
+	let ComponentToRender: React.FC<{ height: number; width: number }> = ChatArea
+
+	if (!!forwardMessageOptions) {
+		ComponentToRender = ForwardMessageModal
+	}
+	if (!!searchMode) {
+		ComponentToRender = SearchModal
+	}
+
+
 	return (
 		<>
 			<Box
@@ -123,15 +135,7 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 				<Box width={sidebarWidth} flexDirection="column" borderRightColor="green">
 					<Sidebar key={currentChatType} height={height} width={sidebarWidth} />
 				</Box>
-				{searchMode ? (
-					<SearchModal height={height} width={chatAreaWidth} />
-				) : (
-					<ChatArea
-						height={height}
-						width={chatAreaWidth}
-						key={currentlySelectedChatId?.toString() ?? 'defualt-key'}
-					/>
-				)}
+				<ComponentToRender key={currentlySelectedChatId?.toString() ?? 'defualt-key'} height={height} width={chatAreaWidth} />
 			</Box>
 			<ShowKeyBinding type={currentlyFocused ?? 'general'} />
 		</>
