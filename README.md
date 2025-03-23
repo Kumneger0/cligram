@@ -80,7 +80,7 @@ When you start, you'll land on the Help Page. You can:
   - **r** to reply to it.
   - **f** to forward it.
 
-## Contributing Guidelines
+## Contributing
 
 We welcome contributions to tele-cli! For detailed guidelines, please refer to the [CONTRIBUTING.md](CONTRIBUTING.md) file.
 
