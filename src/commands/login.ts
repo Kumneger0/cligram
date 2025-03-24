@@ -17,7 +17,7 @@ export default command(
 				process.exit(0);
 			}
 		})().catch((error) => {
-			console.error(`${red('✖')} ${error.message}`);
+			console.error(`${red('✖')} ${error instanceof Error ? error.message : 'An unknown error occurred'}`);
 			process.exit(1);
 		});
 	}

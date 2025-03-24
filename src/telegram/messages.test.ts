@@ -58,7 +58,7 @@ it('it should edit a message', async () => {
 		{ peerId: me.id, accessHash: me.accessHash! },
 		'Hello World'
 	);
-	if (!result.messageId) throw new Error('Message not sent');
+	if (!result.messageId) {throw new Error('Message not sent');}
 	const edited = await editMessage(
 		client,
 		{ peerId: me.id, accessHash: me.accessHash! },
@@ -75,7 +75,7 @@ it('it should delete a message', async () => {
 		{ peerId: me.id, accessHash: me.accessHash! },
 		'Hello World'
 	);
-	if (!result.messageId) throw new Error('Message not sent');
+	if (!result.messageId) {throw new Error('Message not sent');}
 	const deleted = await deleteMessage(
 		client,
 		{ peerId: me.id, accessHash: me.accessHash! },

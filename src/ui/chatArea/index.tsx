@@ -8,15 +8,18 @@ import Spinner from 'ink-spinner';
 import TextInput from 'ink-text-input';
 import React, { Fragment, useEffect, useLayoutEffect, useState } from 'react';
 import { MessageActionModal } from '../modal/Modal';
-const formatDate = (date: Date) =>
-	date.toLocaleDateString('en-US', {
+const formatDate = (date: Date) => {
+	return date.toLocaleDateString('en-US', {
 		month: 'short',
 		day: 'numeric',
 		year: 'numeric'
 	});
+};
 
 const groupMessagesByDate = (messages: FormattedMessage[]) => {
-	const sortedMessages = messages.sort((a, b) => a.date.getTime() - b.date.getTime());
+	const sortedMessages = messages.sort((a, b) => {
+		return a.date.getTime() - b.date.getTime();
+	});
 
 	return sortedMessages.reduce<Record<string, FormattedMessage[]>>((groups, message) => {
 		const dateKey = formatDate(message.date);
@@ -31,10 +34,18 @@ const groupMessagesByDate = (messages: FormattedMessage[]) => {
 export function ChatArea({ height, width }: { height: number; width: number }) {
 	const { focus } = useFocusManager();
 	const { isFocused } = useFocus({ id: componenetFocusIds.chatArea });
-	const selectedUser = useTGCliStore((state) => state.selectedUser);
-	const client = useTGCliStore((state) => state.client)!;
-	const { conversation, setConversation } = conversationStore((state) => state);
-	const setMessageAction = useTGCliStore((state) => state.setMessageAction);
+	const selectedUser = useTGCliStore((state) => {
+		return state.selectedUser;
+	});
+	const client = useTGCliStore((state) => {
+		return state.client;
+	})!;
+	const { conversation, setConversation } = conversationStore((state) => {
+		return state;
+	});
+	const setMessageAction = useTGCliStore((state) => {
+		return state.setMessageAction;
+	});
 	const [offsetId, setOffsetId] = useState<number | undefined>(undefined);
 
 	const [activeMessage, setActiveMessage] = useState<FormattedMessage | null>(null);
@@ -42,23 +53,33 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 	const [isModalOpen, setIsModalOpen] = useState(false);
 	const [offset, setOffset] = useState(0);
 
-	const setForwardMessageOptions = useForwardMessageStore((state) => state.setForwardMessageOptions);
+	const setForwardMessageOptions = useForwardMessageStore((state) => {
+		return state.setForwardMessageOptions;
+	});
 
-	const setCurrentlyFocused = useTGCliStore((state) => state.setCurrentlyFocused);
+	const setCurrentlyFocused = useTGCliStore((state) => {
+		return state.setCurrentlyFocused;
+	});
 
-	const currentChatType = useTGCliStore((state) => state.currentChatType);
-	const setSearchMode = useTGCliStore((state) => state.setSearchMode);
+	const currentChatType = useTGCliStore((state) => {
+		return state.currentChatType;
+	});
+	const setSearchMode = useTGCliStore((state) => {
+		return state.setSearchMode;
+	});
 	const currentlySelectedChatId =
 		currentChatType === 'PeerUser'
-			? (selectedUser as UserInfo)?.peerId
-			: (selectedUser as ChannelInfo)?.channelId;
+			? (selectedUser as UserInfo | null)?.peerId
+			: (selectedUser as ChannelInfo | null)?.channelId;
 
 	const selectedUserPeerID = String(currentlySelectedChatId);
 
 	useEffect(() => {
-		if (!selectedUser) return;
+		if (!selectedUser) {
+			return;
+		}
 		setIsLoading(true);
-		let unsubscribe: () => void;
+		let unsubscribe: (() => void) | undefined;
 
 		const id =
 			currentChatType === 'PeerUser'
@@ -86,7 +107,7 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 				currentChatType
 			);
 			setConversation(conversation);
-			setOffsetId(conversation?.[0]?.id);
+			setOffsetId(conversation[0]?.id);
 			setIsLoading(false);
 			setActiveMessage(conversation.at(-1) ?? null);
 
@@ -112,28 +133,36 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 
 	const conversationAreaHieght =
 		currentChatType === 'PeerUser' ||
-			(currentChatType === 'PeerChannel' && (selectedUser as ChannelInfo)?.isCreator)
+			(currentChatType === 'PeerChannel' && (selectedUser as ChannelInfo | null)?.isCreator)
 			? height * (70 / 100)
 			: height * (90 / 100);
 
 	const visibleMessages = conversation.slice(offset, offset + conversationAreaHieght);
 
 	useEffect(() => {
-		if (isFocused) {	
-			setCurrentlyFocused('chatArea')
+		if (isFocused) {
+			setCurrentlyFocused('chatArea');
 		}
-	}, [isFocused])
+	}, [isFocused]);
 
 	useInput(async (input, key) => {
-		if (!isFocused) return;
+		if (!isFocused) {
+			return;
+		}
 
 		if (input === 'f') {
-			const peerId = currentlySelectedChatId as unknown as bigInt.BigInteger
-			const accessHash = selectedUser?.accessHash as unknown as bigInt.BigInteger
+			const peerId = currentlySelectedChatId as unknown as bigInt.BigInteger | undefined;
+			const accessHash = selectedUser?.accessHash as unknown as bigInt.BigInteger | undefined;
 
-			if (!peerId || !accessHash) return;
+			if (!peerId || !accessHash) {
+				return;
+			}
 
-			setForwardMessageOptions({ fromPeer: { peerId, accessHash }, id: [activeMessage?.id!], type: currentChatType });
+			setForwardMessageOptions({
+				fromPeer: { peerId, accessHash },
+				id: [activeMessage?.id!],
+				type: currentChatType
+			});
 			focus(componenetFocusIds.forwardMessage);
 			return;
 		}
@@ -148,8 +177,10 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 		}
 
 		if (input === 'e') {
-			if (!activeMessage?.isFromMe) return;
-			setMessageAction({ action: 'edit', id: activeMessage?.id! });
+			if (!activeMessage?.isFromMe) {
+				return;
+			}
+			setMessageAction({ action: 'edit', id: activeMessage.id! });
 			focus(componenetFocusIds.messageInput);
 			return;
 		}
@@ -160,10 +191,12 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 			return;
 		}
 
-		if (key.upArrow || input == 'k') {
-			const currentIndex = conversation?.findIndex(({ id }) => id === activeMessage?.id);
+		if (key.upArrow || input === 'k') {
+			const currentIndex = conversation.findIndex(({ id }) => {
+				return id === activeMessage?.id;
+			});
 			let nextMessage = conversation[currentIndex - 1];
-			if (offset == 0 && selectedUser) {
+			if (offset === 0 && selectedUser) {
 				const appendMessages = async () => {
 					const peerId =
 						currentChatType === 'PeerUser'
@@ -192,12 +225,16 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 					);
 					const updatedConversation = [...newMessages, ...conversation];
 					setConversation(
-						updatedConversation.filter(
-							({ id }, i) => updatedConversation.findIndex((c) => c.id == id) === i
-						)
+						updatedConversation.filter(({ id }, i) => {
+							return (
+								updatedConversation.findIndex((c) => {
+									return c.id === id;
+								}) === i
+							);
+						})
 					);
 					nextMessage = updatedConversation[currentIndex - 1];
-					setOffsetId(newMessages?.[0]?.id);
+					setOffsetId(newMessages[0]?.id);
 					setOffset(newMessages.length);
 				};
 				await appendMessages();
@@ -206,9 +243,13 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 			if (nextMessage) {
 				setActiveMessage(nextMessage);
 			}
-			setOffset((prev) => Math.max(prev - 1, 0));
+			setOffset((prev) => {
+				return Math.max(prev - 1, 0);
+			});
 		} else if (key.downArrow || input === 'j') {
-			const currentIndex = conversation?.findIndex(({ id }) => id === activeMessage?.id);
+			const currentIndex = conversation.findIndex(({ id }) => {
+				return id === activeMessage?.id;
+			});
 			const nextMessage = conversation[currentIndex + 1];
 			if (nextMessage) {
 				setActiveMessage(nextMessage);
@@ -234,8 +275,8 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 	}
 	const selectedUserLastSeen =
 		currentChatType === 'PeerUser'
-			? (selectedUser as UserInfo)?.lastSeen
-				? formatLastSeen((selectedUser as UserInfo)?.lastSeen!)
+			? (selectedUser as UserInfo | null)?.lastSeen
+				? formatLastSeen((selectedUser as UserInfo).lastSeen!)
 				: 'Unknown'
 			: '';
 
@@ -243,18 +284,24 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 
 	return (
 		<>
-			{isModalOpen && <MessageActionModal onClose={() => setIsModalOpen(false)} />}
+			{isModalOpen && (
+				<MessageActionModal
+					onClose={() => {
+						return setIsModalOpen(false);
+					}}
+				/>
+			)}
 			{!isModalOpen && (
 				<Box flexDirection="column" height={height} width={width}>
 					<Box gap={1}>
 						<Text color="blue" bold>
 							{currentChatType === 'PeerUser'
-								? (selectedUser as UserInfo)?.firstName
-								: (selectedUser as ChannelInfo)?.title}
+								? (selectedUser as UserInfo | null)?.firstName
+								: (selectedUser as ChannelInfo | null)?.title}
 						</Text>
 						<Text>
 							{currentChatType === 'PeerUser'
-								? (selectedUser as UserInfo)?.isOnline
+								? (selectedUser as UserInfo | null)?.isOnline
 									? 'Online'
 									: `${selectedUserLastSeen}`
 								: ''}
@@ -287,7 +334,7 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 												flexDirection="column"
 												flexGrow={0}
 											>
-												{activeMessage?.id == message.id && isFocused ? (
+												{activeMessage?.id === message.id && isFocused ? (
 													<Text color={'green'}>{'>  '}</Text>
 												) : null}
 												<Box flexDirection="column">
@@ -302,10 +349,10 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 													<Text
 														wrap="wrap"
 														color={'white'}
-														bold={!!message.document}
-														underline={!!message.document}
+														bold={!!message.isUnsupportedMessage}
+														underline={!!message.isUnsupportedMessage}
 														backgroundColor={
-															activeMessage?.id == message.id && isFocused ? 'blue' : ''
+															activeMessage?.id === message.id && isFocused ? 'blue' : ''
 														}
 													>
 														{message.content}
@@ -326,7 +373,8 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 						})}
 					</Box>
 					{(currentChatType === 'PeerUser' ||
-						(currentChatType === 'PeerChannel' && (selectedUser as ChannelInfo)?.isCreator)) && (
+						(currentChatType === 'PeerChannel' &&
+							(selectedUser as ChannelInfo | null)?.isCreator)) && (
 							<MessageInput
 								onSubmit={async (message) => {
 									if (selectedUser) {
@@ -336,6 +384,7 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 											isFromMe: true,
 											id: Math.floor(Math.random() * 10000),
 											sender: 'you',
+											isUnsupportedMessage: false,
 											date: new Date()
 										} satisfies FormattedMessage;
 										setConversation([...conversation, newMessage]);
@@ -370,26 +419,44 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 
 function MessageInput({ onSubmit }: { onSubmit: (message: string) => void }) {
 	const [message, setMessage] = useState('');
-	const selectedUser = useTGCliStore((state) => state.selectedUser);
+	const selectedUser = useTGCliStore((state) => {
+		return state.selectedUser;
+	});
 	const { isFocused } = useFocus({ id: componenetFocusIds.messageInput });
-	const messageAction = useTGCliStore((state) => state.messageAction);
-	const client = useTGCliStore((state) => state.client)!;
-	const setMessageAction = useTGCliStore((state) => state.setMessageAction);
-	const conversation = conversationStore((state) => state.conversation);
-	const messageContent = conversation.find(({ id }) => id === messageAction?.id)?.content;
+	const messageAction = useTGCliStore((state) => {
+		return state.messageAction;
+	});
+	const client = useTGCliStore((state) => {
+		return state.client;
+	})!;
+	const setMessageAction = useTGCliStore((state) => {
+		return state.setMessageAction;
+	});
+	const conversation = conversationStore((state) => {
+		return state.conversation;
+	});
+	const messageContent = conversation.find(({ id }) => {
+		return id === messageAction?.id;
+	})?.content;
 	const isReply = messageAction?.action === 'reply';
 
-	const currentChatType = useTGCliStore((state) => state.currentChatType);
-	const setCurrentlyFocused = useTGCliStore((state) => state.setCurrentlyFocused);
+	const currentChatType = useTGCliStore((state) => {
+		return state.currentChatType;
+	});
+	const setCurrentlyFocused = useTGCliStore((state) => {
+		return state.setCurrentlyFocused;
+	});
 
 	useEffect(() => {
 		if (isFocused) {
-			setCurrentlyFocused(null)
+			setCurrentlyFocused(null);
 		}
-	}, [isFocused])
+	}, [isFocused]);
 
 	useLayoutEffect(() => {
-		if (isReply) return;
+		if (isReply) {
+			return;
+		}
 		setMessage(messageContent ?? '');
 	}, [messageAction?.id]);
 
@@ -401,7 +468,8 @@ function MessageInput({ onSubmit }: { onSubmit: (message: string) => void }) {
 				isFromMe: true,
 				id: messageAction?.id ?? Math.floor(Math.random() * 10000),
 				sender: 'you',
-				date: new Date()
+				date: new Date(),
+				isUnsupportedMessage: false,
 			} satisfies FormattedMessage;
 			const updatedConversation = conversation.map((msg) => {
 				if (msg.id === messageAction?.id) {
@@ -432,17 +500,18 @@ function MessageInput({ onSubmit }: { onSubmit: (message: string) => void }) {
 									isFromMe: true,
 									id: Math.floor(Math.random() * 10000),
 									sender: 'you',
-									date: new Date()
+									date: new Date(),
+									isUnsupportedMessage: false
 								} satisfies FormattedMessage;
 								conversationStore.setState({ conversation: [...conversation, newMessage] });
 								if (currentChatType === 'PeerUser') {
-									sendMessage(client, selectedUser as UserInfo, message, true, messageAction?.id);
+									sendMessage(client, selectedUser as UserInfo, message, true, messageAction.id);
 								}
 								setMessage('');
 								setMessageAction(null);
 								return;
 							}
-							messageAction?.action == 'edit' ? edit() : onSubmit(message);
+							messageAction?.action === 'edit' ? edit() : onSubmit(message);
 							setMessage('');
 						}
 					}}

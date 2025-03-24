@@ -1,12 +1,12 @@
 {
-	"name": "tele-cli",
-	"description": "a telegram-cli",
-	"version": "0.5.4",
+	"name": "cligram",
+	"description": "CLI-based Telegram client",
+	"version": "0.5.5",
 	"main": "dist/index.js",
 	"type": "module",
 	"bin": {
 		"telegram-cli": "dist/index.js",
-		"tele-cli": "dist/index.js"
+		"cligram": "dist/index.js"
 	},
 	"keywords": [
 		"Telegram"
@@ -18,7 +18,7 @@
 	],
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/kumneger0/tele-cli"
+		"url": "https://github.com/kumneger0/cligram"
 	},
 	"scripts": {
 		"dev": "bun --watch src/index.ts",
@@ -54,8 +54,6 @@
 		"date-fns": "^4.1.0",
 		"debounce": "^2.2.0",
 		"dotenv": "^16.4.7",
-		"esbuild-fix-imports-plugin": "^1.0.14",
-		"esbuild-plugin-wasm": "^1.1.0",
 		"ink": "^5.1.0",
 		"ink-spinner": "^5.0.0",
 		"ink-text-input": "^6.0.0",
@@ -69,7 +67,6 @@
 		"telegram": "^2.26.22",
 		"term-size": "^4.0.0",
 		"terminal-image": "^3.1.1",
-		"yoga-wasm-web": "^0.3.3",
 		"zustand": "^5.0.3"
 	}
 }

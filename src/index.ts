@@ -17,13 +17,13 @@ const disconnect = async (client: TelegramClient) => {
 
 cli(
 	{
-		name: 'tele-cli',
+		name: 'cligram',
 		version,
 		commands: [login, logout],
 		help: {
 			description
 		},
-		ignoreArgv: (type) => type === 'unknown-flag' || type === 'argument'
+		ignoreArgv: (type) => { return type === 'unknown-flag' || type === 'argument' }
 	},
 	async (_argv) => {
 		try {
@@ -38,16 +38,16 @@ cli(
 							disconnect(client);
 						});
 					}
-					client?.setLogLevel(LogLevel.NONE);
+					client.setLogLevel(LogLevel.NONE);
 					initializeUI(client);
 					return;
 				}
 			}
 			console.log(`${red('✖')} Are you logged in ?`);
-			console.log('login with tele-cli login');
+			console.log('login with cligram login');
 		} catch (err) {
 			if (err instanceof RPCError) {
-				if (err.errorMessage == 'AUTH_KEY_UNREGISTERED') {
+				if (err.errorMessage === 'AUTH_KEY_UNREGISTERED') {
 					console.log(`${red('✖')} ${err.message}`);
 					console.error(
 						`${red('✖')} We Are unable to access your chat did u terminated the session ?`
@@ -57,7 +57,7 @@ cli(
 				}
 				return;
 			}
-			if (err && typeof err == 'object' && 'message' in err && typeof err.message == 'string') {
+			if (err && typeof err === 'object' && 'message' in err && typeof err.message === 'string') {
 				console.log(`${red('✖')} ${err.message}`);
 			}
 		}

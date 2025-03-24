@@ -31,7 +31,7 @@ export TELEGRAM_API_HASH=your_api_hash_from_telegram
 You'll need to have `bun` installed to use this package:
 
 ```bash
-npm install -g tele-cli
+npm install -g cligram
 ```
 
 ## Using Docker
@@ -39,15 +39,15 @@ npm install -g tele-cli
 Here's the Docker command to run the app:
 
 ```bash
-docker run --rm -it -v tele_cli_data:/root/.tg-cli -e TELEGRAM_API_ID=$TELEGRAM_API_ID -e TELEGRAM_API_HASH=$TELEGRAM_API_HASH kumneger/tele-cli:latest
+docker run --rm -it -v tele_cli_data:/root/.tg-cli -e TELEGRAM_API_ID=$TELEGRAM_API_ID -e TELEGRAM_API_HASH=$TELEGRAM_API_HASH kumneger/cligram:latest
 ```
 
 If the command is too long, you can create an alias to make it easier to use.
 
 ## Before You Start
 
-- **Login**: Use `tele-cli login` in your terminal and follow the prompts.
-- **Logout**: Use `tele-cli logout` when you're done.
+- **Login**: Use `cligram login` in your terminal and follow the prompts.
+- **Logout**: Use `cligram logout` when you're done.
 
 ## First Time?
 
@@ -82,11 +82,11 @@ When you start, you'll land on the Help Page. You can:
 
 ## Contributing
 
-We welcome contributions to tele-cli! For detailed guidelines, please refer to the [CONTRIBUTING.md](CONTRIBUTING.md) file.
+We welcome contributions to cligram! For detailed guidelines, please refer to the [CONTRIBUTING.md](CONTRIBUTING.md) file.
 
 If you encounter any issues or have suggestions, feel free to open an issue on our GitHub repository. This is also a great way to contribute to the project.
 
-Thank you for your interest in improving tele-cli!
+Thank you for your interest in improving cligram!
 
 
 ## License

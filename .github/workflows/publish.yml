@@ -1,4 +1,4 @@
-name: Publish tele-cli
+name: Publish cligram
 
 on:
   push:
@@ -38,6 +38,10 @@ jobs:
       # - name: Test
       #   run: bun test
       #   working-directory: .
+
+      - name lint 
+        run bun run lint:check
+        working-directory
 
       - name: build
         run: bun run build
