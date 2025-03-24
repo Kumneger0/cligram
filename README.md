@@ -5,7 +5,7 @@ This is a Telegram CLI client made with TypeScript and Node.js.
 
 **Note:** This project is currently in development and is not fully stable. expect potential bugs and incomplete features.
 
-**Heads Up:** Right now, you can only chat with personal chats and channels. Group and bot support is coming soon!
+Right now, you can only chat with personal chats and channels. Group and bot support is coming soon!
 
 ## How to Use It
 
