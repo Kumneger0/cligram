@@ -13,13 +13,12 @@ import {
 import { getUserInfo } from './client';
 import { IterMessagesParams } from 'telegram/client/messages';
 
-
 type ForwardMessageParams = {
 	fromPeer: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger };
 	id: number[];
 	toPeer: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger };
-	type: Dialog['peer']['className']
-}
+	type: Dialog['peer']['className'];
+};
 
 /**
  * Forwards messages from one peer to another on Telegram.
@@ -37,29 +36,31 @@ type ForwardMessageParams = {
  * @returns {Promise<Api.messages.ForwardMessages>} The result of the forward operation.
  */
 export async function forwardMessage(client: TelegramClient, params: ForwardMessageParams) {
-	const fromPeerEntity = params.type === 'PeerUser' ? new Api.InputPeerUser({
-		userId: params.fromPeer.peerId,
-		accessHash: params.fromPeer.accessHash
-	}) : new Api.InputPeerChannel({
-		channelId: params.fromPeer.peerId,
-		accessHash: params.fromPeer.accessHash
-	})
+	const fromPeerEntity =
+		params.type === 'PeerUser'
+			? new Api.InputPeerUser({
+				userId: params.fromPeer.peerId,
+				accessHash: params.fromPeer.accessHash
+			})
+			: new Api.InputPeerChannel({
+				channelId: params.fromPeer.peerId,
+				accessHash: params.fromPeer.accessHash
+			});
 
 	const toPeerEntity = new Api.InputPeerUser({
 		userId: params.toPeer.peerId,
 		accessHash: params.toPeer.accessHash
-	})
+	});
 
 	const result = await client.invoke(
 		new Api.messages.ForwardMessages({
 			fromPeer: fromPeerEntity,
 			id: params.id,
-			toPeer: toPeerEntity,
+			toPeer: toPeerEntity
 		})
 	);
 	return result;
 }
-
 
 /**
  * Sends a message to a Telegram user.
@@ -81,21 +82,23 @@ export const sendMessage = async (
 	type: Dialog['peer']['className'] = 'PeerUser'
 ) => {
 	try {
-		if (!client.connected) await client.connect();
+		if (!client.connected) {
+			await client.connect();
+		}
 
 		const sendMessageParam = {
 			message: message,
 			...(isReply && { replyTo: replyToMessageId })
 		};
 		const result = await client.sendMessage(
-			type == 'PeerUser'
+			type === 'PeerUser'
 				? new Api.InputPeerUser({
-					userId: peerInfo?.peerId,
-					accessHash: peerInfo?.accessHash
+					userId: peerInfo.peerId,
+					accessHash: peerInfo.accessHash
 				})
 				: new Api.InputPeerChannel({
-					channelId: peerInfo?.peerId,
-					accessHash: peerInfo?.accessHash
+					channelId: peerInfo.peerId,
+					accessHash: peerInfo.accessHash
 				}),
 			sendMessageParam
 		);
@@ -128,21 +131,21 @@ export const deleteMessage = async (
 ) => {
 	try {
 		const result = await client.deleteMessages(
-			type == 'PeerUser'
+			type === 'PeerUser'
 				? new Api.InputPeerUser({
-					userId: peerInfo?.peerId,
-					accessHash: peerInfo?.accessHash
+					userId: peerInfo.peerId,
+					accessHash: peerInfo.accessHash
 				})
 				: new Api.InputPeerChannel({
-					channelId: peerInfo?.peerId,
-					accessHash: peerInfo?.accessHash
+					channelId: peerInfo.peerId,
+					accessHash: peerInfo.accessHash
 				}),
 			[Number(messageId)],
 			{ revoke: true }
 		);
 		return result;
 	} catch (err) {
-		console.error(err);
+		return null
 	}
 };
 
@@ -164,14 +167,14 @@ export const editMessage = async (
 ) => {
 	try {
 		const entity =
-			type == 'PeerUser'
+			type === 'PeerUser'
 				? new Api.InputPeerUser({
-					userId: peerInfo?.peerId,
-					accessHash: peerInfo?.accessHash
+					userId: peerInfo.peerId,
+					accessHash: peerInfo.accessHash
 				})
 				: new Api.InputPeerChannel({
-					channelId: peerInfo?.peerId,
-					accessHash: peerInfo?.accessHash
+					channelId: peerInfo.peerId,
+					accessHash: peerInfo.accessHash
 				});
 		const result = await client.invoke(
 			new Api.messages.EditMessage({
@@ -182,7 +185,7 @@ export const editMessage = async (
 		);
 		return result;
 	} catch (err) {
-		console.error(err);
+		return null
 	}
 };
 
@@ -232,11 +235,13 @@ export async function getAllMessages<T extends Dialog['peer']['className']>(
 	iterParams?: Partial<IterMessagesParams>
 ): Promise<FormattedMessage[]> {
 	try {
-		if (!client.connected) await client.connect();
+		if (!client.connected) {
+			await client.connect();
+		}
 		const messages = [];
 
 		for await (const message of client.iterMessages(
-			type == 'PeerUser'
+			type === 'PeerUser'
 				? new Api.InputPeerUser({
 					userId: userId as unknown as bigInt.BigInteger,
 					accessHash: accessHash as unknown as bigInt.BigInteger
@@ -252,21 +257,22 @@ export async function getAllMessages<T extends Dialog['peer']['className']>(
 
 		const orgnizedMessages = (
 			await Promise.all(
-				messages.reverse()?.map(async (message): Promise<FormattedMessage> => {
+				messages.reverse().map(async (message): Promise<FormattedMessage> => {
 					const media = message.media as unknown as Media;
 
-					const buffer =
-						media && media.className == 'MessageMediaPhoto'
-							? await downloadMedia({ media, size: 'large' })
-							: null;
+					// const buffer =
+					// 	media && media.className === 'MessageMediaPhoto'
+					// 		? await downloadMedia({ media, size: 'large' })
+					// 		: null;
 
+					const buffer = null;
 					const webPage =
-						media && media.className == 'MessageMediaWebPage'
+						media && media.className === 'MessageMediaWebPage'
 							? getOrganizedWebPageMedia(media as MessageMediaWebPage)
 							: null;
 					const width = (chatAreaWidth ?? terminalSize().columns * (70 / 100)) / 2;
 					const document =
-						media && media.className == 'MessageMediaDocument' ? getOrganizedDocument() : null;
+						media && media.className === 'MessageMediaDocument' ? getOrganizedDocument() : null;
 					const date = new Date(message.date * 1000);
 					const imageString = await (buffer
 						? terminalImage.buffer(new Uint8Array(buffer), {
@@ -275,11 +281,13 @@ export async function getAllMessages<T extends Dialog['peer']['className']>(
 						: null);
 
 					return {
+						isUnsupportedMessage: !!(media || document),
 						id: message.id,
 						sender: message.out ? 'you' : userFirtNameOrChannelTitle,
-						content: document
-							? 'This Message is not supported by this Telegram client.'
-							: message.message,
+						content:
+							document || media
+								? 'This Message is not supported by this Telegram client.'
+								: message.message,
 						isFromMe: !!message.out,
 						media: imageString,
 						date,
@@ -289,23 +297,26 @@ export async function getAllMessages<T extends Dialog['peer']['className']>(
 				})
 			)
 		)
-			?.map(({ content, ...rest }) => ({ content: content?.trim(), ...rest }))
-			?.filter((msg) => msg?.content?.length > 0);
+			.map(({ content, ...rest }) => {
+				return { content: content.trim(), ...rest };
+			})
+			.filter((msg) => {
+				return msg.content.length > 0;
+			});
 
 		return orgnizedMessages;
 	} catch (err) {
-		console.error(err);
 		return [];
 	}
 }
 /**
  * Listens for events from the Telegram client and handles them accordingly.
- * 
+ *
  * @param {TelegramClient} client - The Telegram client instance to listen for events.
  * @param {Object} handlers - An object containing handler functions for different events.
  * @param {function(FormattedMessage): void} handlers.onMessage - A function to handle incoming messages.
  * @param {function(Object): void} [handlers.onUserOnlineStatus] - A function to handle user online status updates.
- * 
+ *
  * @returns {function(): void} A function to remove the event handler when called.
  */
 export const listenForEvents = async (
@@ -323,9 +334,11 @@ export const listenForEvents = async (
 		}) => void;
 	}
 ) => {
-	if (!client.connected) await client.connect();
+	if (!client.connected) {
+		await client.connect();
+	}
 
-	interface Event {
+	type Event = {
 		date: number;
 		userId: bigInt.BigInteger;
 		className: string;
@@ -335,45 +348,43 @@ export const listenForEvents = async (
 		status: {
 			className: string;
 		};
-	}
+	};
 	const hanlder = async (event: Event) => {
 		const userId = event.userId;
-		if (userId) {
-			const user = (await getUserInfo(client, userId)) as unknown as TelegramUser;
-			switch (event.className) {
-				case 'UpdateShortMessage':
-					onMessage &&
-						onMessage({
-							id: event.id,
-							sender: event.out ? 'you' : user.firstName,
-							content: event.message,
-							isFromMe: event.out,
-							media: null,
-							date: event.date ? new Date(event.date * 1000) : new Date()
+		const user = (await getUserInfo(client, userId)) as unknown as TelegramUser;
+		switch (event.className) {
+			case 'UpdateShortMessage':
+				onMessage({
+					id: event.id,
+					sender: event.out ? 'you' : user.firstName,
+					content: event.message,
+					isFromMe: event.out,
+					media: null,
+					date: event.date ? new Date(event.date * 1000) : new Date(),
+					isUnsupportedMessage: false
+				});
+				break;
+			case 'UpdateUserStatus':
+				if (event.status.className === 'UserStatusOnline') {
+					onUserOnlineStatus &&
+						onUserOnlineStatus({
+							accessHash: user.accessHash.toString(),
+							firstName: user.firstName,
+							status: 'online'
 						});
-					break;
-				case 'UpdateUserStatus':
-					if (event.status.className === 'UserStatusOnline') {
-						onUserOnlineStatus &&
-							onUserOnlineStatus({
-								accessHash: user.accessHash.toString(),
-								firstName: user.firstName,
-								status: 'online'
-							});
-					}
-					if (event.status.className === 'UserStatusOffline') {
-						onUserOnlineStatus &&
-							onUserOnlineStatus({
-								accessHash: user.accessHash.toString(),
-								firstName: user.firstName,
-								status: 'offline',
-								lastSeen: user.status?.wasOnline
-							});
-					}
-					break;
-				default:
-					break;
-			}
+				}
+				if (event.status.className === 'UserStatusOffline') {
+					onUserOnlineStatus &&
+						onUserOnlineStatus({
+							accessHash: user.accessHash.toString(),
+							firstName: user.firstName,
+							status: 'offline',
+							lastSeen: user.status?.wasOnline
+						});
+				}
+				break;
+			default:
+				break;
 		}
 	};
 

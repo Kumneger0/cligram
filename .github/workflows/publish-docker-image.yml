@@ -1,4 +1,4 @@
-name: Publish tele-cli Docker Image
+name: Publish cligram Docker Image
 
 on:
   push:
@@ -25,4 +25,4 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/tele-cli:latest
+          tags: ${{ secrets.DOCKER_USERNAME }}/cligram:latest

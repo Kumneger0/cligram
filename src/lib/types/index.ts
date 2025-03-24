@@ -1,6 +1,6 @@
 import { TelegramClient } from 'telegram';
 
-interface PeerNotifySettings {
+type PeerNotifySettings = {
 	flags: number;
 	showPreviews: boolean | null;
 	silent: boolean | null;
@@ -13,15 +13,15 @@ interface PeerNotifySettings {
 	storiesIosSound: string | null;
 	storiesAndroidSound: string | null;
 	storiesOtherSound: string | null;
-}
+};
 
-interface PeerUser {
+type PeerUser = {
 	userId: bigInt.BigInteger;
 	className: 'PeerUser' | 'PeerChannel' | 'PeerChat';
 	channelId: bigInt.BigInteger;
-}
+};
 
-export interface Dialog {
+export type Dialog = {
 	flags: number;
 	pinned: boolean;
 	unreadMark: boolean;
@@ -35,21 +35,20 @@ export interface Dialog {
 	unreadReactionsCount: number;
 	notifySettings: PeerNotifySettings;
 	pts: number | null;
-	draft: any; // Adjust type based on actual structure
 	folderId: number | null;
 	ttlPeriod: number | null;
 	className: 'Dialog';
-}
+};
 
-export interface MessagesResponse {
+export type MessagesResponse = {
 	count: number;
 	dialogs: Dialog[];
-	messages: any[];
-	users: any[];
+	messages: unknown[];
+	users: unknown[];
 	className: 'messages.DialogsSlice';
-}
+};
 
-export interface TelegramUser {
+export type TelegramUser = {
 	flags: number;
 	self: boolean;
 	contact: boolean;
@@ -97,9 +96,9 @@ export interface TelegramUser {
 	color: string | null;
 	profileColor: string | null;
 	className: string;
-}
+};
 
-export interface Message {
+export type Message = {
 	flags: number;
 	out: boolean;
 	mentioned: boolean;
@@ -116,46 +115,46 @@ export interface Message {
 	offline: boolean;
 	id: number;
 	fromId: { userId: string; className: string } | null;
-	fromBoostsApplied: unknown; // Adjust type as needed
+	fromBoostsApplied: unknown;
 	peerId: { userId: string; className: string };
-	savedPeerId: unknown; // Adjust type as needed
-	fwdFrom: unknown; // Adjust type as needed
-	viaBotId: unknown; // Adjust type as needed
-	viaBusinessBotId: unknown; // Adjust type as needed
-	replyTo: unknown; // Adjust type as needed
+	savedPeerId: unknown;
+	fwdFrom: unknown;
+	viaBotId: unknown;
+	viaBusinessBotId: unknown;
+	replyTo: unknown;
 	date: number;
 	message: string;
-	media: unknown; // Adjust type as needed
-	replyMarkup: unknown; // Adjust type as needed
-	entities: unknown; // Adjust type as needed
-	views: unknown; // Adjust type as needed
-	forwards: unknown; // Adjust type as needed
-	replies: unknown; // Adjust type as needed
+	media: unknown;
+	replyMarkup: unknown;
+	entities: unknown;
+	views: unknown;
+	forwards: unknown;
+	replies: unknown;
 	editDate: number | null;
-	postAuthor: unknown; // Adjust type as needed
-	groupedId: unknown; // Adjust type as needed
-	reactions: unknown; // Adjust type as needed
-	restrictionReason: unknown; // Adjust type as needed
-	ttlPeriod: unknown; // Adjust type as needed
-	quickReplyShortcutId: unknown; // Adjust type as needed
-	effect: unknown; // Adjust type as needed
-	factcheck: unknown; // Adjust type as needed
+	postAuthor: unknown;
+	groupedId: unknown;
+	reactions: unknown;
+	restrictionReason: unknown;
+	ttlPeriod: unknown;
+	quickReplyShortcutId: unknown;
+	effect: unknown;
+	factcheck: unknown;
 	className: string;
-}
+};
 
-export interface MessagesSlice {
+export type MessagesSlice = {
 	flags: number;
 	inexact: boolean;
 	count: number;
-	nextRate: any;
-	offsetIdOffset: any;
+	nextRate: unknown;
+	offsetIdOffset: unknown;
 	messages: Message[];
-	chats: any[];
+	chats: unknown[];
 	users: UserInfo[];
 	className: string;
-}
+};
 
-export interface UserInfo {
+export type UserInfo = {
 	firstName: string;
 	isBot: boolean;
 	peerId: bigInt.BigInteger;
@@ -163,15 +162,16 @@ export interface UserInfo {
 	unreadCount: number;
 	lastSeen: Date | null;
 	isOnline: boolean;
-}
+};
 
-export interface FormattedMessage {
+export type FormattedMessage = {
 	id: number;
 	sender: string;
 	content: string;
 	isFromMe: boolean;
 	media: string | null;
 	date: Date;
+	isUnsupportedMessage: boolean;
 	webPage?: {
 		url: string;
 		displayUrl: string | null;
@@ -179,18 +179,18 @@ export interface FormattedMessage {
 	document?: {
 		document: string;
 	} | null;
-}
+};
 
 export const eventClassNames = ['UpdateUserStatus', 'UpdateShortMessage'] as const;
 
-export interface ChannelDetails {
+export type ChannelDetails = {
 	title: string;
 	username: string;
 	channelusername: number | string;
 	accessHash: number | string;
 	isCreator: boolean;
 	isBroadcast: boolean;
-}
+};
 
 export type MessageMedia = {
 	flags: number;
@@ -254,15 +254,15 @@ export type FilesData = {
 	category: string;
 }[];
 
-export interface MessageMediaPhoto {
+export type MessageMediaPhoto = {
 	flags: number;
 	spoiler: boolean;
 	photo: Photo;
 	ttlSeconds: number | null;
 	className: string;
-}
+};
 
-export interface Photo {
+export type Photo = {
 	flags: number;
 	hasStickers: boolean;
 	id: string;
@@ -276,14 +276,14 @@ export interface Photo {
 	CONSTRUCTOR_ID: number;
 	SUBCLASS_OF_ID: number;
 	classType: string;
-}
+};
 
-interface FileReference {
+type FileReference = {
 	type: string;
 	data: number[];
-}
+};
 
-interface PhotoSize {
+type PhotoSize = {
 	type: string;
 	bytes?: {
 		type: string;
@@ -294,18 +294,18 @@ interface PhotoSize {
 	h?: number;
 	size?: number;
 	sizes?: number[];
-}
+};
 
 export type MessageAction = {
 	action: 'edit' | 'delete' | 'reply';
 	id: number;
 };
 
-interface Integer {
+type Integer = {
 	value: bigint;
-}
+};
 
-export interface ChannelInfo {
+export type ChannelInfo = {
 	title: string;
 	username: string | undefined;
 	channelId: string;
@@ -314,7 +314,7 @@ export interface ChannelInfo {
 	isBroadcast: boolean;
 	participantsCount: number | null;
 	unreadCount: number;
-}
+};
 
 type SeachMode = 'CONVERSATION' | 'CHANNELS_OR_ USERS' | null;
 
@@ -333,15 +333,13 @@ export type TGCliStore = {
 	setCurrentlyFocused: (currentlyFocused: 'chatArea' | 'sidebar' | null) => void;
 };
 
-
 export type ForwardMessageOptions = {
 	fromPeer: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger };
 	id: number[];
-	type: Dialog['peer']['className']
-}
+	type: Dialog['peer']['className'];
+};
 
-
-interface ChatPhoto {
+type ChatPhoto = {
 	CONSTRUCTOR_ID: number;
 	SUBCLASS_OF_ID: number;
 	className: 'ChatPhoto';
@@ -351,38 +349,9 @@ interface ChatPhoto {
 	photoId: Integer;
 	strippedThumb: Buffer;
 	dcId: number;
-}
+};
 
-interface ChatBannedRights {
-	CONSTRUCTOR_ID: number;
-	SUBCLASS_OF_ID: number;
-	className: 'ChatBannedRights';
-	classType: 'constructor';
-	flags: number;
-	viewMessages: boolean;
-	sendMessages: boolean;
-	sendMedia: boolean;
-	sendStickers: boolean;
-	sendGifs: boolean;
-	sendGames: boolean;
-	sendInline: boolean;
-	embedLinks: boolean;
-	sendPolls: boolean;
-	changeInfo: boolean;
-	inviteUsers: boolean;
-	pinMessages: boolean;
-	manageTopics: boolean;
-	sendPhotos: boolean;
-	sendVideos: boolean;
-	sendRoundvideos: boolean;
-	sendAudios: boolean;
-	sendVoices: boolean;
-	sendDocs: boolean;
-	sendPlain: boolean;
-	untilDate: number;
-}
-
-export interface Channel {
+export type Channel = {
 	CONSTRUCTOR_ID: number;
 	SUBCLASS_OF_ID: number;
 	className: 'Channel';
@@ -423,42 +392,28 @@ export interface Channel {
 	username: string;
 	photo: ChatPhoto;
 	date: number;
+	participantsCount: number | null;
+};
 
-	// Optional properties
-	restrictionReason: null | any;
-	adminRights: null | any;
-	bannedRights: null | any;
-	defaultBannedRights: ChatBannedRights;
-	participantsCount: null | number;
-	usernames: null | any;
-	storiesMaxId: null | number;
-	color: null | any;
-	profileColor: null | any;
-	emojiStatus: null | any;
-	level: null | number;
-	subscriptionUntilDate: null | number;
-	botVerificationIcon: null | any;
-}
-
-interface BaseMedia {
+type BaseMedia = {
 	CONSTRUCTOR_ID: number;
 	SUBCLASS_OF_ID: number;
 	className: 'MessageMediaWebPage' | 'MessageMediaDocument' | 'MessageMediaPhoto';
 	classType: string;
 	flags: number;
-}
+};
 
 export type Media = MessageMediaWebPage | MessageMediaDocument | MessageMediaPhoto | null;
 
-export interface MessageMediaWebPage extends BaseMedia {
+export type MessageMediaWebPage = {
 	forceLargeMedia: boolean;
 	forceSmallMedia: boolean;
 	manual: boolean;
 	safe: boolean;
 	webpage: WebPage | WebPageEmpty;
-}
+} & BaseMedia;
 
-export interface WebPage {
+export type WebPage = {
 	CONSTRUCTOR_ID: number;
 	SUBCLASS_OF_ID: number;
 	className: 'WebPage';
@@ -480,12 +435,12 @@ export interface WebPage {
 	embedHeight: number | null;
 	duration: number | null;
 	author: string | null;
-	document: any | null;
-	cachedPage: any | null;
-	attributes: any | null;
-}
+	document: unknown | null;
+	cachedPage: unknown | null;
+	attributes: unknown | null;
+};
 
-export interface WebPageEmpty {
+export type WebPageEmpty = {
 	CONSTRUCTOR_ID: number;
 	SUBCLASS_OF_ID: number;
 	className: 'WebPageEmpty';
@@ -493,25 +448,25 @@ export interface WebPageEmpty {
 	flags: number;
 	id: bigint;
 	url: string;
-}
+};
 
-export interface MessageMediaDocument extends BaseMedia {
+export type MessageMediaDocument = {
 	nopremium: boolean;
 	spoiler: boolean;
 	video: boolean;
 	round: boolean;
 	voice: boolean;
 	document: Document;
-	altDocuments: any | null;
-	videoCover: any | null;
-	videoTimestamp: any | null;
+	altDocuments: unknown | null;
+	videoCover: unknown | null;
+	videoTimestamp: unknown | null;
 	ttlSeconds: number | null;
-}
+} & BaseMedia;
 
 /**
  * Document interface.
  */
-export interface Document {
+export type Document = {
 	CONSTRUCTOR_ID: number;
 	SUBCLASS_OF_ID: number;
 	className: 'Document';
@@ -523,8 +478,8 @@ export interface Document {
 	date: number;
 	mimeType: string;
 	size: bigint;
-	thumbs: any | null;
-	videoThumbs: any | null;
+	thumbs: unknown | null;
+	videoThumbs: unknown | null;
 	dcId: number;
-	attributes: any[];
-}
+	attributes: unknown[];
+};

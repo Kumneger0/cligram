@@ -5,19 +5,21 @@ import { Media, Message, MessageMediaPhoto } from '../types';
 type MediaSize = 'large' | 'small';
 
 type DownloadMediaArgs = {
-	media: Message['media'] | MessageMediaPhoto | Media;
+	media: MessageMediaPhoto | Media | null;
 	size: MediaSize;
 };
 
 export const downloadMedia = async ({ media, size }: DownloadMediaArgs): Promise<Buffer | null> => {
-	if (!media) throw new Error('Media is required');
+	if (!media) { throw new Error('Media is required'); }
 	const client = await getTelegramClient();
-	if (!client) throw new Error('Client is not connected');
+	if (!client) { throw new Error('Client is not connected'); }
 	try {
-		if (!client?.connected) await client.connect();
-		if (media) return await handleMediaDownload(client, media, size);
+		if (!client.connected) { await client.connect(); }
+		return await handleMediaDownload(client, media, size)
 	} catch (err) {
-		console.error(err);
+		if (err instanceof Error) {
+			console.error(err.message)
+		}
 	} finally {
 		await client.disconnect();
 	}
