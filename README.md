@@ -1,6 +1,9 @@
-# Telegram CLI
+# CliGram
 
 This is a Telegram CLI client made with TypeScript and Node.js.
+
+
+**Note:** This project is currently in development and is not fully stable. expect potential bugs and incomplete features.
 
 **Heads Up:** Right now, you can only chat with personal chats and channels. Group and bot support is coming soon!
 
@@ -39,8 +42,14 @@ npm install -g cligram
 Here's the Docker command to run the app:
 
 ```bash
-docker run --rm -it -v tele_cli_data:/root/.tg-cli -e TELEGRAM_API_ID=$TELEGRAM_API_ID -e TELEGRAM_API_HASH=$TELEGRAM_API_HASH kumneger/cligram:latest
+docker run --rm -it -v tele_cli_data:/root/.cligram -e TELEGRAM_API_ID=$TELEGRAM_API_ID -e TELEGRAM_API_HASH=$TELEGRAM_API_HASH kumneger/cligram:latest
 ```
+
+### Why is the Docker Command Long?
+
+By default, cligram stores the user's session information in a hidden folder called `.cligram` in the user's home directory. Docker containers have their own file system, which is isolated from the host machine. To prevent the need for re-authenticating the user every time, we create a Docker volume and bind it to the container. This allows us to persist the session information across container restarts.
+
+Additionally, we pass the Telegram API ID and API Hash as environment variables (`TELEGRAM_API_ID` and `TELEGRAM_API_HASH`). These are required for cligram to authenticate and interact with the Telegram API.
 
 If the command is too long, you can create an alias to make it easier to use.
 

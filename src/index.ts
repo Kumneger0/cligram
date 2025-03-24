@@ -45,6 +45,7 @@ cli(
 			}
 			console.log(`${red('✖')} Are you logged in ?`);
 			console.log('login with cligram login');
+			process.exit(0)
 		} catch (err) {
 			if (err instanceof RPCError) {
 				if (err.errorMessage === 'AUTH_KEY_UNREGISTERED') {
