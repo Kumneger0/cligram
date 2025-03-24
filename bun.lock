@@ -13,8 +13,6 @@
         "date-fns": "^4.1.0",
         "debounce": "^2.2.0",
         "dotenv": "^16.4.7",
-        "esbuild-fix-imports-plugin": "^1.0.14",
-        "esbuild-plugin-wasm": "^1.1.0",
         "ink": "^5.1.0",
         "ink-spinner": "^5.0.0",
         "ink-text-input": "^6.0.0",
@@ -28,7 +26,6 @@
         "telegram": "^2.26.22",
         "term-size": "^4.0.0",
         "terminal-image": "^3.1.1",
-        "yoga-wasm-web": "^0.3.3",
         "zustand": "^5.0.3",
       },
       "devDependencies": {
@@ -481,10 +478,6 @@
     "es6-symbol": ["es6-symbol@3.1.4", "", { "dependencies": { "d": "^1.0.2", "ext": "^1.7.0" } }, "sha512-U9bFFjX8tFiATgtkJ1zg25+KviIXpgRvRHS8sau3GfhVzThRQrOeksPeT0BWW2MNZs1OEWJ1DPXOQMn0KKRkvg=="],
 
     "esbuild": ["esbuild@0.21.3", "", { "optionalDependencies": { "@esbuild/aix-ppc64": "0.21.3", "@esbuild/android-arm": "0.21.3", "@esbuild/android-arm64": "0.21.3", "@esbuild/android-x64": "0.21.3", "@esbuild/darwin-arm64": "0.21.3", "@esbuild/darwin-x64": "0.21.3", "@esbuild/freebsd-arm64": "0.21.3", "@esbuild/freebsd-x64": "0.21.3", "@esbuild/linux-arm": "0.21.3", "@esbuild/linux-arm64": "0.21.3", "@esbuild/linux-ia32": "0.21.3", "@esbuild/linux-loong64": "0.21.3", "@esbuild/linux-mips64el": "0.21.3", "@esbuild/linux-ppc64": "0.21.3", "@esbuild/linux-riscv64": "0.21.3", "@esbuild/linux-s390x": "0.21.3", "@esbuild/linux-x64": "0.21.3", "@esbuild/netbsd-x64": "0.21.3", "@esbuild/openbsd-x64": "0.21.3", "@esbuild/sunos-x64": "0.21.3", "@esbuild/win32-arm64": "0.21.3", "@esbuild/win32-ia32": "0.21.3", "@esbuild/win32-x64": "0.21.3" }, "bin": { "esbuild": "bin/esbuild" } }, "sha512-Kgq0/ZsAPzKrbOjCQcjoSmPoWhlcVnGAUo7jvaLHoxW1Drto0KGkR1xBNg2Cp43b9ImvxmPEJZ9xkfcnqPsfBw=="],
-
-    "esbuild-fix-imports-plugin": ["esbuild-fix-imports-plugin@1.0.14", "", {}, "sha512-GltK1iTdVdiPRWUfRUB5XCy6ood3trIprhxw3OX3svFQiVCvsuaiZ2DD/i9xAaTV7XLPH0K9m8ewu2enFMyrmg=="],
-
-    "esbuild-plugin-wasm": ["esbuild-plugin-wasm@1.1.0", "", {}, "sha512-0bQ6+1tUbySSnxzn5jnXHMDvYnT0cN/Wd4Syk8g/sqAIJUg7buTIi22svS3Qz6ssx895NT+TgLPb33xi1OkZig=="],
 
     "escape-string-regexp": ["escape-string-regexp@4.0.0", "", {}, "sha512-TtpcNJ3XAzx3Gq8sWRzJaVajRs0uVxA2YAkdb1jm2YkPz4G6egUFAyA3n5vtEIZefPk5Wa4UXbKuS5fKkJWdgA=="],
 
