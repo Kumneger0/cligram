@@ -4,31 +4,31 @@ import { FormattedMessage, ForwardMessageOptions, TGCliStore } from './types';
 export const conversationStore = create<{
 	conversation: FormattedMessage[];
 	setConversation: (conversation: FormattedMessage[]) => void;
-}>((set) => ({
+}>((set) => {return {
 	conversation: [],
-	setConversation: (conversation) => set({ conversation })
-}));
+	setConversation: (conversation) => {return set({ conversation })}
+}});
 
-export const useTGCliStore = create<TGCliStore>((set) => ({
+export const useTGCliStore = create<TGCliStore>((set) => {return {
 	client: null,
 	currentChatType: 'PeerUser',
 	searchMode: null,
-	setSearchMode: (searchMode) => set((state) => ({ ...state, searchMode })),
-	setCurrentChatType: (currentChatType) => set((state) => ({ ...state, currentChatType })),
-	updateClient: (client) => set((state) => ({ ...state, client })),
+	setSearchMode: (searchMode) => {return set((state) => {return { ...state, searchMode }})},
+	setCurrentChatType: (currentChatType) => {return set((state) => {return { ...state, currentChatType }})},
+	updateClient: (client) => {return set((state) => {return { ...state, client }})},
 	selectedUser: null,
-	setSelectedUser: (selectedUser) => set((state) => ({ ...state, selectedUser })),
+	setSelectedUser: (selectedUser) => {return set((state) => {return { ...state, selectedUser }})},
 	messageAction: null,
-	setMessageAction: (messageAction) => set((state) => ({ ...state, messageAction })),
+	setMessageAction: (messageAction) => {return set((state) => {return { ...state, messageAction }})},
 	currentlyFocused: null,
-	setCurrentlyFocused: (currentlyFocused) => set((state) => ({ ...state, currentlyFocused }))
-}));
+	setCurrentlyFocused: (currentlyFocused) => {return set((state) => {return { ...state, currentlyFocused }})}
+}});
 
 
 export const useForwardMessageStore = create<{
 	forwardMessageOptions: ForwardMessageOptions | null;
 	setForwardMessageOptions: (forwardMessageOptions: ForwardMessageOptions | null) => void;
-}>((set) => ({
+}>((set) => {return {
 	forwardMessageOptions: null,
-	setForwardMessageOptions: (forwardMessageOptions) => set((state) => ({ ...state, forwardMessageOptions }))
-}));
+	setForwardMessageOptions: (forwardMessageOptions) => {return set((state) => {return { ...state, forwardMessageOptions }})}
+}});

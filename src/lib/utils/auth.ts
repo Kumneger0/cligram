@@ -25,7 +25,7 @@ type Config = {
 
 export const tgCliConfig = getConfig();
 const session = tgCliConfig?.['session' as keyof typeof tgCliConfig];
-const stringSession = new StringSession((session as string) ?? '');
+const stringSession = new StringSession((session ?? '') as string);
 
 export async function getTelegramClient(isCalledFromLogin = false) {
 	const client = new TelegramClient(stringSession, Number(apiId), apiHash!, {
@@ -33,19 +33,22 @@ export async function getTelegramClient(isCalledFromLogin = false) {
 	});
 	client.setLogLevel(LogLevel.NONE);
 	try {
-		if (session) return client;
-		if (!isCalledFromLogin && !session) return null;
+		if (session) { return client; }
+		if (!isCalledFromLogin && !session) { return null; }
 		await client.start({
 			phoneNumber: async () => {
-				const phoneNumber = await input.text('Please enter your number: ');
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-call
+				const phoneNumber = await (input as { text: (prompt: string) => Promise<string> }).text('Please enter your number: ');
 				return phoneNumber;
 			},
 			password: async () => {
-				const password = await input.password('Please enter your password: ');
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-call
+				const password = await (input as { password: (prompt: string) => Promise<string> }).password('Please enter your password: ');
 				return password;
 			},
 			phoneCode: async () => {
-				const phoneCode = await input.text('Please enter the code you received: ');
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-call
+				const phoneCode = await (input as { text: (prompt: string) => Promise<string> }).text('Please enter the code you received: ');
 				return phoneCode;
 			},
 			onError: (err) => {
@@ -54,7 +57,7 @@ export async function getTelegramClient(isCalledFromLogin = false) {
 				} else if (err.message.includes('PASSWORD_HASH_INVALID')) {
 					console.error('Error: The password you entered is incorrect. Please try again.');
 				} else {
-					console.error('Authentication error:', err);
+					console.error('Authentication error:', err.message);
 				}
 			}
 		});
@@ -68,7 +71,7 @@ export async function getTelegramClient(isCalledFromLogin = false) {
 			console.log(`${red('✖')} ${message}`);
 			return;
 		}
-		if (err && typeof err == 'object' && 'message' in err && typeof err.message == 'string') {
+		if (err && typeof err === 'object' && 'message' in err && typeof err.message === 'string') {
 			console.log(`${red('✖')} ${err.message}`);
 		}
 	}
@@ -103,7 +106,7 @@ function setUserConfigration(configData: string) {
 
 	fs.writeFile(configFile, configData, (err) => {
 		if (err) {
-			if (err && typeof err == 'object' && 'message' in err && typeof err.message == 'string') {
+			if (typeof err === 'object' && 'message' in err && typeof err.message === 'string') {
 				console.log(`${red('✖')} ${err.message}`);
 				return;
 			}
@@ -141,7 +144,7 @@ export const setConfig = (key: keyof Config, value: string | boolean) => {
 	//@ts-ignore
 	config[key] = value;
 	const configData = Object.entries(configToWrite)
-		.map(([key, value]) => `${key}=${value}`)
+		.map(([key, value]) => { return `${key}=${value}` })
 		.join(';');
 	setUserConfigration(configData);
 };

@@ -1,4 +1,3 @@
-#!/bin/env node
 import { useForwardMessageStore, useTGCliStore } from '@/lib/store';
 import { ChatArea } from '@/ui/chatArea';
 import { Sidebar } from '@/ui/sidebar';
@@ -47,20 +46,20 @@ const HelpPage: React.FC = () => {
 };
 
 const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient }) => {
-	const selectedUser = useTGCliStore((state) => state.selectedUser);
-	const updateClient = useTGCliStore((state) => state.updateClient);
-	const currentlyFocused = useTGCliStore((state) => state.currentlyFocused);
+	const selectedUser = useTGCliStore((state) => { return state.selectedUser });
+	const updateClient = useTGCliStore((state) => { return state.updateClient });
+	const currentlyFocused = useTGCliStore((state) => { return state.currentlyFocused });
 
-	const forwardMessageOptions = useForwardMessageStore((state) => state.forwardMessageOptions);
+	const forwardMessageOptions = useForwardMessageStore((state) => { return state.forwardMessageOptions });
 
 	const config = getConfig();
 	const [showHelp, setShowHelp] = React.useState(
 		String(config?.skipHelp) === 'false' || !!!config?.skipHelp
 	);
-	const currentChatType = useTGCliStore((state) => state.currentChatType);
-	const client = useTGCliStore((state) => state.client);
+	const currentChatType = useTGCliStore((state) => { return state.currentChatType });
+	const client = useTGCliStore((state) => { return state.client });
 
-	const searchMode = useTGCliStore((state) => state.searchMode);
+	const searchMode = useTGCliStore((state) => { return state.searchMode });
 
 	const { stdout } = useStdout();
 	const [size, setSize] = useState({
@@ -83,7 +82,7 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 	}, [stdout]);
 
 	useInput((input, _key) => {
-		if (!showHelp) return;
+		if (!showHelp) { return; }
 
 		if (input === 'c') {
 			setShowHelp(false);
@@ -99,8 +98,8 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 		updateClient(TelegramClient);
 	}, []);
 
-	if (!client) return;
-	if (showHelp) return <HelpPage />;
+	if (!client) { return; }
+	if (showHelp) { return <HelpPage />; }
 
 	const sidebarWidth = size.columns * (30 / 100);
 	const chatAreaWidth = size.columns - sidebarWidth;
@@ -108,8 +107,8 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 
 	const currentlySelectedChatId =
 		currentChatType === 'PeerUser'
-			? (selectedUser as UserInfo)?.peerId
-			: (selectedUser as ChannelInfo)?.channelId;
+			? (selectedUser as UserInfo | null)?.peerId
+			: (selectedUser as ChannelInfo | null)?.channelId;
 
 
 	let ComponentToRender: React.FC<{ height: number; width: number }> = ChatArea
@@ -135,9 +134,9 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 				<Box width={sidebarWidth} flexDirection="column" borderRightColor="green">
 					<Sidebar key={currentChatType} height={height} width={sidebarWidth} />
 				</Box>
-				<ComponentToRender key={currentlySelectedChatId?.toString() ?? 'defualt-key'} height={height} width={chatAreaWidth} />
+				<ComponentToRender key={(currentlySelectedChatId ?? "default-key").toString()} height={height} width={chatAreaWidth} />
 			</Box>
-			<ShowKeyBinding type={currentlyFocused ?? 'general'} />
+			<ShowKeyBinding type={currentlyFocused || 'general'} />
 		</>
 	);
 };
