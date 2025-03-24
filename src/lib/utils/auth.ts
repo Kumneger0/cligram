@@ -37,17 +37,14 @@ export async function getTelegramClient(isCalledFromLogin = false) {
 		if (!isCalledFromLogin && !session) { return null; }
 		await client.start({
 			phoneNumber: async () => {
-				// eslint-disable-next-line @typescript-eslint/no-unsafe-call
 				const phoneNumber = await (input as { text: (prompt: string) => Promise<string> }).text('Please enter your number: ');
 				return phoneNumber;
 			},
 			password: async () => {
-				// eslint-disable-next-line @typescript-eslint/no-unsafe-call
 				const password = await (input as { password: (prompt: string) => Promise<string> }).password('Please enter your password: ');
 				return password;
 			},
 			phoneCode: async () => {
-				// eslint-disable-next-line @typescript-eslint/no-unsafe-call
 				const phoneCode = await (input as { text: (prompt: string) => Promise<string> }).text('Please enter the code you received: ');
 				return phoneCode;
 			},
@@ -78,7 +75,7 @@ export async function getTelegramClient(isCalledFromLogin = false) {
 }
 function getConfigFilePath() {
 	const homeDir = os.homedir();
-	const configDir = path.join(homeDir, '.tg-cli');
+	const configDir = path.join(homeDir, '.cligram');
 	const configFile = path.join(configDir, 'config.txt');
 	return [configFile, configDir] as [string, string];
 }
@@ -86,7 +83,7 @@ function getConfigFilePath() {
 export function removeConfig() {
 	try {
 		const homeDir = os.homedir();
-		const configDir = path.join(homeDir, '.tg-cli');
+		const configDir = path.join(homeDir, '.cligram');
 		const configDirExists = fs.existsSync(configDir);
 		if (configDirExists) {
 			fs.rmSync(configDir, { recursive: true });
