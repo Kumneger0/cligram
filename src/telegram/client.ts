@@ -10,6 +10,12 @@ import {
 
 export let chatUsers: UserInfo[] = [];
 
+const lastSeenMessages = {
+	UserStatusRecently: 'last seen recently',
+	UserStatusLastMonth: 'last seen within a month',
+	UserStatusLastWeek: "last seen within a week"
+}
+
 async function getChannelInfo(client: TelegramClient, channelId: bigInt.BigInteger) {
 	const channel = await client.getEntity(await client.getInputEntity(channelId));
 	return channel;
@@ -120,9 +126,15 @@ export async function getUserChats<T extends Dialog['peer']['className']>(
 						peerId: peer.userId,
 						accessHash: user.accessHash as unknown as bigInt.BigInteger,
 						unreadCount: unreadCount,
-						lastSeen: date,
+						lastSeen: wasOnline ? {
+							type: "time",
+							value: date!
+						} : {
+							type: 'status',
+							value: user.status?.className ? lastSeenMessages[user.status?.className as keyof typeof lastSeenMessages] ?? "last seen a long time ago" : 'last seen a long time ago'
+						},
 						isOnline: user.status?.className === 'UserStatusOnline'
-					};
+					} satisfies UserInfo;
 				} catch (err) {
 					return null;
 				}
