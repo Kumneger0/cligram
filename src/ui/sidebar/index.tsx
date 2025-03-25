@@ -73,8 +73,7 @@ export function Sidebar({ height }: { height: number; width: number }) {
 		firstName: string;
 		status: 'online' | 'offline';
 		lastSeen?: number;
-	}) => {
-		console.log(currentChatType, selectedUser, firstName);
+		}) => {
 		if (
 			currentChatType === 'PeerUser' &&
 			selectedUser &&

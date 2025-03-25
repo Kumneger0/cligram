@@ -103,7 +103,7 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 
 	const sidebarWidth = size.columns * (30 / 100);
 	const chatAreaWidth = size.columns - sidebarWidth;
-	const height = size.rows - 1;
+	const height = 30 
 
 	const currentlySelectedChatId =
 		currentChatType === 'PeerUser'
