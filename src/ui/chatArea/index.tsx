@@ -6,7 +6,7 @@ import { editMessage, getAllMessages, listenForEvents, markUnRead, sendMessage }
 import { Box, Text, useFocus, useFocusManager, useInput } from 'ink';
 import Spinner from 'ink-spinner';
 import TextInput from 'ink-text-input';
-import React, { ChangeEvent, Fragment, useEffect, useLayoutEffect, useState } from 'react';
+import React, { Fragment, useEffect, useLayoutEffect, useState } from 'react';
 import { MessageActionModal } from '../modal/Modal';
 const formatDate = (date: Date) => {
 	return date.toLocaleDateString('en-US', {
@@ -40,7 +40,7 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 	const client = useTGCliStore((state) => {
 		return state.client;
 	})!;
-	const { conversation, setConversation } = conversationStore((state) => {
+	const { conversation, setConversation, updateConversations } = conversationStore((state) => {
 		return state;
 	});
 	const setMessageAction = useTGCliStore((state) => {
@@ -73,7 +73,6 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 			: (selectedUser as ChannelInfo | null)?.channelId;
 
 	const selectedUserPeerID = String(currentlySelectedChatId);
-
 
 	async function MarkMessageAsRead() {
 		if (selectedUser) {
@@ -123,14 +122,12 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 			setIsLoading(false);
 			setActiveMessage(conversation.at(-1) ?? null);
 
-
-
 			if (currentChatType === 'PeerUser') {
 				unsubscribe = await listenForEvents(client, {
 					onMessage: (message) => {
 						const from = message.sender;
 						if (from === (selectedUser as UserInfo).firstName) {
-							setConversation([...conversation, message]);
+							updateConversations([message]);
 							setOffsetId(message.id);
 							setActiveMessage(message);
 						}

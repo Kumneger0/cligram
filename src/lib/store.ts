@@ -4,9 +4,11 @@ import { FormattedMessage, ForwardMessageOptions, TGCliStore } from './types';
 export const conversationStore = create<{
 	conversation: FormattedMessage[];
 	setConversation: (conversation: FormattedMessage[]) => void;
+	updateConversations: (conversation: FormattedMessage[]) => void;
 }>((set) => {return {
 	conversation: [],
-	setConversation: (conversation) => {return set({ conversation })}
+	setConversation: (conversation) => { return set(() => ({ conversation: conversation })) },
+	updateConversations: (conversation) => { return set((state) => ({ conversation: [...state.conversation, ...conversation] })) }
 }});
 
 export const useTGCliStore = create<TGCliStore>((set) => {return {

@@ -12,28 +12,37 @@ import {
 } from '../lib/types/index';
 import { getUserInfo } from './client';
 
+type GetEntityTypes = {
+	peer: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger };
+	type: Dialog['peer']['className'];
+}
+const getEntity = (
+	{ peer, type }: GetEntityTypes
+) => {
+	const entity =
+		type === 'PeerUser'
+			? new Api.InputPeerUser({
+				userId: peer.peerId,
+				accessHash: peer.accessHash
+			})
+			: new Api.InputPeerChannel({
+				channelId: peer.peerId,
+				accessHash: peer.accessHash
+			});
+	return entity
+}
+
 
 
 type MarkUnReadParams = {
 	client: TelegramClient,
 	peer: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger };
 	type: Dialog['peer']['className'];
-
 }
 
 export const markUnRead = async ({ client, peer, type }: MarkUnReadParams) => {
 	try {
-		const entity =
-			type === 'PeerUser'
-				? new Api.InputPeerUser({
-					userId: peer.peerId,
-					accessHash: peer.accessHash
-				})
-				: new Api.InputPeerChannel({
-					channelId: peer.peerId,
-					accessHash: peer.accessHash
-				});
-
+		const entity = getEntity({ peer, type }) 
 		const result = await markAsRead(client, entity)
 		return result
 	} catch (err) {
@@ -64,21 +73,9 @@ type ForwardMessageParams = {
  * @returns {Promise<Api.messages.ForwardMessages>} The result of the forward operation.
  */
 export async function forwardMessage(client: TelegramClient, params: ForwardMessageParams) {
-	const fromPeerEntity =
-		params.type === 'PeerUser'
-			? new Api.InputPeerUser({
-				userId: params.fromPeer.peerId,
-				accessHash: params.fromPeer.accessHash
-			})
-			: new Api.InputPeerChannel({
-				channelId: params.fromPeer.peerId,
-				accessHash: params.fromPeer.accessHash
-			});
-
-	const toPeerEntity = new Api.InputPeerUser({
-		userId: params.toPeer.peerId,
-		accessHash: params.toPeer.accessHash
-	});
+	const fromPeerEntity = getEntity({ peer: { accessHash: params.fromPeer.accessHash, peerId: params.fromPeer.peerId }, type: params.type })
+	//TODO: FIX THIS HARD CODED PEER USER VALUE LIKE FOR EG USER CAN FORWARD TO CHANNEL WHERE HE HAS WRITE ACCESS TO(CHANNEL)
+	const toPeerEntity = getEntity({ peer: { accessHash: params.toPeer.accessHash, peerId: params.toPeer.peerId }, type: 'PeerUser' })
 
 	const result = await client.invoke(
 		new Api.messages.ForwardMessages({
@@ -118,16 +115,9 @@ export const sendMessage = async (
 			message: message,
 			...(isReply && { replyTo: replyToMessageId })
 		};
+		const entity = getEntity({ peer: peerInfo, type }) 
 		const result = await client.sendMessage(
-			type === 'PeerUser'
-				? new Api.InputPeerUser({
-					userId: peerInfo.peerId,
-					accessHash: peerInfo.accessHash
-				})
-				: new Api.InputPeerChannel({
-					channelId: peerInfo.peerId,
-					accessHash: peerInfo.accessHash
-				}),
+			entity,
 			sendMessageParam
 		);
 		return {
@@ -158,16 +148,9 @@ export const deleteMessage = async (
 	type: Dialog['peer']['className'] = 'PeerUser'
 ) => {
 	try {
+		const entity = getEntity({ peer: peerInfo, type }) 
 		const result = await client.deleteMessages(
-			type === 'PeerUser'
-				? new Api.InputPeerUser({
-					userId: peerInfo.peerId,
-					accessHash: peerInfo.accessHash
-				})
-				: new Api.InputPeerChannel({
-					channelId: peerInfo.peerId,
-					accessHash: peerInfo.accessHash
-				}),
+			entity,
 			[Number(messageId)],
 			{ revoke: true }
 		);
@@ -194,16 +177,7 @@ export const editMessage = async (
 	type: Dialog['peer']['className'] = 'PeerUser'
 ) => {
 	try {
-		const entity =
-			type === 'PeerUser'
-				? new Api.InputPeerUser({
-					userId: peerInfo.peerId,
-					accessHash: peerInfo.accessHash
-				})
-				: new Api.InputPeerChannel({
-					channelId: peerInfo.peerId,
-					accessHash: peerInfo.accessHash
-				});
+		const entity = getEntity({ peer: peerInfo, type }) 
 		const result = await client.invoke(
 			new Api.messages.EditMessage({
 				peer: entity,
@@ -211,6 +185,7 @@ export const editMessage = async (
 				message: newMessage
 			})
 		);
+		console.log('edit result', result)
 		return result;
 	} catch (err) {
 		return null
@@ -267,17 +242,9 @@ export async function getAllMessages<T extends Dialog['peer']['className']>(
 			await client.connect();
 		}
 		const messages = [];
-
+		const entity = getEntity({ peer: { peerId: userId as bigInt.BigInteger, accessHash: accessHash as bigInt.BigInteger }, type }) 
 		for await (const message of client.iterMessages(
-			type === 'PeerUser'
-				? new Api.InputPeerUser({
-					userId: userId as unknown as bigInt.BigInteger,
-					accessHash: accessHash as unknown as bigInt.BigInteger
-				})
-				: new Api.InputPeerChannel({
-					channelId: userId as unknown as bigInt.BigInteger,
-					accessHash: accessHash as unknown as bigInt.BigInteger
-				}),
+			entity,
 			{ limit: 10, offsetId, ...iterParams }
 		)) {
 			messages.push(message);
@@ -287,11 +254,6 @@ export async function getAllMessages<T extends Dialog['peer']['className']>(
 			await Promise.all(
 				messages.reverse().map(async (message): Promise<FormattedMessage> => {
 					const media = message.media as unknown as Media;
-
-					// const buffer =
-					// 	media && media.className === 'MessageMediaPhoto'
-					// 		? await downloadMedia({ media, size: 'large' })
-					// 		: null;
 
 					const buffer = null;
 					const webPage =
