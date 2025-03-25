@@ -1,5 +1,5 @@
-import { downloadMedia } from '@/lib/utils/handleMedia';
 import { Api, TelegramClient } from 'telegram';
+import { IterMessagesParams, markAsRead } from 'telegram/client/messages';
 import { Raw } from 'telegram/events';
 import terminalSize from 'term-size';
 import terminalImage from 'terminal-image';
@@ -11,7 +11,35 @@ import {
 	TelegramUser
 } from '../lib/types/index';
 import { getUserInfo } from './client';
-import { IterMessagesParams } from 'telegram/client/messages';
+
+
+
+type MarkUnReadParams = {
+	client: TelegramClient,
+	peer: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger };
+	type: Dialog['peer']['className'];
+
+}
+
+export const markUnRead = async ({ client, peer, type }: MarkUnReadParams) => {
+	try {
+		const entity =
+			type === 'PeerUser'
+				? new Api.InputPeerUser({
+					userId: peer.peerId,
+					accessHash: peer.accessHash
+				})
+				: new Api.InputPeerChannel({
+					channelId: peer.peerId,
+					accessHash: peer.accessHash
+				});
+
+		const result = await markAsRead(client, entity)
+		return result
+	} catch (err) {
+		console.error(err)
+	}
+}
 
 type ForwardMessageParams = {
 	fromPeer: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger };
