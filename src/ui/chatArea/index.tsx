@@ -2,11 +2,11 @@ import { conversationStore, useForwardMessageStore, useTGCliStore } from '@/lib/
 import { ChannelInfo, FormattedMessage, UserInfo } from '@/lib/types';
 import { formatLastSeen } from '@/lib/utils';
 import { componenetFocusIds } from '@/lib/utils/consts';
-import { editMessage, getAllMessages, listenForEvents, sendMessage } from '@/telegram/messages';
+import { editMessage, getAllMessages, listenForEvents, markUnRead, sendMessage } from '@/telegram/messages';
 import { Box, Text, useFocus, useFocusManager, useInput } from 'ink';
 import Spinner from 'ink-spinner';
 import TextInput from 'ink-text-input';
-import React, { Fragment, useEffect, useLayoutEffect, useState } from 'react';
+import React, { ChangeEvent, Fragment, useEffect, useLayoutEffect, useState } from 'react';
 import { MessageActionModal } from '../modal/Modal';
 const formatDate = (date: Date) => {
 	return date.toLocaleDateString('en-US', {
@@ -74,6 +74,18 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 
 	const selectedUserPeerID = String(currentlySelectedChatId);
 
+
+	async function MarkMessageAsRead() {
+		if (selectedUser) {
+			const peer = {
+				peerId: (currentChatType === 'PeerChannel' ? (selectedUser as ChannelInfo).channelId : (selectedUser as UserInfo).peerId) as bigInt.BigInteger,
+				accessHash: (selectedUser.accessHash) as bigInt.BigInteger
+			}
+			await markUnRead({ client, peer, type: currentChatType })
+		}
+	}
+
+
 	useEffect(() => {
 		if (!selectedUser) {
 			return;
@@ -110,6 +122,8 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 			setOffsetId(conversation[0]?.id);
 			setIsLoading(false);
 			setActiveMessage(conversation.at(-1) ?? null);
+
+
 
 			if (currentChatType === 'PeerUser') {
 				unsubscribe = await listenForEvents(client, {
@@ -396,6 +410,8 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 											currentChatType === 'PeerUser'
 												? (selectedUser as UserInfo).accessHash
 												: (selectedUser as ChannelInfo).accessHash;
+
+										await MarkMessageAsRead()
 										await sendMessage(
 											client,
 											{
