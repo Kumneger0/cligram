@@ -32,8 +32,6 @@ const getEntity = (
 	return entity
 }
 
-
-
 type MarkUnReadParams = {
 	client: TelegramClient,
 	peer: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger };
@@ -342,6 +340,7 @@ export const listenForEvents = async (
 	const hanlder = async (event: Event) => {
 		const userId = event.userId;
 		const user = (await getUserInfo(client, userId)) as unknown as TelegramUser;
+
 		switch (event.className) {
 			case 'UpdateShortMessage':
 				onMessage({
@@ -355,6 +354,7 @@ export const listenForEvents = async (
 				});
 				break;
 			case 'UpdateUserStatus':
+				console.log('status to update', event.status.className)
 				if (event.status.className === 'UserStatusOnline') {
 					onUserOnlineStatus &&
 						onUserOnlineStatus({
