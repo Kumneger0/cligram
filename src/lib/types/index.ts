@@ -160,7 +160,16 @@ export type UserInfo = {
 	peerId: bigInt.BigInteger;
 	accessHash: bigInt.BigInteger;
 	unreadCount: number;
-	lastSeen: Date | null;
+	lastSeen:
+		| {
+				type: 'time';
+				value: Date;
+		  }
+		| {
+				type: 'status';
+				value: string;
+		  }
+		| null;
 	isOnline: boolean;
 };
 

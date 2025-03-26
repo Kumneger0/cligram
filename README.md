@@ -2,7 +2,6 @@
 
 This is a Telegram CLI client made with TypeScript and Node.js.
 
-
 **Note:** This project is currently in development and is not fully stable. expect potential bugs and incomplete features.
 
 Right now, you can only chat with personal chats and channels. Group and bot support is coming soon!
@@ -20,14 +19,17 @@ When you start it up, you'll see three main parts:
 First, get your `api_id` and `api_hash` from [Telegram](https://my.telegram.org/apps).
 
 ### Set environment Variables
+
 If you're on a Unix-based system like Linux or macOS, set your `api_id` and `api_hash` in your `.zshrc` or `.bashrc` file:
 
 ```bash
 export TELEGRAM_API_ID=your_api_id_from_telegram
 export TELEGRAM_API_HASH=your_api_hash_from_telegram
 ```
-###  Set environment Variables (Windows)
- go figure out by yourself
+
+### Set environment Variables (Windows)
+
+go figure out by yourself
 
 ### Installation with npm
 
@@ -77,7 +79,7 @@ When you start, you'll land on the Help Page. You can:
 - **Tab**: Switch between the sidebar and the chat area (active section has a green border).
 - **↑** or **k**: Move up (works in both chat list and messages).
 - **↓** or **j**: Move down (works in both chat list and messages).
-- **ctrl + k**  : To Open up search menu
+- **ctrl + k** : To Open up search menu
 - **c**: Switch to Channels (Sidebar specific).
 - **u**: Switch back to users (Sidebar specific).
 
@@ -89,6 +91,75 @@ When you start, you'll land on the Help Page. You can:
   - **r** to reply to it.
   - **f** to forward it.
 
+## Configuration Management
+
+customize your cligram experience by managing your own configuration using a JSON file. The configuration file is located at `~/.cligram/user.config.json`.
+
+### Configuration Options
+
+All configuration options are optional. Here are all available options with their possible values and defaults:
+
+```json
+{
+  "chat": {
+    // Whether to show "typing..." status when composing messages
+    // Possible values: true, false
+    // Default: true
+    "sendTypingState": true,
+
+    // Controls when to send read receipts
+    // Possible values: "default", "instant", "never"
+    // Default: "default"
+    "readReceiptMode": "default"
+  },
+  "privacy": {
+    // Who can see your last seen status
+    // Possible values: "everyone", "contacts", "nobody"
+    // Default: undefined (uses Telegram's default setting)
+    "lastSeenVisibility": "everyone"
+  },
+  "notifications": {
+    // Whether to show notifications
+    // Possible values: true, false
+    // Default: true
+    "enabled": true,
+
+    // Whether to show message content in notifications
+    // Possible values: true, false
+    // Default: true
+    "showMessagePreview": true
+  }
+}
+```
+
+Here's what each setting does:
+
+#### Chat Settings
+- `sendTypingState`: Controls whether others see "typing..." when you're composing a message
+  - `true`: Show typing status (default)
+  - `false`: Never show typing status
+- `readReceiptMode`: Controls when messages are marked as read
+  - `"default"`: Only marks messages as read when you actively interact with them (like replying). the sender won't see the "read" checkmarks until you take action on their messages. 
+  - `"instant"`: Marks messages as read immediately when you view them in the chat area. The sender will see "read" checkmarks as soon as you look at their messages.
+  - `"never"`: Messages are never automatically marked as read, even when you interact with them. The sender will always see their messages with unread status.
+
+#### Privacy Settings
+- `lastSeenVisibility`: Controls who can see when you were last online
+  - `"everyone"`: Anyone can see your last seen time
+  - `"contacts"`: Only your contacts can see your last seen time
+  - `"nobody"`: No one can see your last seen time
+  - If not set: Uses your existing Telegram privacy settings
+
+#### Notification Settings
+- `enabled`: Master switch for notifications
+  - `true`: Show notifications (default)
+  - `false`: Disable all notifications
+- `showMessagePreview`: Controls notification content
+  - `true`: Show message content in notifications (default)
+  - `false`: Only show sender name, hide message content
+
+All settings are optional - if you omit any setting, cligram will use the default value. You can modify the configuration file at any time - changes will take effect the next time you start the application.
+
 ## Contributing
 
 We welcome contributions to cligram! For detailed guidelines, please refer to the [CONTRIBUTING.md](CONTRIBUTING.md) file.
@@ -97,8 +168,6 @@ If you encounter any issues or have suggestions, feel free to open an issue on o
 
 Thank you for your interest in improving cligram!
 
-
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-

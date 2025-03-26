@@ -14,24 +14,42 @@ type SearchResult = { type: 'user'; data: UserInfo } | { type: 'channel'; data: 
 export const SearchModal: React.FC<{ height: number; width: number }> = ({ height, width }) => {
 	const { isFocused } = useFocus({ autoFocus: true, id: componenetFocusIds.searchModal });
 	const [query, setQuery] = useState('');
-	const setSearchMode = useTGCliStore((state) => { return state.setSearchMode });
-	const searchMode = useTGCliStore((state) => { return state.searchMode });
-	const client = useTGCliStore((state) => { return state.client });
-	const currentChatType = useTGCliStore((state) => { return state.currentChatType });
-	const setCurrentChatType = useTGCliStore((state) => { return state.setCurrentChatType });
+	const setSearchMode = useTGCliStore((state) => {
+		return state.setSearchMode;
+	});
+	const searchMode = useTGCliStore((state) => {
+		return state.searchMode;
+	});
+	const client = useTGCliStore((state) => {
+		return state.client;
+	});
+	const currentChatType = useTGCliStore((state) => {
+		return state.currentChatType;
+	});
+	const setCurrentChatType = useTGCliStore((state) => {
+		return state.setCurrentChatType;
+	});
 
-	const setSelectedUser = useTGCliStore((state) => { return state.setSelectedUser });
+	const setSelectedUser = useTGCliStore((state) => {
+		return state.setSelectedUser;
+	});
 
 	const [combinedResults, setCombinedResults] = useState<SearchResult[]>([]);
 	const [activeIndex, setActiveIndex] = useState<number>(-1);
 
 	const debouncedSearch = debounce(async (query: string) => {
-		if (query.length < 3) { return }
+		if (query.length < 3) {
+			return;
+		}
 		if (searchMode === 'CHANNELS_OR_ USERS') {
 			const results = await searchUsers(client!, query);
 			const combined: SearchResult[] = [
-				...results.users.map((user) => { return { type: 'user' as const, data: user } }),
-				...results.channels.map((channel) => { return { type: 'channel' as const, data: channel } })
+				...results.users.map((user) => {
+					return { type: 'user' as const, data: user };
+				}),
+				...results.channels.map((channel) => {
+					return { type: 'channel' as const, data: channel };
+				})
 			];
 			setCombinedResults(combined);
 			setActiveIndex(combined.length > 0 ? 0 : -1);
@@ -64,25 +82,35 @@ export const SearchModal: React.FC<{ height: number; width: number }> = ({ heigh
 			return;
 		}
 
-		if (combinedResults.length === 0) { return; }
+		if (combinedResults.length === 0) {
+			return;
+		}
 
 		if (key.return) {
 			const result = combinedResults[activeIndex];
 			if (result?.type === 'user') {
-				if (currentChatType !== 'PeerUser') { setCurrentChatType('PeerUser'); }
+				if (currentChatType !== 'PeerUser') {
+					setCurrentChatType('PeerUser');
+				}
 				setSelectedUser(result.data);
 			}
 			if (result?.type === 'channel') {
-				if (currentChatType !== 'PeerChannel') { setCurrentChatType('PeerChannel'); }
+				if (currentChatType !== 'PeerChannel') {
+					setCurrentChatType('PeerChannel');
+				}
 				setSelectedUser(result.data);
 			}
 			setSearchMode(null);
 		}
 		if (key.upArrow || input === 'k') {
-			setActiveIndex((prev) => { return Math.max(0, prev - 1) });
+			setActiveIndex((prev) => {
+				return Math.max(0, prev - 1);
+			});
 		}
 		if (key.downArrow || input === 'j') {
-			setActiveIndex((prev) => { return Math.min(combinedResults.length - 1, prev + 1) });
+			setActiveIndex((prev) => {
+				return Math.min(combinedResults.length - 1, prev + 1);
+			});
 		}
 	});
 
@@ -146,16 +174,18 @@ export const SearchModal: React.FC<{ height: number; width: number }> = ({ heigh
 					{searchMode === 'CHANNELS_OR_ USERS' &&
 						combinedResults.map((result, index) => {
 							return (
-							<Text
-								key={result.type === 'user' ? result.data.peerId.toString() : result.data.channelId}
-								color={activeIndex === index ? 'green' : 'white'}
-							>
-								{activeIndex === index ? '> ' : '  '}
-								{result.type === 'user'
-									? `${ICONS.USER} ${result.data.firstName}`
-									: `${ICONS.CHANNEL} ${result.data.title}`}
-							</Text>
-						)
+								<Text
+									key={
+										result.type === 'user' ? result.data.peerId.toString() : result.data.channelId
+									}
+									color={activeIndex === index ? 'green' : 'white'}
+								>
+									{activeIndex === index ? '> ' : '  '}
+									{result.type === 'user'
+										? `${ICONS.USER} ${result.data.firstName}`
+										: `${ICONS.CHANNEL} ${result.data.title}`}
+								</Text>
+							);
 						})}
 				</Box>
 				<Box marginTop={2}>
