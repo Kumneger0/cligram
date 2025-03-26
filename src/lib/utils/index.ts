@@ -7,8 +7,14 @@ import {
 	differenceInSeconds,
 	differenceInCalendarDays
 } from 'date-fns';
+import { UserInfo } from '../types';
 
-export function formatLastSeen(date: Date) {
+export function formatLastSeen(lastSeen: UserInfo['lastSeen']) {
+	if (lastSeen?.type === 'status') {
+		return lastSeen.value;
+	}
+	const date = lastSeen?.value;
+
 	if (!(date instanceof Date)) {
 		return 'Invalid date';
 	}

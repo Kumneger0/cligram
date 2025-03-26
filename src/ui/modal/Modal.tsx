@@ -23,18 +23,30 @@ const messageActions = [
 
 export const MessageActionModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 	const { isFocused } = useFocus({ autoFocus: true, id: componenetFocusIds.modal });
-	const client = useTGCliStore((state) => {return state.client})!;
-	const selectedUser = useTGCliStore((state) => {return state.selectedUser});
-	const setMessageAction = useTGCliStore((state) => {return state.setMessageAction});
-	const messageAction = useTGCliStore((state) => {return state.messageAction});
+	const client = useTGCliStore((state) => {
+		return state.client;
+	})!;
+	const selectedUser = useTGCliStore((state) => {
+		return state.selectedUser;
+	});
+	const setMessageAction = useTGCliStore((state) => {
+		return state.setMessageAction;
+	});
+	const messageAction = useTGCliStore((state) => {
+		return state.messageAction;
+	});
 
-	const currentChatType = useTGCliStore((state) => {return state.currentChatType});
+	const currentChatType = useTGCliStore((state) => {
+		return state.currentChatType;
+	});
 
 	const messageActionCurrentActiveKey = messageAction?.action;
-	const { action, deleteMessageShortCuts, description } = messageActions.find(
-		({ name }) => {return name === messageActionCurrentActiveKey}
-	)!;
-	const { conversation, setConversation } = conversationStore((state) => {return state});
+	const { action, deleteMessageShortCuts, description } = messageActions.find(({ name }) => {
+		return name === messageActionCurrentActiveKey;
+	})!;
+	const { conversation, setConversation } = conversationStore((state) => {
+		return state;
+	});
 
 	useInput(async (_, key) => {
 		if (key.escape) {
@@ -48,7 +60,9 @@ export const MessageActionModal: React.FC<{ onClose: () => void }> = ({ onClose 
 		if (currentChatType === 'PeerUser') {
 			action(client, messageId, selectedUser as UserInfo);
 		}
-		const filterConversation = conversation.filter(({ id }) => {return id !== messageId});
+		const filterConversation = conversation.filter(({ id }) => {
+			return id !== messageId;
+		});
 		setConversation(filterConversation);
 		setMessageAction(null);
 		onClose();

@@ -39,7 +39,7 @@ jobs:
       #   run: bun test
       #   working-directory: .
 
-      - name: lint 
+      - name: lint
         run: bun run lint:check
         working-directory: .
 
