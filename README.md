@@ -91,6 +91,51 @@ When you start, you'll land on the Help Page. You can:
   - **r** to reply to it.
   - **f** to forward it.
 
+## Configuration Management
+
+customize your cligram experience by managing your own configuration using a JSON file. The configuration file is located at `~/.cligram/user.config.json`.
+
+### Configuration Options
+
+Create or edit the `user.config.json` file with your preferred settings:
+
+```json
+{
+  "chat": {
+    "sendTypingState": true,
+    "readReceiptMode": "default"
+  },
+  "privacy": {
+    "lastSeenVisibility": "everyone"
+  },
+  "notifications": {
+    "enabled": true,
+    "showMessagePreview": true
+  }
+}
+
+```
+The configuration file allows you to customize:
+
+#### Chat Settings
+- `sendTypingState`: (boolean) Whether to show "typing..." status when composing messages
+- `readReceiptMode`: Can be "default", "instant", or "never"
+  - `default`: Only send read state when user interacts (replies, etc.)
+  - `instant`: Send read state as soon as message is opened
+  - `never`: Never send read state, even when replying
+
+#### Privacy Settings
+- `lastSeenVisibility`: Controls who can see your last seen status
+  - `everyone`: Visible to all users
+  - `contacts`: Only visible to contacts
+  - `nobody`: Hidden from everyone
+
+#### Notification Settings
+- `enabled`: (boolean) Whether to show notifications
+- `showMessagePreview`: (boolean) Whether to show message content in notifications
+
+If the configuration file is not present or contains invalid settings, cligram will use default settings. You can modify the configuration file at any time - changes will take effect the next time you start the application.
+
 ## Contributing
 
 We welcome contributions to cligram! For detailed guidelines, please refer to the [CONTRIBUTING.md](CONTRIBUTING.md) file.
