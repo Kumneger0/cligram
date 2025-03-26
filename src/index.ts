@@ -1,13 +1,15 @@
 #!/usr/bin/env bun
-import { LogLevel } from 'telegram/extensions/Logger.js';
-import { getTelegramClient, removeConfig } from './lib/utils/auth';
-import { initializeUI } from './main';
 import { cli } from 'cleye';
-import { version, description } from '../package.json';
-import { login, logout } from './commands';
-import { RPCError } from 'telegram/errors/index.js';
 import { red } from 'kolorist';
 import { TelegramClient } from 'telegram';
+import { RPCError } from 'telegram/errors/index.js';
+import { LogLevel } from 'telegram/extensions/Logger.js';
+import { description, version } from '../package.json';
+import { login, logout } from './commands';
+import { loadConfig } from './config/configManager';
+import { getTelegramClient, removeConfig } from './lib/utils/auth';
+import { initializeUI } from './main';
+import { setUserOnlineStatus, setUserPrivacy } from './telegram/client';
 
 const rawArgv = process.argv.slice(2);
 const disconnect = async (client: TelegramClient) => {
@@ -23,7 +25,9 @@ cli(
 		help: {
 			description
 		},
-		ignoreArgv: (type) => { return type === 'unknown-flag' || type === 'argument' }
+		ignoreArgv: (type) => {
+			return type === 'unknown-flag' || type === 'argument';
+		}
 	},
 	async (_argv) => {
 		try {
@@ -39,13 +43,19 @@ cli(
 						});
 					}
 					client.setLogLevel(LogLevel.NONE);
+					const config = loadConfig();
+					await setUserPrivacy(client);
+
+					if (config.privacy.showOnlineStatus) {
+						setUserOnlineStatus(client, true);
+					}
 					initializeUI(client);
 					return;
 				}
 			}
 			console.log(`${red('✖')} Are you logged in ?`);
 			console.log('login with cligram login');
-			process.exit(0)
+			process.exit(0);
 		} catch (err) {
 			if (err instanceof RPCError) {
 				if (err.errorMessage === 'AUTH_KEY_UNREGISTERED') {

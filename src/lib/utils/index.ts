@@ -10,11 +10,10 @@ import {
 import { UserInfo } from '../types';
 
 export function formatLastSeen(lastSeen: UserInfo['lastSeen']) {
-
 	if (lastSeen?.type === 'status') {
-		return lastSeen.value
+		return lastSeen.value;
 	}
-	const date = lastSeen?.value
+	const date = lastSeen?.value;
 
 	if (!(date instanceof Date)) {
 		return 'Invalid date';
