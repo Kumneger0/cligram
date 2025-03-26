@@ -2,7 +2,6 @@
 
 This is a Telegram CLI client made with TypeScript and Node.js.
 
-
 **Note:** This project is currently in development and is not fully stable. expect potential bugs and incomplete features.
 
 Right now, you can only chat with personal chats and channels. Group and bot support is coming soon!
@@ -20,14 +19,17 @@ When you start it up, you'll see three main parts:
 First, get your `api_id` and `api_hash` from [Telegram](https://my.telegram.org/apps).
 
 ### Set environment Variables
+
 If you're on a Unix-based system like Linux or macOS, set your `api_id` and `api_hash` in your `.zshrc` or `.bashrc` file:
 
 ```bash
 export TELEGRAM_API_ID=your_api_id_from_telegram
 export TELEGRAM_API_HASH=your_api_hash_from_telegram
 ```
-###  Set environment Variables (Windows)
- go figure out by yourself
+
+### Set environment Variables (Windows)
+
+go figure out by yourself
 
 ### Installation with npm
 
@@ -77,7 +79,7 @@ When you start, you'll land on the Help Page. You can:
 - **Tab**: Switch between the sidebar and the chat area (active section has a green border).
 - **↑** or **k**: Move up (works in both chat list and messages).
 - **↓** or **j**: Move down (works in both chat list and messages).
-- **ctrl + k**  : To Open up search menu
+- **ctrl + k** : To Open up search menu
 - **c**: Switch to Channels (Sidebar specific).
 - **u**: Switch back to users (Sidebar specific).
 
@@ -97,8 +99,6 @@ If you encounter any issues or have suggestions, feel free to open an issue on o
 
 Thank you for your interest in improving cligram!
 
-
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-

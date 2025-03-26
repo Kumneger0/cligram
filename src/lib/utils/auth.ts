@@ -33,19 +33,29 @@ export async function getTelegramClient(isCalledFromLogin = false) {
 	});
 	client.setLogLevel(LogLevel.NONE);
 	try {
-		if (session) { return client; }
-		if (!isCalledFromLogin && !session) { return null; }
+		if (session) {
+			return client;
+		}
+		if (!isCalledFromLogin && !session) {
+			return null;
+		}
 		await client.start({
 			phoneNumber: async () => {
-				const phoneNumber = await (input as { text: (prompt: string) => Promise<string> }).text('Please enter your number: ');
+				const phoneNumber = await (input as { text: (prompt: string) => Promise<string> }).text(
+					'Please enter your number: '
+				);
 				return phoneNumber;
 			},
 			password: async () => {
-				const password = await (input as { password: (prompt: string) => Promise<string> }).password('Please enter your password: ');
+				const password = await (
+					input as { password: (prompt: string) => Promise<string> }
+				).password('Please enter your password: ');
 				return password;
 			},
 			phoneCode: async () => {
-				const phoneCode = await (input as { text: (prompt: string) => Promise<string> }).text('Please enter the code you received: ');
+				const phoneCode = await (input as { text: (prompt: string) => Promise<string> }).text(
+					'Please enter the code you received: '
+				);
 				return phoneCode;
 			},
 			onError: (err) => {
@@ -141,7 +151,9 @@ export const setConfig = (key: keyof Config, value: string | boolean) => {
 	//@ts-ignore
 	config[key] = value;
 	const configData = Object.entries(configToWrite)
-		.map(([key, value]) => { return `${key}=${value}` })
+		.map(([key, value]) => {
+			return `${key}=${value}`;
+		})
 		.join(';');
 	setUserConfigration(configData);
 };

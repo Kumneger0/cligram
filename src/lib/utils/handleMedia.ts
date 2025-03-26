@@ -10,15 +10,21 @@ type DownloadMediaArgs = {
 };
 
 export const downloadMedia = async ({ media, size }: DownloadMediaArgs): Promise<Buffer | null> => {
-	if (!media) { throw new Error('Media is required'); }
+	if (!media) {
+		throw new Error('Media is required');
+	}
 	const client = await getTelegramClient();
-	if (!client) { throw new Error('Client is not connected'); }
+	if (!client) {
+		throw new Error('Client is not connected');
+	}
 	try {
-		if (!client.connected) { await client.connect(); }
-		return await handleMediaDownload(client, media, size)
+		if (!client.connected) {
+			await client.connect();
+		}
+		return await handleMediaDownload(client, media, size);
 	} catch (err) {
 		if (err instanceof Error) {
-			console.error(err.message)
+			console.error(err.message);
 		}
 	} finally {
 		await client.disconnect();
