@@ -24,8 +24,7 @@ export const tgCliConfigSchema = z.object({
 			.enum(['default', 'instant', 'never'], { message: 'Invalid value for readReceiptMode' })
 			.optional()
 	}),
-	privacy: z.object({
-		showOnlineStatus: z.boolean({ message: 'Invalid value for showOnlineStatus' }).optional(),
+    privacy: z.object({
 		lastSeenVisibility: z
 			.enum(['everyone', 'contacts', 'nobody'], { message: 'Invalid value for lastSeenVisibility' })
 			.optional()
@@ -43,8 +42,7 @@ export const DEFAULT_CONFIG: TgCliConfigSchema = {
 		sendTypingState: true,
 		readReceiptMode: 'default'
 	},
-	privacy: {
-		showOnlineStatus: undefined,
+    privacy: {
 		lastSeenVisibility: undefined
 	},
 	notifications: {

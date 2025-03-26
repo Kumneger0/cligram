@@ -9,7 +9,7 @@ import { login, logout } from './commands';
 import { loadConfig } from './config/configManager';
 import { getTelegramClient, removeConfig } from './lib/utils/auth';
 import { initializeUI } from './main';
-import { setUserOnlineStatus, setUserPrivacy } from './telegram/client';
+import { setUserPrivacy } from './telegram/client';
 
 const rawArgv = process.argv.slice(2);
 const disconnect = async (client: TelegramClient) => {
@@ -43,12 +43,8 @@ cli(
 						});
 					}
 					client.setLogLevel(LogLevel.NONE);
-					const config = loadConfig();
+					loadConfig();
 					await setUserPrivacy(client);
-
-					if (config.privacy.showOnlineStatus) {
-						setUserOnlineStatus(client, true);
-					}
 					initializeUI(client);
 					return;
 				}
