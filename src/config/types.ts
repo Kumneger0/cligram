@@ -17,7 +17,7 @@ import { z } from 'zod';
  * @property {boolean} notifications.enabled - Whether to show notifications
  * @property {boolean} notifications.showMessagePreview - Whether to show message content in notifications
  */
-export const tgCliConfigSchema = z.object({
+export const cliGramConfigSchema = z.object({
 	chat: z.object({
 		sendTypingState: z.boolean({ message: 'Invalid value for sendTypingState' }).optional(),
 		readReceiptMode: z
@@ -35,9 +35,9 @@ export const tgCliConfigSchema = z.object({
 	})
 });
 
-export type TgCliConfigSchema = z.infer<typeof tgCliConfigSchema>;
+export type CliGramConfigSchema = z.infer<typeof cliGramConfigSchema>;
 
-export const DEFAULT_CONFIG: TgCliConfigSchema = {
+export const DEFAULT_CONFIG: CliGramConfigSchema = {
 	chat: {
 		sendTypingState: true,
 		readReceiptMode: 'default'

@@ -1,11 +1,11 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { type TgCliConfigSchema, DEFAULT_CONFIG, tgCliConfigSchema } from './types';
+import { type CliGramConfigSchema, DEFAULT_CONFIG, cliGramConfigSchema } from './types';
 
 const CONFIG_PATH = path.join(os.homedir(), '.cligram', 'user.config.json');
 
-export const loadConfig = (): TgCliConfigSchema => {
+export const loadConfig = (): CliGramConfigSchema => {
 	try {
 		const configDir = path.dirname(CONFIG_PATH);
 		if (!fs.existsSync(configDir)) {
@@ -14,8 +14,8 @@ export const loadConfig = (): TgCliConfigSchema => {
 		if (fs.existsSync(CONFIG_PATH)) {
 			const fileContent = fs.readFileSync(CONFIG_PATH, 'utf-8');
 			try {
-				const parsedConfig = tgCliConfigSchema.parse(
-					JSON.parse(fileContent) as Partial<TgCliConfigSchema>
+                const parsedConfig = cliGramConfigSchema.parse(
+                    JSON.parse(fileContent) as Partial<CliGramConfigSchema>
 				);
 				return { ...DEFAULT_CONFIG, ...parsedConfig };
 			} catch (error) {
@@ -35,10 +35,10 @@ export const loadConfig = (): TgCliConfigSchema => {
 
 let config = loadConfig();
 
-export const getConfig = <K extends keyof TgCliConfigSchema>(key: K): TgCliConfigSchema[K] => {
+export const getConfig = <K extends keyof CliGramConfigSchema>(key: K): CliGramConfigSchema[K] => {
 	return config[key];
 };
 
-export const getAllConfig = (): TgCliConfigSchema => {
+export const getAllConfig = (): CliGramConfigSchema => {
 	return config;
 };
