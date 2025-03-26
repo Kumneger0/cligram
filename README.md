@@ -97,44 +97,68 @@ customize your cligram experience by managing your own configuration using a JSO
 
 ### Configuration Options
 
-Create or edit the `user.config.json` file with your preferred settings:
+All configuration options are optional. Here are all available options with their possible values and defaults:
 
 ```json
 {
   "chat": {
+    // Whether to show "typing..." status when composing messages
+    // Possible values: true, false
+    // Default: true
     "sendTypingState": true,
+
+    // Controls when to send read receipts
+    // Possible values: "default", "instant", "never"
+    // Default: "default"
     "readReceiptMode": "default"
   },
   "privacy": {
+    // Who can see your last seen status
+    // Possible values: "everyone", "contacts", "nobody"
+    // Default: undefined (uses Telegram's default setting)
     "lastSeenVisibility": "everyone"
   },
   "notifications": {
+    // Whether to show notifications
+    // Possible values: true, false
+    // Default: true
     "enabled": true,
+
+    // Whether to show message content in notifications
+    // Possible values: true, false
+    // Default: true
     "showMessagePreview": true
   }
 }
-
 ```
-The configuration file allows you to customize:
+
+Here's what each setting does:
 
 #### Chat Settings
-- `sendTypingState`: (boolean) Whether to show "typing..." status when composing messages
-- `readReceiptMode`: Can be "default", "instant", or "never"
-  - `default`: Only send read state when user interacts (replies, etc.)
-  - `instant`: Send read state as soon as message is opened
-  - `never`: Never send read state, even when replying
+- `sendTypingState`: Controls whether others see "typing..." when you're composing a message
+  - `true`: Show typing status (default)
+  - `false`: Never show typing status
+- `readReceiptMode`: Controls when messages are marked as read
+  - `"default"`: Only marks messages as read when you actively interact with them (like replying). the sender won't see the "read" checkmarks until you take action on their messages. 
+  - `"instant"`: Marks messages as read immediately when you view them in the chat area. The sender will see "read" checkmarks as soon as you look at their messages.
+  - `"never"`: Messages are never automatically marked as read, even when you interact with them. The sender will always see their messages with unread status.
 
 #### Privacy Settings
-- `lastSeenVisibility`: Controls who can see your last seen status
-  - `everyone`: Visible to all users
-  - `contacts`: Only visible to contacts
-  - `nobody`: Hidden from everyone
+- `lastSeenVisibility`: Controls who can see when you were last online
+  - `"everyone"`: Anyone can see your last seen time
+  - `"contacts"`: Only your contacts can see your last seen time
+  - `"nobody"`: No one can see your last seen time
+  - If not set: Uses your existing Telegram privacy settings
 
 #### Notification Settings
-- `enabled`: (boolean) Whether to show notifications
-- `showMessagePreview`: (boolean) Whether to show message content in notifications
+- `enabled`: Master switch for notifications
+  - `true`: Show notifications (default)
+  - `false`: Disable all notifications
+- `showMessagePreview`: Controls notification content
+  - `true`: Show message content in notifications (default)
+  - `false`: Only show sender name, hide message content
 
-If the configuration file is not present or contains invalid settings, cligram will use default settings. You can modify the configuration file at any time - changes will take effect the next time you start the application.
+All settings are optional - if you omit any setting, cligram will use the default value. You can modify the configuration file at any time - changes will take effect the next time you start the application.
 
 ## Contributing
 
