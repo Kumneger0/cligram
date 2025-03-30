@@ -1,7 +1,9 @@
+import { getConfig } from '@/config/configManager';
 import { conversationStore, useForwardMessageStore, useTGCliStore } from '@/lib/store';
-import { ChannelInfo, FormattedMessage, TelegramUser, UserInfo } from '@/lib/types';
+import { ChannelInfo, FormattedMessage, UserInfo } from '@/lib/types';
 import { formatLastSeen } from '@/lib/utils';
 import { componenetFocusIds } from '@/lib/utils/consts';
+import { getUserInfo } from '@/telegram/client';
 import {
 	editMessage,
 	getAllMessages,
@@ -14,11 +16,8 @@ import { Box, Text, useFocus, useFocusManager, useInput } from 'ink';
 import Spinner from 'ink-spinner';
 import TextInput from 'ink-text-input';
 import React, { Fragment, useEffect, useLayoutEffect, useState } from 'react';
-import { MessageActionModal } from '../modal/Modal';
-import { getConfig } from '@/config/configManager';
-import { getUserInfo } from '@/telegram/client';
 import { TelegramClient } from 'telegram';
-import { secondsInYear } from 'node_modules/date-fns/constants.cjs';
+import { MessageActionModal } from '../modal/Modal';
 const formatDate = (date: Date) => {
 	return date.toLocaleDateString('en-US', {
 		month: 'short',
@@ -71,6 +70,16 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 	const setCurrentlyFocused = useTGCliStore((state) => {
 		return state.setCurrentlyFocused;
 	});
+
+
+	const setCurrentChatType = useTGCliStore((state) => {
+		return state.setCurrentChatType;
+	});
+
+	const setSelectedUser = useTGCliStore((state) => {
+		return state.setSelectedUser;
+	});
+
 
 	const currentChatType = useTGCliStore((state) => {
 		return state.currentChatType;
@@ -217,6 +226,16 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 			setMessageAction({ action: 'reply', id: activeMessage?.id! });
 			focus(componenetFocusIds.messageInput);
 			return;
+		}
+
+
+		if (input === 'u' && activeMessage?.fromId) {
+			const user = await getUserInfo(client, activeMessage.fromId)
+			setCurrentChatType('user');
+			setSelectedUser({
+				...user,
+				unreadCount: 0
+			} as UserInfo);
 		}
 
 		if (key.upArrow || input === 'k') {
@@ -433,17 +452,21 @@ function Message({
 	isFocused: boolean;
 	client: TelegramClient;
 }) {
-	const [sender, setSender] = useState<TelegramUser | null>(null);
+	const [sender, setSender] = useState<Omit<UserInfo, 'unreadCount'> | null>(null);
 
 	useEffect(() => {
 		const getSender = async () => {
 			if (message.fromId) {
-				const user = await getUserInfo(client, message.fromId) as unknown as TelegramUser;
+				const user = await getUserInfo(client, message.fromId)
 				setSender(user);
 			}
 		};
 		getSender();
 	}, [message.fromId]);
+
+
+
+
 
 	return (
 		<Box
@@ -472,7 +495,7 @@ function Message({
 				>
 					{message.content}
 				</Text>
-				{sender && (
+				{sender && !message.isFromMe && (
 					<Text>
 						Sent by: {sender.firstName}
 					</Text>

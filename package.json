@@ -28,7 +28,8 @@
 		"format": "prettier . --write",
 		"format:check": "prettier . --check",
 		"lint": "eslint . --fix",
-		"lint:check": "eslint ."
+		"lint:check": "eslint .",
+		"typecheck": "tsc --noEmit"
 	},
 	"devDependencies": {
 		"@tsconfig/node20": "^20.1.4",

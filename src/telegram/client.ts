@@ -6,7 +6,7 @@ import { DialogInfo } from './client.types.js';
 
 export let chatUsers: UserInfo[] = [];
 
-const lastSeenMessages = {
+export const lastSeenMessages = {
 	UserStatusRecently: 'last seen recently',
 	UserStatusLastMonth: 'last seen within a month',
 	UserStatusLastWeek: 'last seen within a week'
@@ -261,32 +261,13 @@ export async function getUserChats<T extends ChatType>(
 					const user = (await getUserInfo(
 						client,
 						(dialog.peer as { userId: bigInt.BigInteger }).userId
-					)) as unknown as TelegramUser | null;
+					)) 
 					if (!user) {
 						return null;
 					}
-					const wasOnline = user.status?.wasOnline;
-					const date = wasOnline ? new Date(wasOnline * 1000) : null;
-
 					return {
-						firstName: user.firstName,
-						isBot: user.bot,
-						peerId: (dialog.peer as { userId: bigInt.BigInteger }).userId,
-						accessHash: user.accessHash as unknown as bigInt.BigInteger,
+						...user,
 						unreadCount: unreadCount,
-						lastSeen: wasOnline
-							? {
-									type: 'time',
-									value: date!
-								}
-							: {
-									type: 'status',
-									value: user.status?.className
-										? (lastSeenMessages[user.status?.className as keyof typeof lastSeenMessages] ??
-											'last seen a long time ago')
-										: 'last seen a long time ago'
-								},
-						isOnline: user.status?.className === 'UserStatusOnline'
 					} satisfies UserInfo;
 				} catch (err) {
 					return null;
@@ -313,13 +294,37 @@ export async function getUserChats<T extends ChatType>(
 	};
 }
 
-export async function getUserInfo(client: TelegramClient, userId: bigInt.BigInteger) {
+export async function getUserInfo(client: TelegramClient, userId: bigInt.BigInteger): Promise<Omit<UserInfo, 'unreadCount'> | null> {
 	try {
 		if (!client.connected) {
 			await client.connect();
 		}
-		const user = await client.getEntity(await client.getInputEntity(userId));
-		return user;
+		const user = await client.getEntity(await client.getInputEntity(userId)) as unknown as TelegramUser | null
+		if (!user) {
+			return null;
+		}
+		const wasOnline = user.status?.wasOnline;
+		const date = wasOnline ? new Date(wasOnline * 1000) : null;
+
+		return {
+			firstName: user.firstName,
+			isBot: user.bot,
+			peerId: userId,
+			accessHash: user.accessHash as unknown as bigInt.BigInteger,
+			lastSeen: wasOnline
+				? {
+					type: 'time',
+					value: date!
+				}
+				: {
+					type: 'status',
+					value: user.status?.className
+						? (lastSeenMessages[user.status?.className as keyof typeof lastSeenMessages] ??
+							'last seen a long time ago')
+						: 'last seen a long time ago'
+				},
+			isOnline: user.status?.className === 'UserStatusOnline'
+		} satisfies Omit<UserInfo, 'unreadCount'>;
 	} catch (err) {
 		return null;
 	}
