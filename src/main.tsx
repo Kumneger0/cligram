@@ -115,6 +115,7 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 	if (!client) {
 		return;
 	}
+
 	if (showHelp) {
 		return <HelpPage />;
 	}
@@ -124,7 +125,7 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 	const height = size.rows - 1;
 
 	const currentlySelectedChatId =
-		currentChatType === 'PeerUser'
+		currentChatType === 'user'
 			? (selectedUser as UserInfo | null)?.peerId
 			: (selectedUser as ChannelInfo | null)?.channelId;
 

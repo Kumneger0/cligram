@@ -89,14 +89,14 @@ export const SearchModal: React.FC<{ height: number; width: number }> = ({ heigh
 		if (key.return) {
 			const result = combinedResults[activeIndex];
 			if (result?.type === 'user') {
-				if (currentChatType !== 'PeerUser') {
-					setCurrentChatType('PeerUser');
+				if (currentChatType !== 'user') {
+					setCurrentChatType('user');
 				}
 				setSelectedUser(result.data);
 			}
 			if (result?.type === 'channel') {
-				if (currentChatType !== 'PeerChannel') {
-					setCurrentChatType('PeerChannel');
+				if (currentChatType !== 'channel') {
+					setCurrentChatType('channel');
 				}
 				setSelectedUser(result.data);
 			}

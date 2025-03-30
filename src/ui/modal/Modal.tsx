@@ -57,7 +57,7 @@ export const MessageActionModal: React.FC<{ onClose: () => void }> = ({ onClose 
 		if (!messageId || !selectedUser) {
 			return;
 		}
-		if (currentChatType === 'PeerUser') {
+		if (currentChatType === 'user') {
 			action(client, messageId, selectedUser as UserInfo);
 		}
 		const filterConversation = conversation.filter(({ id }) => {

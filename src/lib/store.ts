@@ -20,7 +20,7 @@ export const conversationStore = create<{
 export const useTGCliStore = create<TGCliStore>((set) => {
 	return {
 		client: null,
-		currentChatType: 'PeerUser',
+		currentChatType: 'user',
 		searchMode: null,
 		setSearchMode: (searchMode) => {
 			return set((state) => {
