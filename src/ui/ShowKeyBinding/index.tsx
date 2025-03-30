@@ -3,8 +3,8 @@ import { Box, Text } from 'ink';
 import React from 'react';
 
 const all = 'All';
-const user = 'PeerUser';
-const channel = 'PeerChannel';
+const user = 'user';
+const channel = 'channel';
 
 const keyBindings = {
 	general: {
