@@ -381,7 +381,11 @@ export const listenForEvents = async (
 	};
 	const hanlder = async (event: Event) => {
 		const userId = event.userId;
-		const user = (await getUserInfo(client, userId)) as unknown as TelegramUser;
+		const user = (await getUserInfo(client, userId))
+
+		if (!user) {
+			return;
+		}
 
 		switch (event.className) {
 			case 'UpdateShortMessage':
@@ -405,6 +409,10 @@ export const listenForEvents = async (
 						});
 				}
 				if (event.status.className === 'UserStatusOffline') {
+					const user = await client.getEntity(await client.getInputEntity(userId)) as unknown as TelegramUser | null
+					if (!user) {
+						return;
+					}
 					onUserOnlineStatus &&
 						onUserOnlineStatus({
 							accessHash: user.accessHash.toString(),

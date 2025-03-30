@@ -9,9 +9,10 @@ import { Box, Text, useFocus, useInput } from 'ink';
 import notifier from 'node-notifier';
 import React, { useCallback, useEffect, useState } from 'react';
 
+
 // This is the number of empty spaces at the bottom of the sidebar and the top of the sidebar 🔍
 //TODO: I KNOW this name sucks, i'll change it later if you have any suggestions please make a pr 🙏
-const HEIGHT_EMPTY_SPACE = 10;
+const HEIGHT_EMPTY_SPACE = 10
 
 export function Sidebar({ height }: { height: number; width: number }) {
 	const client = useTGCliStore((state) => {
@@ -25,12 +26,15 @@ export function Sidebar({ height }: { height: number; width: number }) {
 	});
 
 	const [activeChat, setActiveChat] = useState<UserInfo | ChannelInfo | null>(null);
+
 	const [offset, setOffset] = useState(0);
+
 	const { isFocused } = useFocus({ id: componenetFocusIds.sidebar });
+
 	const setSearchMode = useTGCliStore((state) => {
 		return state.setSearchMode;
 	});
-	const [userChats, setUserChats] = useState<Awaited<ReturnType<typeof getUserChats>>>();
+	const [userChats, setUserChats] = useState<Awaited<ReturnType<typeof getUserChats>>>()
 
 	const setCurrentlyFocused = useTGCliStore((state) => {
 		return state.setCurrentlyFocused;
@@ -39,6 +43,7 @@ export function Sidebar({ height }: { height: number; width: number }) {
 	const currentChatType = useTGCliStore((state) => {
 		return state.currentChatType;
 	});
+
 
 	const setCurrentChatType = useTGCliStore((state) => {
 		return state.setCurrentChatType;
@@ -53,12 +58,8 @@ export function Sidebar({ height }: { height: number; width: number }) {
 			const notificationConfig = getConfig('notifications');
 			if (notificationConfig.enabled) {
 				notifier.notify({
-					title: notificationConfig.showMessagePreview
-						? `TGCli - ${sender} sent you a message!`
-						: `TGCli`,
-					message: notificationConfig.showMessagePreview
-						? content
-						: `${sender} sent you a message!`,
+					title: notificationConfig.showMessagePreview ? `TGCli - ${sender} sent you a message!` : `TGCli`,
+					message: notificationConfig.showMessagePreview ? content : `${sender} sent you a message!`,
 					sound: true
 				});
 			}
@@ -66,7 +67,7 @@ export function Sidebar({ height }: { height: number; width: number }) {
 
 		const updatedUserChats = userChats?.dialogs?.map((user) => {
 			if (currentChatType === 'user') {
-				const userToUpdate = user as UserInfo;
+				const userToUpdate = user as UserInfo
 				if (userToUpdate.firstName === sender) {
 					return {
 						...userToUpdate,
@@ -77,7 +78,7 @@ export function Sidebar({ height }: { height: number; width: number }) {
 				}
 				return user;
 			} else {
-				const userToUpdate = user as ChannelInfo;
+				const userToUpdate = user as ChannelInfo
 				if (userToUpdate.title === sender) {
 					return {
 						...userToUpdate,
@@ -90,13 +91,14 @@ export function Sidebar({ height }: { height: number; width: number }) {
 			}
 		});
 
+
 		if (currentChatType === 'user') {
 			setUserChats((prev) => {
 				return {
 					dialogs: updatedUserChats as UserInfo[] | ChannelInfo[],
 					lastDialog: prev?.lastDialog ?? null
-				};
-			});
+				}
+			})
 		}
 	}, []);
 
@@ -115,7 +117,7 @@ export function Sidebar({ height }: { height: number; width: number }) {
 		firstName: string;
 		status: 'online' | 'offline';
 		lastSeen?: number;
-	}) => {
+		}) => {
 		if (
 			currentChatType === 'user' &&
 			selectedUser &&
@@ -131,8 +133,9 @@ export function Sidebar({ height }: { height: number; width: number }) {
 			setSelectedUser(user);
 		}
 
+
 		setUserChats((prv) => {
-			const dialog = prv?.dialogs as UserInfo[];
+			const dialog = (prv?.dialogs) as UserInfo[]
 			const updatedData = dialog?.map((u) => {
 				if (u.firstName === firstName) {
 					const date = lastSeen ? new Date(lastSeen * 1000) : null;
@@ -148,17 +151,19 @@ export function Sidebar({ height }: { height: number; width: number }) {
 			return {
 				dialogs: updatedData,
 				lastDialog: prv?.lastDialog ?? null
-			};
+			}
 		});
 	};
 
 	useEffect(() => {
 		let unsubscribe: (() => void) | undefined;
 		const getChats = async () => {
-			const result = await getUserChats(client, currentChatType);
-			setUserChats(result);
-			setActiveChat(result.dialogs?.[0] ?? null);
-			setSelectedUser(result.dialogs?.[0] ?? null);
+			const result = await getUserChats(client, currentChatType)
+			setUserChats(result)
+			setActiveChat(result.dialogs?.[0] ?? null)
+			if (!selectedUser) {
+				setSelectedUser(result.dialogs?.[0] ?? null)
+			}
 		};
 		getChats().then(async () => {
 			if (currentChatType === 'user') {
@@ -228,9 +233,9 @@ export function Sidebar({ height }: { height: number; width: number }) {
 					return peerId === (activeChat as UserInfo).peerId;
 				});
 				const nextUser = (userChats?.dialogs as UserInfo[])[currentIndex + 1];
-				const leastAmountOfChatsTobeDisplayed = height - HEIGHT_EMPTY_SPACE;
-				const visibleChats = (userChats?.dialogs as UserInfo[])?.slice(offset);
-				const shouldWeIncrementOffset = visibleChats.length > leastAmountOfChatsTobeDisplayed;
+				const leastAmountOfChatsTobeDisplayed = height - HEIGHT_EMPTY_SPACE
+				const visibleChats = (userChats?.dialogs as UserInfo[])?.slice(offset)
+				const shouldWeIncrementOffset = visibleChats.length > leastAmountOfChatsTobeDisplayed
 
 				if (shouldWeIncrementOffset) {
 					setOffset((prev) => {
@@ -266,7 +271,7 @@ export function Sidebar({ height }: { height: number; width: number }) {
 	const visibleChats =
 		(currentChatType === 'user'
 			? (userChats?.dialogs as UserInfo[])?.slice(offset, offset + height)
-			: (userChats?.dialogs as ChannelInfo[])?.slice(offset, offset + height)) ?? [];
+			: (userChats?.dialogs as ChannelInfo[])?.slice(offset, offset + height)) ?? []
 
 	return (
 		<Box
@@ -283,15 +288,12 @@ export function Sidebar({ height }: { height: number; width: number }) {
 				const isChannel = currentChatType === 'channel';
 				const isGroup = currentChatType === 'group';
 
-				const id =
-					isChannel || isGroup ? (chat as ChannelInfo).channelId : (chat as UserInfo).peerId;
+				const id = isChannel || isGroup ? (chat as ChannelInfo).channelId : (chat as UserInfo).peerId;
 				const isOnline = currentChatType === 'user' ? (chat as UserInfo).isOnline : false;
-				const name =
-					isChannel || isGroup ? (chat as ChannelInfo).title : (chat as UserInfo).firstName;
-				const isSelected =
-					isChannel || isGroup
-						? (activeChat as ChannelInfo | null)?.channelId === id
-						: (activeChat as UserInfo | null)?.peerId === id;
+				const name = isChannel || isGroup ? (chat as ChannelInfo).title : (chat as UserInfo).firstName;
+				const isSelected = isChannel || isGroup
+					? (activeChat as ChannelInfo | null)?.channelId === id
+					: (activeChat as UserInfo | null)?.peerId === id;
 
 				return (
 					<Box overflowY="hidden" key={String(id)} flexDirection="column">
