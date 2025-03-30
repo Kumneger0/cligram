@@ -81,6 +81,7 @@ When you start, you'll land on the Help Page. You can:
 - **↓** or **j**: Move down (works in both chat list and messages).
 - **ctrl + k** : To Open up search menu
 - **c**: Switch to Channels (Sidebar specific).
+- **g**: Switch to Groups(Sidebar specific))
 - **u**: Switch back to users (Sidebar specific).
 
 ## Doing Things
@@ -90,6 +91,7 @@ When you start, you'll land on the Help Page. You can:
   - **e** to edit it.
   - **r** to reply to it.
   - **f** to forward it.
+  - **u** to open direct message with the user (in group chats, this lets you quickly start a private conversation with any message sender)
 
 ## Configuration Management
 
