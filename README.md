@@ -135,15 +135,17 @@ All configuration options are optional. Here are all available options with thei
 Here's what each setting does:
 
 #### Chat Settings
+
 - `sendTypingState`: Controls whether others see "typing..." when you're composing a message
   - `true`: Show typing status (default)
   - `false`: Never show typing status
 - `readReceiptMode`: Controls when messages are marked as read
-  - `"default"`: Only marks messages as read when you actively interact with them (like replying). the sender won't see the "read" checkmarks until you take action on their messages. 
+  - `"default"`: Only marks messages as read when you actively interact with them (like replying). the sender won't see the "read" checkmarks until you take action on their messages.
   - `"instant"`: Marks messages as read immediately when you view them in the chat area. The sender will see "read" checkmarks as soon as you look at their messages.
   - `"never"`: Messages are never automatically marked as read, even when you interact with them. The sender will always see their messages with unread status.
 
 #### Privacy Settings
+
 - `lastSeenVisibility`: Controls who can see when you were last online
   - `"everyone"`: Anyone can see your last seen time
   - `"contacts"`: Only your contacts can see your last seen time
@@ -151,6 +153,7 @@ Here's what each setting does:
   - If not set: Uses your existing Telegram privacy settings
 
 #### Notification Settings
+
 - `enabled`: Master switch for notifications
   - `true`: Show notifications (default)
   - `false`: Disable all notifications

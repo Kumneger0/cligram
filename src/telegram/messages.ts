@@ -4,21 +4,21 @@ import { Raw } from 'telegram/events';
 import terminalSize from 'term-size';
 import terminalImage from 'terminal-image';
 import {
-	Dialog,
 	FormattedMessage,
 	Media,
 	MessageMediaWebPage,
-	TelegramUser
+	TelegramUser,
+	ChatType
 } from '../lib/types/index';
 import { getUserInfo } from './client';
 
 type GetEntityTypes = {
 	peer: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger };
-	type: Dialog['peer']['className'];
+	type: ChatType;
 };
 const getEntity = ({ peer, type }: GetEntityTypes) => {
 	const entity =
-		type === 'PeerUser'
+		type === 'user'
 			? new Api.InputPeerUser({
 					userId: peer.peerId,
 					accessHash: peer.accessHash
@@ -36,13 +36,13 @@ const getEntity = ({ peer, type }: GetEntityTypes) => {
  * @param {Object} peer - The peer whose typing status should be set
  * @param {bigInt.BigInteger} peer.peerId - The ID of the peer
  * @param {bigInt.BigInteger} peer.accessHash - The access hash of the peer
- * @param {Dialog['peer']['className']} type - The type of the peer (e.g., 'PeerUser' or 'PeerChannel')
+ * @param {ChatType} type - The type of the peer (e.g., 'user' or 'channel')
  * @returns {Promise<void>} A promise that resolves when the typing status is set
  */
 export const setUserTyping = async (
 	client: TelegramClient,
 	peer: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger },
-	type: Dialog['peer']['className']
+	type: ChatType
 ) => {
 	try {
 		const entity = getEntity({ peer, type });
@@ -60,7 +60,7 @@ export const setUserTyping = async (
 type MarkUnReadParams = {
 	client: TelegramClient;
 	peer: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger };
-	type: Dialog['peer']['className'];
+	type: ChatType;
 };
 
 /**
@@ -71,7 +71,7 @@ type MarkUnReadParams = {
  * @param {Object} params.peer - The peer whose messages should be marked as unread
  * @param {bigInt.BigInteger} params.peer.peerId - The ID of the peer
  * @param {bigInt.BigInteger} params.peer.accessHash - The access hash of the peer
- * @param {Dialog['peer']['className']} params.type - The type of the peer (e.g., 'PeerUser' or 'PeerChannel')
+ * @param {ChatType} params.type - The type of the peer (e.g., 'user' or 'channel')
  * @returns {Promise<any>} The result of marking messages as unread
  */
 export const markUnRead = async ({ client, peer, type }: MarkUnReadParams) => {
@@ -88,7 +88,7 @@ type ForwardMessageParams = {
 	fromPeer: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger };
 	id: number[];
 	toPeer: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger };
-	type: Dialog['peer']['className'];
+	type: ChatType;
 };
 
 /**
@@ -103,7 +103,7 @@ type ForwardMessageParams = {
  * @param {Object} params.toPeer - The peer to which the message is forwarded.
  * @param {bigInt.BigInteger} params.toPeer.peerId - The peer ID of the destination.
  * @param {bigInt.BigInteger} params.toPeer.accessHash - The access hash of the destination.
- * @param {Dialog['peer']['className']} params.type - The type of the peer (e.g., 'PeerUser' or 'PeerChannel').
+ * @param {ChatType} params.type - The type of the peer (e.g., 'user' or 'channel').
  * @returns {Promise<Api.messages.ForwardMessages>} The result of the forward operation.
  */
 export async function forwardMessage(client: TelegramClient, params: ForwardMessageParams) {
@@ -114,7 +114,7 @@ export async function forwardMessage(client: TelegramClient, params: ForwardMess
 	//TODO: FIX THIS HARD CODED PEER USER VALUE LIKE FOR EG USER CAN FORWARD TO CHANNEL WHERE HE HAS WRITE ACCESS TO(CHANNEL)
 	const toPeerEntity = getEntity({
 		peer: { accessHash: params.toPeer.accessHash, peerId: params.toPeer.peerId },
-		type: 'PeerUser'
+		type: params.type
 	});
 
 	const result = await client.invoke(
@@ -135,7 +135,7 @@ export async function forwardMessage(client: TelegramClient, params: ForwardMess
  * @param message - The message text to send.
  * @param isReply - (Optional) Indicates whether the message is a reply to another message.
  * @param replyToMessageId - (Optional) The ID of the message to reply to.
- * @param type - (Optional) The type of the peer to send the message to default is 'PeerUser'.
+ * @param type - (Optional) The type of the peer to send the message to default is 'user'.
  * @returns An object containing the message ID and the result of the send operation.
  */
 export const sendMessage = async (
@@ -144,19 +144,18 @@ export const sendMessage = async (
 	message: string,
 	isReply?: boolean | undefined,
 	replyToMessageId?: number,
-	type: Dialog['peer']['className'] = 'PeerUser'
+	type: ChatType = 'user'
 ) => {
 	try {
 		if (!client.connected) {
 			await client.connect();
 		}
-
 		const sendMessageParam = {
 			message: message,
 			...(isReply && { replyTo: replyToMessageId })
 		};
-		const entity = getEntity({ peer: peerInfo, type });
-		const result = await client.sendMessage(entity, sendMessageParam);
+		const entityLike = type === 'group' ? peerInfo.peerId : getEntity({ peer: peerInfo, type });
+		const result = await client.sendMessage(entityLike, sendMessageParam);
 		return {
 			messageId: result.id,
 			result
@@ -175,14 +174,14 @@ export const sendMessage = async (
  * @param client - The Telegram client instance.
  * @param peerInfo - An object containing the peer ID and access hash of the user to delete the message from.
  * @param messageId - The ID of the message to be deleted.
- * @param type - (Optional) The type of the peer to delete the message from default is 'PeerUser'.
+ * @param type - (Optional) The type of the peer to delete the message from default is 'user'.
  * @returns The result of the message deletion operation.
  */
 export const deleteMessage = async (
 	client: TelegramClient,
 	peerInfo: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger },
 	messageId: number,
-	type: Dialog['peer']['className'] = 'PeerUser'
+	type: ChatType = 'user'
 ) => {
 	try {
 		const entity = getEntity({ peer: peerInfo, type });
@@ -207,7 +206,7 @@ export const editMessage = async (
 	peerInfo: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger },
 	messageId: number,
 	newMessage: string,
-	type: Dialog['peer']['className'] = 'PeerUser'
+	type: ChatType = 'user'
 ) => {
 	try {
 		const entity = getEntity({ peer: peerInfo, type });
@@ -218,7 +217,6 @@ export const editMessage = async (
 				message: newMessage
 			})
 		);
-		console.log('edit result', result);
 		return result;
 	} catch (err) {
 		return null;
@@ -251,7 +249,7 @@ const getOrganizedDocument = () => {
  * @param chatAreaWidth - The width of the chat area (optional).
  * @returns An array of formatted messages.
  */
-export async function getAllMessages<T extends Dialog['peer']['className']>(
+export async function getAllMessages<T extends ChatType>(
 	{
 		client,
 		peerInfo: { accessHash, peerId: userId, userFirtNameOrChannelTitle },
@@ -274,19 +272,20 @@ export async function getAllMessages<T extends Dialog['peer']['className']>(
 		if (!client.connected) {
 			await client.connect();
 		}
+
 		const messages = [];
 		const entity = getEntity({
 			peer: { peerId: userId as bigInt.BigInteger, accessHash: accessHash as bigInt.BigInteger },
 			type
 		});
-		for await (const message of client.iterMessages(entity, {
+		const entityLike = type === 'group' ? userId : entity;
+		for await (const message of client.iterMessages(entityLike, {
 			limit: 10,
 			offsetId,
 			...iterParams
 		})) {
 			messages.push(message);
 		}
-
 		const orgnizedMessages = (
 			await Promise.all(
 				messages.reverse().map(async (message): Promise<FormattedMessage> => {
@@ -319,7 +318,11 @@ export async function getAllMessages<T extends Dialog['peer']['className']>(
 						media: imageString,
 						date,
 						webPage,
-						document
+						document,
+						fromId:
+							type === 'group' && 'fromId' in message
+								? (message.fromId as { userId: bigInt.BigInteger }).userId
+								: null
 					};
 				})
 			)
@@ -378,7 +381,11 @@ export const listenForEvents = async (
 	};
 	const hanlder = async (event: Event) => {
 		const userId = event.userId;
-		const user = (await getUserInfo(client, userId)) as unknown as TelegramUser;
+		const user = (await getUserInfo(client, userId))
+
+		if (!user) {
+			return;
+		}
 
 		switch (event.className) {
 			case 'UpdateShortMessage':
@@ -393,7 +400,6 @@ export const listenForEvents = async (
 				});
 				break;
 			case 'UpdateUserStatus':
-				console.log('status to update', event.status.className);
 				if (event.status.className === 'UserStatusOnline') {
 					onUserOnlineStatus &&
 						onUserOnlineStatus({
@@ -403,6 +409,10 @@ export const listenForEvents = async (
 						});
 				}
 				if (event.status.className === 'UserStatusOffline') {
+					const user = await client.getEntity(await client.getInputEntity(userId)) as unknown as TelegramUser | null
+					if (!user) {
+						return;
+					}
 					onUserOnlineStatus &&
 						onUserOnlineStatus({
 							accessHash: user.accessHash.toString(),

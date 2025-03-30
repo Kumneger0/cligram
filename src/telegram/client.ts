@@ -1,17 +1,12 @@
 import { Api, TelegramClient } from 'telegram';
-import {
-	Channel,
-	ChannelInfo,
-	Dialog,
-	MessagesResponse,
-	TelegramUser,
-	UserInfo
-} from '../lib/types/index.js';
+import { Channel, ChannelInfo, ChatType, TelegramUser, UserInfo } from '../lib/types/index.js';
 import { getConfig } from '@/config/configManager.js';
+import { EntityLike } from 'telegram/define.js';
+import { DialogInfo } from './client.types.js';
 
 export let chatUsers: UserInfo[] = [];
 
-const lastSeenMessages = {
+export const lastSeenMessages = {
 	UserStatusRecently: 'last seen recently',
 	UserStatusLastMonth: 'last seen within a month',
 	UserStatusLastWeek: 'last seen within a week'
@@ -19,11 +14,11 @@ const lastSeenMessages = {
 
 /**
  * Updates the user's online status on Telegram.
- * 
+ *
  * @param {TelegramClient} client - The Telegram client instance
  * @param {boolean} online - Whether to set the user as online (true) or offline (false)
  * @returns {Promise<void>} A promise that resolves when the status is updated
- * 
+ *
  * @description
  * This function updates whether the user appears online or offline to other users.
  * The visibility of this status depends on the user's privacy settings.
@@ -32,15 +27,13 @@ export const setUserOnlineStatus = async (client: TelegramClient, online: boolea
 	try {
 		await client.invoke(
 			new Api.account.UpdateStatus({
-				offline: !online,
+				offline: !online
 			})
 		);
 	} catch (err) {
 		console.error(err);
 	}
 };
-
-
 
 /**
  * Sets the user's privacy settings for last seen visibility on Telegram.
@@ -78,7 +71,7 @@ export async function setUserPrivacy(client: TelegramClient) {
 	}
 }
 
-async function getChannelInfo(client: TelegramClient, channelId: bigInt.BigInteger) {
+export async function getChannelInfo(client: TelegramClient, channelId: bigInt.BigInteger) {
 	const channel = await client.getEntity(await client.getInputEntity(channelId));
 	return channel;
 }
@@ -100,7 +93,14 @@ async function getChannelInfo(client: TelegramClient, channelId: bigInt.BigInteg
  * - Matching group chats with title and ID
  * - Matching channels with full channel information
  */
-export async function searchUsers(client: TelegramClient, query: string) {
+export async function searchUsers(
+	client: TelegramClient,
+	query: string
+): Promise<{
+	users: UserInfo[];
+	chats: { title: string; chatId: bigInt.BigInteger }[];
+	channels: ChannelInfo[];
+}> {
 	if (!client.connected) {
 		await client.connect();
 	}
@@ -133,7 +133,7 @@ export async function searchUsers(client: TelegramClient, query: string) {
 		.map((chat) => {
 			return {
 				title: chat.title || '',
-				chatId: chat.id
+				chatId: chat.id as bigInt.BigInteger
 			};
 		});
 
@@ -163,98 +163,111 @@ export async function searchUsers(client: TelegramClient, query: string) {
 /**
  * Retrieves user chats or channels from Telegram based on the specified type.
  *
- * @template T - The type of peer to retrieve ('PeerChannel' or 'PeerUser')
+ * @template T - The type of peer to retrieve ('channel' or 'user')
  * @param {TelegramClient} client - The Telegram client instance
- * @param {T} type - The type of peers to retrieve ('PeerChannel' or 'PeerUser')
- * @returns {Promise<T extends 'PeerChannel' ? ChannelInfo[] : UserInfo[]>} A promise that resolves to:
- *   - An array of ChannelInfo objects if type is 'PeerChannel'
- *   - An array of UserInfo objects if type is 'PeerUser'
- *
- * @description
- * For channels (type='PeerChannel'):
- * - Retrieves only broadcast channels
- * - Returns channel details like title, username, ID, access hash, creator status etc.
- *
- * For users (type='PeerUser'):
- * - Retrieves regular user chats
- * - Returns user details like name, online status, last seen, unread count etc.
- * - Filters out bots and users without first names
+ * @param {T} type - The type of peers to retrieve ('channel' or 'user')
+ * @param {Object} options - Pagination options
+ * @param {number} options.limit - Number of dialogs to fetch (default: 100)
+ * @param {number} options.offsetId - Message ID to start from (default: 0)
+ * @param {number} options.offsetDate - Date to start from (default: 0)
+ * @param {Api.InputPeer} options.offsetPeer - Peer to start from (default: InputPeerEmpty)
+ * @returns {Promise<{
+ *   dialogs: T extends 'channel' ? ChannelInfo[] : UserInfo[],
+ *   lastDialog: Dialog | null
+ * }>} A promise that resolves to:
+ *   - dialogs: Array of channel info or user info objects
+ *   - lastDialog: The last dialog in the current batch, used for pagination
  */
-export async function getUserChats<T extends Dialog['peer']['className']>(
+export async function getUserChats<T extends ChatType>(
 	client: TelegramClient,
-	type: T
-): Promise<T extends 'PeerChannel' ? ChannelInfo[] : UserInfo[]> {
+	type: T,
+	_options: {
+		limit?: number;
+		offsetId?: number;
+		offsetDate?: number;
+		offsetPeer?: EntityLike;
+	} = {}
+): Promise<{
+	dialogs: T extends 'channel' | 'group' ? ChannelInfo[] : UserInfo[];
+	lastDialog: DialogInfo | null;
+}> {
 	if (!client.connected) {
 		await client.connect();
 	}
 
-	const result = (await client.invoke(
-		new Api.messages.GetDialogs({
-			offsetDate: 0,
-			offsetId: 0,
-			offsetPeer: new Api.InputPeerEmpty(),
-			limit: 30000
-		})
-	)) as unknown as MessagesResponse;
+	const result = (await client.getDialogs({})) as unknown as DialogInfo[];
 
-	if (type === 'PeerChannel') {
-		const channels = result.dialogs.filter((dialog) => {
-			return dialog.peer.className === 'PeerChannel';
-		});
-		const channelsInfo = (
-			await Promise.all(
-				channels.map(async (chan) => {
-					const channel = (await getChannelInfo(client, chan.peer.channelId)) as unknown as Channel;
+	const lastDialog = result[result.length - 1] || null;
+
+	if (type === 'channel' || type === 'group') {
+		const groupOrChannels =
+			type === 'channel'
+				? result.filter((dialog) => {
+						return dialog.dialog.peer.className === 'PeerChannel';
+					})
+				: result.filter((dialog) => {
+						return dialog.isGroup;
+					});
+
+		const channelsInfo = await Promise.all(
+			groupOrChannels.map(async (chan) => {
+				const id =
+					'channelId' in chan.dialog.peer
+						? (chan.dialog.peer as { channelId: bigInt.BigInteger }).channelId
+						: (chan.dialog.peer as { chatId: bigInt.BigInteger }).chatId;
+				const isPeerChat = chan.dialog.peer.className === 'PeerChat';
+				const channel = !isPeerChat
+					? ((await getChannelInfo(client, id)) as unknown as Channel)
+					: null;
+				if (isPeerChat) {
 					return {
-						title: channel.title,
-						username: channel.username,
-						channelId: channel.id.toString(),
-						accessHash: channel.accessHash.toString(),
-						isCreator: channel.creator,
-						isBroadcast: channel.broadcast,
-						participantsCount: channel.participantsCount,
-						unreadCount: 0
+						title: chan.title,
+						username: '',
+						channelId: (chan.dialog.peer as { chatId: bigInt.BigInteger }).chatId.toString(),
+						accessHash: '',
+						isCreator: channel?.creator ?? false,
+						isBroadcast: false,
+						participantsCount:
+							(chan.entity as unknown as { participantsCount: number }).participantsCount ?? 0,
+						unreadCount: chan.unreadCount
 					} satisfies ChannelInfo;
-				})
-			)
-		).filter(({ isBroadcast }) => {
-			return isBroadcast;
-		}) as ChannelInfo[];
-		return channelsInfo as unknown as Promise<T extends 'PeerChannel' ? ChannelInfo[] : UserInfo[]>;
+				}
+				return {
+					title: channel?.title ?? '',
+					username: channel?.username ?? '',
+					channelId: channel?.id.toString() ?? '',
+					accessHash: channel?.accessHash.toString() ?? '',
+					isCreator: channel?.creator ?? false,
+					isBroadcast: channel?.broadcast ?? false,
+					participantsCount:
+						(chan.entity as unknown as { participantsCount: number }).participantsCount ?? 0,
+					unreadCount: chan.unreadCount
+				} satisfies ChannelInfo;
+			})
+		);
+		return {
+			dialogs: channelsInfo as T extends 'channel' | 'group' ? ChannelInfo[] : UserInfo[],
+			lastDialog
+		};
 	}
-	if (type === 'PeerUser') {
-		const userChats = result.dialogs.filter((dialog) => {
-			return dialog.peer.className === 'PeerUser';
+
+	if (type === 'user') {
+		const userChats = result.filter((dialog) => {
+			return dialog.dialog.peer.className === 'PeerUser';
 		});
 		const users = await Promise.all(
-			userChats.map(async ({ peer, unreadCount }) => {
+			userChats.map(async ({ dialog, unreadCount }) => {
 				try {
-					const user = (await getUserInfo(client, peer.userId)) as unknown as TelegramUser | null;
+					const user = (await getUserInfo(
+						client,
+						(dialog.peer as { userId: bigInt.BigInteger }).userId
+					)) 
 					if (!user) {
 						return null;
 					}
-					const wasOnline = user.status?.wasOnline;
-					const date = wasOnline ? new Date(wasOnline * 1000) : null;
-
 					return {
-						firstName: user.firstName,
-						isBot: user.bot,
-						peerId: peer.userId,
-						accessHash: user.accessHash as unknown as bigInt.BigInteger,
+						...user,
 						unreadCount: unreadCount,
-						lastSeen: wasOnline
-							? {
-								type: 'time',
-								value: date!
-							}
-							: {
-								type: 'status',
-								value: user.status?.className
-									? (lastSeenMessages[user.status?.className as keyof typeof lastSeenMessages] ??
-										'last seen a long time ago')
-									: 'last seen a long time ago'
-							},
-						isOnline: user.status?.className === 'UserStatusOnline'
 					} satisfies UserInfo;
 				} catch (err) {
 					return null;
@@ -262,23 +275,56 @@ export async function getUserChats<T extends Dialog['peer']['className']>(
 			})
 		);
 
-		chatUsers = users.filter((user): user is NonNullable<typeof user> => {
-			return user !== null;
-		});
-		return chatUsers.filter(({ isBot, firstName }) => {
-			return !isBot && firstName;
-		}) as unknown as Promise<T extends 'PeerChannel' ? ChannelInfo[] : UserInfo[]>;
+		chatUsers = users
+			.filter((user): user is NonNullable<typeof user> => {
+				return user !== null;
+			})
+			.filter(({ isBot, firstName }) => {
+				return !isBot && firstName;
+			});
+
+		return {
+			dialogs: chatUsers as T extends 'channel' | 'group' ? ChannelInfo[] : UserInfo[],
+			lastDialog
+		};
 	}
-	return [];
+	return {
+		dialogs: [] as unknown as T extends 'channel' | 'group' ? ChannelInfo[] : UserInfo[],
+		lastDialog: null
+	};
 }
 
-export async function getUserInfo(client: TelegramClient, userId: bigInt.BigInteger) {
+export async function getUserInfo(client: TelegramClient, userId: bigInt.BigInteger): Promise<Omit<UserInfo, 'unreadCount'> | null> {
 	try {
 		if (!client.connected) {
 			await client.connect();
 		}
-		const user = await client.getEntity(await client.getInputEntity(userId));
-		return user;
+		const user = await client.getEntity(await client.getInputEntity(userId)) as unknown as TelegramUser | null
+		if (!user) {
+			return null;
+		}
+		const wasOnline = user.status?.wasOnline;
+		const date = wasOnline ? new Date(wasOnline * 1000) : null;
+
+		return {
+			firstName: user.firstName,
+			isBot: user.bot,
+			peerId: userId,
+			accessHash: user.accessHash as unknown as bigInt.BigInteger,
+			lastSeen: wasOnline
+				? {
+					type: 'time',
+					value: date!
+				}
+				: {
+					type: 'status',
+					value: user.status?.className
+						? (lastSeenMessages[user.status?.className as keyof typeof lastSeenMessages] ??
+							'last seen a long time ago')
+						: 'last seen a long time ago'
+				},
+			isOnline: user.status?.className === 'UserStatusOnline'
+		} satisfies Omit<UserInfo, 'unreadCount'>;
 	} catch (err) {
 		return null;
 	}

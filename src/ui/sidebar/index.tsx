@@ -9,6 +9,11 @@ import { Box, Text, useFocus, useInput } from 'ink';
 import notifier from 'node-notifier';
 import React, { useCallback, useEffect, useState } from 'react';
 
+
+// This is the number of empty spaces at the bottom of the sidebar and the top of the sidebar 🔍
+//TODO: I KNOW this name sucks, i'll change it later if you have any suggestions please make a pr 🙏
+const HEIGHT_EMPTY_SPACE = 10
+
 export function Sidebar({ height }: { height: number; width: number }) {
 	const client = useTGCliStore((state) => {
 		return state.client;
@@ -21,22 +26,25 @@ export function Sidebar({ height }: { height: number; width: number }) {
 	});
 
 	const [activeChat, setActiveChat] = useState<UserInfo | ChannelInfo | null>(null);
-	const [chatUsers, setChatUsers] = useState<(UserInfo & { unreadCount: number })[]>([]);
+
 	const [offset, setOffset] = useState(0);
+
 	const { isFocused } = useFocus({ id: componenetFocusIds.sidebar });
+
 	const setSearchMode = useTGCliStore((state) => {
 		return state.setSearchMode;
 	});
+	const [userChats, setUserChats] = useState<Awaited<ReturnType<typeof getUserChats>>>()
 
 	const setCurrentlyFocused = useTGCliStore((state) => {
 		return state.setCurrentlyFocused;
 	});
 
-	const [channels, setChannels] = useState<ChannelInfo[]>([]);
-
 	const currentChatType = useTGCliStore((state) => {
 		return state.currentChatType;
 	});
+
+
 	const setCurrentChatType = useTGCliStore((state) => {
 		return state.setCurrentChatType;
 	});
@@ -56,19 +64,42 @@ export function Sidebar({ height }: { height: number; width: number }) {
 				});
 			}
 		}
-		setChatUsers((prev) => {
-			return prev.map((user) => {
-				if (user.firstName === sender) {
+
+		const updatedUserChats = userChats?.dialogs?.map((user) => {
+			if (currentChatType === 'user') {
+				const userToUpdate = user as UserInfo
+				if (userToUpdate.firstName === sender) {
 					return {
-						...user,
-						unreadCount: user.unreadCount + 1,
+						...userToUpdate,
+						unreadCount: userToUpdate.unreadCount + 1,
 						lastMessage: content,
 						isFromMe
 					};
 				}
 				return user;
-			});
+			} else {
+				const userToUpdate = user as ChannelInfo
+				if (userToUpdate.title === sender) {
+					return {
+						...userToUpdate,
+						unreadCount: userToUpdate.unreadCount + 1,
+						lastMessage: content,
+						isFromMe
+					};
+				}
+				return user;
+			}
 		});
+
+
+		if (currentChatType === 'user') {
+			setUserChats((prev) => {
+				return {
+					dialogs: updatedUserChats as UserInfo[] | ChannelInfo[],
+					lastDialog: prev?.lastDialog ?? null
+				}
+			})
+		}
 	}, []);
 
 	useEffect(() => {
@@ -88,7 +119,7 @@ export function Sidebar({ height }: { height: number; width: number }) {
 		lastSeen?: number;
 		}) => {
 		if (
-			currentChatType === 'PeerUser' &&
+			currentChatType === 'user' &&
 			selectedUser &&
 			'firstName' in selectedUser &&
 			firstName === selectedUser.firstName
@@ -101,8 +132,11 @@ export function Sidebar({ height }: { height: number; width: number }) {
 			} satisfies UserInfo;
 			setSelectedUser(user);
 		}
-		setChatUsers((prv) => {
-			const updatedData = prv.map((u) => {
+
+
+		setUserChats((prv) => {
+			const dialog = (prv?.dialogs) as UserInfo[]
+			const updatedData = dialog?.map((u) => {
 				if (u.firstName === firstName) {
 					const date = lastSeen ? new Date(lastSeen * 1000) : null;
 					const user = {
@@ -114,24 +148,25 @@ export function Sidebar({ height }: { height: number; width: number }) {
 				}
 				return u;
 			});
-			return updatedData;
+			return {
+				dialogs: updatedData,
+				lastDialog: prv?.lastDialog ?? null
+			}
 		});
 	};
 
 	useEffect(() => {
 		let unsubscribe: (() => void) | undefined;
 		const getChats = async () => {
-			const users = await getUserChats(client, currentChatType);
-			if (currentChatType === 'PeerChannel') {
-				setChannels(users as ChannelInfo[]);
-				setActiveChat(users[0] as ChannelInfo);
-			} else {
-				setChatUsers(users as UserInfo[]);
-				setActiveChat(users[0] as UserInfo);
+			const result = await getUserChats(client, currentChatType)
+			setUserChats(result)
+			setActiveChat(result.dialogs?.[0] ?? null)
+			if (!selectedUser) {
+				setSelectedUser(result.dialogs?.[0] ?? null)
 			}
 		};
 		getChats().then(async () => {
-			if (currentChatType === 'PeerUser') {
+			if (currentChatType === 'user') {
 				unsubscribe = await listenForEvents(client, { onMessage, onUserOnlineStatus });
 			}
 		});
@@ -140,20 +175,23 @@ export function Sidebar({ height }: { height: number; width: number }) {
 		};
 	}, []);
 
-	useInput((input, key) => {
+	useInput(async (input, key) => {
 		if (!isFocused) {
 			return;
 		}
-
 		if (key.ctrl && input === 'k') {
 			setSearchMode('CHANNELS_OR_ USERS');
 		}
 
 		if (input === 'c') {
-			setCurrentChatType('PeerChannel');
+			setCurrentChatType('channel');
 		}
 		if (input === 'u') {
-			setCurrentChatType('PeerUser');
+			setCurrentChatType('user');
+		}
+
+		if (input === 'g') {
+			setCurrentChatType('group');
 		}
 
 		if (key.return) {
@@ -162,12 +200,12 @@ export function Sidebar({ height }: { height: number; width: number }) {
 		}
 
 		if (key.upArrow || input === 'k') {
-			if (currentChatType === 'PeerUser') {
-				const currentIndex = chatUsers.findIndex(({ peerId }) => {
+			if (currentChatType === 'user') {
+				const currentIndex = (userChats?.dialogs as UserInfo[]).findIndex(({ peerId }) => {
 					return peerId === (activeChat as UserInfo).peerId;
 				});
 
-				const nextUser = chatUsers[currentIndex - 1];
+				const nextUser = (userChats?.dialogs as UserInfo[])[currentIndex - 1];
 				if (nextUser) {
 					setOffset((prev) => {
 						return Math.max(prev - 1, 0);
@@ -176,10 +214,10 @@ export function Sidebar({ height }: { height: number; width: number }) {
 				}
 			} else {
 				const currentSelectedId = (activeChat as ChannelInfo).channelId;
-				const currentIndex = channels.findIndex(({ channelId }) => {
+				const currentIndex = (userChats?.dialogs as ChannelInfo[]).findIndex(({ channelId }) => {
 					return channelId === currentSelectedId;
 				});
-				const nextChannel = channels[currentIndex - 1];
+				const nextChannel = (userChats?.dialogs as ChannelInfo[])[currentIndex - 1];
 				if (nextChannel) {
 					setOffset((prev) => {
 						return Math.max(prev - 1, 0);
@@ -190,18 +228,16 @@ export function Sidebar({ height }: { height: number; width: number }) {
 		}
 
 		if (key.downArrow || input === 'j') {
-			if (currentChatType === 'PeerUser') {
-				const currentIndex = chatUsers.findIndex(({ peerId }) => {
+			if (currentChatType === 'user') {
+				const currentIndex = (userChats?.dialogs as UserInfo[]).findIndex(({ peerId }) => {
 					return peerId === (activeChat as UserInfo).peerId;
 				});
+				const nextUser = (userChats?.dialogs as UserInfo[])[currentIndex + 1];
+				const leastAmountOfChatsTobeDisplayed = height - HEIGHT_EMPTY_SPACE
+				const visibleChats = (userChats?.dialogs as UserInfo[])?.slice(offset)
+				const shouldWeIncrementOffset = visibleChats.length > leastAmountOfChatsTobeDisplayed
 
-				const nextUser = chatUsers[currentIndex + 1];
-
-				if (
-					currentIndex + 1 > height &&
-					chatUsers.length > height &&
-					currentIndex + 1 < chatUsers.length
-				) {
+				if (shouldWeIncrementOffset) {
 					setOffset((prev) => {
 						return prev + 1;
 					});
@@ -211,15 +247,15 @@ export function Sidebar({ height }: { height: number; width: number }) {
 				}
 			} else {
 				const currentSelectedId = (activeChat as ChannelInfo).channelId;
-				const currentIndex = channels.findIndex(({ channelId }) => {
+				const currentIndex = (userChats?.dialogs as ChannelInfo[]).findIndex(({ channelId }) => {
 					return channelId === currentSelectedId;
 				});
-				const nextChannel = channels[currentIndex + 1];
+				const nextChannel = (userChats?.dialogs as ChannelInfo[])[currentIndex + 1];
 
 				if (
 					currentIndex + 1 > height &&
-					channels.length > height &&
-					currentIndex + 1 < channels.length
+					(userChats?.dialogs as ChannelInfo[]).length > height &&
+					currentIndex + 1 < (userChats?.dialogs as ChannelInfo[]).length
 				) {
 					setOffset((prev) => {
 						return prev + 1;
@@ -233,9 +269,9 @@ export function Sidebar({ height }: { height: number; width: number }) {
 	});
 
 	const visibleChats =
-		currentChatType === 'PeerUser'
-			? chatUsers.slice(offset, offset + height)
-			: channels.slice(offset, offset + height);
+		(currentChatType === 'user'
+			? (userChats?.dialogs as UserInfo[])?.slice(offset, offset + height)
+			: (userChats?.dialogs as ChannelInfo[])?.slice(offset, offset + height)) ?? []
 
 	return (
 		<Box
@@ -246,22 +282,23 @@ export function Sidebar({ height }: { height: number; width: number }) {
 			borderColor={isFocused ? 'green' : ''}
 		>
 			<Text color="blue" bold>
-				{currentChatType === 'PeerUser' ? 'Chats' : 'Channels'}
+				{currentChatType === 'user' ? 'Chats' : currentChatType === 'group' ? 'Groups' : 'Channels'}
 			</Text>
 			{visibleChats.map((chat) => {
-				const isChannel = currentChatType === 'PeerChannel';
+				const isChannel = currentChatType === 'channel';
+				const isGroup = currentChatType === 'group';
 
-				const id = isChannel ? (chat as ChannelInfo).channelId : (chat as UserInfo).peerId;
-				const isOnline = currentChatType === 'PeerUser' ? (chat as UserInfo).isOnline : false;
-				const name = isChannel ? (chat as ChannelInfo).title : (chat as UserInfo).firstName;
-				const isSelected = isChannel
+				const id = isChannel || isGroup ? (chat as ChannelInfo).channelId : (chat as UserInfo).peerId;
+				const isOnline = currentChatType === 'user' ? (chat as UserInfo).isOnline : false;
+				const name = isChannel || isGroup ? (chat as ChannelInfo).title : (chat as UserInfo).firstName;
+				const isSelected = isChannel || isGroup
 					? (activeChat as ChannelInfo | null)?.channelId === id
 					: (activeChat as UserInfo | null)?.peerId === id;
 
 				return (
 					<Box overflowY="hidden" key={String(id)} flexDirection="column">
 						<Text color={isSelected ? 'green' : isOnline ? 'yellow' : 'white'}>
-							{isChannel ? ICONS.CHANNEL : ICONS.USER} {name}{' '}
+							{isChannel ? ICONS.CHANNEL : isGroup ? ICONS.GROUP : ICONS.USER} {name}{' '}
 							{chat.unreadCount > 0 && <Text color="red">({chat.unreadCount})</Text>}
 						</Text>
 					</Box>
