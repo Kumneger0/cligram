@@ -1,53 +1,5 @@
 import { TelegramClient } from 'telegram';
 
-type PeerNotifySettings = {
-	flags: number;
-	showPreviews: boolean | null;
-	silent: boolean | null;
-	muteUntil: number | null;
-	iosSound: string | null;
-	androidSound: string | null;
-	otherSound: string | null;
-	storiesMuted: boolean;
-	storiesHideSender: boolean | null;
-	storiesIosSound: string | null;
-	storiesAndroidSound: string | null;
-	storiesOtherSound: string | null;
-};
-
-type PeerUser = {
-	userId: bigInt.BigInteger;
-	className: 'PeerUser' | 'PeerChannel' | 'PeerChat';
-	channelId: bigInt.BigInteger;
-};
-
-export type Dialog = {
-	flags: number;
-	pinned: boolean;
-	unreadMark: boolean;
-	viewForumAsMessages: boolean;
-	peer: PeerUser;
-	topMessage: number;
-	readInboxMaxId: number;
-	readOutboxMaxId: number;
-	unreadCount: number;
-	unreadMentionsCount: number;
-	unreadReactionsCount: number;
-	notifySettings: PeerNotifySettings;
-	pts: number | null;
-	folderId: number | null;
-	ttlPeriod: number | null;
-	className: 'Dialog';
-};
-
-export type MessagesResponse = {
-	count: number;
-	dialogs: Dialog[];
-	messages: unknown[];
-	users: unknown[];
-	className: 'messages.DialogsSlice';
-};
-
 export type TelegramUser = {
 	flags: number;
 	self: boolean;
@@ -188,6 +140,7 @@ export type FormattedMessage = {
 	document?: {
 		document: string;
 	} | null;
+	fromId?: bigInt.BigInteger | null;
 };
 
 export const eventClassNames = ['UpdateUserStatus', 'UpdateShortMessage'] as const;
@@ -327,6 +280,8 @@ export type ChannelInfo = {
 
 type SeachMode = 'CONVERSATION' | 'CHANNELS_OR_ USERS' | null;
 
+export type ChatType = 'user' | 'channel' | 'group' | 'bot';
+
 export type TGCliStore = {
 	client: TelegramClient | null;
 	updateClient: (client: TelegramClient) => void;
@@ -336,8 +291,8 @@ export type TGCliStore = {
 	setSelectedUser: (selectedUser: UserInfo | ChannelInfo | null) => void;
 	messageAction: MessageAction | null;
 	setMessageAction: (messageAction: MessageAction | null) => void;
-	currentChatType: Dialog['peer']['className'];
-	setCurrentChatType: (currentChatType: Dialog['peer']['className']) => void;
+	currentChatType: ChatType;
+	setCurrentChatType: (currentChatType: ChatType) => void;
 	currentlyFocused: 'chatArea' | 'sidebar' | null;
 	setCurrentlyFocused: (currentlyFocused: 'chatArea' | 'sidebar' | null) => void;
 };
@@ -345,7 +300,7 @@ export type TGCliStore = {
 export type ForwardMessageOptions = {
 	fromPeer: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger };
 	id: number[];
-	type: Dialog['peer']['className'];
+	type: ChatType;
 };
 
 type ChatPhoto = {

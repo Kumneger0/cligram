@@ -45,6 +45,7 @@ export function formatLastSeen(lastSeen: UserInfo['lastSeen']) {
 export const ICONS = {
 	USER: '👤',
 	CHANNEL: '📢',
+	GROUP: '👥',
 	MESSAGE: '💬',
 	SEARCH: '🔍',
 	CHECK: '✓',

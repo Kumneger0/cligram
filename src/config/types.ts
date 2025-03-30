@@ -24,7 +24,7 @@ export const cliGramConfigSchema = z.object({
 			.enum(['default', 'instant', 'never'], { message: 'Invalid value for readReceiptMode' })
 			.optional()
 	}),
-    privacy: z.object({
+	privacy: z.object({
 		lastSeenVisibility: z
 			.enum(['everyone', 'contacts', 'nobody'], { message: 'Invalid value for lastSeenVisibility' })
 			.optional()
@@ -42,7 +42,7 @@ export const DEFAULT_CONFIG: CliGramConfigSchema = {
 		sendTypingState: true,
 		readReceiptMode: 'default'
 	},
-    privacy: {
+	privacy: {
 		lastSeenVisibility: undefined
 	},
 	notifications: {

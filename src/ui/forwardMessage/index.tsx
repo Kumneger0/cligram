@@ -44,8 +44,8 @@ function ForwardMessageModal({ width, height }: { width: number; height: number 
 			if (!client) {
 				return;
 			}
-			const chats = await getUserChats(client, 'PeerUser');
-			setChats(chats);
+			const result = await getUserChats(client, 'user');
+			setChats(result.dialogs);
 		};
 		getChats();
 	}, []);
@@ -79,7 +79,7 @@ function ForwardMessageModal({ width, height }: { width: number; height: number 
 			if (chat) {
 				(async () => {
 					try {
-						setCurrentChatType('PeerUser');
+						setCurrentChatType('user');
 
 						await forwardMessage(client, {
 							fromPeer: {

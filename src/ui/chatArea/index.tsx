@@ -1,5 +1,5 @@
 import { conversationStore, useForwardMessageStore, useTGCliStore } from '@/lib/store';
-import { ChannelInfo, FormattedMessage, UserInfo } from '@/lib/types';
+import { ChannelInfo, FormattedMessage, TelegramUser, UserInfo } from '@/lib/types';
 import { formatLastSeen } from '@/lib/utils';
 import { componenetFocusIds } from '@/lib/utils/consts';
 import {
@@ -16,6 +16,9 @@ import TextInput from 'ink-text-input';
 import React, { Fragment, useEffect, useLayoutEffect, useState } from 'react';
 import { MessageActionModal } from '../modal/Modal';
 import { getConfig } from '@/config/configManager';
+import { getUserInfo } from '@/telegram/client';
+import { TelegramClient } from 'telegram';
+import { secondsInYear } from 'node_modules/date-fns/constants.cjs';
 const formatDate = (date: Date) => {
 	return date.toLocaleDateString('en-US', {
 		month: 'short',
@@ -76,7 +79,7 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 		return state.setSearchMode;
 	});
 	const currentlySelectedChatId =
-		currentChatType === 'PeerUser'
+		currentChatType === 'user'
 			? (selectedUser as UserInfo | null)?.peerId
 			: (selectedUser as ChannelInfo | null)?.channelId;
 
@@ -85,7 +88,7 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 	async function markMessageAsRead() {
 		if (selectedUser) {
 			const peer = {
-				peerId: (currentChatType === 'PeerChannel'
+				peerId: (currentChatType === 'channel'
 					? (selectedUser as ChannelInfo).channelId
 					: (selectedUser as UserInfo).peerId) as bigInt.BigInteger,
 				accessHash: selectedUser.accessHash as bigInt.BigInteger
@@ -102,11 +105,11 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 		let unsubscribe: (() => void) | undefined;
 
 		const id =
-			currentChatType === 'PeerUser'
+			currentChatType === 'user'
 				? (selectedUser as UserInfo).peerId
 				: ((selectedUser as ChannelInfo).channelId as unknown as bigInt.BigInteger);
 		const accessHash =
-			currentChatType === 'PeerUser'
+			currentChatType === 'user'
 				? (selectedUser as UserInfo).accessHash
 				: ((selectedUser as ChannelInfo).accessHash as unknown as bigInt.BigInteger);
 
@@ -118,7 +121,7 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 						accessHash,
 						peerId: id,
 						userFirtNameOrChannelTitle:
-							currentChatType === 'PeerUser'
+							currentChatType === 'user'
 								? (selectedUser as UserInfo).firstName
 								: (selectedUser as ChannelInfo).title
 					},
@@ -135,7 +138,7 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 			setIsLoading(false);
 			setActiveMessage(conversation.at(-1) ?? null);
 
-			if (currentChatType === 'PeerUser') {
+			if (currentChatType === 'user') {
 				unsubscribe = await listenForEvents(client, {
 					onMessage: (message) => {
 						const from = message.sender;
@@ -156,8 +159,9 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 	}, [selectedUserPeerID, currentChatType]);
 
 	const conversationAreaHieght =
-		currentChatType === 'PeerUser' ||
-		(currentChatType === 'PeerChannel' && (selectedUser as ChannelInfo | null)?.isCreator)
+		currentChatType === 'user' ||
+			(currentChatType === 'channel' && (selectedUser as ChannelInfo | null)?.isCreator) ||
+			currentChatType === 'group'
 			? height * (70 / 100)
 			: height * (90 / 100);
 
@@ -223,15 +227,15 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 			if (offset === 0 && selectedUser) {
 				const appendMessages = async () => {
 					const peerId =
-						currentChatType === 'PeerUser'
+						currentChatType === 'user'
 							? (selectedUser as UserInfo).peerId
 							: (selectedUser as ChannelInfo).channelId;
 					const accessHash =
-						currentChatType === 'PeerUser'
+						currentChatType === 'user'
 							? (selectedUser as UserInfo).accessHash
 							: (selectedUser as ChannelInfo).accessHash;
 					const userFirtNameOrChannelTitle =
-						currentChatType === 'PeerUser'
+						currentChatType === 'user'
 							? (selectedUser as UserInfo).firstName
 							: (selectedUser as ChannelInfo).title;
 					const newMessages = await getAllMessages(
@@ -298,7 +302,7 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 		);
 	}
 	const selectedUserLastSeen =
-		currentChatType === 'PeerUser'
+		currentChatType === 'user'
 			? (selectedUser as UserInfo | null)?.lastSeen
 				? formatLastSeen((selectedUser as UserInfo).lastSeen!)
 				: 'Unknown'
@@ -319,12 +323,13 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 				<Box flexDirection="column" height={height} width={width}>
 					<Box gap={1}>
 						<Text color="blue" bold>
-							{currentChatType === 'PeerUser'
+							{currentChatType === 'user'
 								? (selectedUser as UserInfo | null)?.firstName
-								: (selectedUser as ChannelInfo | null)?.title}
+								: (selectedUser as ChannelInfo | null)?.title}{' '}
+							{currentChatType === 'group' || currentChatType === 'channel' && `(${(selectedUser as ChannelInfo)?.participantsCount} Members)`}
 						</Text>
 						<Text>
-							{currentChatType === 'PeerUser'
+							{currentChatType === 'user'
 								? (selectedUser as UserInfo | null)?.isOnline
 									? 'Online'
 									: `${selectedUserLastSeen}`
@@ -349,56 +354,23 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 									{messages.map((message) => {
 										const date = message.date;
 										return (
-											<Box
-												alignSelf={message.isFromMe ? 'flex-end' : 'flex-start'}
+											<Message
 												key={message.id}
-												width={'30%'}
-												height={'auto'}
-												flexShrink={0}
-												flexDirection="column"
-												flexGrow={0}
-											>
-												{activeMessage?.id === message.id && isFocused ? (
-													<Text color={'green'}>{'>  '}</Text>
-												) : null}
-												<Box flexDirection="column">
-													<Text
-														backgroundColor={
-															activeMessage?.id === message.id && isFocused ? 'blue' : ''
-														}
-														color={activeMessage?.id === message.id && isFocused ? 'white' : ''}
-													>
-														{message.media && <Text wrap="end">{message.media}</Text>}
-													</Text>
-													<Text
-														wrap="wrap"
-														color={'white'}
-														bold={!!message.isUnsupportedMessage}
-														underline={!!message.isUnsupportedMessage}
-														backgroundColor={
-															activeMessage?.id === message.id && isFocused ? 'blue' : ''
-														}
-													>
-														{message.content}
-													</Text>
-													<Text>
-														{date.toLocaleTimeString([], {
-															hour: '2-digit',
-															minute: '2-digit',
-															hour12: true
-														})}
-													</Text>
-												</Box>
-											</Box>
+												message={message}
+												date={date.toString()}
+												activeMessage={activeMessage}
+												isFocused={isFocused}
+												client={client}
+											/>
 										);
 									})}
 								</Fragment>
 							);
 						})}
 					</Box>
-					{(currentChatType === 'PeerUser' ||
-						(currentChatType === 'PeerChannel' &&
-							(selectedUser as ChannelInfo | null)?.isCreator)) && (
+					{(currentChatType === 'user' ||
+						(currentChatType === 'channel' && (selectedUser as ChannelInfo | null)?.isCreator) ||
+						currentChatType === 'group') && (
 						<MessageInput
 							onSubmit={async (message) => {
 								if (selectedUser) {
@@ -413,17 +385,17 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 									} satisfies FormattedMessage;
 									setConversation([...conversation, newMessage]);
 									const id =
-										currentChatType === 'PeerUser'
+										currentChatType === 'user'
 											? (selectedUser as UserInfo).peerId
 											: (selectedUser as ChannelInfo).channelId;
 									const accessHash =
-										currentChatType === 'PeerUser'
+										currentChatType === 'user'
 											? (selectedUser as UserInfo).accessHash
 											: (selectedUser as ChannelInfo).accessHash;
 
 									const chatConfig = getConfig('chat');
 									if (chatConfig.readReceiptMode === 'default') {
-										if (currentChatType === 'PeerUser') {
+										if (currentChatType === 'user') {
 											await markMessageAsRead();
 										}
 									}
@@ -448,27 +420,103 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 	);
 }
 
+function Message({
+	message,
+	date,
+	activeMessage,
+	isFocused,
+	client
+}: {
+	message: FormattedMessage;
+	date: string;
+	activeMessage: FormattedMessage | null;
+	isFocused: boolean;
+	client: TelegramClient;
+}) {
+	const [sender, setSender] = useState<TelegramUser | null>(null);
+
+	useEffect(() => {
+		const getSender = async () => {
+			if (message.fromId) {
+				const user = await getUserInfo(client, message.fromId) as unknown as TelegramUser;
+				setSender(user);
+			}
+		};
+		getSender();
+	}, [message.fromId]);
+
+	return (
+		<Box
+			alignSelf={message.isFromMe ? 'flex-end' : 'flex-start'}
+			key={message.id}
+			width={'30%'}
+			height={'auto'}
+			flexShrink={0}
+			flexDirection="column"
+			flexGrow={0}
+		>
+			{activeMessage?.id === message.id && isFocused ? <Text color={'green'}>{'>  '}</Text> : null}
+			<Box flexDirection="column">
+				<Text
+					backgroundColor={activeMessage?.id === message.id && isFocused ? 'blue' : ''}
+					color={activeMessage?.id === message.id && isFocused ? 'white' : ''}
+				>
+					{message.media && <Text wrap="end">{message.media}</Text>}
+				</Text>
+				<Text
+					wrap="wrap"
+					color={'white'}
+					bold={!!message.isUnsupportedMessage}
+					underline={!!message.isUnsupportedMessage}
+					backgroundColor={activeMessage?.id === message.id && isFocused ? 'blue' : ''}
+				>
+					{message.content}
+				</Text>
+				{sender && (
+					<Text>
+						Sent by: {sender.firstName}
+					</Text>
+				)}
+				<Text>
+					{new Date(date).toLocaleTimeString([], {
+						hour: '2-digit',
+						minute: '2-digit',
+						hour12: true
+					})}
+				</Text>
+			</Box>
+		</Box>
+	);
+}
+
 function MessageInput({ onSubmit }: { onSubmit: (message: string) => void }) {
 	const [message, setMessage] = useState('');
 	const selectedUser = useTGCliStore((state) => {
 		return state.selectedUser;
 	});
 	const { isFocused } = useFocus({ id: componenetFocusIds.messageInput });
+
 	const messageAction = useTGCliStore((state) => {
 		return state.messageAction;
 	});
+
+
 	const client = useTGCliStore((state) => {
 		return state.client;
 	})!;
+
 	const setMessageAction = useTGCliStore((state) => {
 		return state.setMessageAction;
 	});
+
 	const conversation = conversationStore((state) => {
 		return state.conversation;
 	});
+
 	const messageContent = conversation.find(({ id }) => {
 		return id === messageAction?.id;
 	})?.content;
+
 	const isReply = messageAction?.action === 'reply';
 
 	const currentChatType = useTGCliStore((state) => {
@@ -509,7 +557,7 @@ function MessageInput({ onSubmit }: { onSubmit: (message: string) => void }) {
 				return msg;
 			});
 			conversationStore.setState({ conversation: updatedConversation });
-			if (currentChatType === 'PeerUser') {
+			if (currentChatType === 'user') {
 				editMessage(client, selectedUser as UserInfo, messageAction?.id!, message);
 			}
 			setMessageAction(null);
@@ -535,7 +583,7 @@ function MessageInput({ onSubmit }: { onSubmit: (message: string) => void }) {
 									isUnsupportedMessage: false
 								} satisfies FormattedMessage;
 								conversationStore.setState({ conversation: [...conversation, newMessage] });
-								if (currentChatType === 'PeerUser') {
+								if (currentChatType === 'user') {
 									sendMessage(client, selectedUser as UserInfo, message, true, messageAction.id);
 								}
 								setMessage('');
@@ -552,7 +600,7 @@ function MessageInput({ onSubmit }: { onSubmit: (message: string) => void }) {
 						setMessage(value);
 						const chatConfig = getConfig('chat');
 						if (chatConfig.sendTypingState) {
-							if (currentChatType === 'PeerUser') {
+							if (currentChatType === 'user') {
 								if (selectedUser) {
 									await setUserTyping(client, selectedUser as UserInfo, currentChatType);
 								}
