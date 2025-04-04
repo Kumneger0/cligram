@@ -258,16 +258,16 @@ export async function getUserChats<T extends ChatType>(
 		const users = await Promise.all(
 			userChats.map(async ({ dialog, unreadCount }) => {
 				try {
-					const user = (await getUserInfo(
+					const user = await getUserInfo(
 						client,
 						(dialog.peer as { userId: bigInt.BigInteger }).userId
-					)) 
+					);
 					if (!user) {
 						return null;
 					}
 					return {
 						...user,
-						unreadCount: unreadCount,
+						unreadCount: unreadCount
 					} satisfies UserInfo;
 				} catch (err) {
 					return null;
@@ -294,12 +294,17 @@ export async function getUserChats<T extends ChatType>(
 	};
 }
 
-export async function getUserInfo(client: TelegramClient, userId: bigInt.BigInteger): Promise<Omit<UserInfo, 'unreadCount'> | null> {
+export async function getUserInfo(
+	client: TelegramClient,
+	userId: bigInt.BigInteger
+): Promise<Omit<UserInfo, 'unreadCount'> | null> {
 	try {
 		if (!client.connected) {
 			await client.connect();
 		}
-		const user = await client.getEntity(await client.getInputEntity(userId)) as unknown as TelegramUser | null
+		const user = (await client.getEntity(
+			await client.getInputEntity(userId)
+		)) as unknown as TelegramUser | null;
 		if (!user) {
 			return null;
 		}
@@ -313,16 +318,16 @@ export async function getUserInfo(client: TelegramClient, userId: bigInt.BigInte
 			accessHash: user.accessHash as unknown as bigInt.BigInteger,
 			lastSeen: wasOnline
 				? {
-					type: 'time',
-					value: date!
-				}
+						type: 'time',
+						value: date!
+					}
 				: {
-					type: 'status',
-					value: user.status?.className
-						? (lastSeenMessages[user.status?.className as keyof typeof lastSeenMessages] ??
-							'last seen a long time ago')
-						: 'last seen a long time ago'
-				},
+						type: 'status',
+						value: user.status?.className
+							? (lastSeenMessages[user.status?.className as keyof typeof lastSeenMessages] ??
+								'last seen a long time ago')
+							: 'last seen a long time ago'
+					},
 			isOnline: user.status?.className === 'UserStatusOnline'
 		} satisfies Omit<UserInfo, 'unreadCount'>;
 	} catch (err) {

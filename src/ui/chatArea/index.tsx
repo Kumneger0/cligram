@@ -71,7 +71,6 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 		return state.setCurrentlyFocused;
 	});
 
-
 	const setCurrentChatType = useTGCliStore((state) => {
 		return state.setCurrentChatType;
 	});
@@ -79,7 +78,6 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 	const setSelectedUser = useTGCliStore((state) => {
 		return state.setSelectedUser;
 	});
-
 
 	const currentChatType = useTGCliStore((state) => {
 		return state.currentChatType;
@@ -169,8 +167,8 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 
 	const conversationAreaHieght =
 		currentChatType === 'user' ||
-			(currentChatType === 'channel' && (selectedUser as ChannelInfo | null)?.isCreator) ||
-			currentChatType === 'group'
+		(currentChatType === 'channel' && (selectedUser as ChannelInfo | null)?.isCreator) ||
+		currentChatType === 'group'
 			? height * (70 / 100)
 			: height * (90 / 100);
 
@@ -228,9 +226,8 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 			return;
 		}
 
-
 		if (input === 'u' && activeMessage?.fromId) {
-			const user = await getUserInfo(client, activeMessage.fromId)
+			const user = await getUserInfo(client, activeMessage.fromId);
 			setCurrentChatType('user');
 			setSelectedUser({
 				...user,
@@ -345,7 +342,9 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 							{currentChatType === 'user'
 								? (selectedUser as UserInfo | null)?.firstName
 								: (selectedUser as ChannelInfo | null)?.title}{' '}
-							{currentChatType === 'group' || currentChatType === 'channel' && `(${(selectedUser as ChannelInfo)?.participantsCount} Members)`}
+							{currentChatType === 'group' ||
+								(currentChatType === 'channel' &&
+									`(${(selectedUser as ChannelInfo)?.participantsCount} Members)`)}
 						</Text>
 						<Text>
 							{currentChatType === 'user'
@@ -457,16 +456,12 @@ function Message({
 	useEffect(() => {
 		const getSender = async () => {
 			if (message.fromId) {
-				const user = await getUserInfo(client, message.fromId)
+				const user = await getUserInfo(client, message.fromId);
 				setSender(user);
 			}
 		};
 		getSender();
 	}, [message.fromId]);
-
-
-
-
 
 	return (
 		<Box
@@ -495,11 +490,7 @@ function Message({
 				>
 					{message.content}
 				</Text>
-				{sender && !message.isFromMe && (
-					<Text>
-						Sent by: {sender.firstName}
-					</Text>
-				)}
+				{sender && !message.isFromMe && <Text>Sent by: {sender.firstName}</Text>}
 				<Text>
 					{new Date(date).toLocaleTimeString([], {
 						hour: '2-digit',
@@ -522,7 +513,6 @@ function MessageInput({ onSubmit }: { onSubmit: (message: string) => void }) {
 	const messageAction = useTGCliStore((state) => {
 		return state.messageAction;
 	});
-
 
 	const client = useTGCliStore((state) => {
 		return state.client;

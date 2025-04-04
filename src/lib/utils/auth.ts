@@ -92,7 +92,7 @@ function getConfigFilePath() {
 	const homeDir = os.homedir();
 	const configDir = path.join(homeDir, '.cligram');
 	const configFile = path.join(configDir, 'config.txt');
-	return [configFile, configDir]
+	return [configFile, configDir];
 }
 
 export function removeConfig() {
