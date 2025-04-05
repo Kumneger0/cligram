@@ -56,13 +56,16 @@ export function Sidebar({ height, userChats }: { height: number; width: number, 
 		}
 
 		if (input === 'c') {
+			setSelectedUser(null);
 			setCurrentChatType('channel');
 		}
 		if (input === 'u') {
+			setSelectedUser(null);
 			setCurrentChatType('user');
 		}
 
 		if (input === 'g') {
+			setSelectedUser(null);
 			setCurrentChatType('group');
 		}
 

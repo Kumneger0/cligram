@@ -3,8 +3,14 @@ import { Channel, ChannelInfo, ChatType, TelegramUser, UserInfo } from '../lib/t
 import { getConfig } from '@/config/configManager.js';
 import { EntityLike } from 'telegram/define.js';
 import { DialogInfo } from './client.types.js';
+import { cache } from '@/lib/utils/index.js';
 
 export let chatUsers: UserInfo[] = [];
+
+
+//we are fetching diloags at once so no need to cache users, channels, groups separately we can cache all of them together
+const CACHE_KEY = 'dialogs'
+
 
 export const lastSeenMessages = {
 	UserStatusRecently: 'last seen recently',
@@ -194,8 +200,9 @@ export async function getUserChats<T extends ChatType>(
 	if (!client.connected) {
 		await client.connect();
 	}
-
-	const result = (await client.getDialogs({})) as unknown as DialogInfo[];
+	const cached = cache.get(CACHE_KEY);
+	const result = cached ?? (await client.getDialogs({})) as unknown as DialogInfo[];
+	cache.set(CACHE_KEY, result);
 
 	const lastDialog = result[result.length - 1] || null;
 
@@ -203,11 +210,11 @@ export async function getUserChats<T extends ChatType>(
 		const groupOrChannels =
 			type === 'channel'
 				? result.filter((dialog) => {
-						return dialog.dialog.peer.className === 'PeerChannel';
-					})
+					return dialog.dialog.peer.className === 'PeerChannel';
+				})
 				: result.filter((dialog) => {
-						return dialog.isGroup;
-					});
+					return dialog.isGroup;
+				});
 
 		const channelsInfo = await Promise.all(
 			groupOrChannels.map(async (chan) => {
@@ -318,16 +325,16 @@ export async function getUserInfo(
 			accessHash: user.accessHash as unknown as bigInt.BigInteger,
 			lastSeen: wasOnline
 				? {
-						type: 'time',
-						value: date!
-					}
+					type: 'time',
+					value: date!
+				}
 				: {
-						type: 'status',
-						value: user.status?.className
-							? (lastSeenMessages[user.status?.className as keyof typeof lastSeenMessages] ??
-								'last seen a long time ago')
-							: 'last seen a long time ago'
-					},
+					type: 'status',
+					value: user.status?.className
+						? (lastSeenMessages[user.status?.className as keyof typeof lastSeenMessages] ??
+							'last seen a long time ago')
+						: 'last seen a long time ago'
+				},
 			isOnline: user.status?.className === 'UserStatusOnline'
 		} satisfies Omit<UserInfo, 'unreadCount'>;
 	} catch (err) {

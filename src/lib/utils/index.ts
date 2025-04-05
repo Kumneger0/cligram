@@ -56,6 +56,7 @@ export const onMessage = (
 	message: Partial<FormattedMessage>,
 	userChats: Awaited<ReturnType<typeof getUserChats>>,
 	currentChatType: ChatType,
+	user: Omit<UserInfo, "unreadCount"> | null,
 	setUserChats: React.Dispatch<
 		React.SetStateAction<
 			| {
@@ -82,10 +83,12 @@ export const onMessage = (
 			});
 		}
 	}
-	const updatedUserChats = userChats?.dialogs?.map((user) => {
+
+
+	const updatedUserChats = userChats?.dialogs?.map((u) => {
 		if (currentChatType === 'user') {
-			const userToUpdate = user as UserInfo;
-			if (userToUpdate.firstName === sender) {
+			const userToUpdate = u as UserInfo;
+			if (userToUpdate.firstName === user?.firstName) {
 				return {
 					...userToUpdate,
 					unreadCount: userToUpdate.unreadCount + 1,
@@ -93,10 +96,10 @@ export const onMessage = (
 					isFromMe
 				};
 			}
-			return user;
+			return u
 		} else {
-			const userToUpdate = user as ChannelInfo;
-			if (userToUpdate.title === sender) {
+			const userToUpdate = u as ChannelInfo;
+			if (userToUpdate.title === user?.firstName) {
 				return {
 					...userToUpdate,
 					unreadCount: userToUpdate.unreadCount + 1,
@@ -104,7 +107,7 @@ export const onMessage = (
 					isFromMe
 				};
 			}
-			return user;
+			return u
 		}
 	});
 
@@ -178,7 +181,7 @@ export const onUserOnlineStatus = (params: OnUserOnlineStatusParams) => {
 	});
 };
 
-export const cache = new LRUCache<string, Awaited<ReturnType<typeof getUserChats>>>({
+export const cache = new LRUCache<string, DialogInfo[]>({
 	max: 1000,
 	ttl: 1000 * 60 * 5
 });

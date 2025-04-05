@@ -69,18 +69,20 @@ function ForwardMessageModal({ width, height }: { width: number; height: number 
 			});
 		}
 		if (key.downArrow || input === 'j') {
-			const newOffset = Math.max(offset + 1, chats.length - forwardMessageModalHeight);
+			console.log('previous offset', offset);
+			const newOffset = Math.max(offset + 1);
+			console.log('new offset', newOffset);
 			if (newOffset < chats.length) {
 				setOffset(newOffset);
 			}
 		}
 		if (key.return) {
+			console.log('returning');
 			const chat = visibleChats[activeIndex];
 			if (chat) {
 				(async () => {
 					try {
 						setCurrentChatType('user');
-
 						await forwardMessage(client, {
 							fromPeer: {
 								peerId: forwardMessageOptions.fromPeer.peerId,
