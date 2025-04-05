@@ -1,17 +1,17 @@
-import { useForwardMessageStore, useTGCliStore } from '@/lib/store';
+import { conversationStore, useForwardMessageStore, useTGCliStore } from '@/lib/store';
 import { ChatArea } from '@/ui/chatArea';
 import { Sidebar } from '@/ui/sidebar';
 import { Box, render, Text, useFocus, useInput, useStdout } from 'ink';
 import React, { useEffect, useState } from 'react';
 import { TelegramClient } from 'telegram';
 import { ChannelInfo, UserInfo } from './lib/types';
+import { onMessage, onUserOnlineStatus } from './lib/utils';
 import { getConfig, setConfig } from './lib/utils/auth';
+import { getUserChats } from './telegram/client';
+import { listenForEvents } from './telegram/messages';
 import { SearchModal } from './ui/Search';
 import ShowKeyBinding from './ui/ShowKeyBinding';
 import ForwardMessageModal from './ui/forwardMessage';
-import { getUserChats } from './telegram/client';
-import { listenForEvents } from './telegram/messages';
-import { onMessage, onUserOnlineStatus, cache } from './lib/utils';
 const HelpPage: React.FC = () => {
 	const { isFocused } = useFocus({ autoFocus: true });
 
@@ -46,10 +46,16 @@ const HelpPage: React.FC = () => {
 	);
 };
 
+
 const TGCli: React.FC<{ client: TelegramClient }> = ({ client: telegramClient }) => {
 	const selectedUser = useTGCliStore((state) => {
 		return state.selectedUser;
 	});
+
+	const getSelectedUser = useTGCliStore((state) => {
+		return state.getSelectedUser;
+	});
+
 	const updateClient = useTGCliStore((state) => {
 		return state.updateClient;
 	});
@@ -63,6 +69,10 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: telegramClient })
 
 	const setSelectedUser = useTGCliStore((state) => {
 		return state.setSelectedUser;
+	});
+
+	const { updateConversations } = conversationStore((state) => {
+		return state;
 	});
 
 	const [userChats, setUserChats] = useState<Awaited<ReturnType<typeof getUserChats>>>();
@@ -107,7 +117,6 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: telegramClient })
 		if (!showHelp) {
 			return;
 		}
-
 		if (input === 'c') {
 			setShowHelp(false);
 		}
@@ -115,25 +124,25 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: telegramClient })
 			setShowHelp(false);
 			setConfig('skipHelp', true);
 		}
-	});
+	})
 
 	useEffect(() => {
 		updateClient(telegramClient);
 		let unsubscribe: (() => void) | undefined;
 		const getChats = async () => {
-			const cached = cache.get(currentChatType);
-			if (cached) {
-				return cached;
-			}
-
 			const result = await getUserChats(telegramClient, currentChatType);
-			cache.set(currentChatType, result);
 			return result;
 		};
 		getChats().then(async (userChats) => {
 			unsubscribe = await listenForEvents(telegramClient, {
-				onMessage: (message) => {
-					onMessage(message, userChats, currentChatType, setUserChats)
+				onMessage: (message, user) => {
+					onMessage(message, userChats, currentChatType, user, setUserChats)
+					const selectedUser = getSelectedUser();
+					if (currentChatType === 'user') {
+						if (user?.firstName === (selectedUser as UserInfo).firstName) {
+							updateConversations([message]);
+						}
+					}
 				}, onUserOnlineStatus: (user) => {
 					onUserOnlineStatus({ user, currentChatType, selectedUser, setSelectedUser, setUserChats })
 				}
@@ -148,7 +157,6 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: telegramClient })
 			return unsubscribe?.();
 		};
 	}, [currentChatType]);
-
 
 	if (!client) {
 		return;
@@ -175,8 +183,6 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: telegramClient })
 	if (!!searchMode) {
 		ComponentToRender = SearchModal;
 	}
-
-
 	if (!userChats) {
 		return <Text>Loading...</Text>;
 	}

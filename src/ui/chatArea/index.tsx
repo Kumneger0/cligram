@@ -50,9 +50,13 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 	const client = useTGCliStore((state) => {
 		return state.client;
 	})!;
+
+
 	const { conversation, setConversation, updateConversations } = conversationStore((state) => {
 		return state;
 	});
+
+
 	const setMessageAction = useTGCliStore((state) => {
 		return state.setMessageAction;
 	});
@@ -145,18 +149,18 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 			setIsLoading(false);
 			setActiveMessage(conversation.at(-1) ?? null);
 
-			if (currentChatType === 'user') {
-				unsubscribe = await listenForEvents(client, {
-					onMessage: (message) => {
-						const from = message.sender;
-						if (from === (selectedUser as UserInfo).firstName) {
-							updateConversations([message]);
-							setOffsetId(message.id);
-							setActiveMessage(message);
-						}
-					}
-				});
-			}
+			// if (currentChatType === 'user') {
+			// 	unsubscribe = await listenForEvents(client, {
+			// 		onMessage: (message) => {
+			// 			const from = message.sender;
+			// 			if (from === (selectedUser as UserInfo).firstName) {
+			// 				updateConversations([message]);
+			// 				setOffsetId(message.id);
+			// 				setActiveMessage(message);
+			// 			}
+			// 		}
+			// 	});
+			// }
 		})();
 
 		return () => {
@@ -339,12 +343,17 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 				<Box flexDirection="column" height={height} width={width}>
 					<Box gap={1}>
 						<Text color="blue" bold>
-							{currentChatType === 'user'
-								? (selectedUser as UserInfo | null)?.firstName
-								: (selectedUser as ChannelInfo | null)?.title}{' '}
-							{currentChatType === 'group' ||
-								(currentChatType === 'channel' &&
-									`(${(selectedUser as ChannelInfo)?.participantsCount} Members)`)}
+							{(() => {
+								if (currentChatType === 'user') {
+									return (selectedUser as UserInfo | null)?.firstName;
+								}
+								const channel = selectedUser as ChannelInfo | null;
+								const title = channel?.title ?? '';
+								const memberCount = channel?.participantsCount;
+								return currentChatType === 'group' || currentChatType === 'channel'
+									? `${title}${memberCount ? ` (${memberCount} Members)` : ''}`
+									: title;
+							})()}
 						</Text>
 						<Text>
 							{currentChatType === 'user'
