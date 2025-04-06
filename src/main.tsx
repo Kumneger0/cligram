@@ -1,15 +1,17 @@
-import { useForwardMessageStore, useTGCliStore } from '@/lib/store';
+import { conversationStore, useForwardMessageStore, useTGCliStore } from '@/lib/store';
 import { ChatArea } from '@/ui/chatArea';
 import { Sidebar } from '@/ui/sidebar';
-import { Box, render, Text, useFocus, useInput, useStdout } from 'ink';
+import { Box, Instance, render, Text, useFocus, useInput, useStdout } from 'ink';
 import React, { useEffect, useState } from 'react';
 import { TelegramClient } from 'telegram';
 import { ChannelInfo, UserInfo } from './lib/types';
+import { onMessage, onUserOnlineStatus } from './lib/utils';
 import { getConfig, setConfig } from './lib/utils/auth';
+import { getUserChats } from './telegram/client';
+import { listenForEvents } from './telegram/messages';
 import { SearchModal } from './ui/Search';
 import ShowKeyBinding from './ui/ShowKeyBinding';
 import ForwardMessageModal from './ui/forwardMessage';
-
 const HelpPage: React.FC = () => {
 	const { isFocused } = useFocus({ autoFocus: true });
 
@@ -44,10 +46,15 @@ const HelpPage: React.FC = () => {
 	);
 };
 
-const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient }) => {
+const TGCli: React.FC<{ client: TelegramClient }> = ({ client: telegramClient }) => {
 	const selectedUser = useTGCliStore((state) => {
 		return state.selectedUser;
 	});
+
+	const getSelectedUser = useTGCliStore((state) => {
+		return state.getSelectedUser;
+	});
+
 	const updateClient = useTGCliStore((state) => {
 		return state.updateClient;
 	});
@@ -58,6 +65,16 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 	const forwardMessageOptions = useForwardMessageStore((state) => {
 		return state.forwardMessageOptions;
 	});
+
+	const setSelectedUser = useTGCliStore((state) => {
+		return state.setSelectedUser;
+	});
+
+	const { updateConversations } = conversationStore((state) => {
+		return state;
+	});
+
+	const [userChats, setUserChats] = useState<Awaited<ReturnType<typeof getUserChats>>>();
 
 	const config = getConfig();
 	const [showHelp, setShowHelp] = React.useState(
@@ -98,7 +115,6 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 		if (!showHelp) {
 			return;
 		}
-
 		if (input === 'c') {
 			setShowHelp(false);
 		}
@@ -109,8 +125,43 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 	});
 
 	useEffect(() => {
-		updateClient(TelegramClient);
-	}, []);
+		updateClient(telegramClient);
+		let unsubscribe: (() => void) | undefined;
+		const getChats = async () => {
+			const result = await getUserChats(telegramClient, currentChatType);
+			return result;
+		};
+		getChats().then(async (userChats) => {
+			unsubscribe = await listenForEvents(telegramClient, {
+				onMessage: (message, user) => {
+					onMessage(message, userChats, currentChatType, user, setUserChats);
+					const selectedUser = getSelectedUser();
+					if (currentChatType === 'user') {
+						if (user?.firstName === (selectedUser as UserInfo).firstName) {
+							updateConversations([message]);
+						}
+					}
+				},
+				onUserOnlineStatus: (user) => {
+					onUserOnlineStatus({
+						user,
+						currentChatType,
+						selectedUser,
+						setSelectedUser,
+						setUserChats
+					});
+				}
+			});
+			setUserChats(userChats);
+			if (!selectedUser) {
+				setSelectedUser(userChats.dialogs?.[0] ?? null);
+			}
+		});
+		return () => {
+			setUserChats({ dialogs: [], lastDialog: null });
+			return unsubscribe?.();
+		};
+	}, [currentChatType]);
 
 	if (!client) {
 		return;
@@ -137,6 +188,9 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 	if (!!searchMode) {
 		ComponentToRender = SearchModal;
 	}
+	if (!userChats) {
+		return <Text>Loading...</Text>;
+	}
 
 	return (
 		<>
@@ -149,7 +203,12 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 				width={size.columns}
 			>
 				<Box width={sidebarWidth} flexDirection="column" borderRightColor="green">
-					<Sidebar key={currentChatType} height={height} width={sidebarWidth} />
+					<Sidebar
+						userChats={userChats}
+						key={currentChatType}
+						height={height}
+						width={sidebarWidth}
+					/>
 				</Box>
 				<ComponentToRender
 					key={(currentlySelectedChatId ?? 'default-key').toString()}
@@ -162,6 +221,7 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: TelegramClient })
 	);
 };
 
-export async function initializeUI(client: TelegramClient) {
-	render(<TGCli client={client} />);
+export async function initializeUI(client: TelegramClient): Promise<Instance> {
+	const root = render(<TGCli client={client} />);
+	return root;
 }

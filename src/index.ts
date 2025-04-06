@@ -36,16 +36,16 @@ cli(
 				await client.connect();
 				const me = await client.getMe();
 				if (me.phone) {
+					client.setLogLevel(LogLevel.NONE);
+					await setUserPrivacy(client);
+					const root = await initializeUI(client);
 					for (const signal of ['SIGINT', 'SIGTERM']) {
 						process.on(signal, () => {
-							console.log('Cleaning up');
 							disconnect(client);
+							root.cleanup();
+							console.log('Cleaning up');
 						});
 					}
-					client.setLogLevel(LogLevel.NONE);
-					loadConfig();
-					await setUserPrivacy(client);
-					initializeUI(client);
 					return;
 				}
 			}

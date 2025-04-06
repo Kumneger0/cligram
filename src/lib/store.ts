@@ -17,7 +17,7 @@ export const conversationStore = create<{
 	};
 });
 
-export const useTGCliStore = create<TGCliStore>((set) => {
+export const useTGCliStore = create<TGCliStore>((set, get) => {
 	return {
 		client: null,
 		currentChatType: 'user',
@@ -38,6 +38,9 @@ export const useTGCliStore = create<TGCliStore>((set) => {
 			});
 		},
 		selectedUser: null,
+		getSelectedUser: () => {
+			return get().selectedUser;
+		},
 		setSelectedUser: (selectedUser) => {
 			return set((state) => {
 				return { ...state, selectedUser };

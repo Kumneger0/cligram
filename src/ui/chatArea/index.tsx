@@ -7,7 +7,6 @@ import { getUserInfo } from '@/telegram/client';
 import {
 	editMessage,
 	getAllMessages,
-	listenForEvents,
 	markUnRead,
 	sendMessage,
 	setUserTyping
@@ -50,9 +49,11 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 	const client = useTGCliStore((state) => {
 		return state.client;
 	})!;
-	const { conversation, setConversation, updateConversations } = conversationStore((state) => {
+
+	const { conversation, setConversation } = conversationStore((state) => {
 		return state;
 	});
+
 	const setMessageAction = useTGCliStore((state) => {
 		return state.setMessageAction;
 	});
@@ -71,7 +72,6 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 		return state.setCurrentlyFocused;
 	});
 
-
 	const setCurrentChatType = useTGCliStore((state) => {
 		return state.setCurrentChatType;
 	});
@@ -79,7 +79,6 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 	const setSelectedUser = useTGCliStore((state) => {
 		return state.setSelectedUser;
 	});
-
 
 	const currentChatType = useTGCliStore((state) => {
 		return state.currentChatType;
@@ -111,7 +110,6 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 			return;
 		}
 		setIsLoading(true);
-		let unsubscribe: (() => void) | undefined;
 
 		const id =
 			currentChatType === 'user'
@@ -146,23 +144,9 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 			setOffsetId(conversation[0]?.id);
 			setIsLoading(false);
 			setActiveMessage(conversation.at(-1) ?? null);
-
-			if (currentChatType === 'user') {
-				unsubscribe = await listenForEvents(client, {
-					onMessage: (message) => {
-						const from = message.sender;
-						if (from === (selectedUser as UserInfo).firstName) {
-							updateConversations([message]);
-							setOffsetId(message.id);
-							setActiveMessage(message);
-						}
-					}
-				});
-			}
 		})();
 
 		return () => {
-			unsubscribe?.();
 			setConversation([]);
 		};
 	}, [selectedUserPeerID, currentChatType]);
@@ -228,9 +212,8 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 			return;
 		}
 
-
 		if (input === 'u' && activeMessage?.fromId) {
-			const user = await getUserInfo(client, activeMessage.fromId)
+			const user = await getUserInfo(client, activeMessage.fromId);
 			setCurrentChatType('user');
 			setSelectedUser({
 				...user,
@@ -342,10 +325,17 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 				<Box flexDirection="column" height={height} width={width}>
 					<Box gap={1}>
 						<Text color="blue" bold>
-							{currentChatType === 'user'
-								? (selectedUser as UserInfo | null)?.firstName
-								: (selectedUser as ChannelInfo | null)?.title}{' '}
-							{currentChatType === 'group' || currentChatType === 'channel' && `(${(selectedUser as ChannelInfo)?.participantsCount} Members)`}
+							{(() => {
+								if (currentChatType === 'user') {
+									return (selectedUser as UserInfo | null)?.firstName;
+								}
+								const channel = selectedUser as ChannelInfo | null;
+								const title = channel?.title ?? '';
+								const memberCount = channel?.participantsCount;
+								return currentChatType === 'group' || currentChatType === 'channel'
+									? `${title}${memberCount ? ` (${memberCount} Members)` : ''}`
+									: title;
+							})()}
 						</Text>
 						<Text>
 							{currentChatType === 'user'
@@ -390,49 +380,49 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 					{(currentChatType === 'user' ||
 						(currentChatType === 'channel' && (selectedUser as ChannelInfo | null)?.isCreator) ||
 						currentChatType === 'group') && (
-						<MessageInput
-							onSubmit={async (message) => {
-								if (selectedUser) {
-									const newMessage = {
-										content: message,
-										media: null,
-										isFromMe: true,
-										id: Math.floor(Math.random() * 10000),
-										sender: 'you',
-										isUnsupportedMessage: false,
-										date: new Date()
-									} satisfies FormattedMessage;
-									setConversation([...conversation, newMessage]);
-									const id =
-										currentChatType === 'user'
-											? (selectedUser as UserInfo).peerId
-											: (selectedUser as ChannelInfo).channelId;
-									const accessHash =
-										currentChatType === 'user'
-											? (selectedUser as UserInfo).accessHash
-											: (selectedUser as ChannelInfo).accessHash;
+							<MessageInput
+								onSubmit={async (message) => {
+									if (selectedUser) {
+										const newMessage = {
+											content: message,
+											media: null,
+											isFromMe: true,
+											id: Math.floor(Math.random() * 10000),
+											sender: 'you',
+											isUnsupportedMessage: false,
+											date: new Date()
+										} satisfies FormattedMessage;
+										setConversation([...conversation, newMessage]);
+										const id =
+											currentChatType === 'user'
+												? (selectedUser as UserInfo).peerId
+												: (selectedUser as ChannelInfo).channelId;
+										const accessHash =
+											currentChatType === 'user'
+												? (selectedUser as UserInfo).accessHash
+												: (selectedUser as ChannelInfo).accessHash;
 
-									const chatConfig = getConfig('chat');
-									if (chatConfig.readReceiptMode === 'default') {
-										if (currentChatType === 'user') {
-											await markMessageAsRead();
+										const chatConfig = getConfig('chat');
+										if (chatConfig.readReceiptMode === 'default') {
+											if (currentChatType === 'user') {
+												await markMessageAsRead();
+											}
 										}
+										await sendMessage(
+											client,
+											{
+												peerId: id as unknown as bigInt.BigInteger,
+												accessHash: accessHash as unknown as bigInt.BigInteger
+											},
+											message,
+											undefined,
+											undefined,
+											currentChatType
+										);
 									}
-									await sendMessage(
-										client,
-										{
-											peerId: id as unknown as bigInt.BigInteger,
-											accessHash: accessHash as unknown as bigInt.BigInteger
-										},
-										message,
-										undefined,
-										undefined,
-										currentChatType
-									);
-								}
-							}}
-						/>
-					)}
+								}}
+							/>
+						)}
 				</Box>
 			)}
 		</>
@@ -457,16 +447,12 @@ function Message({
 	useEffect(() => {
 		const getSender = async () => {
 			if (message.fromId) {
-				const user = await getUserInfo(client, message.fromId)
+				const user = await getUserInfo(client, message.fromId);
 				setSender(user);
 			}
 		};
 		getSender();
 	}, [message.fromId]);
-
-
-
-
 
 	return (
 		<Box
@@ -495,11 +481,7 @@ function Message({
 				>
 					{message.content}
 				</Text>
-				{sender && !message.isFromMe && (
-					<Text>
-						Sent by: {sender.firstName}
-					</Text>
-				)}
+				{sender && !message.isFromMe && <Text>Sent by: {sender.firstName}</Text>}
 				<Text>
 					{new Date(date).toLocaleTimeString([], {
 						hour: '2-digit',
@@ -522,7 +504,6 @@ function MessageInput({ onSubmit }: { onSubmit: (message: string) => void }) {
 	const messageAction = useTGCliStore((state) => {
 		return state.messageAction;
 	});
-
 
 	const client = useTGCliStore((state) => {
 		return state.client;
