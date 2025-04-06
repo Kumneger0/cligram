@@ -10,7 +10,14 @@ import React, { useEffect, useState } from 'react';
 //TODO: I KNOW this name sucks, i'll change it later if you have any suggestions please make a pr 🙏
 const HEIGHT_EMPTY_SPACE = 10;
 
-export function Sidebar({ height, userChats }: { height: number; width: number, userChats: Awaited<ReturnType<typeof getUserChats>> | undefined }) {
+export function Sidebar({
+	height,
+	userChats
+}: {
+	height: number;
+	width: number;
+	userChats: Awaited<ReturnType<typeof getUserChats>> | undefined;
+}) {
 	const setSelectedUser = useTGCliStore((state) => {
 		return state.setSelectedUser;
 	});
@@ -39,13 +46,11 @@ export function Sidebar({ height, userChats }: { height: number; width: number, 
 		return state.setCurrentChatType;
 	});
 
-
 	useEffect(() => {
 		if (isFocused) {
 			setCurrentlyFocused('sidebar');
 		}
 	}, [isFocused]);
-
 
 	useInput(async (input, key) => {
 		if (!isFocused) {

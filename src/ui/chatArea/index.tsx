@@ -7,7 +7,6 @@ import { getUserInfo } from '@/telegram/client';
 import {
 	editMessage,
 	getAllMessages,
-	listenForEvents,
 	markUnRead,
 	sendMessage,
 	setUserTyping
@@ -51,11 +50,9 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 		return state.client;
 	})!;
 
-
-	const { conversation, setConversation, updateConversations } = conversationStore((state) => {
+	const { conversation, setConversation } = conversationStore((state) => {
 		return state;
 	});
-
 
 	const setMessageAction = useTGCliStore((state) => {
 		return state.setMessageAction;
@@ -113,7 +110,6 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 			return;
 		}
 		setIsLoading(true);
-		let unsubscribe: (() => void) | undefined;
 
 		const id =
 			currentChatType === 'user'
@@ -148,31 +144,17 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 			setOffsetId(conversation[0]?.id);
 			setIsLoading(false);
 			setActiveMessage(conversation.at(-1) ?? null);
-
-			// if (currentChatType === 'user') {
-			// 	unsubscribe = await listenForEvents(client, {
-			// 		onMessage: (message) => {
-			// 			const from = message.sender;
-			// 			if (from === (selectedUser as UserInfo).firstName) {
-			// 				updateConversations([message]);
-			// 				setOffsetId(message.id);
-			// 				setActiveMessage(message);
-			// 			}
-			// 		}
-			// 	});
-			// }
 		})();
 
 		return () => {
-			unsubscribe?.();
 			setConversation([]);
 		};
 	}, [selectedUserPeerID, currentChatType]);
 
 	const conversationAreaHieght =
 		currentChatType === 'user' ||
-		(currentChatType === 'channel' && (selectedUser as ChannelInfo | null)?.isCreator) ||
-		currentChatType === 'group'
+			(currentChatType === 'channel' && (selectedUser as ChannelInfo | null)?.isCreator) ||
+			currentChatType === 'group'
 			? height * (70 / 100)
 			: height * (90 / 100);
 
@@ -398,49 +380,49 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 					{(currentChatType === 'user' ||
 						(currentChatType === 'channel' && (selectedUser as ChannelInfo | null)?.isCreator) ||
 						currentChatType === 'group') && (
-						<MessageInput
-							onSubmit={async (message) => {
-								if (selectedUser) {
-									const newMessage = {
-										content: message,
-										media: null,
-										isFromMe: true,
-										id: Math.floor(Math.random() * 10000),
-										sender: 'you',
-										isUnsupportedMessage: false,
-										date: new Date()
-									} satisfies FormattedMessage;
-									setConversation([...conversation, newMessage]);
-									const id =
-										currentChatType === 'user'
-											? (selectedUser as UserInfo).peerId
-											: (selectedUser as ChannelInfo).channelId;
-									const accessHash =
-										currentChatType === 'user'
-											? (selectedUser as UserInfo).accessHash
-											: (selectedUser as ChannelInfo).accessHash;
+							<MessageInput
+								onSubmit={async (message) => {
+									if (selectedUser) {
+										const newMessage = {
+											content: message,
+											media: null,
+											isFromMe: true,
+											id: Math.floor(Math.random() * 10000),
+											sender: 'you',
+											isUnsupportedMessage: false,
+											date: new Date()
+										} satisfies FormattedMessage;
+										setConversation([...conversation, newMessage]);
+										const id =
+											currentChatType === 'user'
+												? (selectedUser as UserInfo).peerId
+												: (selectedUser as ChannelInfo).channelId;
+										const accessHash =
+											currentChatType === 'user'
+												? (selectedUser as UserInfo).accessHash
+												: (selectedUser as ChannelInfo).accessHash;
 
-									const chatConfig = getConfig('chat');
-									if (chatConfig.readReceiptMode === 'default') {
-										if (currentChatType === 'user') {
-											await markMessageAsRead();
+										const chatConfig = getConfig('chat');
+										if (chatConfig.readReceiptMode === 'default') {
+											if (currentChatType === 'user') {
+												await markMessageAsRead();
+											}
 										}
+										await sendMessage(
+											client,
+											{
+												peerId: id as unknown as bigInt.BigInteger,
+												accessHash: accessHash as unknown as bigInt.BigInteger
+											},
+											message,
+											undefined,
+											undefined,
+											currentChatType
+										);
 									}
-									await sendMessage(
-										client,
-										{
-											peerId: id as unknown as bigInt.BigInteger,
-											accessHash: accessHash as unknown as bigInt.BigInteger
-										},
-										message,
-										undefined,
-										undefined,
-										currentChatType
-									);
-								}
-							}}
-						/>
-					)}
+								}}
+							/>
+						)}
 				</Box>
 			)}
 		</>

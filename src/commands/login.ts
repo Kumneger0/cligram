@@ -12,7 +12,8 @@ export default command(
 	(_argv) => {
 		(async () => {
 			const client = await getTelegramClient(true);
-			if (client) {
+			const me = await client?.getMe();
+			if (me?.firstName) {
 				console.log(`${green('✔')} You have Successfully loged in`);
 				process.exit(0);
 			}
