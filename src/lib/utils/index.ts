@@ -37,14 +37,15 @@ export const ICONS = {
 	LOCK: '🔒',
 	UNLOCK: '🔓'
 };
+
 /**
  * Handles incoming messages and updates the chat state accordingly
- * 
+ *
  * @param {Partial<FormattedMessage>} message - The incoming message with sender, content and other metadata
  * @param {Awaited<ReturnType<typeof getUserChats>>} userChats - Current state of user chats
  * @param {ChatType} currentChatType - Type of current chat (user/channel)
  * @param {React.Dispatch<React.SetStateAction<{dialogs: UserInfo[] | ChannelInfo[]; lastDialog: DialogInfo | null;} | undefined>>} setUserChats - State setter for updating chat list
- * 
+ *
  * @description
  * This function:
  * 1. Sends desktop notifications for new messages if enabled
@@ -56,7 +57,7 @@ export const onMessage = (
 	message: Partial<FormattedMessage>,
 	userChats: Awaited<ReturnType<typeof getUserChats>>,
 	currentChatType: ChatType,
-	user: Omit<UserInfo, "unreadCount"> | null,
+	user: Omit<UserInfo, 'unreadCount'> | null,
 	setUserChats: React.Dispatch<
 		React.SetStateAction<
 			| {
@@ -84,7 +85,6 @@ export const onMessage = (
 		}
 	}
 
-
 	const updatedUserChats = userChats?.dialogs?.map((u) => {
 		if (currentChatType === 'user') {
 			const userToUpdate = u as UserInfo;
@@ -96,7 +96,7 @@ export const onMessage = (
 					isFromMe
 				};
 			}
-			return u
+			return u;
 		} else {
 			const userToUpdate = u as ChannelInfo;
 			if (userToUpdate.title === user?.firstName) {
@@ -107,7 +107,7 @@ export const onMessage = (
 					isFromMe
 				};
 			}
-			return u
+			return u;
 		}
 	});
 
@@ -185,7 +185,6 @@ export const cache = new LRUCache<string, DialogInfo[]>({
 	max: 1000,
 	ttl: 1000 * 60 * 5
 });
-
 
 export function formatLastSeen(lastSeen: UserInfo['lastSeen']) {
 	if (lastSeen?.type === 'status') {

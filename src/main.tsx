@@ -1,7 +1,7 @@
 import { conversationStore, useForwardMessageStore, useTGCliStore } from '@/lib/store';
 import { ChatArea } from '@/ui/chatArea';
 import { Sidebar } from '@/ui/sidebar';
-import { Box, render, Text, useFocus, useInput, useStdout } from 'ink';
+import { Box, Instance, render, Text, useFocus, useInput, useStdout } from 'ink';
 import React, { useEffect, useState } from 'react';
 import { TelegramClient } from 'telegram';
 import { ChannelInfo, UserInfo } from './lib/types';
@@ -46,7 +46,6 @@ const HelpPage: React.FC = () => {
 	);
 };
 
-
 const TGCli: React.FC<{ client: TelegramClient }> = ({ client: telegramClient }) => {
 	const selectedUser = useTGCliStore((state) => {
 		return state.selectedUser;
@@ -76,7 +75,6 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: telegramClient })
 	});
 
 	const [userChats, setUserChats] = useState<Awaited<ReturnType<typeof getUserChats>>>();
-
 
 	const config = getConfig();
 	const [showHelp, setShowHelp] = React.useState(
@@ -124,7 +122,7 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: telegramClient })
 			setShowHelp(false);
 			setConfig('skipHelp', true);
 		}
-	})
+	});
 
 	useEffect(() => {
 		updateClient(telegramClient);
@@ -136,15 +134,22 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: telegramClient })
 		getChats().then(async (userChats) => {
 			unsubscribe = await listenForEvents(telegramClient, {
 				onMessage: (message, user) => {
-					onMessage(message, userChats, currentChatType, user, setUserChats)
+					onMessage(message, userChats, currentChatType, user, setUserChats);
 					const selectedUser = getSelectedUser();
 					if (currentChatType === 'user') {
 						if (user?.firstName === (selectedUser as UserInfo).firstName) {
 							updateConversations([message]);
 						}
 					}
-				}, onUserOnlineStatus: (user) => {
-					onUserOnlineStatus({ user, currentChatType, selectedUser, setSelectedUser, setUserChats })
+				},
+				onUserOnlineStatus: (user) => {
+					onUserOnlineStatus({
+						user,
+						currentChatType,
+						selectedUser,
+						setSelectedUser,
+						setUserChats
+					});
 				}
 			});
 			setUserChats(userChats);
@@ -168,7 +173,7 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: telegramClient })
 
 	const sidebarWidth = size.columns * (30 / 100);
 	const chatAreaWidth = size.columns - sidebarWidth;
-	const height = 30
+	const height = size.rows - 1;
 
 	const currentlySelectedChatId =
 		currentChatType === 'user'
@@ -198,7 +203,12 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: telegramClient })
 				width={size.columns}
 			>
 				<Box width={sidebarWidth} flexDirection="column" borderRightColor="green">
-					<Sidebar userChats={userChats} key={currentChatType} height={height} width={sidebarWidth} />
+					<Sidebar
+						userChats={userChats}
+						key={currentChatType}
+						height={height}
+						width={sidebarWidth}
+					/>
 				</Box>
 				<ComponentToRender
 					key={(currentlySelectedChatId ?? 'default-key').toString()}
@@ -211,6 +221,7 @@ const TGCli: React.FC<{ client: TelegramClient }> = ({ client: telegramClient })
 	);
 };
 
-export async function initializeUI(client: TelegramClient) {
-	render(<TGCli client={client} />);
+export async function initializeUI(client: TelegramClient): Promise<Instance> {
+	const root = render(<TGCli client={client} />);
+	return root;
 }
