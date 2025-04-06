@@ -3,8 +3,14 @@ import { Channel, ChannelInfo, ChatType, TelegramUser, UserInfo } from '../lib/t
 import { getConfig } from '@/config/configManager.js';
 import { EntityLike } from 'telegram/define.js';
 import { DialogInfo } from './client.types.js';
+import { cache } from '@/lib/utils/index.js';
 
 export let chatUsers: UserInfo[] = [];
+
+
+//we are fetching diloags at once so no need to cache users, channels, groups separately we can cache all of them together
+const CACHE_KEY = 'dialogs'
+
 
 export const lastSeenMessages = {
 	UserStatusRecently: 'last seen recently',
@@ -194,8 +200,9 @@ export async function getUserChats<T extends ChatType>(
 	if (!client.connected) {
 		await client.connect();
 	}
-
-	const result = (await client.getDialogs({})) as unknown as DialogInfo[];
+	const cached = cache.get(CACHE_KEY);
+	const result = cached ?? (await client.getDialogs({})) as unknown as DialogInfo[];
+	cache.set(CACHE_KEY, result);
 
 	const lastDialog = result[result.length - 1] || null;
 
@@ -203,11 +210,11 @@ export async function getUserChats<T extends ChatType>(
 		const groupOrChannels =
 			type === 'channel'
 				? result.filter((dialog) => {
-						return dialog.dialog.peer.className === 'PeerChannel';
-					})
+					return dialog.dialog.peer.className === 'PeerChannel';
+				})
 				: result.filter((dialog) => {
-						return dialog.isGroup;
-					});
+					return dialog.isGroup;
+				});
 
 		const channelsInfo = await Promise.all(
 			groupOrChannels.map(async (chan) => {
@@ -258,16 +265,16 @@ export async function getUserChats<T extends ChatType>(
 		const users = await Promise.all(
 			userChats.map(async ({ dialog, unreadCount }) => {
 				try {
-					const user = (await getUserInfo(
+					const user = await getUserInfo(
 						client,
 						(dialog.peer as { userId: bigInt.BigInteger }).userId
-					)) 
+					);
 					if (!user) {
 						return null;
 					}
 					return {
 						...user,
-						unreadCount: unreadCount,
+						unreadCount: unreadCount
 					} satisfies UserInfo;
 				} catch (err) {
 					return null;
@@ -294,12 +301,17 @@ export async function getUserChats<T extends ChatType>(
 	};
 }
 
-export async function getUserInfo(client: TelegramClient, userId: bigInt.BigInteger): Promise<Omit<UserInfo, 'unreadCount'> | null> {
+export async function getUserInfo(
+	client: TelegramClient,
+	userId: bigInt.BigInteger
+): Promise<Omit<UserInfo, 'unreadCount'> | null> {
 	try {
 		if (!client.connected) {
 			await client.connect();
 		}
-		const user = await client.getEntity(await client.getInputEntity(userId)) as unknown as TelegramUser | null
+		const user = (await client.getEntity(
+			await client.getInputEntity(userId)
+		)) as unknown as TelegramUser | null;
 		if (!user) {
 			return null;
 		}

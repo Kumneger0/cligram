@@ -286,6 +286,7 @@ export type TGCliStore = {
 	client: TelegramClient | null;
 	updateClient: (client: TelegramClient) => void;
 	searchMode: SeachMode;
+	getSelectedUser: () => UserInfo | ChannelInfo | null;
 	setSearchMode: (searchMode: SeachMode) => void;
 	selectedUser: UserInfo | ChannelInfo | null;
 	setSelectedUser: (selectedUser: UserInfo | ChannelInfo | null) => void;

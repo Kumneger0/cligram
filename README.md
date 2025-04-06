@@ -173,6 +173,10 @@ If you encounter any issues or have suggestions, feel free to open an issue on o
 
 Thank you for your interest in improving cligram!
 
+## 🤝 Code of Conduct
+
+We are committed to providing a welcoming and inclusive experience for everyone. We expect all participants in our community to abide by our [Code of Conduct](CODE_OF_CONDUCT.md). Please read it to understand what behaviors will and will not be tolerated.
+
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.

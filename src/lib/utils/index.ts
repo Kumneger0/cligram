@@ -7,7 +7,184 @@ import {
 	differenceInSeconds,
 	differenceInCalendarDays
 } from 'date-fns';
-import { UserInfo } from '../types';
+import { ChannelInfo, ChatType, FormattedMessage, UserInfo } from '../types';
+import notifier from 'node-notifier';
+import { getConfig } from '@/config/configManager';
+import { getUserChats } from '@/telegram/client';
+import { DialogInfo } from '@/telegram/client.types';
+import { LRUCache } from 'lru-cache';
+
+export const ICONS = {
+	USER: '👤',
+	CHANNEL: '📢',
+	GROUP: '👥',
+	MESSAGE: '💬',
+	SEARCH: '🔍',
+	CHECK: '✓',
+	CROSS: '✗',
+	ARROW: '→',
+	STAR: '⭐',
+	WARNING: '⚠️',
+	ERROR: '❌',
+	SUCCESS: '✅',
+	LOADING: '⏳',
+	FOLDER: '📁',
+	FILE: '📄',
+	LINK: '🔗',
+	CLOCK: '🕐',
+	HEART: '❤️',
+	PIN: '📌',
+	LOCK: '🔒',
+	UNLOCK: '🔓'
+};
+
+/**
+ * Handles incoming messages and updates the chat state accordingly
+ *
+ * @param {Partial<FormattedMessage>} message - The incoming message with sender, content and other metadata
+ * @param {Awaited<ReturnType<typeof getUserChats>>} userChats - Current state of user chats
+ * @param {ChatType} currentChatType - Type of current chat (user/channel)
+ * @param {React.Dispatch<React.SetStateAction<{dialogs: UserInfo[] | ChannelInfo[]; lastDialog: DialogInfo | null;} | undefined>>} setUserChats - State setter for updating chat list
+ *
+ * @description
+ * This function:
+ * 1. Sends desktop notifications for new messages if enabled
+ * 2. Updates unread count and last message for the sender
+ * 3. Updates the chat list state with new message information
+ * 4. Handles both user and channel messages differently based on chat type
+ */
+export const onMessage = (
+	message: Partial<FormattedMessage>,
+	userChats: Awaited<ReturnType<typeof getUserChats>>,
+	currentChatType: ChatType,
+	user: Omit<UserInfo, 'unreadCount'> | null,
+	setUserChats: React.Dispatch<
+		React.SetStateAction<
+			| {
+				dialogs: UserInfo[] | ChannelInfo[];
+				lastDialog: DialogInfo | null;
+			}
+			| undefined
+		>
+	>
+) => {
+	const sender = message.sender;
+	const content = message.content;
+	const isFromMe = message.isFromMe;
+
+	if (!message.isFromMe) {
+		const notificationConfig = getConfig('notifications');
+		if (notificationConfig.enabled) {
+			notifier.notify({
+				title: notificationConfig.showMessagePreview
+					? `TGCli - ${sender} sent you a message!`
+					: `TGCli`,
+				message: notificationConfig.showMessagePreview ? content : `${sender} sent you a message!`,
+				sound: true
+			});
+		}
+	}
+
+	const updatedUserChats = userChats?.dialogs?.map((u) => {
+		if (currentChatType === 'user') {
+			const userToUpdate = u as UserInfo;
+			if (userToUpdate.firstName === user?.firstName) {
+				return {
+					...userToUpdate,
+					unreadCount: userToUpdate.unreadCount + 1,
+					lastMessage: content,
+					isFromMe
+				};
+			}
+			return u;
+		} else {
+			const userToUpdate = u as ChannelInfo;
+			if (userToUpdate.title === user?.firstName) {
+				return {
+					...userToUpdate,
+					unreadCount: userToUpdate.unreadCount + 1,
+					lastMessage: content,
+					isFromMe
+				};
+			}
+			return u;
+		}
+	});
+
+	if (currentChatType === 'user') {
+		setUserChats((prev) => {
+			return {
+				dialogs: updatedUserChats as UserInfo[] | ChannelInfo[],
+				lastDialog: prev?.lastDialog ?? null
+			};
+		});
+	}
+};
+
+type OnUserOnlineStatusParams = {
+	user: {
+		accessHash: string;
+		firstName: string;
+		status: 'online' | 'offline';
+		lastSeen?: number;
+	};
+	currentChatType: ChatType;
+	selectedUser: UserInfo | ChannelInfo | null;
+	setSelectedUser: (selectedUser: UserInfo | ChannelInfo | null) => void;
+	setUserChats: React.Dispatch<
+		React.SetStateAction<
+			| {
+				dialogs: UserInfo[] | ChannelInfo[];
+				lastDialog: DialogInfo | null;
+			}
+			| undefined
+		>
+	>;
+};
+
+export const onUserOnlineStatus = (params: OnUserOnlineStatusParams) => {
+	const { currentChatType, selectedUser, setSelectedUser, setUserChats, user } = params;
+	const { firstName, status, lastSeen } = user;
+	if (
+		currentChatType === 'user' &&
+		selectedUser &&
+		'firstName' in selectedUser &&
+		firstName === selectedUser.firstName
+	) {
+		const date = lastSeen ? new Date(lastSeen * 1000) : null;
+		const user = {
+			...selectedUser,
+			isOnline: status === 'online',
+			lastSeen: date ? { type: 'time', value: date } : null
+		} satisfies UserInfo;
+		setSelectedUser(user);
+	}
+
+	setUserChats((prv) => {
+		const dialog = prv?.dialogs as UserInfo[];
+		const updatedData = dialog?.map((u) => {
+			if (u.firstName === firstName) {
+				const date = lastSeen ? new Date(lastSeen * 1000) : null;
+				const user = {
+					...u,
+					isOnline: status === 'online',
+					lastSeen: date ? { type: 'time', value: date } : null
+				} satisfies UserInfo;
+				return user;
+			}
+			return u;
+		});
+		return {
+			dialogs: updatedData,
+			lastDialog: prv?.lastDialog ?? null
+		};
+	});
+};
+
+export const cache = new LRUCache<string, DialogInfo[]>({
+	max: 1000,
+	ttl: 1000 * 60 * 5
+});
 
 export function formatLastSeen(lastSeen: UserInfo['lastSeen']) {
 	if (lastSeen?.type === 'status') {
@@ -41,27 +218,3 @@ export function formatLastSeen(lastSeen: UserInfo['lastSeen']) {
 	}
 	return `last seen on ${format(date, 'MMM d, yyyy')} at ${format(date, 'h:mm a')}`;
 }
-
-export const ICONS = {
-	USER: '👤',
-	CHANNEL: '📢',
-	GROUP: '👥',
-	MESSAGE: '💬',
-	SEARCH: '🔍',
-	CHECK: '✓',
-	CROSS: '✗',
-	ARROW: '→',
-	STAR: '⭐',
-	WARNING: '⚠️',
-	ERROR: '❌',
-	SUCCESS: '✅',
-	LOADING: '⏳',
-	FOLDER: '📁',
-	FILE: '📄',
-	LINK: '🔗',
-	CLOCK: '🕐',
-	HEART: '❤️',
-	PIN: '📌',
-	LOCK: '🔒',
-	UNLOCK: '🔓'
-};

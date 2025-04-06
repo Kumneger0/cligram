@@ -68,7 +68,12 @@ export async function getTelegramClient(isCalledFromLogin = false) {
 				}
 			}
 		});
-		const telegramSession = client.session.save();
+		const telegramSession = await client.session.save();
+
+		//@ts-ignore
+		if (!telegramSession) {
+			throw new Error('Failed to login to telegram');
+		}
 		const configData = `session=${telegramSession}`;
 		setUserConfigration(configData);
 		return client;
@@ -87,7 +92,7 @@ function getConfigFilePath() {
 	const homeDir = os.homedir();
 	const configDir = path.join(homeDir, '.cligram');
 	const configFile = path.join(configDir, 'config.txt');
-	return [configFile, configDir] as [string, string];
+	return [configFile, configDir];
 }
 
 export function removeConfig() {
@@ -107,6 +112,11 @@ export function removeConfig() {
 function setUserConfigration(configData: string) {
 	const [configFile, configDir] = getConfigFilePath();
 
+	if (!configFile || !configDir) {
+		console.error('Error: Config file or directory not found');
+		return;
+	}
+
 	if (!fs.existsSync(configDir)) {
 		fs.mkdirSync(configDir, { recursive: true });
 	}
@@ -124,6 +134,12 @@ function setUserConfigration(configData: string) {
 
 export function getConfig(): Config | null {
 	const [configFile] = getConfigFilePath();
+
+	if (!configFile) {
+		console.error('Error: Config file not found');
+		return null;
+	}
+
 	if (!fs.existsSync(configFile)) {
 		return null;
 	}
