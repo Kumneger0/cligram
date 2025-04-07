@@ -3,6 +3,7 @@ import { IterMessagesParams, markAsRead } from 'telegram/client/messages';
 import { Raw } from 'telegram/events';
 import terminalSize from 'term-size';
 import terminalImage from 'terminal-image';
+import fs from 'node:fs/promises';
 import {
 	FormattedMessage,
 	Media,
@@ -12,11 +13,13 @@ import {
 	UserInfo
 } from '../lib/types/index';
 import { getUserInfo } from './client';
+import { CustomFile } from 'telegram/client/uploads';
 
 type GetEntityTypes = {
 	peer: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger };
 	type: ChatType;
 };
+
 const getEntity = ({ peer, type }: GetEntityTypes) => {
 	const entity =
 		type === 'user'
@@ -30,6 +33,7 @@ const getEntity = ({ peer, type }: GetEntityTypes) => {
 			});
 	return entity;
 };
+
 /**
  * Sets the typing status for a user in a chat on Telegram.
  *
@@ -145,23 +149,56 @@ export const sendMessage = async (
 	message: string,
 	isReply?: boolean | undefined,
 	replyToMessageId?: number,
-	type: ChatType = 'user'
+	type: ChatType = 'user',
+	isFile?: boolean | undefined,
+	path?: string,
+	onProgress?: (progress: number | null) => void
 ) => {
 	try {
 		if (!client.connected) {
 			await client.connect();
 		}
+		const entityLike = type === 'group' ? peerInfo.peerId : getEntity({ peer: peerInfo, type });
+		if (isFile && path) {
+			const buffer = await fs.readFile(path);
+			const fileName = path.split('/').pop() ?? 'file';
+			const customeFile = new CustomFile(fileName, buffer.length, path);
+
+			const toUpload = await client.uploadFile({
+				file: customeFile,
+				workers: 1,
+				onProgress: (progress) => {
+					if (onProgress) {
+						onProgress(progress * 100);
+					}
+				}
+			});
+
+			const result = await client.sendFile(entityLike, {
+				file: toUpload,
+				caption: message,
+				replyTo: isReply ? replyToMessageId : undefined
+			});
+
+			onProgress?.(null);
+
+			return {
+				messageId: result.id,
+				result
+			};
+		}
+
 		const sendMessageParam = {
 			message: message,
 			...(isReply && { replyTo: replyToMessageId })
 		};
-		const entityLike = type === 'group' ? peerInfo.peerId : getEntity({ peer: peerInfo, type });
 		const result = await client.sendMessage(entityLike, sendMessageParam);
 		return {
 			messageId: result.id,
 			result
 		};
 	} catch (err) {
+		console.log('Error sending message:', err);
 		return {
 			messageId: null,
 			result: null
@@ -356,7 +393,7 @@ export const listenForEvents = async (
 		onMessage,
 		onUserOnlineStatus
 	}: {
-			onMessage: (message: FormattedMessage, user: Omit<UserInfo, "unreadCount"> | null) => void;
+			onMessage: (message: FormattedMessage, user: Omit<UserInfo, 'unreadCount'> | null) => void;
 		onUserOnlineStatus?: (user: {
 			accessHash: string;
 			firstName: string;
@@ -390,15 +427,19 @@ export const listenForEvents = async (
 
 		switch (event.className) {
 			case 'UpdateShortMessage':
-				onMessage({
-					id: event.id,
-					sender: event.out ? 'you' : user.firstName,
-					content: event.message,
-					isFromMe: event.out,
-					media: null,
-					date: event.date ? new Date(event.date * 1000) : new Date(),
-					isUnsupportedMessage: false
-				}, user);
+				console.log(event);
+				onMessage(
+					{
+						id: event.id,
+						sender: event.out ? 'you' : user.firstName,
+						content: event.message,
+						isFromMe: event.out,
+						media: null,
+						date: event.date ? new Date(event.date * 1000) : new Date(),
+						isUnsupportedMessage: false
+					},
+					user
+				);
 				break;
 			case 'UpdateUserStatus':
 				if (event.status.className === 'UserStatusOnline') {
