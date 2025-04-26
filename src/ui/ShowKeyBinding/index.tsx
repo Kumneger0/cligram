@@ -7,7 +7,10 @@ const user = 'user';
 const channel = 'channel';
 const group = 'group';
 
-const keyBindings: Record<string, Record<string, { mode: string | string[], description: string }>> = {
+const keyBindings: Record<
+	string,
+	Record<string, { mode: string | string[]; description: string }>
+> = {
 	general: {
 		'ctrl+k': {
 			mode: all,
@@ -66,7 +69,7 @@ const keyBindings: Record<string, Record<string, { mode: string | string[], desc
 			description: 'Switch to groups'
 		}
 	}
-}
+};
 
 type ShowKeyBindingProps = {
 	type: keyof typeof keyBindings;
@@ -75,9 +78,13 @@ function ShowKeyBinding({ type }: ShowKeyBindingProps) {
 	const currentChatType = useTGCliStore((state) => state.currentChatType);
 	const keyBindingToShow = Object.entries(
 		type !== 'general'
-			? { ...keyBindings.general || {}, ...keyBindings[type] || {} }
+			? { ...(keyBindings.general || {}), ...(keyBindings[type] || {}) }
 			: keyBindings[type] || {}
-	).filter(([_key, value]) => Array.isArray(value.mode) ? value.mode.includes(currentChatType) : value.mode === all || value.mode === currentChatType);
+	).filter(([_key, value]) =>
+		Array.isArray(value.mode)
+			? value.mode.includes(currentChatType)
+			: value.mode === all || value.mode === currentChatType
+	);
 	return (
 		<Box>
 			<Text>
