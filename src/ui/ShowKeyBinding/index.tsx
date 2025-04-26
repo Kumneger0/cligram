@@ -5,8 +5,9 @@ import React from 'react';
 const all = 'All';
 const user = 'user';
 const channel = 'channel';
+const group = 'group';
 
-const keyBindings = {
+const keyBindings: Record<string, Record<string, { mode: string | string[], description: string }>> = {
 	general: {
 		'ctrl+k': {
 			mode: all,
@@ -53,25 +54,30 @@ const keyBindings = {
 			description: 'Go up'
 		},
 		c: {
-			mode: user,
+			mode: [user, group],
 			description: 'Switch to channels'
 		},
 		u: {
-			mode: channel,
+			mode: [channel, group],
 			description: 'Switch to users'
+		},
+		g: {
+			mode: [channel, user],
+			description: 'Switch to groups'
 		}
 	}
-} as const;
+}
 
 type ShowKeyBindingProps = {
 	type: keyof typeof keyBindings;
 };
 function ShowKeyBinding({ type }: ShowKeyBindingProps) {
 	const currentChatType = useTGCliStore((state) => state.currentChatType);
-
 	const keyBindingToShow = Object.entries(
-		type !== 'general' ? { ...keyBindings.general, ...keyBindings[type] } : keyBindings[type]
-	).filter(([_key, value]) => value.mode === all || value.mode === currentChatType);
+		type !== 'general'
+			? { ...keyBindings.general || {}, ...keyBindings[type] || {} }
+			: keyBindings[type] || {}
+	).filter(([_key, value]) => Array.isArray(value.mode) ? value.mode.includes(currentChatType) : value.mode === all || value.mode === currentChatType);
 	return (
 		<Box>
 			<Text>
