@@ -93,7 +93,6 @@ When you start, you'll land on the Help Page. You can:
   - **f** to forward it.
   - **u** to open direct message with the user (in group chats, this lets you quickly start a private conversation with any message sender)
 
-
 ## Working with the Message Input
 
 - **ctrl + x**: Toggle focus on the message input box

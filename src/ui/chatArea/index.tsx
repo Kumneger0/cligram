@@ -18,8 +18,6 @@ import React, { Fragment, useEffect, useLayoutEffect, useState } from 'react';
 import { TelegramClient } from 'telegram';
 import { MessageActionModal } from '../modal/Modal';
 
-
-
 const formatDate = (date: Date) => {
 	return date.toLocaleDateString('en-US', {
 		month: 'short',
@@ -156,8 +154,8 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 
 	const conversationAreaHieght =
 		currentChatType === 'user' ||
-			(currentChatType === 'channel' && (selectedUser as ChannelInfo | null)?.isCreator) ||
-			currentChatType === 'group'
+		(currentChatType === 'channel' && (selectedUser as ChannelInfo | null)?.isCreator) ||
+		currentChatType === 'group'
 			? height * (70 / 100)
 			: height * (90 / 100);
 
@@ -383,53 +381,55 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 					{(currentChatType === 'user' ||
 						(currentChatType === 'channel' && (selectedUser as ChannelInfo | null)?.isCreator) ||
 						currentChatType === 'group') && (
-							<MessageInput
+						<MessageInput
 							onSubmit={async (message, isFile, filePath, onProgess) => {
-								const isUnsupportedMessage = Boolean(isFile && filePath)
-									if (selectedUser) {
-										const newMessage = {
-											content: isUnsupportedMessage ? 'This Message is not supported by this Telegram client.' : message,
-											media: null,
-											isFromMe: true,
-											id: Math.floor(Math.random() * 10000),
-											sender: 'you',
-											isUnsupportedMessage,
-											date: new Date()
-										} satisfies FormattedMessage;
-										setConversation([...conversation, newMessage]);
-										const id =
-											currentChatType === 'user'
-												? (selectedUser as UserInfo).peerId
-												: (selectedUser as ChannelInfo).channelId;
-										const accessHash =
-											currentChatType === 'user'
-												? (selectedUser as UserInfo).accessHash
-												: (selectedUser as ChannelInfo).accessHash;
+								const isUnsupportedMessage = Boolean(isFile && filePath);
+								if (selectedUser) {
+									const newMessage = {
+										content: isUnsupportedMessage
+											? 'This Message is not supported by this Telegram client.'
+											: message,
+										media: null,
+										isFromMe: true,
+										id: Math.floor(Math.random() * 10000),
+										sender: 'you',
+										isUnsupportedMessage,
+										date: new Date()
+									} satisfies FormattedMessage;
+									setConversation([...conversation, newMessage]);
+									const id =
+										currentChatType === 'user'
+											? (selectedUser as UserInfo).peerId
+											: (selectedUser as ChannelInfo).channelId;
+									const accessHash =
+										currentChatType === 'user'
+											? (selectedUser as UserInfo).accessHash
+											: (selectedUser as ChannelInfo).accessHash;
 
-										const chatConfig = getConfig('chat');
-										if (chatConfig.readReceiptMode === 'default') {
-											if (currentChatType === 'user') {
-												await markMessageAsRead();
-											}
+									const chatConfig = getConfig('chat');
+									if (chatConfig.readReceiptMode === 'default') {
+										if (currentChatType === 'user') {
+											await markMessageAsRead();
 										}
-										await sendMessage(
-											client,
-											{
-												peerId: id as unknown as bigInt.BigInteger,
-												accessHash: accessHash as unknown as bigInt.BigInteger
-											},
-											message,
-											undefined,
-											undefined,
-											currentChatType,
-											isFile,
-											filePath,
-											onProgess
-										);
 									}
-								}}
-							/>
-						)}
+									await sendMessage(
+										client,
+										{
+											peerId: id as unknown as bigInt.BigInteger,
+											accessHash: accessHash as unknown as bigInt.BigInteger
+										},
+										message,
+										undefined,
+										undefined,
+										currentChatType,
+										isFile,
+										filePath,
+										onProgess
+									);
+								}
+							}}
+						/>
+					)}
 				</Box>
 			)}
 		</>
@@ -590,12 +590,12 @@ function MessageInput({
 		if (!isFocused) return;
 
 		if (key.ctrl && input === 'x') {
-			setIsInputFocused((prev) => !prev)
+			setIsInputFocused((prev) => !prev);
 		}
 
 		if (key.ctrl && input === 'a') {
 			await pickFile();
-			setIsInputFocused(true)
+			setIsInputFocused(true);
 		}
 	});
 
@@ -630,7 +630,9 @@ function MessageInput({
 				{isReply ? (
 					<Text>Replay To: {messageContent}</Text>
 				) : (
-					<Text>{selectedFile ? 'File Selected Now You can Add Caption:' : 'Write A message:'}</Text>
+					<Text>
+						{selectedFile ? 'File Selected Now You can Add Caption:' : 'Write A message:'}
+					</Text>
 				)}
 			</Box>
 			<Box>

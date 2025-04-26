@@ -87,76 +87,73 @@ export async function isProgramInstalled(programName: string): Promise<boolean> 
  * This function:
  * 1. Sends desktop notifications for new messages if enabled
  * 2. Updates unread count and last message for the sender 3. Updates the chat list state with new message information 4. Handles both user and channel messages differently based on chat type */
-export const onMessage =
-	(
-		message: Partial<FormattedMessage>,
-		userChats: Awaited<ReturnType<typeof getUserChats>>,
-		currentChatType: ChatType,
-		user: Omit<UserInfo, 'unreadCount'> | null,
-		setUserChats: React.Dispatch<
-			React.SetStateAction<
-				| {
+export const onMessage = (
+	message: Partial<FormattedMessage>,
+	userChats: Awaited<ReturnType<typeof getUserChats>>,
+	currentChatType: ChatType,
+	user: Omit<UserInfo, 'unreadCount'> | null,
+	setUserChats: React.Dispatch<
+		React.SetStateAction<
+			| {
 					dialogs: UserInfo[] | ChannelInfo[];
 					lastDialog: DialogInfo | null;
-				}
-				| undefined
-			>
+			  }
+			| undefined
 		>
-	) => {
-		const sender = message.sender;
-		const content = message.content;
-		const isFromMe = message.isFromMe;
+	>
+) => {
+	const sender = message.sender;
+	const content = message.content;
+	const isFromMe = message.isFromMe;
 
-		if (!message.isFromMe) {
-			const notificationConfig = getConfig('notifications');
-			if (notificationConfig.enabled) {
-				notifier.notify({
-					title: notificationConfig.showMessagePreview
-						? `TGCli - ${sender} sent you a message!`
-						: `TGCli`,
-					message: notificationConfig.showMessagePreview
-						? content
-						: `${sender} sent you a message!`,
-					sound: true
-				});
-			}
+	if (!message.isFromMe) {
+		const notificationConfig = getConfig('notifications');
+		if (notificationConfig.enabled) {
+			notifier.notify({
+				title: notificationConfig.showMessagePreview
+					? `TGCli - ${sender} sent you a message!`
+					: `TGCli`,
+				message: notificationConfig.showMessagePreview ? content : `${sender} sent you a message!`,
+				sound: true
+			});
 		}
+	}
 
-		const updatedUserChats = userChats?.dialogs?.map((u) => {
-			if (currentChatType === 'user') {
-				const userToUpdate = u as UserInfo;
-				if (userToUpdate.firstName === user?.firstName) {
-					return {
-						...userToUpdate,
-						unreadCount: userToUpdate.unreadCount + 1,
-						lastMessage: content,
-						isFromMe
-					};
-				}
-				return u;
-			} else {
-				const userToUpdate = u as ChannelInfo;
-				if (userToUpdate.title === user?.firstName) {
-					return {
-						...userToUpdate,
-						unreadCount: userToUpdate.unreadCount + 1,
-						lastMessage: content,
-						isFromMe
-					};
-				}
-				return u;
+	const updatedUserChats = userChats?.dialogs?.map((u) => {
+		if (currentChatType === 'user') {
+			const userToUpdate = u as UserInfo;
+			if (userToUpdate.firstName === user?.firstName) {
+				return {
+					...userToUpdate,
+					unreadCount: userToUpdate.unreadCount + 1,
+					lastMessage: content,
+					isFromMe
+				};
 			}
-		});
+			return u;
+		} else {
+			const userToUpdate = u as ChannelInfo;
+			if (userToUpdate.title === user?.firstName) {
+				return {
+					...userToUpdate,
+					unreadCount: userToUpdate.unreadCount + 1,
+					lastMessage: content,
+					isFromMe
+				};
+			}
+			return u;
+		}
+	});
 
-		 if (currentChatType === 'user') {
-			 setUserChats((prev) => {
-				 return {
-					 dialogs: updatedUserChats as UserInfo[] | ChannelInfo[],
-					 lastDialog: prev?.lastDialog ?? null
-				 };
-			 });
-		 }
-	 };
+	if (currentChatType === 'user') {
+		setUserChats((prev) => {
+			return {
+				dialogs: updatedUserChats as UserInfo[] | ChannelInfo[],
+				lastDialog: prev?.lastDialog ?? null
+			};
+		});
+	}
+};
 
 type OnUserOnlineStatusParams = {
 	user: {
@@ -171,9 +168,9 @@ type OnUserOnlineStatusParams = {
 	setUserChats: React.Dispatch<
 		React.SetStateAction<
 			| {
-				dialogs: UserInfo[] | ChannelInfo[];
-				lastDialog: DialogInfo | null;
-			}
+					dialogs: UserInfo[] | ChannelInfo[];
+					lastDialog: DialogInfo | null;
+			  }
 			| undefined
 		>
 	>;

@@ -24,13 +24,13 @@ const getEntity = ({ peer, type }: GetEntityTypes) => {
 	const entity =
 		type === 'user'
 			? new Api.InputPeerUser({
-				userId: peer.peerId,
-				accessHash: peer.accessHash
-			})
+					userId: peer.peerId,
+					accessHash: peer.accessHash
+				})
 			: new Api.InputPeerChannel({
-				channelId: peer.peerId,
-				accessHash: peer.accessHash
-			});
+					channelId: peer.peerId,
+					accessHash: peer.accessHash
+				});
 	return entity;
 };
 
@@ -340,8 +340,8 @@ export async function getAllMessages<T extends ChatType>(
 					const date = new Date(message.date * 1000);
 					const imageString = await (buffer
 						? terminalImage.buffer(new Uint8Array(buffer), {
-							width
-						})
+								width
+							})
 						: null);
 
 					return {
@@ -393,7 +393,7 @@ export const listenForEvents = async (
 		onMessage,
 		onUserOnlineStatus
 	}: {
-			onMessage: (message: FormattedMessage, user: Omit<UserInfo, 'unreadCount'> | null) => void;
+		onMessage: (message: FormattedMessage, user: Omit<UserInfo, 'unreadCount'> | null) => void;
 		onUserOnlineStatus?: (user: {
 			accessHash: string;
 			firstName: string;
