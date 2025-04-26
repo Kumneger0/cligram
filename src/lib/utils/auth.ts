@@ -1,16 +1,16 @@
 import { TelegramClient } from 'telegram';
-import { StringSession } from 'telegram/sessions/index.js';
 import { RPCError } from 'telegram/errors/index.js';
+import { StringSession } from 'telegram/sessions/index.js';
 
+import { config } from 'dotenv';
 //@ts-expect-error
 import input from 'input';
 import os from 'node:os';
-import { config } from 'dotenv';
 
-import path from 'node:path';
-import fs from 'node:fs';
-import { LogLevel } from 'telegram/extensions/Logger.js';
 import { red } from 'kolorist';
+import fs from 'node:fs';
+import path from 'node:path';
+import { LogLevel } from 'telegram/extensions/Logger.js';
 
 config();
 

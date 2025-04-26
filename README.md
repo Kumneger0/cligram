@@ -93,6 +93,13 @@ When you start, you'll land on the Help Page. You can:
   - **f** to forward it.
   - **u** to open direct message with the user (in group chats, this lets you quickly start a private conversation with any message sender)
 
+## Working with the Message Input
+
+- **ctrl + x**: Toggle focus on the message input box
+- **ctrl + a**: Open file picker to attach a file (requires zenity to be installed)
+- When a file is selected, you can add an optional caption or just press Enter to send the file as is
+- File upload progress is displayed while sending
+
 ## Configuration Management
 
 customize your cligram experience by managing your own configuration using a JSON file. The configuration file is located at `~/.cligram/user.config.json`.

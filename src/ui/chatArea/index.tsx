@@ -1,7 +1,7 @@
 import { getConfig } from '@/config/configManager';
 import { conversationStore, useForwardMessageStore, useTGCliStore } from '@/lib/store';
 import { ChannelInfo, FormattedMessage, UserInfo } from '@/lib/types';
-import { formatLastSeen } from '@/lib/utils';
+import { formatLastSeen, getFilePath, isProgramInstalled } from '@/lib/utils';
 import { componenetFocusIds } from '@/lib/utils/consts';
 import { getUserInfo } from '@/telegram/client';
 import {
@@ -17,6 +17,7 @@ import TextInput from 'ink-text-input';
 import React, { Fragment, useEffect, useLayoutEffect, useState } from 'react';
 import { TelegramClient } from 'telegram';
 import { MessageActionModal } from '../modal/Modal';
+
 const formatDate = (date: Date) => {
 	return date.toLocaleDateString('en-US', {
 		month: 'short',
@@ -153,8 +154,8 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 
 	const conversationAreaHieght =
 		currentChatType === 'user' ||
-			(currentChatType === 'channel' && (selectedUser as ChannelInfo | null)?.isCreator) ||
-			currentChatType === 'group'
+		(currentChatType === 'channel' && (selectedUser as ChannelInfo | null)?.isCreator) ||
+		currentChatType === 'group'
 			? height * (70 / 100)
 			: height * (90 / 100);
 
@@ -380,49 +381,55 @@ export function ChatArea({ height, width }: { height: number; width: number }) {
 					{(currentChatType === 'user' ||
 						(currentChatType === 'channel' && (selectedUser as ChannelInfo | null)?.isCreator) ||
 						currentChatType === 'group') && (
-							<MessageInput
-								onSubmit={async (message) => {
-									if (selectedUser) {
-										const newMessage = {
-											content: message,
-											media: null,
-											isFromMe: true,
-											id: Math.floor(Math.random() * 10000),
-											sender: 'you',
-											isUnsupportedMessage: false,
-											date: new Date()
-										} satisfies FormattedMessage;
-										setConversation([...conversation, newMessage]);
-										const id =
-											currentChatType === 'user'
-												? (selectedUser as UserInfo).peerId
-												: (selectedUser as ChannelInfo).channelId;
-										const accessHash =
-											currentChatType === 'user'
-												? (selectedUser as UserInfo).accessHash
-												: (selectedUser as ChannelInfo).accessHash;
+						<MessageInput
+							onSubmit={async (message, isFile, filePath, onProgess) => {
+								const isUnsupportedMessage = Boolean(isFile && filePath);
+								if (selectedUser) {
+									const newMessage = {
+										content: isUnsupportedMessage
+											? 'This Message is not supported by this Telegram client.'
+											: message,
+										media: null,
+										isFromMe: true,
+										id: Math.floor(Math.random() * 10000),
+										sender: 'you',
+										isUnsupportedMessage,
+										date: new Date()
+									} satisfies FormattedMessage;
+									setConversation([...conversation, newMessage]);
+									const id =
+										currentChatType === 'user'
+											? (selectedUser as UserInfo).peerId
+											: (selectedUser as ChannelInfo).channelId;
+									const accessHash =
+										currentChatType === 'user'
+											? (selectedUser as UserInfo).accessHash
+											: (selectedUser as ChannelInfo).accessHash;
 
-										const chatConfig = getConfig('chat');
-										if (chatConfig.readReceiptMode === 'default') {
-											if (currentChatType === 'user') {
-												await markMessageAsRead();
-											}
+									const chatConfig = getConfig('chat');
+									if (chatConfig.readReceiptMode === 'default') {
+										if (currentChatType === 'user') {
+											await markMessageAsRead();
 										}
-										await sendMessage(
-											client,
-											{
-												peerId: id as unknown as bigInt.BigInteger,
-												accessHash: accessHash as unknown as bigInt.BigInteger
-											},
-											message,
-											undefined,
-											undefined,
-											currentChatType
-										);
 									}
-								}}
-							/>
-						)}
+									await sendMessage(
+										client,
+										{
+											peerId: id as unknown as bigInt.BigInteger,
+											accessHash: accessHash as unknown as bigInt.BigInteger
+										},
+										message,
+										undefined,
+										undefined,
+										currentChatType,
+										isFile,
+										filePath,
+										onProgess
+									);
+								}
+							}}
+						/>
+					)}
 				</Box>
 			)}
 		</>
@@ -494,8 +501,23 @@ function Message({
 	);
 }
 
-function MessageInput({ onSubmit }: { onSubmit: (message: string) => void }) {
+function MessageInput({
+	onSubmit
+}: {
+	onSubmit: (
+		message: string,
+		isFile?: boolean,
+		filePath?: string,
+		onProgess?: (progress: number | null) => void
+	) => Promise<void>;
+}) {
 	const [message, setMessage] = useState('');
+	const [isInputFocused, setIsInputFocused] = useState(false);
+
+	const [fileUploadProgess, setFileUploadProgess] = useState<number | null>(null);
+
+	const [selectedFile, setSelectedFile] = useState<string | null>(null);
+
 	const selectedUser = useTGCliStore((state) => {
 		return state.selectedUser;
 	});
@@ -512,7 +534,6 @@ function MessageInput({ onSubmit }: { onSubmit: (message: string) => void }) {
 	const setMessageAction = useTGCliStore((state) => {
 		return state.setMessageAction;
 	});
-
 	const conversation = conversationStore((state) => {
 		return state.conversation;
 	});
@@ -526,9 +547,31 @@ function MessageInput({ onSubmit }: { onSubmit: (message: string) => void }) {
 	const currentChatType = useTGCliStore((state) => {
 		return state.currentChatType;
 	});
+
 	const setCurrentlyFocused = useTGCliStore((state) => {
 		return state.setCurrentlyFocused;
 	});
+
+	const onProgress = (progress: number | null) => {
+		setFileUploadProgess(progress);
+	};
+
+	const pickFile = async () => {
+		try {
+			const isZenityInstalled = await isProgramInstalled('zenity');
+			if (isZenityInstalled) {
+				const filePath = await getFilePath();
+				if (filePath) {
+					setSelectedFile(filePath);
+					setMessage('');
+				}
+			}
+		} catch (err) {
+			if (err instanceof Error) {
+				console.error(err.message);
+			}
+		}
+	};
 
 	useEffect(() => {
 		if (isFocused) {
@@ -543,7 +586,20 @@ function MessageInput({ onSubmit }: { onSubmit: (message: string) => void }) {
 		setMessage(messageContent ?? '');
 	}, [messageAction?.id]);
 
-	const edit = () => {
+	useInput(async (input, key) => {
+		if (!isFocused) return;
+
+		if (key.ctrl && input === 'x') {
+			setIsInputFocused((prev) => !prev);
+		}
+
+		if (key.ctrl && input === 'a') {
+			await pickFile();
+			setIsInputFocused(true);
+		}
+	});
+
+	const edit = async () => {
 		if (selectedUser) {
 			const newMessage = {
 				content: message,
@@ -562,15 +618,29 @@ function MessageInput({ onSubmit }: { onSubmit: (message: string) => void }) {
 			});
 			conversationStore.setState({ conversation: updatedConversation });
 			if (currentChatType === 'user') {
-				editMessage(client, selectedUser as UserInfo, messageAction?.id!, message);
+				await editMessage(client, selectedUser as UserInfo, messageAction?.id!, message);
 			}
 			setMessageAction(null);
 		}
 	};
+
 	return (
 		<Box borderStyle={isFocused ? 'classic' : undefined} flexDirection="column">
 			<Box>
-				{isReply ? <Text>Replay To: {messageContent}</Text> : <Text>Write A message:</Text>}
+				{isReply ? (
+					<Text>Replay To: {messageContent}</Text>
+				) : (
+					<Text>
+						{selectedFile ? 'File Selected Now You can Add Caption:' : 'Write A message:'}
+					</Text>
+				)}
+			</Box>
+			<Box>
+				{fileUploadProgess !== null && (
+					<Text color="green" bold>
+						uploading {fileUploadProgess}/100%
+					</Text>
+				)}
 			</Box>
 			<Box>
 				<TextInput
@@ -588,17 +658,35 @@ function MessageInput({ onSubmit }: { onSubmit: (message: string) => void }) {
 								} satisfies FormattedMessage;
 								conversationStore.setState({ conversation: [...conversation, newMessage] });
 								if (currentChatType === 'user') {
-									sendMessage(client, selectedUser as UserInfo, message, true, messageAction.id);
+									await sendMessage(
+										client,
+										selectedUser as UserInfo,
+										message,
+										true,
+										messageAction.id,
+										currentChatType,
+										!!selectedFile,
+										selectedFile ?? undefined,
+										onProgress
+									);
+									setSelectedFile(null);
 								}
 								setMessage('');
 								setMessageAction(null);
 								return;
 							}
-							messageAction?.action === 'edit' ? edit() : onSubmit(message);
+
+							messageAction?.action === 'edit'
+								? await edit()
+								: await onSubmit(message, !!selectedFile, selectedFile ?? undefined, onProgress);
+
+							setSelectedFile(null);
 							setMessage('');
 						}
 					}}
-					placeholder="Write a message"
+					placeholder={
+						selectedFile ? 'Add Caption or Press Enter to Send only the File' : 'Write a message'
+					}
 					value={message}
 					onChange={async (value) => {
 						setMessage(value);
@@ -611,7 +699,7 @@ function MessageInput({ onSubmit }: { onSubmit: (message: string) => void }) {
 							}
 						}
 					}}
-					focus={isFocused}
+					focus={isInputFocused}
 				/>
 			</Box>
 		</Box>
