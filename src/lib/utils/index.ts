@@ -13,6 +13,8 @@ import { getConfig } from '@/config/configManager';
 import { getUserChats } from '@/telegram/client';
 import { DialogInfo } from '@/telegram/client.types';
 import { LRUCache } from 'lru-cache';
+import { $ } from 'bun';
+import os from 'node:os';
 
 export const ICONS = {
 	USER: '👤',
@@ -38,6 +40,41 @@ export const ICONS = {
 	UNLOCK: '🔓'
 };
 
+export const getFilePath = async () => {
+	try {
+		const process = await $`zenity --file-selection --title="Select a file"`;
+		const { stdout } = process;
+		const stdOutStr = stdout.toString();
+		return stdOutStr.trim();
+	} catch (err) {
+		if (err instanceof Error) {
+			console.error(err.message);
+		} else {
+			console.error('Unknown Error');
+		}
+	}
+};
+
+export async function isProgramInstalled(programName: string): Promise<boolean> {
+	const osName = os.platform();
+	if (osName === 'win32') throw new Error('Windows is not supported yet');
+	return new Promise<boolean>(async (res, rej) => {
+		try {
+			await $`which ${programName}`;
+			res(true);
+		} catch (err) {
+			console.log(
+				`We couldn't find ${programName} installed on your system \n Please install it and try again`
+			);
+			if (err instanceof Error) {
+				rej(false);
+			} else {
+				rej(false);
+			}
+		}
+	});
+}
+
 /**
  * Handles incoming messages and updates the chat state accordingly
  *
@@ -49,10 +86,7 @@ export const ICONS = {
  * @description
  * This function:
  * 1. Sends desktop notifications for new messages if enabled
- * 2. Updates unread count and last message for the sender
- * 3. Updates the chat list state with new message information
- * 4. Handles both user and channel messages differently based on chat type
- */
+ * 2. Updates unread count and last message for the sender 3. Updates the chat list state with new message information 4. Handles both user and channel messages differently based on chat type */
 export const onMessage = (
 	message: Partial<FormattedMessage>,
 	userChats: Awaited<ReturnType<typeof getUserChats>>,
@@ -61,9 +95,9 @@ export const onMessage = (
 	setUserChats: React.Dispatch<
 		React.SetStateAction<
 			| {
-				dialogs: UserInfo[] | ChannelInfo[];
-				lastDialog: DialogInfo | null;
-			}
+					dialogs: UserInfo[] | ChannelInfo[];
+					lastDialog: DialogInfo | null;
+			  }
 			| undefined
 		>
 	>
@@ -134,9 +168,9 @@ type OnUserOnlineStatusParams = {
 	setUserChats: React.Dispatch<
 		React.SetStateAction<
 			| {
-				dialogs: UserInfo[] | ChannelInfo[];
-				lastDialog: DialogInfo | null;
-			}
+					dialogs: UserInfo[] | ChannelInfo[];
+					lastDialog: DialogInfo | null;
+			  }
 			| undefined
 		>
 	>;
