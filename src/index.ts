@@ -6,7 +6,6 @@ import { RPCError } from 'telegram/errors/index.js';
 import { LogLevel } from 'telegram/extensions/Logger.js';
 import { description, version } from '../package.json';
 import { login, logout } from './commands';
-import { loadConfig } from './config/configManager';
 import { getTelegramClient, removeConfig } from './lib/utils/auth';
 import { initializeUI } from './main';
 import { setUserPrivacy } from './telegram/client';
