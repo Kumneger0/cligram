@@ -1,10 +1,29 @@
 # CliGram
-
 This is a Telegram CLI client made with TypeScript and Node.js.
 
-**Note:** This project is currently in development and is not fully stable. expect potential bugs and incomplete features.
-
 Right now, you can only chat with personal chats and channels. Group and bot support is coming soon!
+
+---
+
+## Limitations and Intended Use
+
+CliGram is designed as a lightweight and minimalistic Telegram client for basic use cases. While it provides essential functionality for interacting with personal chats, channels, and groups, it is not intended to replace GUI-based Telegram clients. Some advanced features available in GUI clients are currently missing, including:
+
+- **Bot Interaction**: Support for interacting with Telegram bots is not yet implemented (coming soon).
+- **Media Management**: Advanced media viewing, editing, and management features are not available.
+- **Voice and Video Calls**: CliGram does not support voice or video calls.
+- **Rich Media Previews**: Inline previews for links, videos, and other rich media are not displayed.
+- **Advanced Group Management**: Features like managing group permissions, polls, and pinned messages are not supported.
+- **Multi-Account Support**: Currently, only a single Telegram account can be used at a time.
+
+CliGram is ideal for users who prefer a terminal-based interface for basic messaging tasks. For a complete Telegram experience, we recommend using the official Telegram desktop or mobile applications.
+
+---
+
+## Implemented
+- [x] Channels  
+- [x] Groups  
+- [x] Personal chats  
 
 ## How to Use It
 
@@ -111,31 +130,14 @@ All configuration options are optional. Here are all available options with thei
 ```json
 {
   "chat": {
-    // Whether to show "typing..." status when composing messages
-    // Possible values: true, false
-    // Default: true
     "sendTypingState": true,
-
-    // Controls when to send read receipts
-    // Possible values: "default", "instant", "never"
-    // Default: "default"
     "readReceiptMode": "default"
   },
   "privacy": {
-    // Who can see your last seen status
-    // Possible values: "everyone", "contacts", "nobody"
-    // Default: undefined (uses Telegram's default setting)
     "lastSeenVisibility": "everyone"
   },
   "notifications": {
-    // Whether to show notifications
-    // Possible values: true, false
-    // Default: true
     "enabled": true,
-
-    // Whether to show message content in notifications
-    // Possible values: true, false
-    // Default: true
     "showMessagePreview": true
   }
 }
