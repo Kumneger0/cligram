@@ -6,8 +6,6 @@ import { getUserChats } from '@/telegram/client';
 import { Box, Text, useFocus, useInput } from 'ink';
 import React, { useEffect, useState } from 'react';
 
-// This is the number of empty spaces at the bottom of the sidebar and the top of the sidebar 🔍
-//TODO: I KNOW this name sucks, i'll change it later if you have any suggestions please make a pr 🙏
 const HEIGHT_EMPTY_SPACE = 10;
 
 export function Sidebar({
@@ -183,6 +181,7 @@ export function Sidebar({
 						<Text color={isSelected ? 'green' : isOnline ? 'yellow' : 'white'}>
 							{isChannel ? ICONS.CHANNEL : isGroup ? ICONS.GROUP : ICONS.USER} {name}{' '}
 							{chat.unreadCount > 0 && <Text color="red">({chat.unreadCount})</Text>}
+
 						</Text>
 					</Box>
 				);
