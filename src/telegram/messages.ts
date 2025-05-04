@@ -116,7 +116,6 @@ export async function forwardMessage(client: TelegramClient, params: ForwardMess
 		peer: { accessHash: params.fromPeer.accessHash, peerId: params.fromPeer.peerId },
 		type: params.type
 	});
-	//TODO: FIX THIS HARD CODED PEER USER VALUE LIKE FOR EG USER CAN FORWARD TO CHANNEL WHERE HE HAS WRITE ACCESS TO(CHANNEL)
 	const toPeerEntity = getEntity({
 		peer: { accessHash: params.toPeer.accessHash, peerId: params.toPeer.peerId },
 		type: params.type
