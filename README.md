@@ -48,7 +48,32 @@ export TELEGRAM_API_HASH=your_api_hash_from_telegram
 
 ### Set environment Variables (Windows)
 
-go figure out by yourself
+If you're on Windows, you can set your `api_id` and `api_hash` as environment variables using the Command Prompt or PowerShell:
+
+#### Using Command Prompt:
+```cmd
+set TELEGRAM_API_ID=your_api_id_from_telegram
+set TELEGRAM_API_HASH=your_api_hash_from_telegram
+```
+
+#### Using PowerShell:
+```powershell
+$env:TELEGRAM_API_ID="your_api_id_from_telegram"
+$env:TELEGRAM_API_HASH="your_api_hash_from_telegram"
+```
+
+To make these variables persistent across sessions, you can add them to your system's environment variables:
+
+1. Open the Start Menu and search for "Environment Variables."
+2. Click on "Edit the system environment variables."
+3. In the System Properties window, click on the "Environment Variables" button.
+4. Under "System variables" or "User variables," click "New" and add:
+   - **Variable name**: `TELEGRAM_API_ID`
+   - **Variable value**: `your_api_id_from_telegram`
+5. Repeat the process for `TELEGRAM_API_HASH`.
+6. Click "OK" to save and close all windows.
+
+After setting the variables, restart your terminal to apply the changes.
 
 ### Installation with npm
 
