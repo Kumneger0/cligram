@@ -1,11 +1,3 @@
-FROM oven/bun:latest
-
-WORKDIR /app
-
-COPY package.json bun.lock ./
-RUN bun install
-
-COPY . .
-
-
-ENTRYPOINT ["bun", "src/index.ts"]
+FROM alpine:3.20
+COPY cligram /usr/bin/cligram
+ENTRYPOINT ["/usr/bin/cligram"]
