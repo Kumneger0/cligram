@@ -4,97 +4,33 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"time"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
-type LastSeen struct {
-	Type   string
-	Time   *time.Time
-	Status *string
-}
-
-func (ls *LastSeen) UnmarshalJSON(data []byte) error {
-	if string(data) == "null" {
-		ls.Type, ls.Time, ls.Status = "", nil, nil
-		return nil
-	}
-
-	var aux struct {
-		Type  string          `json:"type"`
-		Value json.RawMessage `json:"value"`
-	}
-	if err := json.Unmarshal(data, &aux); err != nil {
-		return fmt.Errorf("LastSeen: cannot unmarshal wrapper: %w", err)
-	}
-
-	ls.Type = aux.Type
-
-	switch aux.Type {
-	case "time":
-		var t time.Time
-		if err := json.Unmarshal(aux.Value, &t); err != nil {
-			return fmt.Errorf("LastSeen: invalid time value: %w", err)
-		}
-		ls.Time = &t
-		ls.Status = nil
-
-	case "status":
-		var s string
-		if err := json.Unmarshal(aux.Value, &s); err != nil {
-			return fmt.Errorf("LastSeen: invalid status value: %w", err)
-		}
-		ls.Status = &s
-		ls.Time = nil
-
-	default:
-		return fmt.Errorf("LastSeen: unknown type %q", aux.Type)
-	}
-	return nil
-}
-
-type UserInfo struct {
-	FirstName   string   `json:"firstName"`
-	IsBot       bool     `json:"isBot"`
-	PeerID      string   `json:"peerId"`
-	AccessHash  string   `json:"accessHash"`
-	UnreadCount int      `json:"unreadCount"`
-	LastSeen    LastSeen `json:"lastSeen"`
-	IsOnline    bool     `json:"isOnline"`
-}
-
-var (
-	normalStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFFFFF"))
-
-	selectedStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#000000")).
-			Background(lipgloss.Color("#7D56F4")).
-			Bold(true)
-)
-
-func (u UserInfo) Title() string {
-	return u.FirstName
-}
-
-func (u UserInfo) FilterValue() string {
-	return u.FirstName
-}
+var ()
 
 type CustomDelegate struct {
 	list.DefaultDelegate
 }
 
 func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
-	entry, ok := item.(UserInfo)
-	if !ok {
+	var title string
+	
+	if entry, ok := item.(UserInfo); ok {
+		title = entry.Title()
+	} else if entry, ok := item.(ChannelInfo); ok {
+		title = entry.Title()
+	} else {
 		return
 	}
 
-	str := lipgloss.NewStyle().Width(50).Render(entry.Title())
+	str := lipgloss.NewStyle().Width(50).Render(title)
 	if index == m.Index() {
 		fmt.Fprint(w, selectedStyle.Render(" "+str+" "))
 	} else {
@@ -103,100 +39,14 @@ func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 }
 
 func GetFakeData() []list.Item {
-	testJson := `[
-        {
-            "firstName": "Alice",
-            "isBot": false,
-            "peerId": "12345678901234567890",
-            "accessHash": "98765432109876543210",
-            "unreadCount": 0,
-            "lastSeen": { "type": "time", "value": "2025-05-18T08:15:30Z" },
-            "isOnline": true
-        },
-        {
-            "firstName": "Botify",
-            "isBot": true,
-            "peerId": "11111111111111111111",
-            "accessHash": "22222222222222222222",
-            "unreadCount": 5,
-            "lastSeen": { "type": "status", "value": "typing..." },
-            "isOnline": true
-        },
-        {
-            "firstName": "Carlos",
-            "isBot": false,
-            "peerId": "33333333333333333333",
-            "accessHash": "44444444444444444444",
-            "unreadCount": 2,
-            "lastSeen": null,
-            "isOnline": false
-        },
-        {
-            "firstName": "Dana",
-            "isBot": false,
-            "peerId": "55555555555555555555",
-            "accessHash": "66666666666666666666",
-            "unreadCount": 10,
-            "lastSeen": { "type": "time", "value": "2025-05-17T22:45:00Z" },
-            "isOnline": false
-        },
-        {
-            "firstName": "EchoBot",
-            "isBot": true,
-            "peerId": "77777777777777777777",
-            "accessHash": "88888888888888888888",
-            "unreadCount": 0,
-            "lastSeen": { "type": "status", "value": "awaiting input" },
-            "isOnline": false
-        },
-        {
-            "firstName": "François",
-            "isBot": false,
-            "peerId": "99999999999999999999",
-            "accessHash": "00000000000000000000",
-            "unreadCount": 7,
-            "lastSeen": { "type": "time", "value": "2025-05-18T05:00:00Z" },
-            "isOnline": true
-        },
-        {
-            "firstName": "Gina",
-            "isBot": false,
-            "peerId": "10101010101010101010",
-            "accessHash": "20202020202020202020",
-            "unreadCount": 3,
-            "lastSeen": { "type": "status", "value": "away" },
-            "isOnline": false
-        },
-        {
-            "firstName": "Hubert",
-            "isBot": false,
-            "peerId": "30303030303030303030",
-            "accessHash": "40404040404040404040",
-            "unreadCount": 1,
-            "lastSeen": null,
-            "isOnline": false
-        },
-        {
-            "firstName": "Ivy",
-            "isBot": false,
-            "peerId": "50505050505050505050",
-            "accessHash": "60606060606060606060",
-            "unreadCount": 12,
-            "lastSeen": { "type": "time", "value": "2025-05-18T12:00:00Z" },
-            "isOnline": true
-        },
-        {
-            "firstName": "JasperBot",
-            "isBot": true,
-            "peerId": "70707070707070707070",
-            "accessHash": "80808080808080808080",
-            "unreadCount": 4,
-            "lastSeen": { "type": "status", "value": "processing" },
-            "isOnline": true
-        }
-    ]`
+	cwd, _ := os.Getwd()
+	fakeUsersPath := filepath.Join(cwd, "internal", "ui", "testUsers.txt")
+	testJson, err := os.ReadFile(fakeUsersPath)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
 	var fakeUsers []UserInfo
-	err := json.Unmarshal([]byte(testJson), &fakeUsers)
+	err = json.Unmarshal(testJson, &fakeUsers)
 
 	if err != nil {
 		fmt.Println(err.Error())
@@ -211,8 +61,29 @@ func GetFakeData() []list.Item {
 	return users
 }
 
-type Model struct {
-	Users list.Model
+func GetFakeChannels() []list.Item {
+	cwd, _ := os.Getwd()
+	fakeChannelsPath := filepath.Join(cwd, "internal", "ui", "fakeChannels.txt")
+	testJson, err := os.ReadFile(fakeChannelsPath)
+
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	var fakeChannels []ChannelInfo
+	err = json.Unmarshal(testJson, &fakeChannels)
+
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+
+	var channels []list.Item
+
+	for _, v := range fakeChannels {
+		channels = append(channels, list.Item(v))
+	}
+
+	return channels
+
 }
 
 func (m Model) Init() tea.Cmd {
@@ -225,16 +96,154 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
+		case "tab":
+			currentlyFoucsedOn := m.FocusedOn
+			if currentlyFoucsedOn == "sideBar" {
+				m.FocusedOn = "mainView"
+			} else if currentlyFoucsedOn == "mainView" {
+				m.FocusedOn = "input"
+			} else {
+				m.FocusedOn = "sideBar"
+			}
+			return m, nil
+		case "c":
+			if m.Mode == "users" {
+				m.Mode = "channels"
+			}
+			return m, nil
+		case "u":
+			if m.Mode == "channels" {
+				m.Mode = "users"
+			}
+			return m, nil
 		case "enter":
-			return m, tea.Quit
+			if m.Mode == "users" {
+				m.SelectedUser = m.Users.SelectedItem().(UserInfo)
+			}
+			if m.Mode == "channels" {
+				m.SelectedChannel = m.Channels.SelectedItem().(ChannelInfo)
+			}
+			//TODO: kick off new rpc request to js backend to get the conversation for new chat
+			return m, nil
 		}
+	case tea.WindowSizeMsg:
+		m.Width = msg.Width - 4
+		m.Height = msg.Height - 4
+		m.updateViewport()
 	}
 
 	var cmd tea.Cmd
-	m.Users, cmd = m.Users.Update(msg)
+
+	if m.FocusedOn == "input" {
+		m.Input.Focus()
+		m.Input, cmd = m.Input.Update(msg)
+	} else if m.FocusedOn == "sideBar" {
+		m.Input.Blur()
+        if m.Mode == "channels" {
+            m.Channels, cmd = m.Channels.Update(msg)
+        } else if m.Mode == "users"{
+			m.Users, cmd = m.Users.Update(msg)
+		} else {
+			//if we reach at this point we must be in group mode 
+			// as of wrting this im not handling the group mode 
+			// TODO: handle group mode
+		}
+
+	} else {
+		m.Vp, cmd = m.Vp.Update(msg)
+	}
 	return m, cmd
 }
 
+func (m *Model) updateViewport() {
+	sidebarWidth := m.Width * 30 / 100
+	mainWidth := m.Width - sidebarWidth
+	contentHeight := m.Height * 90 / 100
+
+	headerHeight := 2
+
+	w, h := mainWidth*70/100, contentHeight*90/100-headerHeight
+	m.Vp.Width = w
+	m.Vp.Height = h
+
+	m.Vp.YPosition = headerHeight
+
+	m.Vp.SetContent(formatMessages(m.Conversations))
+	m.Vp.GotoBottom()
+}
+
+func getItemBorder(isSelected bool) lipgloss.Border {
+	if isSelected {
+		return lipgloss.DoubleBorder()
+	}
+	return lipgloss.NormalBorder()
+}
+
+func setItemStyles(m Model) string {
+	sidebarWidth := m.Width * 30 / 100
+	mainWidth := m.Width - sidebarWidth
+	contentHeight := m.Height * 90 / 100
+	inputHeight := m.Height - contentHeight
+	m.Users.SetHeight(contentHeight - 4)
+	m.Users.SetWidth(sidebarWidth)
+	m.Channels.SetWidth(sidebarWidth)
+	m.Channels.SetHeight(contentHeight - 4)
+
+	mainStyle := getMainStyle(mainWidth, contentHeight, m)
+
+	var userNameOrChannelName string
+	if m.Mode == "users" {
+		userNameOrChannelName = m.SelectedUser.Title()
+	}
+	if m.Mode == "channels" {
+		userNameOrChannelName = m.SelectedChannel.FilterValue()
+	}
+
+	title := titleStyle.Render(userNameOrChannelName)
+	line := strings.Repeat("─", max(0, mainWidth-4-lipgloss.Width(title)))
+	headerView := lipgloss.JoinVertical(lipgloss.Center, title, line)
+
+	mainContent := lipgloss.JoinVertical(
+		lipgloss.Top,
+		headerView,
+		m.Vp.View(),
+	)
+
+	chatView := mainStyle.Render(mainContent)
+    
+	var sideBarContent string
+	if m.Mode == "users" {
+		sideBarContent = m.Users.View()
+	} else if m.Mode == "channels" {
+		sideBarContent = m.Channels.View()
+	} else {
+		sideBarContent = ""
+	}
+
+	sidebar := getSideBarStyles(sidebarWidth, contentHeight, m).Render(sideBarContent)
+
+	if m.FocusedOn == "input" {
+		m.Input.Focus()
+	}
+	inputView := getInputStyle(m, inputHeight).Render(m.Input.View())
+	row := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, chatView)
+	ui := lipgloss.JoinVertical(lipgloss.Top, row, inputView)
+
+	return ui
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
 func (m Model) View() string {
-	return m.Users.View()
+	m.Users.Title = "Chats"
+	m.Channels.Title = "Channels"
+	m.Channels.SetShowStatusBar(false)
+	m.Users.SetShowStatusBar(false)
+	ui := setItemStyles(m)
+	return ui
 }

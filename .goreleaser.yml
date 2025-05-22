@@ -35,8 +35,8 @@ nfpms:
       - cligram
     vendor: kumneger0
     homepage:  https://github.com/kumneger0/cligram
-    maintainer: "Tom Morelly <tommorelly@gmail.com>"
-    description: "A general purpose golang CLI template for Github and Gitlab"
+    maintainer: "Kumneger wondimu <Kumnegerwondimu@gmail.com>"
+    description: "CLI-based Telegram client"
     license: GPL-3.0
     formats:
       - apk
@@ -70,9 +70,9 @@ dockers:
   build_flag_templates:
   - "--pull"
   - "--label=io.artifacthub.package.readme-url=https://raw.githubusercontent.com/kumneger0/cligram/master/README.md"
-  - "--label=io.artifacthub.package.maintainers=[{\"name\":\"Tom Morelly\",\"email\":\"tommorelly@gmail.com\"}]"
+  - "--label=io.artifacthub.package.maintainers=[{\"name\":\"Kumneger wondimu\",\"email\":\"Kumnegerwondimu@gmail.com\"}]"
   - "--label=io.artifacthub.package.license=MIT"
-  - "--label=org.opencontainers.image.description=A general purpose golang CLI template for Github and Gitlab"
+  - "--label=org.opencontainers.image.description=CLI-based Telegram client"
   - "--label=org.opencontainers.image.created={{.Date}}"
   - "--label=org.opencontainers.image.name={{.ProjectName}}"
   - "--label=org.opencontainers.image.revision={{.FullCommit}}"
@@ -88,9 +88,9 @@ dockers:
   - "--pull"
   - "--label=io.artifacthub.package.readme-url=https://raw.githubusercontent.com/kumneger0/cligram/master/README.md"
   - "--label=io.artifacthub.package.logo-url=https://raw.githubusercontent.com/kumneger0/cligram/master/www/static/images/logo.png"
-  - "--label=io.artifacthub.package.maintainers=[{\"name\":\"Tom Morelly\",\"email\":\"tommorelly@gmail.com\"}]"
+  - "--label=io.artifacthub.package.maintainers=[{\"name\":\"Kumneger wondimu\",\"email\":\"Kumnegerwondimu@gmail.com\"}]"
   - "--label=io.artifacthub.package.license=MIT"
-  - "--label=org.opencontainers.image.description=A general purpose golang CLI template for Github and Gitlab"
+  - "--label=org.opencontainers.image.description=CLI-based Telegram client"
   - "--label=org.opencontainers.image.created={{.Date}}"
   - "--label=org.opencontainers.image.name={{.ProjectName}}"
   - "--label=org.opencontainers.image.revision={{.FullCommit}}"
