@@ -31,7 +31,7 @@ type LastSeen struct {
 	IsOnline    bool     `json:"isOnline"`
 }
 
-type ChannelInfo struct {
+type ChannelAndGroupInfo struct {
 	ChannelTitle            string  `json:"title"`
 	Username          *string `json:"username"`
 	ChannelID         string  `json:"channelId"`
@@ -68,11 +68,11 @@ func (u UserInfo) FilterValue() string {
 	return u.FirstName
 }
 
-func (c ChannelInfo) FilterValue() string {
+func (c ChannelAndGroupInfo) FilterValue() string {
 	return c.ChannelTitle
 }
 
-func (c ChannelInfo) Title() string {
+func (c ChannelAndGroupInfo) Title() string {
 	return c.ChannelTitle
 }
 
@@ -80,7 +80,9 @@ type Model struct {
 	Users           list.Model
 	SelectedUser    UserInfo
 	Channels        list.Model
-	SelectedChannel ChannelInfo
+	SelectedChannel ChannelAndGroupInfo
+    Groups          list.Model
+	SelectedGroup   ChannelAndGroupInfo
 	Height          int
 	Width           int
 	// mode = "users" | "channels" | "groups"
