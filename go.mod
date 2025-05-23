@@ -1,8 +1,6 @@
 module github.com/kumneger0/cligram
 
-go 1.23.0
-
-toolchain go1.23.1
+go 1.24.3
 
 require (
 	github.com/charmbracelet/bubbles v0.21.0

@@ -1,0 +1,102 @@
+[
+  {
+    "title": "Tech News Daily",
+    "username": "technewsdaily",
+    "channelId": "1234567890",
+    "accessHash": "a1b2c3d4e5f6g7h8i9j0",
+    "isCreator": false,
+    "isBroadcast": true,
+    "participantsCount": 15678,
+    "unreadCount": 23
+  },
+  {
+    "title": "Crypto Updates",
+    "username": "cryptoupdates",
+    "channelId": "2345678901",
+    "accessHash": "b2c3d4e5f6g7h8i9j0k1",
+    "isCreator": false,
+    "isBroadcast": true,
+    "participantsCount": 8943,
+    "unreadCount": 7
+  },
+  {
+    "title": "Programming Tips",
+    "username": "progtips",
+    "channelId": "3456789012",
+    "accessHash": "c3d4e5f6g7h8i9j0k1l2",
+    "isCreator": true,
+    "isBroadcast": true,
+    "participantsCount": 2341,
+    "unreadCount": 0
+  },
+  {
+    "title": "Private Group",
+    "username": null,
+    "channelId": "4567890123",
+    "accessHash": "d4e5f6g7h8i9j0k1l2m3",
+    "isCreator": true,
+    "isBroadcast": false,
+    "participantsCount": 56,
+    "unreadCount": 12
+  },
+  {
+    "title": "Gaming Community",
+    "username": "gamers",
+    "channelId": "5678901234",
+    "accessHash": "e5f6g7h8i9j0k1l2m3n4",
+    "isCreator": false,
+    "isBroadcast": false,
+    "participantsCount": 9876,
+    "unreadCount": 45
+  },
+  {
+    "title": "Secret Chat",
+    "username": null,
+    "channelId": "6789012345",
+    "accessHash": "f6g7h8i9j0k1l2m3n4o5",
+    "isCreator": false,
+    "isBroadcast": false,
+    "participantsCount": null,
+    "unreadCount": 3
+  },
+  {
+    "title": "News Network",
+    "username": "newsnetwork",
+    "channelId": "7890123456",
+    "accessHash": "g7h8i9j0k1l2m3n4o5p6",
+    "isCreator": false,
+    "isBroadcast": true,
+    "participantsCount": 45632,
+    "unreadCount": 18
+  },
+  {
+    "title": "Dev Team",
+    "username": "devteam",
+    "channelId": "8901234567",
+    "accessHash": "h8i9j0k1l2m3n4o5p6q7",
+    "isCreator": true,
+    "isBroadcast": false,
+    "participantsCount": 15,
+    "unreadCount": 0
+  },
+  {
+    "title": "Meme Central",
+    "username": "memecentral",
+    "channelId": "9012345678",
+    "accessHash": "i9j0k1l2m3n4o5p6q7r8",
+    "isCreator": false,
+    "isBroadcast": true,
+    "participantsCount": 23487,
+    "unreadCount": 56
+  },
+  {
+    "title": "Project Collaboration",
+    "username": null,
+    "channelId": "0123456789",
+    "accessHash": "j0k1l2m3n4o5p6q7r8s9",
+    "isCreator": true,
+    "isBroadcast": false,
+    "participantsCount": 8,
+    "unreadCount": 4
+  }
+]

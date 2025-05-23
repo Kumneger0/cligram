@@ -21,12 +21,16 @@ func newRootCmd(version string) *cobra.Command {
 			userList := list.New(users, ui.CustomDelegate{}, 10, 20)
             channels := ui.GetFakeChannels()
             channelList := (list.New(channels, ui.CustomDelegate{}, 10, 20))
+            groups := ui.GetFakeChannels()
+            groupList := (list.New(groups, ui.CustomDelegate{}, 10, 20))
+
+
 
 			userList.SetShowHelp(false)
             channelList.SetShowHelp(false)
-
+            groupList.SetShowHelp(false)
 			initiallySelectedUser := users[0].(ui.UserInfo)
-			initiallySelectedChannel := channels[0].(ui.ChannelInfo)
+			initiallySelectedChannel := channels[0].(ui.ChannelAndGroupInfo)
 
 			input := textinput.New()
 			input.Placeholder = "Type a message..."
@@ -38,8 +42,10 @@ func newRootCmd(version string) *cobra.Command {
 				Users:        userList,
 				SelectedUser: initiallySelectedUser,
 				SelectedChannel: initiallySelectedChannel,
+				Groups: groupList,
+				SelectedGroup: groups[0].(ui.ChannelAndGroupInfo),
 				Channels: channelList,
-			    Mode: "channels",
+			    Mode: "users",
 				Conversations: ui.FakeConversations(),
 				FocusedOn: "sideBar",
 		        Vp: viewport.New(0, 0),
