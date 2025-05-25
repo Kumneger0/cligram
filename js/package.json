@@ -53,6 +53,7 @@
 		"date-fns": "^4.1.0",
 		"debounce": "^2.2.0",
 		"dotenv": "^16.4.7",
+		"flatted": "^3.3.3",
 		"input": "^1.0.1",
 		"kolorist": "^1.8.0",
 		"lru-cache": "^11.1.0",
