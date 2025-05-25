@@ -120,8 +120,8 @@ export async function searchUsers(
 		.map((user) => {
 			return {
 				firstName: user.firstName ?? '',
-				peerId: user.id,
-				accessHash: user.accessHash as unknown as bigInt.BigInteger,
+				peerId: user.id.toString(),
+				accessHash: user?.accessHash?.toString() ?? "",
 				isBot: user.bot ?? false,
 				unreadCount: 0,
 				lastSeen: null,
@@ -179,10 +179,7 @@ export async function searchUsers(
 export async function getUserChats<T extends ChatType>(
 	client: TelegramClient,
 	type: T
-): Promise<{
-	dialogs: T extends 'channel' | 'group' ? ChannelInfo[] : UserInfo[];
-	lastDialog: DialogInfo | null;
-}> {
+): Promise<T extends 'channel' | 'group' ? ChannelInfo[] : UserInfo[]> {
 	if (!client.connected) {
 		await client.connect();
 	}
@@ -196,11 +193,11 @@ export async function getUserChats<T extends ChatType>(
 		const groupOrChannels =
 			type === 'channel'
 				? result.filter((dialog) => {
-						return dialog.dialog.peer.className === 'PeerChannel';
-					})
+					return dialog.dialog.peer.className === 'PeerChannel';
+				})
 				: result.filter((dialog) => {
-						return dialog.isGroup;
-					});
+					return dialog.isGroup;
+				});
 
 		const channelsInfo = await Promise.all(
 			groupOrChannels.map(async (chan) => {
@@ -238,10 +235,8 @@ export async function getUserChats<T extends ChatType>(
 				} satisfies ChannelInfo;
 			})
 		);
-		return {
-			dialogs: channelsInfo as T extends 'channel' | 'group' ? ChannelInfo[] : UserInfo[],
-			lastDialog
-		};
+		return channelsInfo as T extends 'channel' | 'group' ? ChannelInfo[] : UserInfo[]
+
 	}
 
 	if (type === 'user') {
@@ -260,6 +255,7 @@ export async function getUserChats<T extends ChatType>(
 					}
 					return {
 						...user,
+						accessHash: user.accessHash.toString(),
 						unreadCount: unreadCount
 					} satisfies UserInfo;
 				} catch (err) {
@@ -276,15 +272,11 @@ export async function getUserChats<T extends ChatType>(
 				return !isBot && firstName;
 			});
 
-		return {
-			dialogs: chatUsers as T extends 'channel' | 'group' ? ChannelInfo[] : UserInfo[],
-			lastDialog
-		};
+		return chatUsers as T extends 'channel' | 'group' ? ChannelInfo[] : UserInfo[]
+
 	}
-	return {
-		dialogs: [] as unknown as T extends 'channel' | 'group' ? ChannelInfo[] : UserInfo[],
-		lastDialog: null
-	};
+	return [] as unknown as T extends 'channel' | 'group' ? ChannelInfo[] : UserInfo[]
+
 }
 
 export async function getUserInfo(
@@ -307,20 +299,20 @@ export async function getUserInfo(
 		return {
 			firstName: user.firstName,
 			isBot: user.bot,
-			peerId: userId,
-			accessHash: user.accessHash as unknown as bigInt.BigInteger,
+			peerId: userId.toString() ?? "",
+			accessHash: user?.accessHash?.toString(),
 			lastSeen: wasOnline
 				? {
-						type: 'time',
-						value: date!
-					}
+					type: 'time',
+					value: date!
+				}
 				: {
-						type: 'status',
-						value: user.status?.className
-							? (lastSeenMessages[user.status?.className as keyof typeof lastSeenMessages] ??
-								'last seen a long time ago')
-							: 'last seen a long time ago'
-					},
+					type: 'status',
+					value: user.status?.className
+						? (lastSeenMessages[user.status?.className as keyof typeof lastSeenMessages] ??
+							'last seen a long time ago')
+						: 'last seen a long time ago'
+				},
 			isOnline: user.status?.className === 'UserStatusOnline'
 		} satisfies Omit<UserInfo, 'unreadCount'>;
 	} catch (err) {
