@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -161,7 +162,7 @@ func (c *JsonRpcClient) GetUserChannel() tea.Cmd {
 }
 
 type UserGroupsMsg struct {
-	Err      error
+	Err error
 	//groupds and channels share same propertiy so we don't have to redefine its types use this instead
 	Response *UserChannelResponse
 }
@@ -181,6 +182,111 @@ func (c *JsonRpcClient) GetUserGroups() tea.Cmd {
 		}
 		return UserGroupsMsg{Err: nil, Response: &response}
 	}
+}
+
+type PeerInfoParams struct {
+	AccessHash                  string `json:"accessHash"`
+	PeerID                      string `json:"peerId"`
+	UserFirstNameOrChannelTitle string `json:"userFirtNameOrChannelTitle"`
+}
+
+type ChatType string
+
+const (
+	UserChat    ChatType = "user"
+	GroupChat   ChatType = "group"
+	ChannelChat ChatType = "channel"
+)
+
+type IterParams map[string]interface{}
+
+type UserConversationResponse struct {
+	JsonRPC string `json:"jsonrpc"`
+	ID      int    `json:"id"`
+	Error   *struct {
+		Code    int         `json:"code"`
+		Message string      `json:"message"`
+		Data    interface{} `json:"data,omitempty"`
+	} `json:"error,omitempty"`
+	Result []FormattedMessage `json:"result,omitempty"`
+}
+
+func (c *JsonRpcClient) GetMessages(
+	pInfo PeerInfoParams,
+	cType ChatType,
+	offsetID *int,
+	chatAreaWidth *int,
+	itParams IterParams,
+) (UserConversationResponse, error) {
+	paramsFixed := make([]interface{}, 5)
+	paramsFixed[0] = pInfo
+	paramsFixed[1] = cType
+
+	if offsetID != nil {
+		paramsFixed[2] = *offsetID
+	} else {
+		paramsFixed[2] = nil
+	}
+
+	if chatAreaWidth != nil {
+		paramsFixed[3] = *chatAreaWidth
+	} else {
+		paramsFixed[3] = nil
+	}
+
+	if itParams != nil {
+		paramsFixed[4] = itParams
+	} else {
+		paramsFixed[4] = nil
+	}
+
+	allMesssages, err := c.Call("getAllMessages", paramsFixed)
+	if err != nil {
+		fmt.Println("There was An Error occured", err.Error())
+	}
+
+	cwd, _ := os.Getwd()
+	file, _ := os.Create(filepath.Join(cwd, "logs.json"))
+
+
+	writeLosToFIle(file, allMesssages)
+
+
+	var formatedMessage UserConversationResponse
+
+	if err := json.Unmarshal(allMesssages, &formatedMessage); err != nil {
+		cwd, _ := os.Getwd()
+		file, _ := os.Create(filepath.Join(cwd, "logs.json"))
+           
+		writeLosToFIle(file, []byte(err.Error()))
+
+		return UserConversationResponse{}, err
+	}
+
+	return formatedMessage, nil
+}
+
+func writeLosToFIle(file *os.File, content []byte) error {
+	_, err := file.Write(content)
+	return err
+}
+
+type FormattedMessage struct {
+	ID                   int64     `json:"id"`
+	Sender               string    `json:"sender"`
+	Content              string    `json:"content"`
+	IsFromMe             bool      `json:"isFromMe"`
+	Media                *string   `json:"media,omitempty"`
+	Date                 time.Time `json:"date"`
+	IsUnsupportedMessage bool      `json:"isUnsupportedMessage"`
+	WebPage              *struct {
+		URL        string  `json:"url"`
+		DisplayURL *string `json:"displayUrl,omitempty"`
+	} `json:"webPage,omitempty"`
+	Document *struct {
+		Document string `json:"document"`
+	} `json:"document,omitempty"`
+	FromID *string `json:"fromId"`
 }
 
 func (c *JsonRpcClient) Call(method string, params interface{}) ([]byte, error) {
