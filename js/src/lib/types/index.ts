@@ -109,8 +109,8 @@ export type MessagesSlice = {
 export type UserInfo = {
 	firstName: string;
 	isBot: boolean;
-	peerId: bigInt.BigInteger;
-	accessHash: bigInt.BigInteger;
+	peerId: string;
+	accessHash: string;
 	unreadCount: number;
 	lastSeen:
 		| {

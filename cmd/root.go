@@ -2,33 +2,114 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sync"
 
 	list "github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	viewport "github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/kumneger0/cligram/internal/rpc"
 	ui "github.com/kumneger0/cligram/internal/ui"
 	"github.com/spf13/cobra"
 )
+
+func getJsFilePath() string {
+	cwd, _ := os.Getwd()
+	jsFilePath := filepath.Join(cwd, "js", "src", "index.ts")
+
+	return jsFilePath
+}
+
+func startSeparateJsProces(wg *sync.WaitGroup) {
+	jsFilePath := getJsFilePath()
+
+	jsExcute := exec.Command("bun", jsFilePath)
+
+	stdin, err := jsExcute.StdinPipe()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create stdin pipe: %v\n", err)
+		wg.Done()
+		return
+	}
+
+	stdout, err := jsExcute.StdoutPipe()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create stdout pipe: %v\n", err)
+		stdin.Close()
+		wg.Done()
+		return
+	}
+
+	logDir := filepath.Join(os.TempDir(), "tg-cli-logs")
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create log directory: %v\n", err)
+	}
+
+	logFile, err := os.Create(filepath.Join(logDir, "js-process.log"))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create log file, stderr will be discarded: %v\n", err)
+		jsExcute.Stderr = nil
+	} else {
+		jsExcute.Stderr = logFile
+		defer func() {
+			logFile.Close()
+		}()
+	}
+
+	if err := jsExcute.Start(); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to start JavaScript process: %v\n", err)
+		stdin.Close()
+		if logFile != nil {
+			logFile.Close()
+		}
+		wg.Done()
+		return
+	}
+
+	rpc.JsProcess = jsExcute.Process
+
+	rpc.RpcClient = &rpc.JsonRpcClient{
+		Stdin:  stdin,
+		Stdout: stdout,
+		Cmd:    jsExcute,
+		NextID: 1,
+	}
+
+	go func() {
+		if err := jsExcute.Wait(); err != nil {
+			if logFile != nil {
+				fmt.Fprintf(logFile, "JavaScript process exited with error: %v\n", err)
+			}
+		}
+	}()
+
+	wg.Done()
+}
 
 func newRootCmd(version string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cligram",
 		Short: "cligram a cli based telegram client",
 		RunE: func(cmd *cobra.Command, args []string) error {
+
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go startSeparateJsProces(&wg)
+
 			users := ui.GetFakeData()
 
 			userList := list.New(users, ui.CustomDelegate{}, 10, 20)
-            channels := ui.GetFakeChannels()
-            channelList := (list.New(channels, ui.CustomDelegate{}, 10, 20))
-            groups := ui.GetFakeChannels()
-            groupList := (list.New(groups, ui.CustomDelegate{}, 10, 20))
-
-
+			channels := ui.GetFakeChannels()
+			channelList := (list.New(channels, ui.CustomDelegate{}, 10, 20))
+			groups := ui.GetFakeChannels()
+			groupList := (list.New(groups, ui.CustomDelegate{}, 10, 20))
 
 			userList.SetShowHelp(false)
-            channelList.SetShowHelp(false)
-            groupList.SetShowHelp(false)
+			channelList.SetShowHelp(false)
+			groupList.SetShowHelp(false)
 			initiallySelectedUser := users[0].(ui.UserInfo)
 			initiallySelectedChannel := channels[0].(ui.ChannelAndGroupInfo)
 
@@ -38,17 +119,17 @@ func newRootCmd(version string) *cobra.Command {
 			input.CharLimit = 256
 
 			m := ui.Model{
-				Input: input,
-				Users:        userList,
-				SelectedUser: initiallySelectedUser,
+				Input:           input,
+				Users:           userList,
+				SelectedUser:    initiallySelectedUser,
 				SelectedChannel: initiallySelectedChannel,
-				Groups: groupList,
-				SelectedGroup: groups[0].(ui.ChannelAndGroupInfo),
-				Channels: channelList,
-			    Mode: "users",
-				Conversations: ui.FakeConversations(),
-				FocusedOn: "sideBar",
-		        Vp: viewport.New(0, 0),
+				Groups:          groupList,
+				SelectedGroup:   groups[0].(ui.ChannelAndGroupInfo),
+				Channels:        channelList,
+				Mode:            "users",
+				Conversations:   ui.FakeConversations(),
+				FocusedOn:       "sideBar",
+				Vp:              viewport.New(0, 0),
 			}
 			p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
@@ -57,7 +138,6 @@ func newRootCmd(version string) *cobra.Command {
 				return fmt.Errorf("failed to start TUI: %w", err)
 			}
 
-			fmt.Println("Exited TUI normally.")
 			return nil
 		},
 	}

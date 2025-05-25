@@ -2,13 +2,42 @@
 import { Buffer } from 'buffer';
 import { stderr, stdin, stdout } from 'process';
 
+import { TelegramClient } from 'telegram';
 import { RPCError as TelegramRpcError } from 'telegram/errors/index.js';
 import { LogLevel } from 'telegram/extensions/Logger.js';
+import { login, logout } from './commands';
 import { getTelegramClient } from './lib/utils/auth';
 import { getUserChats, getUserInfo, searchUsers, setUserPrivacy } from './telegram/client';
 import { deleteMessage, editMessage, sendMessage } from './telegram/messages';
-import { TelegramClient } from 'telegram';
-import { login, logout } from './commands';
+
+// import { stringify } from 'flatted';
+
+
+const stringify = JSON.stringify
+
+
+
+/**
+ * gram has logs that we don't need i tried setting log level to none but it didn't work
+ * so we just patch the global console object to ignore all logs
+ */
+console.log = () => { };
+console.error = () => { };
+console.warn = () => { };
+console.info = () => { };
+console.debug = () => { };
+console.trace = () => { };
+console.dir = () => { };
+console.table = () => { };
+console.group = () => { };
+console.groupEnd = () => { };
+console.time = () => { };
+console.timeEnd = () => { };
+console.timeLog = () => { };
+console.count = () => { };
+console.countReset = () => { };
+console.clear = () => { };
+console.assert = () => { };
 
 const arg = process.argv[2]
 
@@ -109,7 +138,7 @@ async function readMessage(): Promise<IncomingMessage> {
 	);
 
 	if (!contentLengthHeader) {
-		stderr.write('Error: Missing Content-Length header\n' + JSON.stringify(headers) + '\n');
+		stderr.write('Error: Missing Content-Length header\n' + stringify(headers) + '\n');
 		throw new Error('Missing Content-Length header');
 	}
 	const length = parseInt(headers[contentLengthHeader!]!, 10);
@@ -141,7 +170,7 @@ async function readMessage(): Promise<IncomingMessage> {
 }
 
 function writeToStdout(msg: RpcSuccess | RpcErrorResponse): void {
-	const json = JSON.stringify(msg);
+	const json = stringify(msg);
 	const header = `Content-Length: ${Buffer.byteLength(json, 'utf8')}\r\n\r\n`;
 	stdout.write(header + json);
 }
@@ -162,6 +191,8 @@ function createRpcError(
 let telegramClientInstance: TelegramClient | null = null;
 
 async function startup() {
+
+
 	try {
 		if (arg === "login") {
 			await login()
@@ -173,9 +204,9 @@ async function startup() {
 			return
 		}
 
-		console.error('Attempting to get Telegram client...');
 		const client = await getTelegramClient();
-		console.error('getTelegramClient returned.');
+		if (!client.connected) await client.connect()
+
 
 		if (client) {
 			telegramClientInstance = client;
@@ -265,6 +296,7 @@ async function messageProcessingLoop(client: TelegramClient) {
 						result = await handlers.searchUsers(client, ...request.params);
 						break;
 					case 'getUserChats':
+						// announce that we are fetching user chats
 						result = await handlers.getUserChats(client, ...request.params);
 						break;
 					case 'getUserInfo':

@@ -119,7 +119,7 @@ export const onMessage = (
 		}
 	}
 
-	const updatedUserChats = userChats?.dialogs?.map((u) => {
+	const updatedUserChats = userChats?.map((u) => {
 		if (currentChatType === 'user') {
 			const userToUpdate = u as UserInfo;
 			if (userToUpdate.firstName === user?.firstName) {
