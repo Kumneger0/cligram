@@ -8,7 +8,7 @@ import { LogLevel } from 'telegram/extensions/Logger.js';
 import { login, logout } from './commands';
 import { getTelegramClient } from './lib/utils/auth';
 import { getUserChats, getUserInfo, searchUsers, setUserPrivacy } from './telegram/client';
-import { deleteMessage, editMessage, sendMessage } from './telegram/messages';
+import { deleteMessage, editMessage, getAllMessages, sendMessage } from './telegram/messages';
 
 // import { stringify } from 'flatted';
 
@@ -48,7 +48,9 @@ const handlers = {
 	searchUsers,
 	getUserChats,
 	getUserInfo,
+	getAllMessages
 };
+
 
 type RestParameters<TFunc extends (client: any, ...args: any[]) => any> = TFunc extends (
 	client: TelegramClient,
@@ -302,6 +304,9 @@ async function messageProcessingLoop(client: TelegramClient) {
 					case 'getUserInfo':
 						result = await handlers.getUserInfo(client, ...request.params);
 						break;
+					case "getAllMessages":
+						result = await handlers.getAllMessages(client, ...request.params)
+						break
 					default:
 						writeToStdout(
 							createRpcError(

@@ -231,6 +231,39 @@ func handleUserChange(m *Model) (Model, tea.Cmd) {
 		m.SelectedGroup = m.Groups.SelectedItem().(ChannelAndGroupInfo)
 	}
 
+	pInfo := rpc.PeerInfoParams{AccessHash: m.SelectedUser.AccessHash,
+		PeerID:                      m.SelectedUser.PeerID,
+		UserFirstNameOrChannelTitle: m.SelectedUser.FirstName,
+	}
+
+	result, err := rpc.RpcClient.GetMessages(pInfo, "user", nil, nil, nil)
+	if err != nil {
+		fmt.Println(strings.Repeat("uff there is something off", 10), err.Error())
+		return *m, nil
+	}
+
+	var formatedMessages []FormattedMessage
+
+	for _, v := range result.Result {
+		formatedMessages = append(formatedMessages, FormattedMessage{
+			ID:                   v.ID,
+			Sender:               v.Sender,
+			Content:              v.Content,
+			IsFromMe:             v.IsFromMe,
+			Media:                v.Media,
+			Date:                 v.Date,
+			IsUnsupportedMessage: v.IsUnsupportedMessage,
+			WebPage:              v.WebPage,
+			Document:             v.Document,
+			FromID:               v.FromID,
+		})
+
+	}
+
+	m.Conversations = formatedMessages
+
+	m.updateViewport()
+
 	//TODO: kick off new rpc request to js backend to get the conversation for new chat
 	return *m, nil
 }
@@ -295,8 +328,8 @@ func setItemStyles(m *Model) string {
 	contentHeight := m.Height * 90 / 100
 	inputHeight := m.Height - contentHeight
 
-	//there are some extra spaces at top and bottom if we incude the becomes ugly so 
-	// this one is a solution i found 
+	//there are some extra spaces at top and bottom if we incude the becomes ugly so
+	// this one is a solution i found
 	// feels a bit hacky
 	m.Users.SetHeight(contentHeight - 4)
 	m.Users.SetWidth(sidebarWidth)
@@ -304,7 +337,7 @@ func setItemStyles(m *Model) string {
 	m.Channels.SetHeight(contentHeight - 4)
 
 	m.Groups.SetWidth(sidebarWidth)
-	
+
 	m.Groups.SetHeight(contentHeight - 4)
 
 	mainStyle := getMainStyle(mainWidth, contentHeight, m)

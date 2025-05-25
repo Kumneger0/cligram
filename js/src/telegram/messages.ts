@@ -24,13 +24,13 @@ const getEntity = ({ peer, type }: GetEntityTypes) => {
 	const entity =
 		type === 'user'
 			? new Api.InputPeerUser({
-					userId: peer.peerId,
-					accessHash: peer.accessHash
-				})
+				userId: peer.peerId,
+				accessHash: peer.accessHash
+			})
 			: new Api.InputPeerChannel({
-					channelId: peer.peerId,
-					accessHash: peer.accessHash
-				});
+				channelId: peer.peerId,
+				accessHash: peer.accessHash
+			});
 	return entity;
 };
 
@@ -290,28 +290,23 @@ const getOrganizedDocument = () => {
  * @returns An array of formatted messages.
  */
 export async function getAllMessages<T extends ChatType>(
-	{
-		client,
-		peerInfo: { accessHash, peerId: userId, userFirtNameOrChannelTitle },
-		offsetId,
-		chatAreaWidth
-	}: {
-		client: TelegramClient;
-		peerInfo: {
-			accessHash: bigInt.BigInteger | string;
-			peerId: bigInt.BigInteger | string;
-			userFirtNameOrChannelTitle: string;
-		};
-		offsetId?: number;
-		chatAreaWidth?: number;
+	client: TelegramClient,
+	peerInfo: {
+		accessHash: bigInt.BigInteger | string;
+		peerId: bigInt.BigInteger | string;
+		userFirtNameOrChannelTitle: string;
 	},
 	type: T,
+	offsetId?: number,
+	chatAreaWidth?: number,
 	iterParams?: Partial<IterMessagesParams>
 ): Promise<FormattedMessage[]> {
 	try {
 		if (!client.connected) {
 			await client.connect();
 		}
+
+		const { accessHash, peerId: userId, userFirtNameOrChannelTitle } = peerInfo
 
 		const messages = [];
 		const entity = getEntity({
@@ -320,7 +315,7 @@ export async function getAllMessages<T extends ChatType>(
 		});
 		const entityLike = type === 'group' ? userId : entity;
 		for await (const message of client.iterMessages(entityLike, {
-			limit: 10,
+			limit: 50,
 			offsetId,
 			...iterParams
 		})) {
@@ -342,8 +337,8 @@ export async function getAllMessages<T extends ChatType>(
 					const date = new Date(message.date * 1000);
 					const imageString = await (buffer
 						? terminalImage.buffer(new Uint8Array(buffer), {
-								width
-							})
+							width
+						})
 						: null);
 
 					return {
