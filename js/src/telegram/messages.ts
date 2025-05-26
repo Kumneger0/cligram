@@ -186,7 +186,6 @@ export const sendMessage = async (
 
 			return {
 				messageId: result.id,
-				result
 			};
 		}
 
@@ -197,13 +196,11 @@ export const sendMessage = async (
 		const result = await client.sendMessage(entityLike, sendMessageParam);
 		return {
 			messageId: result.id,
-			result
 		};
 	} catch (err) {
-		console.log('Error sending message:', err);
+		  throw new Error((err as Error).message)
 		return {
 			messageId: null,
-			result: null
 		};
 	}
 };
@@ -305,7 +302,6 @@ export async function getAllMessages<T extends ChatType>(
 		if (!client.connected) {
 			await client.connect();
 		}
-
 		const { accessHash, peerId: userId, userFirtNameOrChannelTitle } = peerInfo
 
 		const messages = [];
@@ -363,14 +359,16 @@ export async function getAllMessages<T extends ChatType>(
 			)
 		)
 			.map(({ content, ...rest }) => {
-				return { content: content.trim(), ...rest };
+				return { content: content?.trim(), ...rest };
 			})
 			.filter((msg) => {
-				return msg.content.length > 0;
+				return msg?.content?.length > 0;
 			});
 
 		return orgnizedMessages;
 	} catch (err) {
+		const error = err as Error
+		throw new Error(`${error.message} ${error.stack} ${error.name} ${error.cause}`)
 		return [];
 	}
 }

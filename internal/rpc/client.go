@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -48,119 +47,6 @@ type BaseJsonRpcResponse struct {
 	} `json:"error,omitempty"`
 }
 
-type UserChatsMsg struct {
-	Response *UserChatsJsonRpcResponse
-	Err      error
-}
-
-type DuplicatedLastSeen struct {
-	Type   string
-	Time   *time.Time
-	Status *string
-}
-
-type DuplicatedUserInfo struct {
-	FirstName   string             `json:"firstName"`
-	IsBot       bool               `json:"isBot"`
-	PeerID      string             `json:"peerId"`
-	AccessHash  string             `json:"accessHash"`
-	UnreadCount int                `json:"unreadCount"`
-	LastSeen    DuplicatedLastSeen `json:"lastSeen"`
-	IsOnline    bool               `json:"isOnline"`
-}
-
-// there is a lot of room here for refacoring
-// the the first one is i redefined userInfo here b/c of import cycle
-// figure out and eliminate
-func (du DuplicatedUserInfo) Title() string {
-	return du.FirstName
-}
-
-func (du DuplicatedUserInfo) FilterValue() string {
-	return du.FirstName
-}
-
-type UserChatsJsonRpcResponse struct {
-	JsonRPC string `json:"jsonrpc"`
-	ID      int    `json:"id"`
-	Error   *struct {
-		Code    int         `json:"code"`
-		Message string      `json:"message"`
-		Data    interface{} `json:"data,omitempty"`
-	} `json:"error,omitempty"`
-	Result []DuplicatedUserInfo `json:"result,omitempty"`
-}
-
-func (c *JsonRpcClient) GetUserChats() tea.Cmd {
-	userChatRpcResponse, err := c.Call("getUserChats", []string{"user"})
-
-	return func() tea.Msg {
-		if err != nil {
-			return UserChatsMsg{Err: err}
-		}
-		var response UserChatsJsonRpcResponse
-		if err := json.Unmarshal(userChatRpcResponse, &response); err != nil {
-			return UserChatsMsg{Err: fmt.Errorf("failed to unmarshal response JSON '%s': %w", string(userChatRpcResponse), err)}
-		}
-		if response.Error != nil {
-			return UserChatsMsg{Err: fmt.Errorf(response.Error.Message)}
-		}
-		return UserChatsMsg{Err: nil, Response: &response}
-	}
-}
-
-type DuplicatedChannelAndGroupInfo struct {
-	ChannelTitle      string  `json:"title"`
-	Username          *string `json:"username"`
-	ChannelID         string  `json:"channelId"`
-	AccessHash        string  `json:"accessHash"`
-	IsCreator         bool    `json:"isCreator"`
-	IsBroadcast       bool    `json:"isBroadcast"`
-	ParticipantsCount *int    `json:"participantsCount"`
-	UnreadCount       int     `json:"unreadCount"`
-}
-
-func (dc DuplicatedChannelAndGroupInfo) Title() string {
-	return dc.ChannelTitle
-}
-
-func (dc DuplicatedChannelAndGroupInfo) FilterValue() string {
-	return dc.ChannelTitle
-}
-
-type UserChannelResponse struct {
-	JsonRPC string `json:"jsonrpc"`
-	ID      int    `json:"id"`
-	Error   *struct {
-		Code    int         `json:"code"`
-		Message string      `json:"message"`
-		Data    interface{} `json:"data,omitempty"`
-	} `json:"error,omitempty"`
-	Result []DuplicatedChannelAndGroupInfo `json:"result,omitempty"`
-}
-
-type UserChannelMsg struct {
-	Err      error
-	Response *UserChannelResponse
-}
-
-func (c *JsonRpcClient) GetUserChannel() tea.Cmd {
-	userChannelRpcResponse, err := c.Call("getUserChats", []string{"channel"})
-	return func() tea.Msg {
-		if err != nil {
-			return UserChannelMsg{Err: err}
-		}
-		var response UserChannelResponse
-		if err := json.Unmarshal(userChannelRpcResponse, &response); err != nil {
-			return UserChannelMsg{Err: fmt.Errorf("failed to unmarshal response JSON '%s': %w", string(userChannelRpcResponse), err)}
-		}
-		if response.Error != nil {
-			return UserChannelMsg{Err: fmt.Errorf(response.Error.Message)}
-		}
-		return UserChannelMsg{Err: nil, Response: &response}
-	}
-}
-
 type UserGroupsMsg struct {
 	Err error
 	//groupds and channels share same propertiy so we don't have to redefine its types use this instead
@@ -184,110 +70,18 @@ func (c *JsonRpcClient) GetUserGroups() tea.Cmd {
 	}
 }
 
-type PeerInfoParams struct {
-	AccessHash                  string `json:"accessHash"`
-	PeerID                      string `json:"peerId"`
-	UserFirstNameOrChannelTitle string `json:"userFirtNameOrChannelTitle"`
-}
-
-type ChatType string
-
-const (
-	UserChat    ChatType = "user"
-	GroupChat   ChatType = "group"
-	ChannelChat ChatType = "channel"
-)
-
-type IterParams map[string]interface{}
-
-type UserConversationResponse struct {
-	JsonRPC string `json:"jsonrpc"`
-	ID      int    `json:"id"`
-	Error   *struct {
-		Code    int         `json:"code"`
-		Message string      `json:"message"`
-		Data    interface{} `json:"data,omitempty"`
-	} `json:"error,omitempty"`
-	Result []FormattedMessage `json:"result,omitempty"`
-}
-
-func (c *JsonRpcClient) GetMessages(
-	pInfo PeerInfoParams,
-	cType ChatType,
-	offsetID *int,
-	chatAreaWidth *int,
-	itParams IterParams,
-) (UserConversationResponse, error) {
-	paramsFixed := make([]interface{}, 5)
-	paramsFixed[0] = pInfo
-	paramsFixed[1] = cType
-
-	if offsetID != nil {
-		paramsFixed[2] = *offsetID
-	} else {
-		paramsFixed[2] = nil
-	}
-
-	if chatAreaWidth != nil {
-		paramsFixed[3] = *chatAreaWidth
-	} else {
-		paramsFixed[3] = nil
-	}
-
-	if itParams != nil {
-		paramsFixed[4] = itParams
-	} else {
-		paramsFixed[4] = nil
-	}
-
-	allMesssages, err := c.Call("getAllMessages", paramsFixed)
-	if err != nil {
-		fmt.Println("There was An Error occured", err.Error())
-	}
-
-	cwd, _ := os.Getwd()
-	file, _ := os.Create(filepath.Join(cwd, "logs.json"))
-
-
-	writeLosToFIle(file, allMesssages)
-
-
-	var formatedMessage UserConversationResponse
-
-	if err := json.Unmarshal(allMesssages, &formatedMessage); err != nil {
-		cwd, _ := os.Getwd()
-		file, _ := os.Create(filepath.Join(cwd, "logs.json"))
-           
-		writeLosToFIle(file, []byte(err.Error()))
-
-		return UserConversationResponse{}, err
-	}
-
-	return formatedMessage, nil
-}
 
 func writeLosToFIle(file *os.File, content []byte) error {
 	_, err := file.Write(content)
 	return err
 }
 
-type FormattedMessage struct {
-	ID                   int64     `json:"id"`
-	Sender               string    `json:"sender"`
-	Content              string    `json:"content"`
-	IsFromMe             bool      `json:"isFromMe"`
-	Media                *string   `json:"media,omitempty"`
-	Date                 time.Time `json:"date"`
-	IsUnsupportedMessage bool      `json:"isUnsupportedMessage"`
-	WebPage              *struct {
-		URL        string  `json:"url"`
-		DisplayURL *string `json:"displayUrl,omitempty"`
-	} `json:"webPage,omitempty"`
-	Document *struct {
-		Document string `json:"document"`
-	} `json:"document,omitempty"`
-	FromID *string `json:"fromId"`
+
+type PeerInfo struct {
+	AccessHash string `json:"accessHash"`
+	PeerID     string `json:"peerId"`
 }
+
 
 func (c *JsonRpcClient) Call(method string, params interface{}) ([]byte, error) {
 	c.Mu.Lock()
@@ -367,51 +161,11 @@ func (c *JsonRpcClient) Call(method string, params interface{}) ([]byte, error) 
 		return nil, fmt.Errorf("short read for JSON payload: expected %d bytes, got %d", contentLength, n)
 	}
 
+	cwd, _ := os.Getwd()
+	file, _ := os.Create(filepath.Join(cwd, "logs.json"))
+
+    //TODO:don't forget to remove this is just for debuging purpose 
+	writeLosToFIle(file, jsonPayloadBytes)
+
 	return jsonPayloadBytes, nil
-}
-
-// this needs to be removed this is redifinded
-// ideally we should use the LastSeen struct it has UnmarshalJSON function
-// i just redefined b/c of import cyle issue
-// will remove this after refactoring the the code base
-// this was just quick fix
-// TODO:remove this function it is duplicated
-
-func (ls *DuplicatedLastSeen) UnmarshalJSON(data []byte) error {
-	if string(data) == "null" {
-		ls.Type, ls.Time, ls.Status = "", nil, nil
-		return nil
-	}
-
-	var aux struct {
-		Type  string          `json:"type"`
-		Value json.RawMessage `json:"value"`
-	}
-	if err := json.Unmarshal(data, &aux); err != nil {
-		return fmt.Errorf("LastSeen: cannot unmarshal wrapper: %w", err)
-	}
-
-	ls.Type = aux.Type
-
-	switch aux.Type {
-	case "time":
-		var t time.Time
-		if err := json.Unmarshal(aux.Value, &t); err != nil {
-			return fmt.Errorf("LastSeen: invalid time value: %w", err)
-		}
-		ls.Time = &t
-		ls.Status = nil
-
-	case "status":
-		var s string
-		if err := json.Unmarshal(aux.Value, &s); err != nil {
-			return fmt.Errorf("LastSeen: invalid status value: %w", err)
-		}
-		ls.Status = &s
-		ls.Time = nil
-
-	default:
-		return fmt.Errorf("LastSeen: unknown type %q", aux.Type)
-	}
-	return nil
 }
