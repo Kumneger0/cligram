@@ -169,12 +169,22 @@ export async function searchUsers(
  * @template T - The type of peer to retrieve ('channel' or 'user')
  * @param {TelegramClient} client - The Telegram client instance
  * @param {T} type - The type of peers to retrieve ('channel' or 'user')
- * @returns {Promise<{
- *   dialogs: T extends 'channel' ? ChannelInfo[] : UserInfo[],
- *   lastDialog: Dialog | null
- * }>} A promise that resolves to:
+ * @returns {Promise< T extends 'channel' ? ChannelInfo[] : UserInfo[]>} A promise that resolves to:
  *   - dialogs: Array of channel info or user info objects
- *   - lastDialog: The last dialog in the current batch, used for pagination
+ */
+/**
+ * Retrieves a list of chats for the connected Telegram client, filtered by the specified chat type.
+ *
+ * - If `type` is `'channel'` or `'group'`, returns an array of `ChannelInfo` objects.
+ * - If `type` is `'user'`, returns an array of `UserInfo` objects.
+ *
+ * The function uses a cache to avoid unnecessary network requests and fetches additional information
+ * for each chat as needed.
+ *
+ * @template T - The chat type to filter by ('channel', 'group', or 'user').
+ * @param client - The Telegram client instance. Will connect if not already connected.
+ * @param type - The type of chats to retrieve: 'channel', 'group', or 'user'.
+ * @returns A promise that resolves to an array of `ChannelInfo` or `UserInfo` depending on the `type` parameter.
  */
 export async function getUserChats<T extends ChatType>(
 	client: TelegramClient,
@@ -186,8 +196,6 @@ export async function getUserChats<T extends ChatType>(
 	const cached = cache.get(CACHE_KEY);
 	const result = cached ?? ((await client.getDialogs({})) as unknown as DialogInfo[]);
 	cache.set(CACHE_KEY, result);
-
-	const lastDialog = result[result.length - 1] || null;
 
 	if (type === 'channel' || type === 'group') {
 		const groupOrChannels =

@@ -1,11 +1,8 @@
 package ui
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -35,53 +32,6 @@ func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 	} else {
 		fmt.Fprint(w, normalStyle.Render(" "+str+" "))
 	}
-}
-
-func GetFakeData() []list.Item {
-
-	cwd, _ := os.Getwd()
-	fakeUsersPath := filepath.Join(cwd, "internal", "ui", "testUsers.txt")
-	testJson, err := os.ReadFile(fakeUsersPath)
-	if err != nil {
-		fmt.Println(err.Error())
-	}
-	var fakeUsers []UserInfo
-	err = json.Unmarshal(testJson, &fakeUsers)
-
-	if err != nil {
-		fmt.Println(err.Error())
-	}
-
-	var users []list.Item
-
-	for _, v := range fakeUsers {
-		users = append(users, list.Item(v))
-	}
-
-	return users
-}
-
-func GetFakeChannels() []list.Item {
-	cwd, _ := os.Getwd()
-	fakeChannelsPath := filepath.Join(cwd, "internal", "ui", "fakeChannels.txt")
-	testJson, err := os.ReadFile(fakeChannelsPath)
-
-	if err != nil {
-		fmt.Println(err.Error())
-	}
-	var fakeChannels []ChannelAndGroupInfo
-	err = json.Unmarshal(testJson, &fakeChannels)
-
-	if err != nil {
-		fmt.Println(err.Error())
-	}
-
-	var channels []list.Item
-
-	for _, v := range fakeChannels {
-		channels = append(channels, list.Item(v))
-	}
-	return channels
 }
 
 func (m Model) Init() tea.Cmd {
@@ -194,8 +144,39 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func sendMessage(m *Model) (Model, tea.Cmd) {
 	userMsg := m.Input.Value()
 	m.Input.Reset()
-	fmt.Println(userMsg)
-	//TODO: send new message
+	var cType rpc.ChatType
+	var peerInfo rpc.PeerInfo
+
+	if m.Mode == "users" {
+		cType = rpc.UserChat
+		peerInfo = rpc.PeerInfo{
+			AccessHash: m.SelectedUser.AccessHash,
+			PeerID:     m.SelectedUser.PeerID,
+		}
+	}
+
+	if m.Mode == "channels" {
+		cType = rpc.ChannelChat
+		peerInfo = rpc.PeerInfo{
+			AccessHash: m.SelectedChannel.AccessHash,
+			PeerID:     m.SelectedChannel.ChannelID,
+		}
+	}
+
+	if m.Mode == "groups" {
+		cType = rpc.GroupChat
+		peerInfo = rpc.PeerInfo{
+			AccessHash: m.SelectedGroup.AccessHash,
+			PeerID:     m.SelectedGroup.ChannelID,
+		}
+	}
+	_, err := rpc.RpcClient.SendMessage(peerInfo, userMsg, false, "idi", cType, false, nil)
+	if err != nil {
+		//TODO: find out a way to show the error message in ui
+		// fmt.Println(strings.Repeat(err.Error(), 10))
+		return *m, nil
+	}
+	m.Input.Reset()
 	return *m, nil
 }
 
@@ -221,22 +202,36 @@ func updateFocusedComponent(m *Model, msg tea.Msg) (Model, tea.Cmd) {
 }
 
 func handleUserChange(m *Model) (Model, tea.Cmd) {
+	var cType rpc.ChatType
+	var pInfo rpc.PeerInfoParams
 	if m.Mode == "users" {
 		m.SelectedUser = m.Users.SelectedItem().(UserInfo)
+		cType = "user"
+		pInfo = rpc.PeerInfoParams{
+			AccessHash:                  m.SelectedUser.AccessHash,
+			PeerID:                      m.SelectedUser.PeerID,
+			UserFirstNameOrChannelTitle: m.SelectedUser.FirstName,
+		}
 	}
 	if m.Mode == "channels" {
 		m.SelectedChannel = m.Channels.SelectedItem().(ChannelAndGroupInfo)
+		cType = "channel"
+		pInfo = rpc.PeerInfoParams{
+			AccessHash:                  m.SelectedChannel.AccessHash,
+			PeerID:                      m.SelectedChannel.ChannelID,
+			UserFirstNameOrChannelTitle: m.SelectedChannel.ChannelTitle,
+		}
 	}
 	if m.Mode == "groups" {
 		m.SelectedGroup = m.Groups.SelectedItem().(ChannelAndGroupInfo)
+		cType = "group"
+		pInfo = rpc.PeerInfoParams{
+			AccessHash:                  m.SelectedGroup.AccessHash,
+			PeerID:                      m.SelectedGroup.ChannelID,
+			UserFirstNameOrChannelTitle: m.SelectedGroup.ChannelTitle,
+		}
 	}
-
-	pInfo := rpc.PeerInfoParams{AccessHash: m.SelectedUser.AccessHash,
-		PeerID:                      m.SelectedUser.PeerID,
-		UserFirstNameOrChannelTitle: m.SelectedUser.FirstName,
-	}
-
-	result, err := rpc.RpcClient.GetMessages(pInfo, "user", nil, nil, nil)
+	result, err := rpc.RpcClient.GetMessages(pInfo, cType, nil, nil, nil)
 	if err != nil {
 		fmt.Println(strings.Repeat("uff there is something off", 10), err.Error())
 		return *m, nil
@@ -259,12 +254,8 @@ func handleUserChange(m *Model) (Model, tea.Cmd) {
 		})
 
 	}
-
 	m.Conversations = formatedMessages
-
 	m.updateViewport()
-
-	//TODO: kick off new rpc request to js backend to get the conversation for new chat
 	return *m, nil
 }
 
