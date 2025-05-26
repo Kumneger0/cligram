@@ -18,6 +18,8 @@ import (
 
 func getJsFilePath() string {
 	cwd, _ := os.Getwd()
+	//TODO: don't forget update this 
+	// the file may be diffrent after build
 	jsFilePath := filepath.Join(cwd, "js", "src", "index.ts")
 
 	return jsFilePath
@@ -99,19 +101,17 @@ func newRootCmd(version string) *cobra.Command {
 			wg.Add(1)
 			go startSeparateJsProces(&wg)
 
-			users := ui.GetFakeData()
+			users := []list.Item{}
 
 			userList := list.New(users, ui.CustomDelegate{}, 10, 20)
-			channels := ui.GetFakeChannels()
+			channels := []list.Item{}
 			channelList := (list.New(channels, ui.CustomDelegate{}, 10, 20))
-			groups := ui.GetFakeChannels()
+			groups := []list.Item{}
 			groupList := (list.New(groups, ui.CustomDelegate{}, 10, 20))
 
 			userList.SetShowHelp(false)
 			channelList.SetShowHelp(false)
 			groupList.SetShowHelp(false)
-			initiallySelectedUser := users[0].(ui.UserInfo)
-			initiallySelectedChannel := channels[0].(ui.ChannelAndGroupInfo)
 
 			input := textinput.New()
 			input.Placeholder = "Type a message..."
@@ -121,13 +121,9 @@ func newRootCmd(version string) *cobra.Command {
 			m := ui.Model{
 				Input:           input,
 				Users:           userList,
-				SelectedUser:    initiallySelectedUser,
-				SelectedChannel: initiallySelectedChannel,
 				Groups:          groupList,
-				SelectedGroup:   groups[0].(ui.ChannelAndGroupInfo),
 				Channels:        channelList,
 				Mode:            "users",
-				Conversations:   ui.FakeConversations(),
 				FocusedOn:       "sideBar",
 				Vp:              viewport.New(0, 0),
 			}
