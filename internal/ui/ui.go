@@ -3,7 +3,8 @@ package ui
 import (
 	"fmt"
 	"io"
-	"strings"
+	"math/rand"
+	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
@@ -50,6 +51,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "tab":
 			return changeFocusMode(&m, "tab")
+		case "m":
+			m.IsModalVisible = true
+			return m, nil
 		case "c":
 			return changeSideBarMode(&m, "c")
 		case "u":
@@ -69,7 +73,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case rpc.UserChatsMsg:
 		if msg.Err != nil {
-			fmt.Println("opps we fucked up", msg.Err.Error())
+			m.IsModalVisible = true
+			m.ModalContent = GetModalContent(msg.Err.Error())
 			return m, nil
 		}
 
@@ -90,7 +95,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case rpc.UserChannelMsg:
 		if msg.Err != nil {
-			fmt.Println("opps we fucked up", msg.Err.Error())
+			m.IsModalVisible = true
+			m.ModalContent = GetModalContent(msg.Err.Error())
 			return m, nil
 		}
 
@@ -102,20 +108,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				Username:          nil,
 				ChannelID:         du.ChannelID,
 				AccessHash:        du.AccessHash,
-				IsCreator:         false,
-				IsBroadcast:       false,
+				IsCreator:         du.IsCreator,
+				IsBroadcast:       du.IsBroadcast,
 				ParticipantsCount: nil,
 				UnreadCount:       du.UnreadCount,
 			})
 		}
 		m.Channels.SetItems(channels)
 		return m, nil
-
 	case rpc.UserGroupsMsg:
 		if msg.Err != nil {
-			fmt.Println("opps we fucked up", msg.Err.Error())
+			m.IsModalVisible = true
+			m.ModalContent = GetModalContent(msg.Err.Error())
 			return m, nil
 		}
+
 		duplicatedGroups := msg.Response.Result
 		var groups []list.Item
 		for _, du := range duplicatedGroups {
@@ -124,8 +131,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				Username:          nil,
 				ChannelID:         du.ChannelID,
 				AccessHash:        du.AccessHash,
-				IsCreator:         false,
-				IsBroadcast:       false,
+				IsCreator:         du.IsCreator,
+				IsBroadcast:       du.IsBroadcast,
 				ParticipantsCount: nil,
 				UnreadCount:       du.UnreadCount,
 			})
@@ -154,7 +161,7 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 			PeerID:     m.SelectedUser.PeerID,
 		}
 	}
-
+	
 	if m.Mode == "channels" {
 		cType = rpc.ChannelChat
 		peerInfo = rpc.PeerInfo{
@@ -170,12 +177,33 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 			PeerID:     m.SelectedGroup.ChannelID,
 		}
 	}
-	_, err := rpc.RpcClient.SendMessage(peerInfo, userMsg, false, "idi", cType, false, nil)
+
+	//TODO:we dont't need this
+	//will fix it when i start working in replay feature
+	replayToMessageId := "88"
+
+	_, err := rpc.RpcClient.SendMessage(peerInfo, userMsg, false, replayToMessageId, cType, false, nil)
 	if err != nil {
 		//TODO: find out a way to show the error message in ui
 		// fmt.Println(strings.Repeat(err.Error(), 10))
 		return *m, nil
 	}
+
+	m.Conversations = append(m.Conversations, FormattedMessage{
+		//This is just to show the message immediatly after sending
+		// so we don't have to refetch the whole message since we are the one who are sending
+		ID:                   int64(rand.Int()),
+		Sender:               "you",
+		IsFromMe:             true,
+		Content:              userMsg,
+		Media:                nil,
+		Date:                 time.Now(),
+		IsUnsupportedMessage: false,
+		WebPage:              nil,
+		Document:             nil,
+		FromID:               nil,
+	})
+
 	m.Input.Reset()
 	return *m, nil
 }
@@ -221,6 +249,9 @@ func handleUserChange(m *Model) (Model, tea.Cmd) {
 			PeerID:                      m.SelectedChannel.ChannelID,
 			UserFirstNameOrChannelTitle: m.SelectedChannel.ChannelTitle,
 		}
+		if m.SelectedChannel.IsCreator {
+			m.Input.Reset()
+		}
 	}
 	if m.Mode == "groups" {
 		m.SelectedGroup = m.Groups.SelectedItem().(ChannelAndGroupInfo)
@@ -233,7 +264,7 @@ func handleUserChange(m *Model) (Model, tea.Cmd) {
 	}
 	result, err := rpc.RpcClient.GetMessages(pInfo, cType, nil, nil, nil)
 	if err != nil {
-		fmt.Println(strings.Repeat("uff there is something off", 10), err.Error())
+		// fmt.Println(strings.Repeat("uff there is something off", 10), err.Error())
 		return *m, nil
 	}
 
@@ -261,9 +292,11 @@ func handleUserChange(m *Model) (Model, tea.Cmd) {
 
 func changeFocusMode(m *Model, msg string) (Model, tea.Cmd) {
 	currentlyFoucsedOn := m.FocusedOn
+	canWrite := (m.Mode == "users" || m.Mode == "groups") || (m.Mode == "channels" && m.SelectedChannel.IsCreator)
+
 	if currentlyFoucsedOn == "sideBar" {
 		m.FocusedOn = "mainView"
-	} else if currentlyFoucsedOn == "mainView" {
+	} else if currentlyFoucsedOn == "mainView" && canWrite {
 		m.FocusedOn = "input"
 	} else {
 		m.FocusedOn = "sideBar"
@@ -278,6 +311,11 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 	switch msg {
 	case "c":
 		m.Mode = "channels"
+		if !m.SelectedChannel.IsCreator {
+			m.Input.SetValue("Not Allowed To Type")
+		} else {
+			m.Input.Reset()
+		}
 		return *m, nil
 	case "u":
 		m.Mode = "users"
@@ -311,71 +349,6 @@ func getItemBorder(isSelected bool) lipgloss.Border {
 		return lipgloss.DoubleBorder()
 	}
 	return lipgloss.NormalBorder()
-}
-
-func setItemStyles(m *Model) string {
-	sidebarWidth := m.Width * 30 / 100
-	mainWidth := m.Width - sidebarWidth
-	contentHeight := m.Height * 90 / 100
-	inputHeight := m.Height - contentHeight
-
-	//there are some extra spaces at top and bottom if we incude the becomes ugly so
-	// this one is a solution i found
-	// feels a bit hacky
-	m.Users.SetHeight(contentHeight - 4)
-	m.Users.SetWidth(sidebarWidth)
-	m.Channels.SetWidth(sidebarWidth)
-	m.Channels.SetHeight(contentHeight - 4)
-
-	m.Groups.SetWidth(sidebarWidth)
-
-	m.Groups.SetHeight(contentHeight - 4)
-
-	mainStyle := getMainStyle(mainWidth, contentHeight, m)
-
-	var userNameOrChannelName string
-	if m.Mode == "users" {
-		userNameOrChannelName = m.SelectedUser.Title()
-	}
-	if m.Mode == "channels" {
-		userNameOrChannelName = m.SelectedChannel.FilterValue()
-	}
-	if m.Mode == "groups" {
-		userNameOrChannelName = m.SelectedGroup.FilterValue()
-	}
-
-	title := titleStyle.Render(userNameOrChannelName)
-	line := strings.Repeat("─", max(0, mainWidth-4-lipgloss.Width(title)))
-	headerView := lipgloss.JoinVertical(lipgloss.Center, title, line)
-
-	mainContent := lipgloss.JoinVertical(
-		lipgloss.Top,
-		headerView,
-		m.Vp.View(),
-	)
-
-	chatView := mainStyle.Render(mainContent)
-
-	var sideBarContent string
-	if m.Mode == "users" {
-		sideBarContent = m.Users.View()
-	} else if m.Mode == "channels" {
-		sideBarContent = m.Channels.View()
-	} else {
-		sideBarContent = m.Groups.View()
-	}
-
-	sidebar := getSideBarStyles(sidebarWidth, contentHeight, m).Render(sideBarContent)
-
-	if m.FocusedOn == "input" {
-		m.Input.Focus()
-	}
-
-	inputView := getInputStyle(m, inputHeight).Render(m.Input.View())
-	row := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, chatView)
-	ui := lipgloss.JoinVertical(lipgloss.Top, row, inputView)
-
-	return ui
 }
 
 func max(a, b int) int {

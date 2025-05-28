@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -13,15 +14,24 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+var (
+	dialogBoxStyle = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#874BFD")).
+		Padding(1, 2).
+		BorderTop(true).
+		BorderLeft(true).
+		BorderRight(true).
+		BorderBottom(true)
+)
+
 type LastSeen struct {
 	Type   string
 	Time   *time.Time
 	Status *string
 }
 
-
-
- type UserInfo struct {
+type UserInfo struct {
 	FirstName   string   `json:"firstName"`
 	IsBot       bool     `json:"isBot"`
 	PeerID      string   `json:"peerId"`
@@ -32,7 +42,7 @@ type LastSeen struct {
 }
 
 type ChannelAndGroupInfo struct {
-	ChannelTitle            string  `json:"title"`
+	ChannelTitle      string  `json:"title"`
 	Username          *string `json:"username"`
 	ChannelID         string  `json:"channelId"`
 	AccessHash        string  `json:"accessHash"`
@@ -80,8 +90,10 @@ type Model struct {
 	Users           list.Model
 	SelectedUser    UserInfo
 	Channels        list.Model
+	IsModalVisible  bool
+	ModalContent    string
 	SelectedChannel ChannelAndGroupInfo
-    Groups          list.Model
+	Groups          list.Model
 	SelectedGroup   ChannelAndGroupInfo
 	Height          int
 	Width           int
@@ -96,7 +108,6 @@ type Model struct {
 	Vp            viewport.Model
 	Conversations []FormattedMessage
 }
-
 
 func (ls *LastSeen) UnmarshalJSON(data []byte) error {
 	if string(data) == "null" {
@@ -162,8 +173,6 @@ func formatMessages(msgs []FormattedMessage) string {
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }
 
-
-
 func FakeConversations() []FormattedMessage {
 	cwd, _ := os.Getwd()
 	fakeConversationsPath := filepath.Join(cwd, "internal", "ui", "fakeConversation.txt")
@@ -177,6 +186,85 @@ func FakeConversations() []FormattedMessage {
 	if err != nil {
 		fmt.Println(err.Error())
 	}
-
 	return formatedMessage
+}
+
+// this is just temporary just to get things working  
+// definetly i need to remove this
+func GetModalContent(errorMessage  string) string {
+	var modalContent strings.Builder
+	modalContent.WriteString(errorMessage + "\n")
+	modalContent.WriteString("\n" + "press ctrl + c or q to close")
+	modalWidth := max(40, len(errorMessage)+4)
+	return dialogBoxStyle.Width(modalWidth).Render(modalContent.String())
+}
+
+
+
+func setItemStyles(m *Model) string {
+	if m.IsModalVisible {
+		modalView := lipgloss.Place(
+			m.Width,
+			m.Height,
+			lipgloss.Center, lipgloss.Center, m.ModalContent,
+		)
+		return modalView
+	}
+
+	sidebarWidth := m.Width * 30 / 100
+	mainWidth := m.Width - sidebarWidth
+	contentHeight := m.Height * 90 / 100
+	inputHeight := m.Height - contentHeight
+
+	m.Users.SetHeight(contentHeight - 4)
+	m.Users.SetWidth(sidebarWidth)
+	m.Channels.SetWidth(sidebarWidth)
+	m.Channels.SetHeight(contentHeight - 4)
+
+	m.Groups.SetWidth(sidebarWidth)
+
+	m.Groups.SetHeight(contentHeight - 4)
+
+	mainStyle := getMainStyle(mainWidth, contentHeight, m)
+
+	var userNameOrChannelName string
+	if m.Mode == "users" {
+		userNameOrChannelName = m.SelectedUser.Title()
+	}
+	if m.Mode == "channels" {
+		userNameOrChannelName = m.SelectedChannel.FilterValue()
+	}
+	if m.Mode == "groups" {
+		userNameOrChannelName = m.SelectedGroup.FilterValue()
+	}
+
+	title := titleStyle.Render(userNameOrChannelName)
+	line := strings.Repeat("─", max(0, mainWidth-4-lipgloss.Width(title)))
+	headerView := lipgloss.JoinVertical(lipgloss.Center, title, line)
+
+	mainContent := lipgloss.JoinVertical(
+		lipgloss.Top,
+		headerView,
+		m.Vp.View(),
+	)
+
+	chatView := mainStyle.Render(mainContent)
+	var sideBarContent string
+	if m.Mode == "users" {
+		sideBarContent = m.Users.View()
+	} else if m.Mode == "channels" {
+		sideBarContent = m.Channels.View()
+	} else {
+		sideBarContent = m.Groups.View()
+	}
+	sidebar := getSideBarStyles(sidebarWidth, contentHeight, m).Render(sideBarContent)
+
+	if m.FocusedOn == "input" {
+		m.Input.Focus()
+	}
+
+	inputView := getInputStyle(m, inputHeight).Render(m.Input.View())
+	row := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, chatView)
+	ui := lipgloss.JoinVertical(lipgloss.Top, row, inputView)
+	return ui
 }
