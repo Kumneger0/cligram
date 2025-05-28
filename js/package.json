@@ -36,7 +36,7 @@
 		"@types/bun": "^1.2.2",
 		"@typescript-eslint/eslint-plugin": "6.21.0",
 		"@typescript-eslint/parser": "6.21.0",
-		"@typescript/native-preview": "7.0.0-dev.20250525.1",
+		"@typescript/native-preview": "^7.0.0-dev.20250527.1",
 		"esbuild": "0.21.3",
 		"eslint": "8.57.0",
 		"eslint-config-prettier": "9.1.0",

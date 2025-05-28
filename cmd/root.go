@@ -18,7 +18,7 @@ import (
 
 func getJsFilePath() string {
 	cwd, _ := os.Getwd()
-	//TODO: don't forget update this 
+	//TODO: don't forget update this
 	// the file may be diffrent after build
 	jsFilePath := filepath.Join(cwd, "js", "src", "index.ts")
 
@@ -119,13 +119,14 @@ func newRootCmd(version string) *cobra.Command {
 			input.CharLimit = 256
 
 			m := ui.Model{
-				Input:           input,
-				Users:           userList,
-				Groups:          groupList,
-				Channels:        channelList,
-				Mode:            "users",
-				FocusedOn:       "sideBar",
-				Vp:              viewport.New(0, 0),
+				Input:          input,
+				Users:          userList,
+				Groups:         groupList,
+				Channels:       channelList,
+                IsModalVisible:   false,
+				Mode:           "users",
+				FocusedOn:      "sideBar",
+				Vp:             viewport.New(0, 0),
 			}
 			p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
 

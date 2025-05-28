@@ -9,13 +9,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// ManCmd manpage command.
 type ManCmd struct {
 	Cmd *cobra.Command
 }
 
-// NewManCmd manpage cmd.
-//nolint
 func NewManCmd() *ManCmd {
 	root := &ManCmd{}
 

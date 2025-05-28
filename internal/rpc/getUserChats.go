@@ -69,9 +69,6 @@ func (c *JsonRpcClient) GetUserChats() tea.Cmd {
 	}
 }
 
-
-
-
 // this needs to be removed this is redifinded
 // ideally we should use the LastSeen struct it has UnmarshalJSON function
 // i just redefined b/c of import cyle issue
