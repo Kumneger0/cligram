@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -247,4 +249,38 @@ func setItemStyles(m *Model) string {
 	row := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, chatView)
 	ui := lipgloss.JoinVertical(lipgloss.Top, row, inputView)
 	return ui
+}
+
+func Debounce(fn func(args ...interface{}) tea.Msg, delay time.Duration) func(args ...interface{}) tea.Cmd {
+	var mu sync.Mutex
+	var timer *time.Timer
+	var lastArgs []interface{}
+
+	return func(args ...interface{}) tea.Cmd {
+		mu.Lock()
+		defer mu.Unlock()
+
+		lastArgs = args
+
+		if timer != nil {
+			timer.Stop()
+		}
+
+		return func() tea.Msg {
+			msgChan := make(chan tea.Msg, 1)
+
+			timer = time.AfterFunc(delay, func() {
+				mu.Lock()
+				defer mu.Unlock()
+
+				argsToPass := make([]interface{}, len(lastArgs))
+				copy(argsToPass, lastArgs)
+
+				msgChan <- fn(argsToPass...)
+				close(msgChan)
+			})
+
+			return <-msgChan
+		}
+	}
 }

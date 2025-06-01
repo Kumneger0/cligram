@@ -39,6 +39,26 @@ func (m Model) Init() tea.Cmd {
 	return rpc.RpcClient.GetChats()
 }
 
+func getChannelIndex(m Model, channel ChannelAndGroupInfo) int {
+	var index int = -1
+	for i, v := range m.Channels.Items() {
+		if v.FilterValue() == channel.ChannelTitle {
+			index = i
+		}
+	}
+	return index
+}
+
+func getUserIndex(m Model, user UserInfo) int {
+	var index int = -1
+	for i, v := range m.Users.Items() {
+		if v.FilterValue() == user.FilterValue() {
+			index = i
+		}
+	}
+	return index
+}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -145,6 +165,57 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Width = msg.Width - 4
 		m.Height = msg.Height - 4
 		m.updateViewport()
+	case SelectSearchedUserResult:
+		if msg.user != nil {
+			m.SelectedUser = *msg.user
+			index := getUserIndex(m, *msg.user)
+			if index != -1 {
+				m.Users.Select(index)
+				m.FocusedOn = "sideBar"
+				m.Mode = "users"
+				return handleUserChange(&m)
+			}
+			newUpdatedUsers := append(m.Users.Items(), *msg.user)
+			updateUserCmd := m.Users.SetItems(newUpdatedUsers)
+
+			index = getUserIndex(m, *msg.user)
+
+			if index != -1 {
+				m.Users.Select(index)
+				m.FocusedOn = "sideBar"
+				m.Mode = "users"
+				m, handleUserChangeCmd := handleUserChange(&m)
+				return m, tea.Batch(updateUserCmd, handleUserChangeCmd)
+			}
+
+			return m, updateUserCmd
+		}
+
+		if msg.channel != nil {
+			m.SelectedChannel = *msg.channel
+			index := getChannelIndex(m, *msg.channel)
+
+			if index != -1 {
+				m.Channels.Select(index)
+				m.FocusedOn = "sideBar"
+				m.Mode = "channels"
+				return handleUserChange(&m)
+			}
+
+			newUpdatedChannelsList := append(m.Channels.Items(), *msg.channel)
+			setItemsCmd := m.Channels.SetItems(newUpdatedChannelsList)
+			index = getChannelIndex(m, *msg.channel)
+
+			if index != -1 {
+				m.Channels.Select(index)
+				m.FocusedOn = "sideBar"
+				m.Mode = "channels"
+				m, handleChangeUserCmd := handleUserChange(&m)
+				return m, tea.Batch(setItemsCmd, handleChangeUserCmd)
+			}
+			return m, setItemsCmd
+		}
+
 	}
 	return updateFocusedComponent(&m, msg)
 }
