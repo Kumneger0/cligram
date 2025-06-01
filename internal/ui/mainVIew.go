@@ -36,11 +36,7 @@ func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(
-		rpc.RpcClient.GetUserChats(),
-		rpc.RpcClient.GetUserChannel(),
-		rpc.RpcClient.GetUserGroups(),
-	)
+	return rpc.RpcClient.GetChats()
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -52,8 +48,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "tab":
 			return changeFocusMode(&m, "tab")
 		case "m":
-			m.IsModalVisible = true
-			return m, nil
+			if m.FocusedOn != "input" {
+				m.IsModalVisible = true
+				return m, nil
+			}
+			input, cmd := m.Input.Update(msg)
+			m.Input = input
+			return m, cmd
 		case "c":
 			return changeSideBarMode(&m, "c")
 		case "u":
@@ -82,7 +83,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var users []list.Item
 		for _, du := range duplicatedUsers {
 			users = append(users, UserInfo{
-				unreadCount: du.UnreadCount,
+				UnreadCount: du.UnreadCount,
 				FirstName:   du.FirstName,
 				IsBot:       du.IsBot,
 				PeerID:      du.PeerID,
@@ -161,7 +162,7 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 			PeerID:     m.SelectedUser.PeerID,
 		}
 	}
-	
+
 	if m.Mode == "channels" {
 		cType = rpc.ChannelChat
 		peerInfo = rpc.PeerInfo{
@@ -264,6 +265,7 @@ func handleUserChange(m *Model) (Model, tea.Cmd) {
 	}
 	result, err := rpc.RpcClient.GetMessages(pInfo, cType, nil, nil, nil)
 	if err != nil {
+		//TODO: SHOW toast message here
 		// fmt.Println(strings.Repeat("uff there is something off", 10), err.Error())
 		return *m, nil
 	}
@@ -316,13 +318,13 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 		} else {
 			m.Input.Reset()
 		}
-		return *m, nil
+		return *m, rpc.RpcClient.GetUserChannel()
 	case "u":
 		m.Mode = "users"
 		return *m, nil
 	case "g":
 		m.Mode = "groups"
-		return *m, nil
+		return *m, rpc.RpcClient.GetUserGroups()
 	}
 	return *m, nil
 }

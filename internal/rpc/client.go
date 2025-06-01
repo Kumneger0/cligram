@@ -55,7 +55,7 @@ type UserGroupsMsg struct {
 
 func (c *JsonRpcClient) GetUserGroups() tea.Cmd {
 	userGroupsRpcResponse, err := c.Call("getUserChats", []string{"group"})
-	return func() tea.Msg {
+	return  func() tea.Msg {
 		if err != nil {
 			return UserGroupsMsg{Err: err}
 		}
@@ -70,18 +70,15 @@ func (c *JsonRpcClient) GetUserGroups() tea.Cmd {
 	}
 }
 
-
 func writeLosToFIle(file *os.File, content []byte) error {
 	_, err := file.Write(content)
 	return err
 }
 
-
 type PeerInfo struct {
 	AccessHash string `json:"accessHash"`
 	PeerID     string `json:"peerId"`
 }
-
 
 func (c *JsonRpcClient) Call(method string, params interface{}) ([]byte, error) {
 	c.Mu.Lock()
@@ -164,8 +161,9 @@ func (c *JsonRpcClient) Call(method string, params interface{}) ([]byte, error) 
 	cwd, _ := os.Getwd()
 	file, _ := os.Create(filepath.Join(cwd, "logs.json"))
 
-    //TODO:don't forget to remove this is just for debuging purpose 
+	//TODO:don't forget to remove this is just for debuging purpose
 	writeLosToFIle(file, jsonPayloadBytes)
 
 	return jsonPayloadBytes, nil
 }
+

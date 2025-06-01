@@ -13,7 +13,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kumneger0/cligram/internal/rpc"
 	ui "github.com/kumneger0/cligram/internal/ui"
+	overlay "github.com/rmhubbert/bubbletea-overlay"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 func getJsFilePath() string {
@@ -102,7 +104,6 @@ func newRootCmd(version string) *cobra.Command {
 			go startSeparateJsProces(&wg)
 
 			users := []list.Item{}
-
 			userList := list.New(users, ui.CustomDelegate{}, 10, 20)
 			channels := []list.Item{}
 			channelList := (list.New(channels, ui.CustomDelegate{}, 10, 20))
@@ -118,17 +119,41 @@ func newRootCmd(version string) *cobra.Command {
 			input.Prompt = "> "
 			input.CharLimit = 256
 
+			fd := int(os.Stdout.Fd())
+			width, height, _ := term.GetSize(fd)
+
 			m := ui.Model{
-				Input:          input,
-				Users:          userList,
-				Groups:         groupList,
+				Input:  input,
+				Users:  userList,
+				Groups: groupList,
+				//for some reason the view streching
+				//subtracting 4 from height and width fixed the issue
+				Height:         height - 4,
+				Width:          width - 4,
 				Channels:       channelList,
-                IsModalVisible:   false,
+				IsModalVisible: false,
 				Mode:           "users",
 				FocusedOn:      "sideBar",
 				Vp:             viewport.New(0, 0),
 			}
-			p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
+
+			backgorund := m
+			forground := &ui.Foreground{}
+
+			manager := ui.Manager{
+				Foreground: forground,
+				Background: backgorund,
+				State:      ui.MainView,
+				Overlay: overlay.New(
+					forground,
+					backgorund,
+					overlay.Center,
+					overlay.Top,
+					0,
+					0,
+				),
+			}
+			p := tea.NewProgram(manager, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 			_, err := p.Run()
 			if err != nil {

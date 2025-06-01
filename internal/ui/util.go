@@ -3,8 +3,6 @@ package ui
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -36,7 +34,7 @@ type UserInfo struct {
 	IsBot       bool     `json:"isBot"`
 	PeerID      string   `json:"peerId"`
 	AccessHash  string   `json:"accessHash"`
-	unreadCount int      `json:"unreadCount"`
+	UnreadCount int      `json:"unreadCount"`
 	LastSeen    LastSeen `json:"lastSeen"`
 	IsOnline    bool     `json:"isOnline"`
 }
@@ -173,33 +171,15 @@ func formatMessages(msgs []FormattedMessage) string {
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }
 
-func FakeConversations() []FormattedMessage {
-	cwd, _ := os.Getwd()
-	fakeConversationsPath := filepath.Join(cwd, "internal", "ui", "fakeConversation.txt")
-	conversations, err := os.ReadFile(fakeConversationsPath)
-	if err != nil {
-		fmt.Println(err.Error())
-	}
-
-	var formatedMessage []FormattedMessage
-	err = json.Unmarshal(conversations, &formatedMessage)
-	if err != nil {
-		fmt.Println(err.Error())
-	}
-	return formatedMessage
-}
-
-// this is just temporary just to get things working  
+// this is just temporary just to get things working
 // definetly i need to remove this
-func GetModalContent(errorMessage  string) string {
+func GetModalContent(errorMessage string) string {
 	var modalContent strings.Builder
 	modalContent.WriteString(errorMessage + "\n")
 	modalContent.WriteString("\n" + "press ctrl + c or q to close")
 	modalWidth := max(40, len(errorMessage)+4)
 	return dialogBoxStyle.Width(modalWidth).Render(modalContent.String())
 }
-
-
 
 func setItemStyles(m *Model) string {
 	if m.IsModalVisible {
