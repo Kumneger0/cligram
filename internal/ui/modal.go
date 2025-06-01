@@ -35,11 +35,17 @@ func (m Manager) Init() tea.Cmd {
 	)
 }
 
+
 func (m Manager) Update(message tea.Msg) (tea.Model, tea.Cmd) {
+
 	switch msg := message.(type) {
 	case tea.WindowSizeMsg:
 		m.WindowWidth = msg.Width
 		m.WindowHeight = msg.Height
+
+	case CloseOverlay:
+		m.State = MainView
+		return m, nil
 
 	case tea.KeyMsg:
 		switch msg.String() {
