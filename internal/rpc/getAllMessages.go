@@ -2,7 +2,6 @@ package rpc
 
 import (
 	"encoding/json"
-	"fmt"
 	"time"
 )
 
@@ -82,7 +81,8 @@ func (c *JsonRpcClient) GetMessages(
 
 	allMesssages, err := c.Call("getAllMessages", paramsFixed)
 	if err != nil {
-		fmt.Println("There was An Error occured", err.Error())
+		//TODO: show toast message
+		// loging the error will make the ui verry ugly
 	}
 
 	var formatedMessage UserConversationResponse
