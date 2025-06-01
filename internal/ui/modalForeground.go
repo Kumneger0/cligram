@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"fmt"
+	"io"
 	"time"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -17,12 +19,74 @@ const (
 	LIST   focusState = "LIST"
 )
 
+type ChannelOrUserType string
+
+const (
+	CHANNEL ChannelOrUserType = "CHANNEL"
+	USER    ChannelOrUserType = "USER"
+)
+
+type SearchDelegate struct {
+	list.DefaultDelegate
+}
+
+func (d SearchDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+	var title string
+
+	entry, ok := item.(SearchResult)
+	if ok {
+		title = entry.FilterValue()
+	} else {
+		return
+	}
+
+	if entry.ChannelOrUserType == USER {
+		//TODO:replace this icon instead
+		title = "u, " + title
+	} else {
+		title = "c|g, " + title
+	}
+
+	str := lipgloss.NewStyle().Width(50).Render(title)
+	if index == m.Index() {
+		fmt.Fprint(w, selectedStyle.Render(" "+str+" "))
+	} else {
+		fmt.Fprint(w, normalStyle.Render(" "+str+" "))
+	}
+}
+
+type SearchResult struct {
+	Name              string
+	IsBot             bool
+	PeerID            string
+	AccessHash        string
+	UnreadCount       int
+	ChannelOrUserType ChannelOrUserType
+}
+
+func (s SearchResult) Title() string {
+	return s.Name
+}
+
+func (s SearchResult) FilterValue() string {
+	return s.Name
+}
+
+type SelectSearchedUserResult struct {
+	user    *UserInfo
+	channel *ChannelAndGroupInfo
+}
+
+type CloseOverlay struct{}
+
 type Foreground struct {
-	windowWidth      int
-	windowHeight     int
-	input            textinput.Model
-	searchUserResult list.Model
-	focusedOn        focusState
+	windowWidth          int
+	windowHeight         int
+	input                textinput.Model
+	searchResultCombined list.Model
+	focusedOn            focusState
+	searchResultUsers    []UserInfo
+	SearchResultChannels []ChannelAndGroupInfo
 }
 
 func (f Foreground) Init() tea.Cmd {
@@ -30,18 +94,24 @@ func (f Foreground) Init() tea.Cmd {
 	return nil
 }
 
+var debouncedSearch = Debounce(func(args ...interface{}) tea.Msg {
+	query := args[0].(string)
+	return rpc.RpcClient.Search(query)
+}, 300*time.Millisecond)
+
 func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	switch msg := message.(type) {
 	case tea.WindowSizeMsg:
-		m.searchUserResult = list.New([]list.Item{}, CustomDelegate{}, 10, 10)
+		m.searchResultCombined = list.New([]list.Item{}, SearchDelegate{}, 10, 10)
 
-		m.searchUserResult.Title = "Search User Result"
-		m.searchUserResult.SetShowStatusBar(false)
-		m.searchUserResult.SetShowFilter(false)
-		m.searchUserResult.SetShowStatusBar(false)
+		m.searchResultCombined.Title = "Search User Result"
+		m.searchResultCombined.SetShowStatusBar(false)
+		m.searchResultCombined.SetShowFilter(false)
+		m.searchResultCombined.SetShowStatusBar(false)
 		m.windowWidth = msg.Width
 		m.windowHeight = msg.Height
+		m.focusedOn = SEARCH
 		input := textinput.New()
 		input.Placeholder = "Search..."
 		input.Prompt = "> "
@@ -56,46 +126,139 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				m.input.Blur()
 			} else {
 				m.focusedOn = SEARCH
+				m.input.Focus()
+			}
+		case "enter":
+			if m.focusedOn == LIST {
+				selectedUser := m.searchResultCombined.SelectedItem()
+				if selectedUser != nil {
+					user, ok := selectedUser.(SearchResult)
+					if ok {
+						closeCommandCMD := func() tea.Msg {
+							return CloseOverlay{}
+						}
+
+						var channel *ChannelAndGroupInfo = nil
+						if user.ChannelOrUserType == CHANNEL {
+							for _, v := range m.SearchResultChannels {
+								if v.ChannelID == user.PeerID {
+									channel = &v
+								}
+							}
+						}
+
+						var u *UserInfo = nil
+						if user.ChannelOrUserType == USER {
+							for _, v := range m.searchResultUsers {
+								if v.PeerID == user.PeerID {
+									u = &v
+								}
+							}
+						}
+
+						cmd := func() tea.Msg {
+							if u != nil {
+								return SelectSearchedUserResult{
+									user:    u,
+									channel: nil,
+								}
+							}
+							if channel != nil {
+								return SelectSearchedUserResult{
+									channel: channel,
+									user:    nil,
+								}
+
+							}
+							return nil
+						}
+						return m, tea.Batch(cmd, closeCommandCMD)
+					}
+				}
 			}
 		}
+
 		if m.input.Focused() {
 			searchValue := m.input.Value()
 			if len(searchValue) >= 3 {
-				searchUsersCmd := tea.Tick(time.Millisecond*300, func(t time.Time) tea.Msg {
-					return rpc.RpcClient.Search(searchValue)
-				})
-				cmds = append(cmds, searchUsersCmd)
+				searchCmd := debouncedSearch(searchValue)
+				cmds = append(cmds, searchCmd)
 			}
 		}
 	case rpc.SearchUserMsg:
 		if msg.Err != nil {
 			//TODO:show error message here
 		} else {
+			// Wait for the message and return it
 			result := msg.Response.Result
 			var users []list.Item
-			for _, v := range result {
-				users = append(users, UserInfo{
-					FirstName:   v.FirstName,
-					IsBot:       v.IsBot,
-					PeerID:      v.PeerID,
-					AccessHash:  v.AccessHash,
-					UnreadCount: v.UnreadCount,
-					LastSeen:    LastSeen(v.LastSeen),
-					IsOnline:    v.IsOnline,
+			for _, v := range result.Users {
+				users = append(users, SearchResult{
+					Name:              v.FirstName,
+					IsBot:             v.IsBot,
+					PeerID:            v.PeerID,
+					AccessHash:        v.AccessHash,
+					UnreadCount:       v.UnreadCount,
+					ChannelOrUserType: USER,
 				})
 			}
-			m.searchUserResult.SetItems(users)
+
+			for _, v := range result.Channels {
+				users = append(users, SearchResult{
+					Name:              v.ChannelTitle,
+					IsBot:             false,
+					PeerID:            v.ChannelID,
+					AccessHash:        v.AccessHash,
+					UnreadCount:       v.UnreadCount,
+					ChannelOrUserType: CHANNEL,
+				})
+			}
+			setTotalSearchResultUsers(msg, m)
+			m.searchResultCombined.SetItems(users)
 		}
 	}
 
 	input, cmd := m.input.Update(message)
 	m.input = input
 
-	users, userCmd := m.searchUserResult.Update(message)
-	m.searchUserResult = users
+	cmds = append(cmds, cmd)
+	if m.focusedOn == LIST {
+		users, userCmd := m.searchResultCombined.Update(message)
+		m.searchResultCombined = users
+		cmds = append(cmds, userCmd)
+	}
 
-	cmds = append(cmds, cmd, userCmd)
 	return m, tea.Batch(cmds...)
+}
+
+func setTotalSearchResultUsers(searchMsg rpc.SearchUserMsg, m *Foreground) {
+	var users []UserInfo
+	for _, v := range searchMsg.Response.Result.Users {
+		users = append(users, UserInfo{
+			FirstName:   v.FirstName,
+			IsBot:       v.IsBot,
+			PeerID:      v.PeerID,
+			AccessHash:  v.AccessHash,
+			UnreadCount: v.UnreadCount,
+			LastSeen:    LastSeen(v.LastSeen),
+			IsOnline:    v.IsOnline,
+		})
+	}
+	var channels []ChannelAndGroupInfo
+	for _, v := range searchMsg.Response.Result.Channels {
+		channels = append(channels, ChannelAndGroupInfo{
+			ChannelTitle:      v.ChannelTitle,
+			Username:          v.Username,
+			ChannelID:         v.ChannelID,
+			AccessHash:        v.AccessHash,
+			IsCreator:         v.IsCreator,
+			IsBroadcast:       v.IsBroadcast,
+			ParticipantsCount: v.ParticipantsCount,
+			UnreadCount:       v.UnreadCount,
+		})
+	}
+	m.searchResultUsers = users
+	m.SearchResultChannels = channels
 }
 
 func (f Foreground) View() string {
@@ -107,17 +270,24 @@ func (f Foreground) View() string {
 	boldStyle := lipgloss.NewStyle().Bold(true)
 	title := boldStyle.Render("Search")
 	content := getSearchView(f)
-	searchResult := lipgloss.NewStyle().Border(lipgloss.NormalBorder()).Render(f.searchUserResult.View())
+	var border lipgloss.Border
+
+	if f.focusedOn == SEARCH {
+		border = lipgloss.NormalBorder()
+	} else {
+		border = lipgloss.DoubleBorder()
+	}
+
+	searchResult := lipgloss.NewStyle().Border(border).Render(f.searchResultCombined.View())
 	layout := lipgloss.JoinVertical(lipgloss.Left, title, content, searchResult)
 
 	return foreStyle.Render(layout)
 }
 
 func getSearchView(m Foreground) string {
-
 	var border lipgloss.Border
 
-	if m.focusedOn == SEARCH {
+	if m.focusedOn == LIST {
 		border = lipgloss.NormalBorder()
 	} else {
 		border = lipgloss.DoubleBorder()

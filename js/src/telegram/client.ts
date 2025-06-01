@@ -99,7 +99,7 @@ export async function getChannelInfo(client: TelegramClient, channelId: bigInt.B
 export async function searchUsers(
 	client: TelegramClient,
 	query: string
-): Promise<UserInfo[]> {
+): Promise<{users:UserInfo[], channels:ChannelInfo[]}> {
 	if (!client.connected) {
 		await client.connect();
 	}
@@ -125,17 +125,16 @@ export async function searchUsers(
 			} satisfies UserInfo;
 		});
     //TODO: i'll come back later and fix this
-		//@ts-ignore 
-	const chats = result.chats
-		.filter((chat) => {
-			return chat.className === 'Chat';
-		})
-		.map((chat) => {
-			return {
-				title: chat.title || '',
-				chatId: chat.id as bigInt.BigInteger
-			};
-		});
+	// const chats = result.chats
+	// 	.filter((chat) => {
+	// 		return chat.className === 'Chat';
+	// 	})
+	// 	.map((chat) => {
+	// 		return {
+	// 			title: chat.title || '',
+	// 			chatId: chat.id as bigInt.BigInteger
+	// 		};
+	// 	});
 
 		   //TODO: i'll come back later and fix this
 		//@ts-ignore 
@@ -159,7 +158,7 @@ export async function searchUsers(
 			})
 	);
 
-	return users
+	return {users, channels}
 }
 
 /**
