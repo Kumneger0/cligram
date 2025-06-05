@@ -23,6 +23,7 @@ type ChannelOrUserType string
 
 const (
 	CHANNEL ChannelOrUserType = "CHANNEL"
+	GROUP   ChannelOrUserType = "GROUP"
 	USER    ChannelOrUserType = "USER"
 )
 
@@ -36,15 +37,16 @@ func (d SearchDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 	entry, ok := item.(SearchResult)
 	if ok {
 		title = entry.FilterValue()
+		switch entry.ChannelOrUserType {
+		case USER:
+			title = "👤 " + title
+		case GROUP:
+			title = "👥 " + title
+		case CHANNEL:
+			title = "📢 " + title
+		}
 	} else {
 		return
-	}
-
-	if entry.ChannelOrUserType == USER {
-		//TODO:replace this icon instead
-		title = "u, " + title
-	} else {
-		title = "c|g, " + title
 	}
 
 	str := lipgloss.NewStyle().Width(50).Render(title)
@@ -75,6 +77,7 @@ func (s SearchResult) FilterValue() string {
 type SelectSearchedUserResult struct {
 	user    *UserInfo
 	channel *ChannelAndGroupInfo
+	group   *ChannelAndGroupInfo
 }
 
 type CloseOverlay struct{}
@@ -114,7 +117,7 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.focusedOn = SEARCH
 		input := textinput.New()
 		input.Placeholder = "Search..."
-		input.Prompt = "> "
+		input.Prompt = "🔍 "
 		input.CharLimit = 256
 		m.input = input
 		m.input.Focus()
@@ -156,6 +159,15 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 							}
 						}
 
+						var group *ChannelAndGroupInfo = nil
+						if user.ChannelOrUserType == GROUP {
+							for _, v := range m.SearchResultChannels {
+								if v.ChannelID == user.PeerID {
+									group = &v
+								}
+							}
+						}
+
 						cmd := func() tea.Msg {
 							if u != nil {
 								return SelectSearchedUserResult{
@@ -169,6 +181,12 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 									user:    nil,
 								}
 
+							}
+							if group != nil {
+								return SelectSearchedUserResult{
+									group:   group,
+									user:    nil,
+								}
 							}
 							return nil
 						}
@@ -204,13 +222,19 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			for _, v := range result.Channels {
+				var channelOrGroup ChannelOrUserType
+				if v.IsBroadcast {
+					channelOrGroup = CHANNEL
+				} else {
+					channelOrGroup = GROUP
+				}
 				users = append(users, SearchResult{
 					Name:              v.ChannelTitle,
 					IsBot:             false,
 					PeerID:            v.ChannelID,
 					AccessHash:        v.AccessHash,
 					UnreadCount:       v.UnreadCount,
-					ChannelOrUserType: CHANNEL,
+					ChannelOrUserType: channelOrGroup,
 				})
 			}
 			setTotalSearchResultUsers(msg, m)
