@@ -3,6 +3,7 @@ package ui
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -211,13 +212,45 @@ func setItemStyles(m *Model) string {
 
 	var userNameOrChannelName string
 	if m.Mode == "users" {
+		lastSeenTime := m.SelectedUser.LastSeen
 		userNameOrChannelName = m.SelectedUser.Title()
+
+		switch lastSeenTime.Type {
+		case "time":
+			userNameOrChannelName += " " + lastSeenTime.Time.Format("15:04")
+		case "status":
+			userNameOrChannelName += " " + *lastSeenTime.Status
+		}
 	}
 	if m.Mode == "channels" {
-		userNameOrChannelName = m.SelectedChannel.FilterValue()
+		selectedChannel := m.SelectedChannel
+		userNameOrChannelName = selectedChannel.FilterValue()
+		if selectedChannel.ParticipantsCount != nil {
+			var sb strings.Builder
+			sb.WriteString(selectedChannel.FilterValue())
+			sb.WriteString(" ")
+			if selectedChannel.ParticipantsCount != nil {
+				sb.WriteString(strconv.Itoa(*selectedChannel.ParticipantsCount))
+				sb.WriteString(" ")
+				sb.WriteString("Members")
+			}
+			userNameOrChannelName = sb.String()
+		}
 	}
 	if m.Mode == "groups" {
-		userNameOrChannelName = m.SelectedGroup.FilterValue()
+		selectedGroup := m.SelectedGroup
+		userNameOrChannelName = selectedGroup.FilterValue()
+		if selectedGroup.ParticipantsCount != nil {
+			var sb strings.Builder
+			sb.WriteString(selectedGroup.FilterValue())
+			sb.WriteString(" ")
+			if selectedGroup.ParticipantsCount != nil {
+				sb.WriteString(strconv.Itoa(*selectedGroup.ParticipantsCount))
+				sb.WriteString(" ")
+				sb.WriteString("Members")
+			}
+			userNameOrChannelName = sb.String()
+		}
 	}
 
 	title := titleStyle.Render(userNameOrChannelName)
@@ -232,12 +265,15 @@ func setItemStyles(m *Model) string {
 
 	chatView := mainStyle.Render(mainContent)
 	var sideBarContent string
-	if m.Mode == "users" {
+	switch m.Mode {
+	case "users":
 		sideBarContent = m.Users.View()
-	} else if m.Mode == "channels" {
+	case "channels":
 		sideBarContent = m.Channels.View()
-	} else {
+	case "groups":
 		sideBarContent = m.Groups.View()
+	default:
+		sideBarContent = ""
 	}
 	sidebar := getSideBarStyles(sidebarWidth, contentHeight, m).Render(sideBarContent)
 
