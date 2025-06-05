@@ -21,8 +21,14 @@ func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 
 	if entry, ok := item.(UserInfo); ok {
 		title = entry.Title()
+		title = "👤 " + title
 	} else if entry, ok := item.(ChannelAndGroupInfo); ok {
 		title = entry.Title()
+		if entry.IsBroadcast {
+			title = "📢 " + title
+		} else {
+			title = "👥 " + title
+		}
 	} else {
 		return
 	}
@@ -43,6 +49,16 @@ func getChannelIndex(m Model, channel ChannelAndGroupInfo) int {
 	var index int = -1
 	for i, v := range m.Channels.Items() {
 		if v.FilterValue() == channel.ChannelTitle {
+			index = i
+		}
+	}
+	return index
+}
+
+func getGroupIndex(m Model, group ChannelAndGroupInfo) int {
+	var index int = -1
+	for i, v := range m.Groups.Items() {
+		if v.FilterValue() == group.ChannelTitle {
 			index = i
 		}
 	}
@@ -131,7 +147,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				AccessHash:        du.AccessHash,
 				IsCreator:         du.IsCreator,
 				IsBroadcast:       du.IsBroadcast,
-				ParticipantsCount: nil,
+				ParticipantsCount: du.ParticipantsCount,
 				UnreadCount:       du.UnreadCount,
 			})
 		}
@@ -154,7 +170,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				AccessHash:        du.AccessHash,
 				IsCreator:         du.IsCreator,
 				IsBroadcast:       du.IsBroadcast,
-				ParticipantsCount: nil,
+				ParticipantsCount: du.ParticipantsCount,
 				UnreadCount:       du.UnreadCount,
 			})
 		}
@@ -216,6 +232,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, setItemsCmd
 		}
 
+		if msg.group != nil {
+			m.SelectedGroup = *msg.group
+			index := getGroupIndex(m, *msg.group)
+
+			if index != -1 {
+				m.Groups.Select(index)
+				m.FocusedOn = "sideBar"
+				m.Mode = "groups"
+				return handleUserChange(&m)
+			}
+
+			newUpdatedGroupsList := append(m.Groups.Items(), *msg.group)
+			setItemsCmd := m.Groups.SetItems(newUpdatedGroupsList)
+			index = getGroupIndex(m, *msg.group)
+
+			if index != -1 {
+				m.Groups.Select(index)
+				m.FocusedOn = "sideBar"
+				m.Mode = "groups"
+				m, handleChangeUserCmd := handleUserChange(&m)
+				return m, tea.Batch(setItemsCmd, handleChangeUserCmd)
+			}
+			return m, setItemsCmd
+		}
 	}
 	return updateFocusedComponent(&m, msg)
 }
@@ -263,7 +303,7 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 
 	m.Conversations = append(m.Conversations, FormattedMessage{
 		//This is just to show the message immediatly after sending
-		// so we don't have to refetch the whole message since we are the one who are sending
+		// so we don't have to refetch the whole message since we are the one who is sending
 		ID:                   int64(rand.Int()),
 		Sender:               "you",
 		IsFromMe:             true,
@@ -282,20 +322,22 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 
 func updateFocusedComponent(m *Model, msg tea.Msg) (Model, tea.Cmd) {
 	var cmd tea.Cmd
-	if m.FocusedOn == "input" {
+	switch m.FocusedOn {
+	case "input":
 		m.Input.Focus()
 		m.Input, cmd = m.Input.Update(msg)
-	} else if m.FocusedOn == "sideBar" {
+	case "sideBar":
 		m.Input.Blur()
-		if m.Mode == "channels" {
+		switch m.Mode {
+		case "channels":
 			m.Channels, cmd = m.Channels.Update(msg)
-		} else if m.Mode == "users" {
+		case "users":
 			m.Users, cmd = m.Users.Update(msg)
-		} else {
+		default:
 			m.Groups, cmd = m.Groups.Update(msg)
 		}
 
-	} else {
+	default:
 		m.Vp, cmd = m.Vp.Update(msg)
 	}
 	return *m, cmd
