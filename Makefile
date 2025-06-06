@@ -1,7 +1,8 @@
 projectname?=cligram
 
 # --- JS Backend Variables ---
-JS_BACKEND_BINARY=internal/assets/resources/cligram-js-backend
+JS_BACKEND_BINARY_DIR=internal/assets/resources
+JS_BACKEND_BINARY=$(JS_BACKEND_BINARY_DIR)/cligram-js-backend
 JS_BUILD_OUTPUT=js/bin/cligram-js
 
 # --- Dynamically find all relevant source and config files ---
@@ -26,7 +27,7 @@ build: $(JS_BACKEND_BINARY) ## build golang binary with embedded JS backend
 # Target to prepare the JS binary for embedding
 $(JS_BACKEND_BINARY): $(JS_BUILD_OUTPUT)
 	@echo "--> Preparing JS backend for embedding..."
-	@mkdir -p embed
+	@mkdir -p $(JS_BACKEND_BINARY_DIR)
 	@cp $(JS_BUILD_OUTPUT) $(JS_BACKEND_BINARY)
 
 # Target to build the JS source using bun
