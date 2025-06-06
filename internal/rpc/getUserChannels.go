@@ -63,7 +63,7 @@ func (c *JsonRpcClient) GetUserChannel() tea.Cmd {
 			return UserChannelMsg{Err: fmt.Errorf("failed to unmarshal response JSON '%s': %w", string(userChannelRpcResponse), err)}
 		}
 		if response.Error != nil {
-			return UserChannelMsg{Err: fmt.Errorf(response.Error.Message)}
+			return UserChannelMsg{Err: fmt.Errorf("ERROR: %s", response.Error.Message)}
 		}
 		return UserChannelMsg{Err: nil, Response: &response}
 	}

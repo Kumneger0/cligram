@@ -57,7 +57,7 @@ func (c *JsonRpcClient) GetUserChats() UserChatsMsg {
 		return UserChatsMsg{Err: fmt.Errorf("failed to unmarshal response JSON '%s': %w", string(userChatRpcResponse), err)}
 	}
 	if response.Error != nil {
-		return UserChatsMsg{Err: fmt.Errorf(response.Error.Message)}
+		return UserChatsMsg{Err: fmt.Errorf("ERROR: %s", response.Error.Message)}
 	}
 	return UserChatsMsg{Err: nil, Response: &response}
 }
@@ -73,7 +73,7 @@ func (c *JsonRpcClient) GetChats() tea.Cmd {
 			return UserChatsMsg{Err: fmt.Errorf("failed to unmarshal response JSON '%s': %w", string(userChatRpcResponse), err)}
 		}
 		if response.Error != nil {
-			return UserChatsMsg{Err: fmt.Errorf(response.Error.Message)}
+			return UserChatsMsg{Err: fmt.Errorf("ERROR: %s", response.Error.Message)}
 		}
 		return UserChatsMsg{Err: nil, Response: &response}
 	}

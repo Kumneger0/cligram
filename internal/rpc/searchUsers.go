@@ -34,7 +34,7 @@ func (c *JsonRpcClient) Search(query string) SearchUserMsg {
 		return SearchUserMsg{Err: fmt.Errorf("failed to unmarshal response JSON '%s': %w", string(userChatRpcResponse), err)}
 	}
 	if response.Error != nil {
-		return SearchUserMsg{Err: fmt.Errorf(response.Error.Message)}
+		return SearchUserMsg{Err: fmt.Errorf("ERROR: %s", response.Error.Message)}
 	}
 	return SearchUserMsg{Err: nil, Response: &response}
 }

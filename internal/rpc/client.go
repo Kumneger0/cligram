@@ -64,7 +64,7 @@ func (c *JsonRpcClient) GetUserGroups() tea.Cmd {
 			return UserGroupsMsg{Err: fmt.Errorf("failed to unmarshal response JSON '%s': %w", string(userGroupsRpcResponse), err)}
 		}
 		if response.Error != nil {
-			return UserGroupsMsg{Err: fmt.Errorf(response.Error.Message)}
+			return UserGroupsMsg{Err: fmt.Errorf("ERROR: %s", response.Error.Message)}
 		}
 		return UserGroupsMsg{Err: nil, Response: &response}
 	}
