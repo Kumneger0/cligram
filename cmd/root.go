@@ -108,7 +108,7 @@ func newRootCmd(version string) *cobra.Command {
 			msg := rpc.RpcClient.GetUserChats()
 
 			if msg.Err != nil {
-				return fmt.Errorf("failed to get user chats: %w", msg.Err)
+				// return fmt.Errorf("failed to get user chats: %w", msg.Err)
 			}
 
 			duplicatedUsers := msg.Response.Result
