@@ -1,5 +1,5 @@
 import { getConfig } from '@/config/configManager.js';
-import { cache } from '@/lib/utils/index.js';
+import { cache, formatLastSeen } from '@/lib/utils/index.js';
 import { Api, TelegramClient } from 'telegram';
 import { Channel, ChannelInfo, ChatType, TelegramUser, UserInfo } from '../lib/types/index.js';
 import { DialogInfo } from './client.types.js';
@@ -120,7 +120,7 @@ export async function searchUsers(
 				accessHash: user?.accessHash?.toString() ?? "",
 				isBot: user.bot ?? false,
 				unreadCount: 0,
-				lastSeen: null,
+				lastSeen: "",
 				isOnline: false
 			} satisfies UserInfo;
 		});
@@ -302,23 +302,26 @@ export async function getUserInfo(
 		const wasOnline = user.status?.wasOnline;
 		const date = wasOnline ? new Date(wasOnline * 1000) : null;
 
+		const lastSeen = wasOnline
+			? {
+				type: 'time' as const,
+				value: date!
+			}
+			: {
+				type: 'status' as const,
+				value: user.status?.className
+						? (lastSeenMessages[user.status?.className as keyof typeof lastSeenMessages] ??
+							'last seen a long time ago')
+						: 'last seen a long time ago'
+			}
+
+
 		return {
 			firstName: user.firstName,
 			isBot: user.bot,
 			peerId: userId.toString() ?? "",
 			accessHash: user?.accessHash?.toString(),
-			lastSeen: wasOnline
-				? {
-					type: 'time',
-					value: date!
-				}
-				: {
-					type: 'status',
-					value: user.status?.className
-						? (lastSeenMessages[user.status?.className as keyof typeof lastSeenMessages] ??
-							'last seen a long time ago')
-						: 'last seen a long time ago'
-				},
+			lastSeen: formatLastSeen(lastSeen),
 			isOnline: user.status?.className === 'UserStatusOnline'
 		} satisfies Omit<UserInfo, 'unreadCount'>;
 	} catch (err) {

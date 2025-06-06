@@ -1,8 +1,6 @@
 package ui
 
 import (
-	"encoding/json"
-	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,20 +24,14 @@ var (
 		BorderBottom(true)
 )
 
-type LastSeen struct {
-	Type   string
-	Time   *time.Time
-	Status *string
-}
-
 type UserInfo struct {
-	FirstName   string   `json:"firstName"`
-	IsBot       bool     `json:"isBot"`
-	PeerID      string   `json:"peerId"`
-	AccessHash  string   `json:"accessHash"`
-	UnreadCount int      `json:"unreadCount"`
-	LastSeen    LastSeen `json:"lastSeen"`
-	IsOnline    bool     `json:"isOnline"`
+	FirstName   string  `json:"firstName"`
+	IsBot       bool    `json:"isBot"`
+	PeerID      string  `json:"peerId"`
+	AccessHash  string  `json:"accessHash"`
+	UnreadCount int     `json:"unreadCount"`
+	LastSeen    *string `json:"lastSeen"`
+	IsOnline    bool    `json:"isOnline"`
 }
 
 type ChannelAndGroupInfo struct {
@@ -110,45 +102,6 @@ type Model struct {
 	Conversations []FormattedMessage
 }
 
-func (ls *LastSeen) UnmarshalJSON(data []byte) error {
-	if string(data) == "null" {
-		ls.Type, ls.Time, ls.Status = "", nil, nil
-		return nil
-	}
-
-	var aux struct {
-		Type  string          `json:"type"`
-		Value json.RawMessage `json:"value"`
-	}
-	if err := json.Unmarshal(data, &aux); err != nil {
-		return fmt.Errorf("LastSeen: cannot unmarshal wrapper: %w", err)
-	}
-
-	ls.Type = aux.Type
-
-	switch aux.Type {
-	case "time":
-		var t time.Time
-		if err := json.Unmarshal(aux.Value, &t); err != nil {
-			return fmt.Errorf("LastSeen: invalid time value: %w", err)
-		}
-		ls.Time = &t
-		ls.Status = nil
-
-	case "status":
-		var s string
-		if err := json.Unmarshal(aux.Value, &s); err != nil {
-			return fmt.Errorf("LastSeen: invalid status value: %w", err)
-		}
-		ls.Status = &s
-		ls.Time = nil
-
-	default:
-		return fmt.Errorf("LastSeen: unknown type %q", aux.Type)
-	}
-	return nil
-}
-
 func formatMessages(msgs []FormattedMessage) string {
 	var lines []string
 	for _, m := range msgs {
@@ -215,11 +168,10 @@ func setItemStyles(m *Model) string {
 		lastSeenTime := m.SelectedUser.LastSeen
 		userNameOrChannelName = m.SelectedUser.Title()
 
-		switch lastSeenTime.Type {
-		case "time":
-			userNameOrChannelName += " " + lastSeenTime.Time.Format("15:04")
-		case "status":
-			userNameOrChannelName += " " + *lastSeenTime.Status
+		if m.SelectedUser.IsOnline {
+			userNameOrChannelName += " " + "Online"
+		} else if lastSeenTime != nil {
+			userNameOrChannelName += " " + *lastSeenTime
 		}
 	}
 	if m.Mode == "channels" {

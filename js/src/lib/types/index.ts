@@ -112,16 +112,7 @@ export type UserInfo = {
 	peerId: string;
 	accessHash: string;
 	unreadCount: number;
-	lastSeen:
-		| {
-				type: 'time';
-				value: Date;
-		  }
-		| {
-				type: 'status';
-				value: string;
-		  }
-		| null;
+	lastSeen: string;
 	isOnline: boolean;
 };
 
