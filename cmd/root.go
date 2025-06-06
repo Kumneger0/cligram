@@ -91,6 +91,7 @@ func startSeparateJsProces(wg *sync.WaitGroup) {
 	}()
 
 	wg.Done()
+
 }
 
 func newRootCmd(version string) *cobra.Command {
@@ -102,8 +103,28 @@ func newRootCmd(version string) *cobra.Command {
 			var wg sync.WaitGroup
 			wg.Add(1)
 			go startSeparateJsProces(&wg)
+			wg.Wait()
 
-			users := []list.Item{}
+			msg := rpc.RpcClient.GetUserChats()
+
+			if msg.Err != nil {
+				// return fmt.Errorf("failed to get user chats: %w", msg.Err)
+			}
+
+			duplicatedUsers := msg.Response.Result
+			var users []list.Item
+			for _, du := range duplicatedUsers {
+				users = append(users, ui.UserInfo{
+					UnreadCount: du.UnreadCount,
+					FirstName:   du.FirstName,
+					IsBot:       du.IsBot,
+					PeerID:      du.PeerID,
+					AccessHash:  du.PeerID,
+					LastSeen:    du.LastSeen,
+					IsOnline:    du.IsOnline,
+				})
+			}
+
 			userList := list.New(users, ui.CustomDelegate{}, 10, 20)
 			channels := []list.Item{}
 			channelList := (list.New(channels, ui.CustomDelegate{}, 10, 20))
@@ -153,6 +174,7 @@ func newRootCmd(version string) *cobra.Command {
 					0,
 				),
 			}
+
 			p := tea.NewProgram(manager, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 			_, err := p.Run()
