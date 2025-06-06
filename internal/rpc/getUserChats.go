@@ -3,7 +3,6 @@ package rpc
 import (
 	"encoding/json"
 	"fmt"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -13,11 +12,7 @@ type UserChatsMsg struct {
 	Err      error
 }
 
-type DuplicatedLastSeen struct {
-	Type   string
-	Time   *time.Time
-	Status *string
-}
+
 
 type DuplicatedUserInfo struct {
 	FirstName   string             `json:"firstName"`
@@ -25,7 +20,7 @@ type DuplicatedUserInfo struct {
 	PeerID      string             `json:"peerId"`
 	AccessHash  string             `json:"accessHash"`
 	UnreadCount int                `json:"unreadCount"`
-	LastSeen    DuplicatedLastSeen `json:"lastSeen"`
+	LastSeen    *string            `json:"lastSeen"`
 	IsOnline    bool               `json:"isOnline"`
 }
 
@@ -83,50 +78,4 @@ func (c *JsonRpcClient) GetChats() tea.Cmd {
 		return UserChatsMsg{Err: nil, Response: &response}
 	}
 
-}
-
-// this needs to be removed this is redifinded
-// ideally we should use the LastSeen struct it has UnmarshalJSON function
-// i just redefined b/c of import cyle issue
-// will remove this after refactoring the the code base
-// this was just quick fix
-// TODO:remove this function it is duplicated
-
-func (ls *DuplicatedLastSeen) UnmarshalJSON(data []byte) error {
-	if string(data) == "null" {
-		ls.Type, ls.Time, ls.Status = "", nil, nil
-		return nil
-	}
-
-	var aux struct {
-		Type  string          `json:"type"`
-		Value json.RawMessage `json:"value"`
-	}
-	if err := json.Unmarshal(data, &aux); err != nil {
-		return fmt.Errorf("LastSeen: cannot unmarshal wrapper: %w", err)
-	}
-
-	ls.Type = aux.Type
-
-	switch aux.Type {
-	case "time":
-		var t time.Time
-		if err := json.Unmarshal(aux.Value, &t); err != nil {
-			return fmt.Errorf("LastSeen: invalid time value: %w", err)
-		}
-		ls.Time = &t
-		ls.Status = nil
-
-	case "status":
-		var s string
-		if err := json.Unmarshal(aux.Value, &s); err != nil {
-			return fmt.Errorf("LastSeen: invalid status value: %w", err)
-		}
-		ls.Status = &s
-		ls.Time = nil
-
-	default:
-		return fmt.Errorf("LastSeen: unknown type %q", aux.Type)
-	}
-	return nil
 }

@@ -95,9 +95,9 @@ export const onMessage = (
 	setUserChats: React.Dispatch<
 		React.SetStateAction<
 			| {
-					dialogs: UserInfo[] | ChannelInfo[];
-					lastDialog: DialogInfo | null;
-			  }
+				dialogs: UserInfo[] | ChannelInfo[];
+				lastDialog: DialogInfo | null;
+			}
 			| undefined
 		>
 	>
@@ -168,9 +168,9 @@ type OnUserOnlineStatusParams = {
 	setUserChats: React.Dispatch<
 		React.SetStateAction<
 			| {
-					dialogs: UserInfo[] | ChannelInfo[];
-					lastDialog: DialogInfo | null;
-			  }
+				dialogs: UserInfo[] | ChannelInfo[];
+				lastDialog: DialogInfo | null;
+			}
 			| undefined
 		>
 	>;
@@ -189,7 +189,7 @@ export const onUserOnlineStatus = (params: OnUserOnlineStatusParams) => {
 		const user = {
 			...selectedUser,
 			isOnline: status === 'online',
-			lastSeen: date ? { type: 'time', value: date } : null
+			lastSeen: date ? formatLastSeen({ type: 'time', value: date }) : ""
 		} satisfies UserInfo;
 		setSelectedUser(user);
 	}
@@ -202,7 +202,7 @@ export const onUserOnlineStatus = (params: OnUserOnlineStatusParams) => {
 				const user = {
 					...u,
 					isOnline: status === 'online',
-					lastSeen: date ? { type: 'time', value: date } : null
+					lastSeen: date ? formatLastSeen({ type: 'time', value: date }) : ""
 				} satisfies UserInfo;
 				return user;
 			}
@@ -220,7 +220,18 @@ export const cache = new LRUCache<string, DialogInfo[]>({
 	ttl: 1000 * 60 * 5
 });
 
-export function formatLastSeen(lastSeen: UserInfo['lastSeen']) {
+
+type LastSeen = {
+	type: 'time';
+	value: Date;
+} | {
+	type: "status";
+	value: string;
+}
+
+
+
+export function formatLastSeen(lastSeen: LastSeen) {
 	if (lastSeen?.type === 'status') {
 		return lastSeen.value;
 	}
@@ -252,17 +263,3 @@ export function formatLastSeen(lastSeen: UserInfo['lastSeen']) {
 	}
 	return `last seen on ${format(date, 'MMM d, yyyy')} at ${format(date, 'h:mm a')}`;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
