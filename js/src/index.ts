@@ -95,7 +95,6 @@ type RpcErrorResponse = {
 
 type IncomingMessage = TypedRpcRequest | TypedRpcNotification;
 
-
 async function readHeaders(reader: typeof stdin): Promise<{ [key: string]: string }> {
 	const headers: { [key: string]: string } = {};
 	let lineBuffer = '';
