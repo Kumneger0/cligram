@@ -2,6 +2,7 @@ cligram
 js/node_modules/
 js/bin
 vendor/
+tmp/
 coverage.out
 /dist
 .env
