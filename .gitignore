@@ -1,5 +1,6 @@
 cligram
 js/node_modules/
+js/bin
 vendor/
 coverage.out
 /dist
