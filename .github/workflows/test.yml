@@ -14,20 +14,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0 
 
-      - uses: actions/setup-go@v5
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
 
-      - name: go get
-        run: go get ./...
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v1
 
-      - name: go mod tidy
-        run: go mod tidy
+      - name: Build application and assets
+        run: make build
 
-      - name: Run coverage
-        run: go test -race -coverprofile="coverage.out" -covermode=atomic ./...
+      - name: Run tests
+        run: make test
 
       - name: Upload coverage to Codecov
         if: matrix.os == 'ubuntu-latest'
