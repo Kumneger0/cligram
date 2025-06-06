@@ -12,25 +12,24 @@ import (
 	viewport "github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kumneger0/cligram/internal/rpc"
+	"github.com/kumneger0/cligram/internal/runner"
 	ui "github.com/kumneger0/cligram/internal/ui"
 	overlay "github.com/rmhubbert/bubbletea-overlay"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
 
-func getJsFilePath() string {
-	cwd, _ := os.Getwd()
-	//TODO: don't forget update this
-	// the file may be diffrent after build
-	jsFilePath := filepath.Join(cwd, "js", "src", "index.ts")
-
-	return jsFilePath
-}
 
 func startSeparateJsProces(wg *sync.WaitGroup) {
-	jsFilePath := getJsFilePath()
+    jsExcutable, err := runner.GetJSExcutable()
 
-	jsExcute := exec.Command("bun", jsFilePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to get JS executable: %v\n", err)
+		wg.Done()
+		return
+	}
+
+	jsExcute := exec.Command(*jsExcutable)
 
 	stdin, err := jsExcute.StdinPipe()
 	if err != nil {

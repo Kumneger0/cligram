@@ -1,16 +1,15 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 
+	"github.com/kumneger0/cligram/internal/runner"
 	"github.com/spf13/cobra"
 )
 
 func login() *cobra.Command {
-	cwd, _ := os.Getwd()
-	jsFilePath := filepath.Join(cwd, "js", "src", "index.ts")
 
 	return &cobra.Command{
 		Use:          "login",
@@ -18,27 +17,33 @@ func login() *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			jsExcute := exec.Command("bun", jsFilePath, "login")
+			jsExcutable, err := runner.GetJSExcutable()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to get JS executable: %v\n", err)
+				return
+			}
+			jsExcute := exec.Command(*jsExcutable, "login")
 			jsExcute.Stdin = os.Stdin
 			jsExcute.Stdout = os.Stdout
 			jsExcute.Stderr = os.Stderr
 			jsExcute.Run()
 		},
-	}	
+	}
 }
 
-
 func logout() *cobra.Command {
-	cwd, _ := os.Getwd()
-	jsFilePath := filepath.Join(cwd, "js", "src", "index.ts")
-
 	return &cobra.Command{
 		Use:          "logout",
 		Short:        "cligram logout",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			jsExcute := exec.Command("bun", jsFilePath, "logout")
+			jsExcutable, err := runner.GetJSExcutable()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to get JS executable: %v\n", err)
+				return
+			}
+			jsExcute := exec.Command(*jsExcutable, "logout")
 			jsExcute.Stdin = os.Stdin
 			jsExcute.Stdout = os.Stdout
 			jsExcute.Stderr = os.Stderr
