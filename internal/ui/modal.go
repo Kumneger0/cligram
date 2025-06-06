@@ -35,7 +35,6 @@ func (m Manager) Init() tea.Cmd {
 	)
 }
 
-
 func (m Manager) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := message.(type) {
@@ -62,6 +61,16 @@ func (m Manager) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				m.State = MainView
 			}
+		}
+		if m.State == ModalView {
+			fg, fgCmd := m.Foreground.Update(message)
+			m.Foreground = fg
+			return m, fgCmd
+		}
+		if m.State == MainView {
+			bg, bgCmd := m.Background.Update(message)
+			m.Background = bg
+			return m, bgCmd
 		}
 	}
 
