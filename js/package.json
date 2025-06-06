@@ -21,8 +21,9 @@
     "url": "https://github.com/kumneger0/cligram"
   },
   "scripts": {
-    "dev": "bun --watch src/index.ts",
-    "build": "tsdown src/index.ts --format esm",
+	"dev": "nodemon --watch src --watch test --ext ts,json --exec 'bun run build'",
+	"build": "bun build src/index.ts --compile --outfile bin/cligram-js",
+	"build:esm": "tsdown src/index.ts --format esm",
     "start": "bun src/index.ts",
     "test:": "vitest",
     "format": "prettier . --write",
@@ -40,7 +41,7 @@
     "esbuild": "0.21.3",
     "eslint": "8.57.0",
     "eslint-config-prettier": "9.1.0",
-    "nodemon": "3.1.4",
+	"nodemon": "^3.1.10",
     "prettier": "3.3.3",
     "tsdown": "^0.12.7",
     "typescript": "5.5.4",

@@ -14,7 +14,6 @@ import { deleteMessage, editMessage, getAllMessages, sendMessage } from './teleg
 
 const stringify = JSON.stringify
 
-
 /**
  * gram has logs that we don't need i tried setting log level to none but it didn't work
  * so we just patch the global console object to ignore all logs
@@ -95,6 +94,7 @@ type RpcErrorResponse = {
 };
 
 type IncomingMessage = TypedRpcRequest | TypedRpcNotification;
+
 
 async function readHeaders(reader: typeof stdin): Promise<{ [key: string]: string }> {
 	const headers: { [key: string]: string } = {};
@@ -191,8 +191,6 @@ function createRpcError(
 let telegramClientInstance: TelegramClient | null = null;
 
 async function startup() {
-
-
 	try {
 		if (arg === "login") {
 			await login()
@@ -206,7 +204,6 @@ async function startup() {
 
 		const client = await getTelegramClient();
 		if (!client.connected) await client.connect()
-
 
 		if (client) {
 			telegramClientInstance = client;

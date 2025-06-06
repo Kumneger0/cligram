@@ -1,6 +1,8 @@
 cligram
 js/node_modules/
+js/bin
 vendor/
+tmp/
 coverage.out
 /dist
 .env
@@ -10,3 +12,4 @@ dist/
 logs.json
 todo.md
 channels.json
+internal/assets/resources/cligram-js-backend
