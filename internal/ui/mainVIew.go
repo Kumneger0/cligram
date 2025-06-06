@@ -124,7 +124,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				IsBot:       du.IsBot,
 				PeerID:      du.PeerID,
 				AccessHash:  du.PeerID,
-				LastSeen:    LastSeen(du.LastSeen),
+				LastSeen:    du.LastSeen,
 				IsOnline:    du.IsOnline,
 			})
 		}

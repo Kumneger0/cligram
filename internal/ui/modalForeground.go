@@ -264,7 +264,7 @@ func setTotalSearchResultUsers(searchMsg rpc.SearchUserMsg, m *Foreground) {
 			PeerID:      v.PeerID,
 			AccessHash:  v.AccessHash,
 			UnreadCount: v.UnreadCount,
-			LastSeen:    LastSeen(v.LastSeen),
+			LastSeen:    v.LastSeen,
 			IsOnline:    v.IsOnline,
 		})
 	}
