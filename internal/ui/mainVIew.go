@@ -338,7 +338,7 @@ func updateFocusedComponent(m *Model, msg tea.Msg) (Model, tea.Cmd) {
 		}
 
 	default:
-		m.Vp, cmd = m.Vp.Update(msg)
+		m.ChatUI, cmd = m.ChatUI.Update(msg)
 	}
 	return *m, cmd
 }
@@ -445,18 +445,14 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 func (m *Model) updateViewport() {
 	sidebarWidth := m.Width * 30 / 100
 	mainWidth := m.Width - sidebarWidth
-	contentHeight := m.Height * 90 / 100
+	// contentHeight := m.Height * 90 / 100
 
-	headerHeight := 2
+	w := mainWidth * 70 / 100
+	m.ChatUI.SetWidth(w)
+	m.ChatUI.SetHeight(15)
 
-	w, h := mainWidth*70/100, contentHeight*90/100-headerHeight
-	m.Vp.Width = w
-	m.Vp.Height = h
 
-	m.Vp.YPosition = headerHeight
-
-	m.Vp.SetContent(formatMessages(m.Conversations))
-	m.Vp.GotoBottom()
+	m.ChatUI.SetItems(formatMessages(m.Conversations))
 }
 
 func getItemBorder(isSelected bool) lipgloss.Border {

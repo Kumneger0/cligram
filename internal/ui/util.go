@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"sync"
@@ -8,7 +10,6 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -63,6 +64,41 @@ type FormattedMessage struct {
 	FromID *string `json:"fromId"`
 }
 
+func (m FormattedMessage) Title() string {
+	return m.Content
+}
+
+func (m FormattedMessage) FilterValue() string {
+	return m.Content
+}
+
+
+
+type MessagesDelegate struct {
+	list.DefaultDelegate
+}
+
+func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+	var title string
+
+	if entry, ok := item.(FormattedMessage); ok {
+		title = entry.Title()
+		if entry.IsFromMe {
+			title = "You: " + title
+		} else {
+			title = entry.Sender + ": " + title
+		}
+	} else {
+		return
+	}
+	str := lipgloss.NewStyle().Width(50).Height(2).Render(title)
+	if index == m.Index() {
+		fmt.Fprint(w, selectedStyle.Render(" "+str+" "))
+	} else {
+		fmt.Fprint(w, normalStyle.Render(" "+str+" "))
+	}
+}
+
 func (u UserInfo) Title() string {
 	return u.FirstName
 }
@@ -98,33 +134,44 @@ type Model struct {
 	// this one has also 3 possible values
 	// sideBar | "mainView" | "input"
 	FocusedOn     string
-	Vp            viewport.Model
+	ChatUI        list.Model
 	Conversations []FormattedMessage
 }
 
-func formatMessages(msgs []FormattedMessage) string {
-	var lines []string
+func formatMessages(msgs []FormattedMessage) []list.Item {
+	var lines []list.Item
 	for _, m := range msgs {
-		timestamp := timestampStyle.Render(m.Date.Format("15:04"))
+		// timestamp := timestampStyle.Render(m.Date.Format("15:04"))
 
-		var senderText string
-		if m.IsFromMe {
-			senderText = myMessageStyle.Render("You:")
-		} else {
-			senderText = senderStyle.Render(m.Sender + ":")
-		}
+		// var senderText string
+		// if m.IsFromMe {
+		// 	senderText = myMessageStyle.Render("You:")
+		// } else {
+		// 	senderText = senderStyle.Render(m.Sender + ":")
+		// }
 
-		content := contentStyle.Render(m.Content)
+		// content := contentStyle.Render(m.Content)
 
-		dateLine := lipgloss.JoinHorizontal(lipgloss.Top, timestamp)
-		messageLine := lipgloss.JoinHorizontal(lipgloss.Top, senderText, content)
+		// dateLine := lipgloss.JoinHorizontal(lipgloss.Top, timestamp)
+		// messageLine := lipgloss.JoinHorizontal(lipgloss.Top, senderText, content)
 
-		fullMessage := lipgloss.JoinVertical(lipgloss.Left, dateLine, messageLine)
+		// fullMessage := lipgloss.JoinVertical(lipgloss.Left, dateLine, messageLine)
 
-		lines = append(lines, messageStyle.Render(fullMessage))
+		lines = append(lines, FormattedMessage{
+			ID:                   m.ID,
+			Sender:               m.Sender,
+			Content:              m.Content,
+			IsFromMe:             m.IsFromMe,
+			Media:                m.Media,
+			Date:                 m.Date,
+			IsUnsupportedMessage: m.IsUnsupportedMessage,
+			WebPage:              m.WebPage,
+			Document:             m.Document,
+			FromID:               m.FromID,
+		})
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+	return lines
 }
 
 // this is just temporary just to get things working
@@ -138,6 +185,7 @@ func GetModalContent(errorMessage string) string {
 }
 
 func setItemStyles(m *Model) string {
+
 	if m.IsModalVisible {
 		modalView := lipgloss.Place(
 			m.Width,
@@ -156,13 +204,17 @@ func setItemStyles(m *Model) string {
 	m.Users.SetWidth(sidebarWidth)
 	m.Channels.SetWidth(sidebarWidth)
 	m.Channels.SetHeight(contentHeight - 4)
-
 	m.Groups.SetWidth(sidebarWidth)
 
 	m.Groups.SetHeight(contentHeight - 4)
 
+	
 	mainStyle := getMainStyle(mainWidth, contentHeight, m)
+m.ChatUI.SetItems(formatMessages(m.Conversations))
 
+	w := mainWidth * 70 / 100
+	m.ChatUI.SetWidth(w)
+	m.ChatUI.SetHeight(15)
 	var userNameOrChannelName string
 	if m.Mode == "users" {
 		lastSeenTime := m.SelectedUser.LastSeen
@@ -212,7 +264,7 @@ func setItemStyles(m *Model) string {
 	mainContent := lipgloss.JoinVertical(
 		lipgloss.Top,
 		headerView,
-		m.Vp.View(),
+		m.ChatUI.View(),
 	)
 
 	chatView := mainStyle.Render(mainContent)
