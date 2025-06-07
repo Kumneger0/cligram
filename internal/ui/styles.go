@@ -50,7 +50,7 @@ func getInputStyle(m *Model, inputHeight int) lipgloss.Style {
 func getMainStyle(mainWidth int, contentHeight int, m *Model) lipgloss.Style {
 	return lipgloss.NewStyle().
 		Width(mainWidth).
-		Height(contentHeight).
+		Height(contentHeight - 6).
 		Padding(1).
 		Border(getItemBorder(m.FocusedOn == "mainView"))
 }
