@@ -8,7 +8,7 @@ import { LogLevel } from 'telegram/extensions/Logger.js';
 import { login, logout } from './commands';
 import { getTelegramClient } from './lib/utils/auth';
 import { getUserChats, getUserInfo, searchUsers, setUserPrivacy } from './telegram/client';
-import { deleteMessage, editMessage, getAllMessages, sendMessage } from './telegram/messages';
+import { deleteMessage, editMessage, forwardMessage, getAllMessages, sendMessage } from './telegram/messages';
 
 // import { stringify } from 'flatted';
 
@@ -45,7 +45,8 @@ const handlers = {
 	searchUsers,
 	getUserChats,
 	getUserInfo,
-	getAllMessages
+	getAllMessages,
+	forwardMessage
 };
 
 
@@ -300,6 +301,9 @@ async function messageProcessingLoop(client: TelegramClient) {
 						break;
 					case "getAllMessages":
 						result = await handlers.getAllMessages(client, ...request.params)
+						break
+					case "forwardMessage":
+						result = await handlers.forwardMessage(client, ...request.params)
 						break
 					default:
 						writeToStdout(

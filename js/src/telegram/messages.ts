@@ -20,6 +20,8 @@ type GetEntityTypes = {
 	type: ChatType;
 };
 
+
+
 const getEntity = ({ peer, type }: GetEntityTypes) => {
 	const entity =
 		type === 'user'
@@ -118,7 +120,8 @@ export async function forwardMessage(client: TelegramClient, params: ForwardMess
 	});
 	const toPeerEntity = getEntity({
 		peer: { accessHash: params.toPeer.accessHash, peerId: params.toPeer.peerId },
-		type: params.type
+		//TODO: we need to allow forwarding to groups, own channel and bot let's hard this for now 
+		type: "user"
 	});
 
 	const result = await client.invoke(

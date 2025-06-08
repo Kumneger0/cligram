@@ -42,7 +42,7 @@ func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 }
 
 func (m Model) Init() tea.Cmd {
-	return rpc.RpcClient.GetChats()
+	return nil
 }
 
 func getChannelIndex(m Model, channel ChannelAndGroupInfo) int {
@@ -104,9 +104,50 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.FocusedOn == "sideBar" {
 				return handleUserChange(&m)
 			}
-			//TODO:at this time we must be in mainView
-			//figure out what to do when someone clicks enter while in mainView
+			selectedMessage := m.ChatUI.SelectedItem()
+			if selectedMessage != nil {
+				//TODO: show open list of options in modal for message action
+			}
+		case "r":
+			if m.FocusedOn == "mainView" {
+				//TODO: implement forward message
+			}
+		case "d":
+			if m.FocusedOn == "mainView" {
+				return m, func() tea.Msg {
+					return OpenModalMsg{
+						ModalMode: ModalModeDeleteMessage,
+					}
+				}
+			}
+		case "f":
+			if m.FocusedOn == "mainView" {
+				selectedMessage, ok := m.ChatUI.SelectedItem().(FormattedMessage)
+				var from list.Item
 
+				if m.Mode == "users" {
+					from = m.SelectedUser
+				}
+
+				if m.Mode == "channels" {
+					from = m.SelectedChannel
+				}
+
+				if m.Mode == "groups" {
+					from = &m.SelectedGroup
+				}
+
+				if ok {
+					return m, func() tea.Msg {
+						return OpenModalMsg{
+							ModalMode: ModalModeForwardMessage,
+							Message:   &selectedMessage,
+							UsersList: &m.Users,
+							FromPeer:  &from,
+						}
+					}
+				}
+			}
 		}
 	case rpc.UserChatsMsg:
 		if msg.Err != nil {
@@ -177,10 +218,58 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Groups.SetItems(groups)
 		return m, nil
 
+	case ForwardMsg:
+		messageToBeForwarded := msg.msg
+		reciever := *msg.reciever
+		fromPeer := *msg.fromPeer
+
+		var from rpc.PeerInfo
+		var toPeer rpc.PeerInfo
+		var cType rpc.ChatType
+
+		fromUser, ok := fromPeer.(UserInfo)
+		if ok {
+			from.PeerID = fromUser.PeerID
+			from.AccessHash = fromUser.AccessHash
+			cType = "user"
+		}
+
+		fromChannelOrGroup, ok := fromPeer.(ChannelAndGroupInfo)
+		if ok {
+			from.PeerID = fromChannelOrGroup.ChannelID
+			from.AccessHash = fromChannelOrGroup.AccessHash
+			cType = "channel"
+		}
+
+		userOrChannel, ok := reciever.(UserInfo)
+		if ok {
+			toPeer.PeerID = userOrChannel.PeerID
+			toPeer.AccessHash = userOrChannel.AccessHash
+		}
+
+		channelOrGroup, ok := reciever.(ChannelAndGroupInfo)
+		if ok {
+			toPeer.PeerID = channelOrGroup.ChannelID
+			toPeer.AccessHash = channelOrGroup.AccessHash
+		}
+		messageIDs := []int{int(messageToBeForwarded.ID)}
+
+		response, err := rpc.RpcClient.ForwardMessages(from, messageIDs, toPeer, cType)
+		if err != nil {
+			//TODO:show toast message
+			return m, nil
+		}
+
+		if response.Error != nil {
+			//TODO:show toast message
+		}
+
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.Width = msg.Width - 4
 		m.Height = msg.Height - 4
-		m.updateViewport()
+		m.updateConverstaions()
 	case SelectSearchedUserResult:
 		if msg.user != nil {
 			m.SelectedUser = *msg.user
@@ -401,7 +490,7 @@ func handleUserChange(m *Model) (Model, tea.Cmd) {
 
 	}
 	m.Conversations = formatedMessages
-	m.updateViewport()
+	m.updateConverstaions()
 	return *m, nil
 }
 
@@ -442,15 +531,14 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 	return *m, nil
 }
 
-func (m *Model) updateViewport() {
+func (m *Model) updateConverstaions() {
 	sidebarWidth := m.Width * 30 / 100
 	mainWidth := m.Width - sidebarWidth
 	// contentHeight := m.Height * 90 / 100
 
 	w := mainWidth * 70 / 100
 	m.ChatUI.SetWidth(w)
-	m.ChatUI.SetHeight(15)
-
+	m.ChatUI.SetHeight(int(float64(m.Height) / 2.6666666665))
 
 	m.ChatUI.SetItems(formatMessages(m.Conversations))
 }
