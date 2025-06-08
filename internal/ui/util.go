@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"sync"
@@ -8,7 +10,6 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -63,6 +64,39 @@ type FormattedMessage struct {
 	FromID *string `json:"fromId"`
 }
 
+func (m FormattedMessage) Title() string {
+	return m.Content
+}
+
+func (m FormattedMessage) FilterValue() string {
+	return m.Content
+}
+
+type MessagesDelegate struct {
+	list.DefaultDelegate
+}
+
+func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+	var title string
+
+	if entry, ok := item.(FormattedMessage); ok {
+		title = entry.Title()
+		if entry.IsFromMe {
+			title = "You: " + title
+		} else {
+			title = entry.Sender + ": " + title
+		}
+	} else {
+		return
+	}
+	str := lipgloss.NewStyle().Width(50).Height(2).Render(title)
+	if index == m.Index() {
+		fmt.Fprint(w, selectedStyle.Render(" "+str+" "))
+	} else {
+		fmt.Fprint(w, normalStyle.Render(" "+str+" "))
+	}
+}
+
 func (u UserInfo) Title() string {
 	return u.FirstName
 }
@@ -79,6 +113,22 @@ func (c ChannelAndGroupInfo) Title() string {
 	return c.ChannelTitle
 }
 
+type Mode string
+
+const (
+	ModeUsers    Mode = "users"
+	ModeChannels Mode = "channels"
+	ModeGroups   Mode = "groups"
+)
+
+type FocusedOn string
+
+const (
+	SideBar  FocusedOn = "sideBar"
+	Mainview FocusedOn = "mainView"
+	Input    FocusedOn = "input"
+)
+
 type Model struct {
 	Users           list.Model
 	SelectedUser    UserInfo
@@ -90,41 +140,33 @@ type Model struct {
 	SelectedGroup   ChannelAndGroupInfo
 	Height          int
 	Width           int
-	// mode = "users" | "channels" | "groups"
-	// ideally i wanted to create like union type in typescript but i have no idea how can i do this in golang
-	//figure out this later
-	Mode  string
-	Input textinput.Model
-	// this one has also 3 possible values
-	// sideBar | "mainView" | "input"
-	FocusedOn     string
-	Vp            viewport.Model
-	Conversations []FormattedMessage
+	Mode            Mode
+	Input           textinput.Model
+	FocusedOn       FocusedOn
+	ChatUI          list.Model
+	Conversations   []FormattedMessage
+	IsReply         bool
+	ReplyTo         *FormattedMessage
 }
 
-func formatMessages(msgs []FormattedMessage) string {
-	var lines []string
+func formatMessages(msgs []FormattedMessage) []list.Item {
+	var lines []list.Item
 	for _, m := range msgs {
-		timestamp := timestampStyle.Render(m.Date.Format("15:04"))
-
-		var senderText string
-		if m.IsFromMe {
-			senderText = myMessageStyle.Render("You:")
-		} else {
-			senderText = senderStyle.Render(m.Sender + ":")
-		}
-
-		content := contentStyle.Render(m.Content)
-
-		dateLine := lipgloss.JoinHorizontal(lipgloss.Top, timestamp)
-		messageLine := lipgloss.JoinHorizontal(lipgloss.Top, senderText, content)
-
-		fullMessage := lipgloss.JoinVertical(lipgloss.Left, dateLine, messageLine)
-
-		lines = append(lines, messageStyle.Render(fullMessage))
+		lines = append(lines, FormattedMessage{
+			ID:                   m.ID,
+			Sender:               m.Sender,
+			Content:              m.Content,
+			IsFromMe:             m.IsFromMe,
+			Media:                m.Media,
+			Date:                 m.Date,
+			IsUnsupportedMessage: m.IsUnsupportedMessage,
+			WebPage:              m.WebPage,
+			Document:             m.Document,
+			FromID:               m.FromID,
+		})
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, lines...)
+	return lines
 }
 
 // this is just temporary just to get things working
@@ -138,6 +180,7 @@ func GetModalContent(errorMessage string) string {
 }
 
 func setItemStyles(m *Model) string {
+
 	if m.IsModalVisible {
 		modalView := lipgloss.Place(
 			m.Width,
@@ -156,15 +199,18 @@ func setItemStyles(m *Model) string {
 	m.Users.SetWidth(sidebarWidth)
 	m.Channels.SetWidth(sidebarWidth)
 	m.Channels.SetHeight(contentHeight - 4)
-
 	m.Groups.SetWidth(sidebarWidth)
 
 	m.Groups.SetHeight(contentHeight - 4)
 
 	mainStyle := getMainStyle(mainWidth, contentHeight, m)
+	m.ChatUI.SetItems(formatMessages(m.Conversations))
 
+	w := mainWidth * 70 / 100
+	m.ChatUI.SetWidth(w)
+	m.ChatUI.SetHeight(15)
 	var userNameOrChannelName string
-	if m.Mode == "users" {
+	if m.Mode == ModeUsers {
 		lastSeenTime := m.SelectedUser.LastSeen
 		userNameOrChannelName = m.SelectedUser.Title()
 
@@ -174,7 +220,8 @@ func setItemStyles(m *Model) string {
 			userNameOrChannelName += " " + *lastSeenTime
 		}
 	}
-	if m.Mode == "channels" {
+
+	if m.Mode == ModeChannels {
 		selectedChannel := m.SelectedChannel
 		userNameOrChannelName = selectedChannel.FilterValue()
 		if selectedChannel.ParticipantsCount != nil {
@@ -189,7 +236,7 @@ func setItemStyles(m *Model) string {
 			userNameOrChannelName = sb.String()
 		}
 	}
-	if m.Mode == "groups" {
+	if m.Mode == ModeGroups {
 		selectedGroup := m.SelectedGroup
 		userNameOrChannelName = selectedGroup.FilterValue()
 		if selectedGroup.ParticipantsCount != nil {
@@ -212,28 +259,34 @@ func setItemStyles(m *Model) string {
 	mainContent := lipgloss.JoinVertical(
 		lipgloss.Top,
 		headerView,
-		m.Vp.View(),
+		m.ChatUI.View(),
 	)
 
 	chatView := mainStyle.Render(mainContent)
 	var sideBarContent string
 	switch m.Mode {
-	case "users":
+	case ModeUsers:
 		sideBarContent = m.Users.View()
-	case "channels":
+	case ModeChannels:
 		sideBarContent = m.Channels.View()
-	case "groups":
+	case ModeGroups:
 		sideBarContent = m.Groups.View()
 	default:
 		sideBarContent = ""
 	}
 	sidebar := getSideBarStyles(sidebarWidth, contentHeight, m).Render(sideBarContent)
 
-	if m.FocusedOn == "input" {
+	if m.FocusedOn == Input {
 		m.Input.Focus()
 	}
 
 	inputView := getInputStyle(m, inputHeight).Render(m.Input.View())
+	if m.IsReply && m.ReplyTo != nil {
+		//get one line only
+		str := strings.Join([]string{"Reply to \n", strings.Split(m.ReplyTo.Content, "\n")[0]}, "")
+		inputView = lipgloss.JoinVertical(lipgloss.Top, str, inputView)
+	}
+
 	row := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, chatView)
 	ui := lipgloss.JoinVertical(lipgloss.Top, row, inputView)
 	return ui

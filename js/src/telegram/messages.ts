@@ -20,6 +20,8 @@ type GetEntityTypes = {
 	type: ChatType;
 };
 
+
+
 const getEntity = ({ peer, type }: GetEntityTypes) => {
 	const entity =
 		type === 'user'
@@ -118,7 +120,8 @@ export async function forwardMessage(client: TelegramClient, params: ForwardMess
 	});
 	const toPeerEntity = getEntity({
 		peer: { accessHash: params.toPeer.accessHash, peerId: params.toPeer.peerId },
-		type: params.type
+		//TODO: we need to allow forwarding to groups, own channel and bot let's hard this for now 
+		type: "user"
 	});
 
 	const result = await client.invoke(
@@ -156,53 +159,46 @@ export const sendMessage = async (
 	path?: string,
 	onProgress?: (progress: number | null) => void
 ) => {
-	try {
-		if (!client.connected) {
-			await client.connect();
-		}
-		const entityLike = type === 'group' ? peerInfo.peerId : getEntity({ peer: peerInfo, type });
-		if (isFile && path) {
-			const buffer = await fs.readFile(path);
-			const fileName = path.split('/').pop() ?? 'file';
-			const customeFile = new CustomFile(fileName, buffer.length, path);
+	if (!client.connected) {
+		await client.connect();
+	}
+	const entityLike = type === 'group' ? peerInfo.peerId : getEntity({ peer: peerInfo, type });
+	if (isFile && path) {
+		const buffer = await fs.readFile(path);
+		const fileName = path.split('/').pop() ?? 'file';
+		const customeFile = new CustomFile(fileName, buffer.length, path);
 
-			const toUpload = await client.uploadFile({
-				file: customeFile,
-				workers: 1,
-				onProgress: (progress) => {
-					if (onProgress) {
-						onProgress(progress * 100);
-					}
+		const toUpload = await client.uploadFile({
+			file: customeFile,
+			workers: 1,
+			onProgress: (progress) => {
+				if (onProgress) {
+					onProgress(progress * 100);
 				}
-			});
+			}
+		});
 
-			const result = await client.sendFile(entityLike, {
-				file: toUpload,
-				caption: message,
-				replyTo: isReply ? replyToMessageId : undefined
-			});
+		const result = await client.sendFile(entityLike, {
+			file: toUpload,
+			caption: message,
+			replyTo: isReply ? replyToMessageId : undefined
+		});
 
-			onProgress?.(null);
+		onProgress?.(null);
 
-			return {
-				messageId: result.id,
-			};
-		}
-
-		const sendMessageParam = {
-			message: message,
-			...(isReply && { replyTo: replyToMessageId })
-		};
-		const result = await client.sendMessage(entityLike, sendMessageParam);
 		return {
-			messageId: result.id,
-		};
-	} catch (err) {
-		  throw new Error((err as Error).message)
-		return {
-			messageId: null,
+			messageId: result?.id,
 		};
 	}
+
+	const sendMessageParam = {
+		message: message,
+		...(isReply && { replyTo: Number(replyToMessageId) })
+	};
+	const result = await client.sendMessage(entityLike, sendMessageParam);
+	return {
+		messageId: result?.id,
+	};
 };
 
 /**

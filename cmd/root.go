@@ -9,7 +9,6 @@ import (
 
 	list "github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
-	viewport "github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kumneger0/cligram/internal/rpc"
 	"github.com/kumneger0/cligram/internal/runner"
@@ -19,9 +18,8 @@ import (
 	"golang.org/x/term"
 )
 
-
 func startSeparateJsProces(wg *sync.WaitGroup) {
-    jsExcutable, err := runner.GetJSExcutable()
+	jsExcutable, err := runner.GetJSExcutable()
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to get JS executable: %v\n", err)
@@ -125,10 +123,13 @@ func newRootCmd(version string) *cobra.Command {
 			}
 
 			userList := list.New(users, ui.CustomDelegate{}, 10, 20)
+			userList.SetShowPagination(false)
 			channels := []list.Item{}
 			channelList := (list.New(channels, ui.CustomDelegate{}, 10, 20))
+			channelList.SetShowPagination(false)
 			groups := []list.Item{}
 			groupList := (list.New(groups, ui.CustomDelegate{}, 10, 20))
+			groupList.SetShowPagination(false)
 
 			userList.SetShowHelp(false)
 			channelList.SetShowHelp(false)
@@ -142,6 +143,13 @@ func newRootCmd(version string) *cobra.Command {
 			fd := int(os.Stdout.Fd())
 			width, height, _ := term.GetSize(fd)
 
+			chatList := list.New([]list.Item{}, ui.MessagesDelegate{}, 10, 20)
+			chatList.SetShowPagination(false)
+			chatList.SetShowHelp(false)
+			chatList.SetShowFilter(false)
+			chatList.SetShowTitle(false)
+			chatList.SetShowStatusBar(false)
+
 			m := ui.Model{
 				Input:  input,
 				Users:  userList,
@@ -154,7 +162,7 @@ func newRootCmd(version string) *cobra.Command {
 				IsModalVisible: false,
 				Mode:           "users",
 				FocusedOn:      "sideBar",
-				Vp:             viewport.New(0, 0),
+				ChatUI:         chatList,
 			}
 
 			backgorund := m
