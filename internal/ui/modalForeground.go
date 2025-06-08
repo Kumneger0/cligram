@@ -82,6 +82,27 @@ type SelectSearchedUserResult struct {
 
 type CloseOverlay struct{}
 
+type ModalMode string
+
+const (
+	ModalModeSearch         ModalMode = "SEARCH"
+	ModalModeForwardMessage ModalMode = "FORWARD_MESSAGE"
+	ModalModeDeleteMessage  ModalMode = "DELETE_MESSAGE"
+)
+
+type OpenModalMsg struct {
+	ModalMode ModalMode
+    FromPeer  *list.Item
+	Message   *FormattedMessage
+	UsersList *list.Model
+}
+
+type ForwardMsg struct {
+	msg      *FormattedMessage
+	reciever *list.Item
+	fromPeer *list.Item
+}
+
 type Foreground struct {
 	windowWidth          int
 	windowHeight         int
@@ -90,6 +111,10 @@ type Foreground struct {
 	focusedOn            focusState
 	searchResultUsers    []UserInfo
 	SearchResultChannels []ChannelAndGroupInfo
+	ModalMode            ModalMode
+	UsersList            *list.Model
+	Message              *FormattedMessage
+	fromPeer             *list.Item
 }
 
 func (f Foreground) Init() tea.Cmd {
@@ -132,6 +157,30 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				m.input.Focus()
 			}
 		case "enter":
+			if m.ModalMode == ModalModeForwardMessage {
+				if m.UsersList != nil {
+					selectedUser := m.UsersList.SelectedItem()
+
+					closeCommandCMD := func() tea.Msg {
+						return CloseOverlay{}
+					}
+
+					var from list.Item
+					if m.fromPeer != nil {
+						from = *m.fromPeer
+					}
+
+					if selectedUser != nil {
+						return m, tea.Batch(closeCommandCMD, func() tea.Msg {
+							return ForwardMsg{
+								msg:      m.Message,
+								reciever: &selectedUser,
+								fromPeer: &from,
+							}
+						})
+					}
+				}
+			}
 			if m.focusedOn == LIST {
 				selectedUser := m.searchResultCombined.SelectedItem()
 				if selectedUser != nil {
@@ -184,8 +233,8 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 							}
 							if group != nil {
 								return SelectSearchedUserResult{
-									group:   group,
-									user:    nil,
+									group: group,
+									user:  nil,
 								}
 							}
 							return nil
@@ -240,10 +289,24 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			setTotalSearchResultUsers(msg, m)
 			m.searchResultCombined.SetItems(users)
 		}
+	case OpenModalMsg:
+		m.ModalMode = msg.ModalMode
+		m.Message = msg.Message
+		m.fromPeer = msg.FromPeer
+		m.UsersList = msg.UsersList
+		if msg.ModalMode == ModalModeSearch {
+			m.focusedOn = SEARCH
+		}
 	}
 
 	input, cmd := m.input.Update(message)
 	m.input = input
+
+	if m.UsersList != nil {
+		userList, userListCmd := m.UsersList.Update(message)
+		m.UsersList = &userList
+		cmds = append(cmds, userListCmd)
+	}
 
 	cmds = append(cmds, cmd)
 	if m.focusedOn == LIST {
@@ -286,10 +349,34 @@ func setTotalSearchResultUsers(searchMsg rpc.SearchUserMsg, m *Foreground) {
 }
 
 func (f Foreground) View() string {
+
 	foreStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder(), true).
 		BorderForeground(lipgloss.Color("6")).
 		Padding(0, 1)
+
+	if f.ModalMode == ModalModeForwardMessage {
+		title := "Forward Message"
+		boldStyle := lipgloss.NewStyle().Bold(true)
+		title = boldStyle.Render(title)
+		f.UsersList.SetShowFilter(false)
+		f.UsersList.SetShowStatusBar(false)
+		f.UsersList.SetShowTitle(false)
+		f.UsersList.SetShowHelp(false)
+		f.UsersList.SetWidth(f.windowWidth / 3)
+		f.UsersList.SetHeight(f.windowHeight / 2)
+		content := lipgloss.NewStyle().Border(lipgloss.NormalBorder()).Render(f.UsersList.View())
+		layout := lipgloss.JoinVertical(lipgloss.Left, title, content)
+		return foreStyle.Render(layout)
+	}
+	if f.ModalMode == ModalModeDeleteMessage {
+		title := "Delete Message"
+		//here we need to show are u sure you want to delete this message this can't be undone
+		boldStyle := lipgloss.NewStyle().Bold(true)
+		title = boldStyle.Render(title)
+		layout := lipgloss.JoinVertical(lipgloss.Left, title)
+		return foreStyle.Render(layout)
+	}
 
 	boldStyle := lipgloss.NewStyle().Bold(true)
 	title := boldStyle.Render("Search")

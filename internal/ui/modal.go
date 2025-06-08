@@ -46,6 +46,8 @@ func (m Manager) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.State = MainView
 		return m, nil
 
+	case OpenModalMsg:
+		m.State = ModalView
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "ctrl+c", "esc":
