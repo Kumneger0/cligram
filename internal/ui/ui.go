@@ -263,6 +263,7 @@ func (m *Model) updateConverstaions() {
 	m.ChatUI.Select(conversationLastIndex)
 }
 
+// getItemBorder returns a double border if the item is selected, otherwise returns a normal border.
 func getItemBorder(isSelected bool) lipgloss.Border {
 	if isSelected {
 		return lipgloss.DoubleBorder()
