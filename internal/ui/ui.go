@@ -256,7 +256,11 @@ func (m *Model) updateConverstaions() {
 	m.ChatUI.SetWidth(w)
 	m.ChatUI.SetHeight(int(float64(m.Height) / 2.6666666665))
 
+	conversations := m.Conversations
+	conversationLastIndex := len(conversations) - 1
+
 	m.ChatUI.SetItems(formatMessages(m.Conversations))
+	m.ChatUI.Select(conversationLastIndex)
 }
 
 func getItemBorder(isSelected bool) lipgloss.Border {
