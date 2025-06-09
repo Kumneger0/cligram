@@ -123,6 +123,10 @@ func (f Foreground) Init() tea.Cmd {
 	return nil
 }
 
+type MessageDeletionConfrimResponseMsg struct {
+	yes bool
+}
+
 var debouncedSearch = Debounce(func(args ...interface{}) tea.Msg {
 	query := args[0].(string)
 	return rpc.RpcClient.Search(query)
@@ -244,6 +248,25 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 			}
+		case "y", "Y":
+			if m.ModalMode == ModalModeDeleteMessage {
+				closeCommandCMD := func() tea.Msg {
+					return CloseOverlay{}
+				}
+
+				return m, tea.Batch(closeCommandCMD, func() tea.Msg {
+					return MessageDeletionConfrimResponseMsg{yes: true}
+				})
+			}
+		case "n", "N":
+			if m.ModalMode == ModalModeDeleteMessage {
+				closeCommandCMD := func() tea.Msg {
+					return CloseOverlay{}
+				}
+				return m, tea.Batch(closeCommandCMD, func() tea.Msg {
+					return MessageDeletionConfrimResponseMsg{yes: false}
+				})
+			}
 		}
 
 		if m.input.Focused() {
@@ -253,6 +276,7 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, searchCmd)
 			}
 		}
+
 	case rpc.SearchUserMsg:
 		if msg.Err != nil {
 			//TODO:show error message here
