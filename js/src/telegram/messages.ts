@@ -216,12 +216,10 @@ export const deleteMessage = async (
 	messageId: number,
 	type: ChatType = 'user'
 ) => {
-	try {
-		const entity = getEntity({ peer: peerInfo, type });
-		const result = await client.deleteMessages(entity, [Number(messageId)], { revoke: true });
-		return result;
-	} catch (err) {
-		return null;
+	const entity = getEntity({ peer: peerInfo, type });
+	await client.deleteMessages(entity, [Number(messageId)], { revoke: true });
+	return {
+		status: 'success'
 	}
 };
 

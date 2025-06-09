@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/kumneger0/cligram/internal/rpc"
 )
 
 var (
@@ -25,53 +26,6 @@ var (
 		BorderBottom(true)
 )
 
-type UserInfo struct {
-	FirstName   string  `json:"firstName"`
-	IsBot       bool    `json:"isBot"`
-	PeerID      string  `json:"peerId"`
-	AccessHash  string  `json:"accessHash"`
-	UnreadCount int     `json:"unreadCount"`
-	LastSeen    *string `json:"lastSeen"`
-	IsOnline    bool    `json:"isOnline"`
-}
-
-type ChannelAndGroupInfo struct {
-	ChannelTitle      string  `json:"title"`
-	Username          *string `json:"username"`
-	ChannelID         string  `json:"channelId"`
-	AccessHash        string  `json:"accessHash"`
-	IsCreator         bool    `json:"isCreator"`
-	IsBroadcast       bool    `json:"isBroadcast"`
-	ParticipantsCount *int    `json:"participantsCount"`
-	UnreadCount       int     `json:"unreadCount"`
-}
-
-type FormattedMessage struct {
-	ID                   int64     `json:"id"`
-	Sender               string    `json:"sender"`
-	Content              string    `json:"content"`
-	IsFromMe             bool      `json:"isFromMe"`
-	Media                *string   `json:"media,omitempty"`
-	Date                 time.Time `json:"date"`
-	IsUnsupportedMessage bool      `json:"isUnsupportedMessage"`
-	WebPage              *struct {
-		URL        string  `json:"url"`
-		DisplayURL *string `json:"displayUrl,omitempty"`
-	} `json:"webPage,omitempty"`
-	Document *struct {
-		Document string `json:"document"`
-	} `json:"document,omitempty"`
-	FromID *string `json:"fromId"`
-}
-
-func (m FormattedMessage) Title() string {
-	return m.Content
-}
-
-func (m FormattedMessage) FilterValue() string {
-	return m.Content
-}
-
 type MessagesDelegate struct {
 	list.DefaultDelegate
 }
@@ -79,7 +33,7 @@ type MessagesDelegate struct {
 func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	var title string
 
-	if entry, ok := item.(FormattedMessage); ok {
+	if entry, ok := item.(rpc.FormattedMessage); ok {
 		title = entry.Title()
 		if entry.IsFromMe {
 			title = "You: " + title
@@ -95,22 +49,6 @@ func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list
 	} else {
 		fmt.Fprint(w, normalStyle.Render(" "+str+" "))
 	}
-}
-
-func (u UserInfo) Title() string {
-	return u.FirstName
-}
-
-func (u UserInfo) FilterValue() string {
-	return u.FirstName
-}
-
-func (c ChannelAndGroupInfo) FilterValue() string {
-	return c.ChannelTitle
-}
-
-func (c ChannelAndGroupInfo) Title() string {
-	return c.ChannelTitle
 }
 
 type Mode string
@@ -131,39 +69,28 @@ const (
 
 type Model struct {
 	Users           list.Model
-	SelectedUser    UserInfo
+	SelectedUser    rpc.UserInfo
 	Channels        list.Model
 	IsModalVisible  bool
 	ModalContent    string
-	SelectedChannel ChannelAndGroupInfo
+	SelectedChannel rpc.ChannelAndGroupInfo
 	Groups          list.Model
-	SelectedGroup   ChannelAndGroupInfo
+	SelectedGroup   rpc.ChannelAndGroupInfo
 	Height          int
 	Width           int
 	Mode            Mode
 	Input           textinput.Model
 	FocusedOn       FocusedOn
 	ChatUI          list.Model
-	Conversations   []FormattedMessage
+	Conversations   []rpc.FormattedMessage
 	IsReply         bool
-	ReplyTo         *FormattedMessage
+	ReplyTo         *rpc.FormattedMessage
 }
 
-func formatMessages(msgs []FormattedMessage) []list.Item {
+func formatMessages(msgs []rpc.FormattedMessage) []list.Item {
 	var lines []list.Item
 	for _, m := range msgs {
-		lines = append(lines, FormattedMessage{
-			ID:                   m.ID,
-			Sender:               m.Sender,
-			Content:              m.Content,
-			IsFromMe:             m.IsFromMe,
-			Media:                m.Media,
-			Date:                 m.Date,
-			IsUnsupportedMessage: m.IsUnsupportedMessage,
-			WebPage:              m.WebPage,
-			Document:             m.Document,
-			FromID:               m.FromID,
-		})
+		lines = append(lines, m)
 	}
 
 	return lines

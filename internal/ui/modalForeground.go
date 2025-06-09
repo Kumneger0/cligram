@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -75,9 +76,9 @@ func (s SearchResult) FilterValue() string {
 }
 
 type SelectSearchedUserResult struct {
-	user    *UserInfo
-	channel *ChannelAndGroupInfo
-	group   *ChannelAndGroupInfo
+	user    *rpc.UserInfo
+	channel *rpc.ChannelAndGroupInfo
+	group   *rpc.ChannelAndGroupInfo
 }
 
 type CloseOverlay struct{}
@@ -92,13 +93,13 @@ const (
 
 type OpenModalMsg struct {
 	ModalMode ModalMode
-    FromPeer  *list.Item
-	Message   *FormattedMessage
+	FromPeer  *list.Item
+	Message   *rpc.FormattedMessage
 	UsersList *list.Model
 }
 
 type ForwardMsg struct {
-	msg      *FormattedMessage
+	msg      *rpc.FormattedMessage
 	reciever *list.Item
 	fromPeer *list.Item
 }
@@ -109,17 +110,21 @@ type Foreground struct {
 	input                textinput.Model
 	searchResultCombined list.Model
 	focusedOn            focusState
-	searchResultUsers    []UserInfo
-	SearchResultChannels []ChannelAndGroupInfo
+	searchResultUsers    []rpc.UserInfo
+	SearchResultChannels []rpc.ChannelAndGroupInfo
 	ModalMode            ModalMode
 	UsersList            *list.Model
-	Message              *FormattedMessage
+	Message              *rpc.FormattedMessage
 	fromPeer             *list.Item
 }
 
 func (f Foreground) Init() tea.Cmd {
 	f.focusedOn = SEARCH
 	return nil
+}
+
+type MessageDeletionConfrimResponseMsg struct {
+	yes bool
 }
 
 var debouncedSearch = Debounce(func(args ...interface{}) tea.Msg {
@@ -190,7 +195,7 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 							return CloseOverlay{}
 						}
 
-						var channel *ChannelAndGroupInfo = nil
+						var channel *rpc.ChannelAndGroupInfo = nil
 						if user.ChannelOrUserType == CHANNEL {
 							for _, v := range m.SearchResultChannels {
 								if v.ChannelID == user.PeerID {
@@ -199,7 +204,7 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 							}
 						}
 
-						var u *UserInfo = nil
+						var u *rpc.UserInfo = nil
 						if user.ChannelOrUserType == USER {
 							for _, v := range m.searchResultUsers {
 								if v.PeerID == user.PeerID {
@@ -208,7 +213,7 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 							}
 						}
 
-						var group *ChannelAndGroupInfo = nil
+						var group *rpc.ChannelAndGroupInfo = nil
 						if user.ChannelOrUserType == GROUP {
 							for _, v := range m.SearchResultChannels {
 								if v.ChannelID == user.PeerID {
@@ -243,6 +248,25 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 			}
+		case "y", "Y":
+			if m.ModalMode == ModalModeDeleteMessage {
+				closeCommandCMD := func() tea.Msg {
+					return CloseOverlay{}
+				}
+
+				return m, tea.Batch(closeCommandCMD, func() tea.Msg {
+					return MessageDeletionConfrimResponseMsg{yes: true}
+				})
+			}
+		case "n", "N":
+			if m.ModalMode == ModalModeDeleteMessage {
+				closeCommandCMD := func() tea.Msg {
+					return CloseOverlay{}
+				}
+				return m, tea.Batch(closeCommandCMD, func() tea.Msg {
+					return MessageDeletionConfrimResponseMsg{yes: false}
+				})
+			}
 		}
 
 		if m.input.Focused() {
@@ -252,6 +276,7 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, searchCmd)
 			}
 		}
+
 	case rpc.SearchUserMsg:
 		if msg.Err != nil {
 			//TODO:show error message here
@@ -319,33 +344,8 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func setTotalSearchResultUsers(searchMsg rpc.SearchUserMsg, m *Foreground) {
-	var users []UserInfo
-	for _, v := range searchMsg.Response.Result.Users {
-		users = append(users, UserInfo{
-			FirstName:   v.FirstName,
-			IsBot:       v.IsBot,
-			PeerID:      v.PeerID,
-			AccessHash:  v.AccessHash,
-			UnreadCount: v.UnreadCount,
-			LastSeen:    v.LastSeen,
-			IsOnline:    v.IsOnline,
-		})
-	}
-	var channels []ChannelAndGroupInfo
-	for _, v := range searchMsg.Response.Result.Channels {
-		channels = append(channels, ChannelAndGroupInfo{
-			ChannelTitle:      v.ChannelTitle,
-			Username:          v.Username,
-			ChannelID:         v.ChannelID,
-			AccessHash:        v.AccessHash,
-			IsCreator:         v.IsCreator,
-			IsBroadcast:       v.IsBroadcast,
-			ParticipantsCount: v.ParticipantsCount,
-			UnreadCount:       v.UnreadCount,
-		})
-	}
-	m.searchResultUsers = users
-	m.SearchResultChannels = channels
+	m.searchResultUsers = searchMsg.Response.Result.Users
+	m.SearchResultChannels = searchMsg.Response.Result.Channels
 }
 
 func (f Foreground) View() string {
@@ -371,10 +371,37 @@ func (f Foreground) View() string {
 	}
 	if f.ModalMode == ModalModeDeleteMessage {
 		title := "Delete Message"
-		//here we need to show are u sure you want to delete this message this can't be undone
+
+		yes := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("fff")).
+			Background(lipgloss.Color("#25D366")).
+			Render("Y")
+
+		no := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("fff")).
+			Background(lipgloss.Color("#dc2626")).
+			Render("N")
+
+		contentStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("161b22")).
+			Background(lipgloss.Color("fff")).
+			Padding(1, 2)
+
+		var content strings.Builder
+		content.WriteString("Are You Sure You want to delete this message \n")
+		content.WriteString("Press")
+		content.WriteString(" ")
+		content.WriteString(yes)
+		content.WriteString(" to confirm")
+		content.WriteString(" or ")
+		content.WriteString(no)
+		content.WriteString(" to cancel")
+
+		contentString := contentStyle.Render(content.String())
+
 		boldStyle := lipgloss.NewStyle().Bold(true)
 		title = boldStyle.Render(title)
-		layout := lipgloss.JoinVertical(lipgloss.Left, title)
+		layout := lipgloss.JoinVertical(lipgloss.Left, title, contentString)
 		return foreStyle.Render(layout)
 	}
 

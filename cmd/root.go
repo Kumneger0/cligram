@@ -111,7 +111,7 @@ func newRootCmd(version string) *cobra.Command {
 			duplicatedUsers := msg.Response.Result
 			var users []list.Item
 			for _, du := range duplicatedUsers {
-				users = append(users, ui.UserInfo{
+				users = append(users, rpc.UserInfo{
 					UnreadCount: du.UnreadCount,
 					FirstName:   du.FirstName,
 					IsBot:       du.IsBot,

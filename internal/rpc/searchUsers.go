@@ -14,8 +14,8 @@ type UserSearchRpcResponse struct {
 		Data    interface{} `json:"data,omitempty"`
 	} `json:"error,omitempty"`
 	Result *struct {
-		Users    []DuplicatedUserInfo            `json:"users"`
-		Channels []DuplicatedChannelAndGroupInfo `json:"channels"`
+		Users    []UserInfo            `json:"users"`
+		Channels []ChannelAndGroupInfo `json:"channels"`
 	} `json:"result,omitempty"`
 }
 
