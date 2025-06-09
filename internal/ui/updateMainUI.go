@@ -8,6 +8,51 @@ import (
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case MessageDeletionConfrimResponseMsg:
+		if msg.yes {
+			var peer rpc.PeerInfo
+			selectedItemInChat := m.ChatUI.SelectedItem().(rpc.FormattedMessage)
+			var cType rpc.ChatType
+
+			if m.Mode == ModeUsers {
+				peer = rpc.PeerInfo{
+					PeerID:     m.SelectedUser.PeerID,
+					AccessHash: m.SelectedUser.AccessHash,
+				}
+				cType = rpc.UserChat
+			}
+
+			if m.Mode == ModeChannels {
+				peer = rpc.PeerInfo{
+					PeerID:     m.SelectedChannel.ChannelID,
+					AccessHash: m.SelectedChannel.AccessHash,
+				}
+				cType = rpc.ChannelChat
+			}
+
+			if m.Mode == ModeGroups {
+				peer = rpc.PeerInfo{
+					PeerID:     m.SelectedGroup.ChannelID,
+					AccessHash: m.SelectedGroup.AccessHash,
+				}
+				cType = rpc.GroupChat
+			}
+
+			response, err := rpc.RpcClient.DeleteMessage(peer, int(selectedItemInChat.ID), cType)
+			if err != nil {
+				m.IsModalVisible = true
+				m.ModalContent = GetModalContent(err.Error())
+				return m, nil
+			}
+
+			if response.Error != nil {
+				m.IsModalVisible = true
+				m.ModalContent = GetModalContent(response.Error.Message)
+				return m, nil
+			}
+
+			return m, nil
+		}
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "ctrl+c":
