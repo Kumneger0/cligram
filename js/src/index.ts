@@ -46,7 +46,7 @@ const handlers = {
 	getUserChats,
 	getUserInfo,
 	getAllMessages,
-	forwardMessage
+	forwardMessage,
 };
 
 

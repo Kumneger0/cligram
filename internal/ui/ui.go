@@ -20,10 +20,10 @@ type CustomDelegate struct {
 func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	var title string
 
-	if entry, ok := item.(UserInfo); ok {
+	if entry, ok := item.(rpc.UserInfo); ok {
 		title = entry.Title()
 		title = "👤 " + title
-	} else if entry, ok := item.(ChannelAndGroupInfo); ok {
+	} else if entry, ok := item.(rpc.ChannelAndGroupInfo); ok {
 		title = entry.Title()
 		if entry.IsBroadcast {
 			title = "📢 " + title
@@ -46,7 +46,7 @@ func (m Model) Init() tea.Cmd {
 	return nil
 }
 
-func getChannelIndex(m Model, channel ChannelAndGroupInfo) int {
+func getChannelIndex(m Model, channel rpc.ChannelAndGroupInfo) int {
 	var index int = -1
 	for i, v := range m.Channels.Items() {
 		if v.FilterValue() == channel.ChannelTitle {
@@ -56,7 +56,7 @@ func getChannelIndex(m Model, channel ChannelAndGroupInfo) int {
 	return index
 }
 
-func getGroupIndex(m Model, group ChannelAndGroupInfo) int {
+func getGroupIndex(m Model, group rpc.ChannelAndGroupInfo) int {
 	var index int = -1
 	for i, v := range m.Groups.Items() {
 		if v.FilterValue() == group.ChannelTitle {
@@ -66,7 +66,7 @@ func getGroupIndex(m Model, group ChannelAndGroupInfo) int {
 	return index
 }
 
-func getUserIndex(m Model, user UserInfo) int {
+func getUserIndex(m Model, user rpc.UserInfo) int {
 	var index int = -1
 	for i, v := range m.Users.Items() {
 		if v.FilterValue() == user.FilterValue() {
@@ -109,7 +109,6 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 	messageToReply := *m.ReplyTo
 	replayToMessageId := strconv.FormatInt(messageToReply.ID, 10)
 
-
 	response, err := rpc.RpcClient.SendMessage(peerInfo, userMsg, m.IsReply && m.ReplyTo != nil, replayToMessageId, cType, false, nil)
 	if err != nil {
 		//TODO: trigger to show toast message
@@ -121,7 +120,7 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 		return *m, nil
 	}
 
-	m.Conversations = append(m.Conversations, FormattedMessage{
+	m.Conversations = append(m.Conversations, rpc.FormattedMessage{
 		//This is just to show the message immediatly after sending
 		// so we don't have to refetch the whole message since we are the one who is sending
 		ID:                   int64(rand.Int()),
@@ -169,7 +168,7 @@ func handleUserChange(m *Model) (Model, tea.Cmd) {
 	var cType rpc.ChatType
 	var pInfo rpc.PeerInfoParams
 	if m.Mode == ModeUsers {
-		m.SelectedUser = m.Users.SelectedItem().(UserInfo)
+		m.SelectedUser = m.Users.SelectedItem().(rpc.UserInfo)
 		cType = "user"
 		pInfo = rpc.PeerInfoParams{
 			AccessHash:                  m.SelectedUser.AccessHash,
@@ -178,7 +177,7 @@ func handleUserChange(m *Model) (Model, tea.Cmd) {
 		}
 	}
 	if m.Mode == ModeChannels {
-		m.SelectedChannel = m.Channels.SelectedItem().(ChannelAndGroupInfo)
+		m.SelectedChannel = m.Channels.SelectedItem().(rpc.ChannelAndGroupInfo)
 		cType = "channel"
 		pInfo = rpc.PeerInfoParams{
 			AccessHash:                  m.SelectedChannel.AccessHash,
@@ -190,7 +189,7 @@ func handleUserChange(m *Model) (Model, tea.Cmd) {
 		}
 	}
 	if m.Mode == ModeGroups {
-		m.SelectedGroup = m.Groups.SelectedItem().(ChannelAndGroupInfo)
+		m.SelectedGroup = m.Groups.SelectedItem().(rpc.ChannelAndGroupInfo)
 		cType = "group"
 		pInfo = rpc.PeerInfoParams{
 			AccessHash:                  m.SelectedGroup.AccessHash,
@@ -205,23 +204,7 @@ func handleUserChange(m *Model) (Model, tea.Cmd) {
 		return *m, nil
 	}
 
-	var formatedMessages []FormattedMessage
-
-	for _, v := range result.Result {
-		formatedMessages = append(formatedMessages, FormattedMessage{
-			ID:                   v.ID,
-			Sender:               v.Sender,
-			Content:              v.Content,
-			IsFromMe:             v.IsFromMe,
-			Media:                v.Media,
-			Date:                 v.Date,
-			IsUnsupportedMessage: v.IsUnsupportedMessage,
-			WebPage:              v.WebPage,
-			Document:             v.Document,
-			FromID:               v.FromID,
-		})
-
-	}
+	formatedMessages := result.Result
 	m.Conversations = formatedMessages
 	m.updateConverstaions()
 	return *m, nil

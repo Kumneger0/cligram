@@ -34,6 +34,16 @@ type FormattedMessage struct {
 	FromID *string `json:"fromId"`
 }
 
+
+func (m FormattedMessage) Title() string {
+	return m.Content
+}
+
+func (m FormattedMessage) FilterValue() string {
+	return m.Content
+}
+
+
 type PeerInfoParams struct {
 	AccessHash                  string `json:"accessHash"`
 	PeerID                      string `json:"peerId"`

@@ -167,3 +167,41 @@ func (c *JsonRpcClient) Call(method string, params interface{}) ([]byte, error) 
 	return jsonPayloadBytes, nil
 }
 
+
+type UserInfo struct {
+	FirstName   string  `json:"firstName"`
+	IsBot       bool    `json:"isBot"`
+	PeerID      string  `json:"peerId"`
+	AccessHash  string  `json:"accessHash"`
+	UnreadCount int     `json:"unreadCount"`
+	LastSeen    *string `json:"lastSeen"`
+	IsOnline    bool    `json:"isOnline"`
+}
+
+type ChannelAndGroupInfo struct {
+	ChannelTitle      string  `json:"title"`
+	Username          *string `json:"username"`
+	ChannelID         string  `json:"channelId"`
+	AccessHash        string  `json:"accessHash"`
+	IsCreator         bool    `json:"isCreator"`
+	IsBroadcast       bool    `json:"isBroadcast"`
+	ParticipantsCount *int    `json:"participantsCount"`
+	UnreadCount       int     `json:"unreadCount"`
+}
+
+
+func (u UserInfo) Title() string {
+	return u.FirstName
+}
+
+func (u UserInfo) FilterValue() string {
+	return u.FirstName
+}
+
+func (c ChannelAndGroupInfo) FilterValue() string {
+	return c.ChannelTitle
+}
+
+func (c ChannelAndGroupInfo) Title() string {
+	return c.ChannelTitle
+}
