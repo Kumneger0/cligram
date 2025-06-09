@@ -44,7 +44,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				canWrite := (m.Mode == ModeUsers || m.Mode == ModeGroups) || (m.Mode == ModeChannels && m.SelectedChannel.IsCreator)
 				if canWrite {
 					m.IsReply = true
-					if selectedMessage, ok := m.ChatUI.SelectedItem().(FormattedMessage); ok {
+					if selectedMessage, ok := m.ChatUI.SelectedItem().(rpc.FormattedMessage); ok {
 						m.FocusedOn = Input
 						m.ReplyTo = &selectedMessage
 					}
@@ -53,15 +53,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "d":
 			if m.FocusedOn == Mainview {
+				selectedItem := m.ChatUI.SelectedItem().(rpc.FormattedMessage)
 				return m, func() tea.Msg {
 					return OpenModalMsg{
 						ModalMode: ModalModeDeleteMessage,
+						Message:   &selectedItem,
 					}
 				}
 			}
 		case "f":
 			if m.FocusedOn == Mainview {
-				selectedMessage, ok := m.ChatUI.SelectedItem().(FormattedMessage)
+				selectedMessage, ok := m.ChatUI.SelectedItem().(rpc.FormattedMessage)
 				var from list.Item
 
 				if m.Mode == ModeUsers {
@@ -98,15 +100,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		duplicatedUsers := msg.Response.Result
 		var users []list.Item
 		for _, du := range duplicatedUsers {
-			users = append(users, UserInfo{
-				UnreadCount: du.UnreadCount,
-				FirstName:   du.FirstName,
-				IsBot:       du.IsBot,
-				PeerID:      du.PeerID,
-				AccessHash:  du.PeerID,
-				LastSeen:    du.LastSeen,
-				IsOnline:    du.IsOnline,
-			})
+			users = append(users, du)
 		}
 		m.Users.SetItems(users)
 		return m, nil
@@ -120,16 +114,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		duplicatedUsers := msg.Response.Result
 		var channels []list.Item
 		for _, du := range duplicatedUsers {
-			channels = append(channels, ChannelAndGroupInfo{
-				ChannelTitle:      du.ChannelTitle,
-				Username:          nil,
-				ChannelID:         du.ChannelID,
-				AccessHash:        du.AccessHash,
-				IsCreator:         du.IsCreator,
-				IsBroadcast:       du.IsBroadcast,
-				ParticipantsCount: du.ParticipantsCount,
-				UnreadCount:       du.UnreadCount,
-			})
+			channels = append(channels, du)
 		}
 		m.Channels.SetItems(channels)
 		return m, nil
@@ -143,16 +128,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		duplicatedGroups := msg.Response.Result
 		var groups []list.Item
 		for _, du := range duplicatedGroups {
-			groups = append(groups, ChannelAndGroupInfo{
-				ChannelTitle:      du.ChannelTitle,
-				Username:          nil,
-				ChannelID:         du.ChannelID,
-				AccessHash:        du.AccessHash,
-				IsCreator:         du.IsCreator,
-				IsBroadcast:       du.IsBroadcast,
-				ParticipantsCount: du.ParticipantsCount,
-				UnreadCount:       du.UnreadCount,
-			})
+			groups = append(groups, du)
 		}
 		m.Groups.SetItems(groups)
 		return m, nil
@@ -166,27 +142,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var toPeer rpc.PeerInfo
 		var cType rpc.ChatType
 
-		fromUser, ok := fromPeer.(UserInfo)
+		fromUser, ok := fromPeer.(rpc.UserInfo)
 		if ok {
 			from.PeerID = fromUser.PeerID
 			from.AccessHash = fromUser.AccessHash
 			cType = "user"
 		}
 
-		fromChannelOrGroup, ok := fromPeer.(ChannelAndGroupInfo)
+		fromChannelOrGroup, ok := fromPeer.(rpc.ChannelAndGroupInfo)
 		if ok {
 			from.PeerID = fromChannelOrGroup.ChannelID
 			from.AccessHash = fromChannelOrGroup.AccessHash
 			cType = "channel"
 		}
 
-		userOrChannel, ok := reciever.(UserInfo)
+		userOrChannel, ok := reciever.(rpc.UserInfo)
 		if ok {
 			toPeer.PeerID = userOrChannel.PeerID
 			toPeer.AccessHash = userOrChannel.AccessHash
 		}
 
-		channelOrGroup, ok := reciever.(ChannelAndGroupInfo)
+		channelOrGroup, ok := reciever.(rpc.ChannelAndGroupInfo)
 		if ok {
 			toPeer.PeerID = channelOrGroup.ChannelID
 			toPeer.AccessHash = channelOrGroup.AccessHash

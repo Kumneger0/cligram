@@ -8,26 +8,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 )
-
-type DuplicatedChannelAndGroupInfo struct {
-	ChannelTitle      string  `json:"title"`
-	Username          *string `json:"username"`
-	ChannelID         string  `json:"channelId"`
-	AccessHash        string  `json:"accessHash"`
-	IsCreator         bool    `json:"isCreator"`
-	IsBroadcast       bool    `json:"isBroadcast"`
-	ParticipantsCount *int    `json:"participantsCount"`
-	UnreadCount       int     `json:"unreadCount"`
-}
-
-func (dc DuplicatedChannelAndGroupInfo) Title() string {
-	return dc.ChannelTitle
-}
-
-func (dc DuplicatedChannelAndGroupInfo) FilterValue() string {
-	return dc.ChannelTitle
-}
-
 type UserChannelResponse struct {
 	JsonRPC string `json:"jsonrpc"`
 	ID      int    `json:"id"`
@@ -36,7 +16,7 @@ type UserChannelResponse struct {
 		Message string      `json:"message"`
 		Data    interface{} `json:"data,omitempty"`
 	} `json:"error,omitempty"`
-	Result []DuplicatedChannelAndGroupInfo `json:"result,omitempty"`
+	Result []ChannelAndGroupInfo `json:"result,omitempty"`
 }
 
 type UserChannelMsg struct {
