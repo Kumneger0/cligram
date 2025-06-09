@@ -51,6 +51,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
+			if response.Result.Status == "success" {
+				var updatedConversations []rpc.FormattedMessage
+				for _, v := range m.Conversations {
+					if v.ID != selectedItemInChat.ID {
+						updatedConversations = append(updatedConversations, v)
+					}
+				}
+				m.Conversations = updatedConversations
+				cmd := m.ChatUI.SetItems(formatMessages(updatedConversations))
+				return m, cmd
+			}
+
 			return m, nil
 		}
 	case tea.KeyMsg:
