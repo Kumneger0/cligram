@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"sync"
 
+	"github.com/charmbracelet/bubbles/filepicker"
 	list "github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -88,7 +90,31 @@ func startSeparateJsProces(wg *sync.WaitGroup) {
 	}()
 
 	wg.Done()
+}
 
+func processIncommingNotifications() {
+	logFile, err := os.Create(filepath.Join(".", "incoming-notifications.log"))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create log file, stderr will be discarded: %v\n", err)
+		return
+	}
+	defer func() {
+		logFile.Close()
+	}()
+
+	for {
+		jsonPayload := make([]byte, 1)
+		_, err := rpc.RpcClient.Stdout.Read(jsonPayload)
+		if err != nil {
+			fmt.Fprintf(logFile, "Notifications channel closed\n")
+			return
+		}
+
+		if _, err := logFile.WriteString(string(jsonPayload)); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to write to log file: %v\n", err)
+			return
+		}
+	}
 }
 
 func newRootCmd(version string) *cobra.Command {
@@ -102,14 +128,25 @@ func newRootCmd(version string) *cobra.Command {
 			go startSeparateJsProces(&wg)
 			wg.Wait()
 
+			// go processIncommingNotifications()
+
 			msg := rpc.RpcClient.GetUserChats()
 
+			modalContent := ""
+			isModalVisible := false
+
+			var duplicatedUsers []rpc.UserInfo = []rpc.UserInfo{}
+
 			if msg.Err != nil {
-				// return fmt.Errorf("failed to get user chats: %w", msg.Err)
+				modalContent = msg.Err.Error()
+				isModalVisible = true
+			} else {
+				if msg.Response.Result != nil {
+					duplicatedUsers = msg.Response.Result
+				}
 			}
 
-			duplicatedUsers := msg.Response.Result
-			var users []list.Item
+			var users []list.Item = []list.Item{}
 			for _, du := range duplicatedUsers {
 				users = append(users, rpc.UserInfo{
 					UnreadCount: du.UnreadCount,
@@ -150,19 +187,24 @@ func newRootCmd(version string) *cobra.Command {
 			chatList.SetShowTitle(false)
 			chatList.SetShowStatusBar(false)
 
+			fp := filepicker.New()
+			fp.AllowedTypes = []string{}
+			fp.CurrentDirectory, _ = os.UserHomeDir()
+
 			m := ui.Model{
-				Input:  input,
-				Users:  userList,
-				Groups: groupList,
-				//for some reason the view streching
-				//subtracting 4 from height and width fixed the issue
+				Filepicker:     fp,
+				Input:          input,
+				Users:          userList,
+				Groups:         groupList,
+				ModalContent:   modalContent,
 				Height:         height - 4,
 				Width:          width - 4,
 				Channels:       channelList,
-				IsModalVisible: false,
+				IsModalVisible: isModalVisible,
 				Mode:           "users",
 				FocusedOn:      "sideBar",
 				ChatUI:         chatList,
+				SelectedFile:   "",
 			}
 
 			backgorund := m
@@ -201,8 +243,18 @@ func newRootCmd(version string) *cobra.Command {
 }
 
 func Execute(version string) error {
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, os.Interrupt)
 	if err := newRootCmd(version).Execute(); err != nil {
 		return fmt.Errorf("error executing root command: %w", err)
+	}
+
+	fmt.Println("Press Ctrl+C to exit")
+	_ = <-signalChan
+	err := rpc.JsProcess.Signal(os.Interrupt)
+
+	if err != nil {
+		return fmt.Errorf("error sending signal to JS process: %w", err)
 	}
 
 	return nil

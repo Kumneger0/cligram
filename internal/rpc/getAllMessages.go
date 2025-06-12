@@ -3,6 +3,8 @@ package rpc
 import (
 	"encoding/json"
 	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 type UserConversationResponse struct {
@@ -34,7 +36,6 @@ type FormattedMessage struct {
 	FromID *string `json:"fromId"`
 }
 
-
 func (m FormattedMessage) Title() string {
 	return m.Content
 }
@@ -42,7 +43,6 @@ func (m FormattedMessage) Title() string {
 func (m FormattedMessage) FilterValue() string {
 	return m.Content
 }
-
 
 type PeerInfoParams struct {
 	AccessHash                  string `json:"accessHash"`
@@ -60,13 +60,18 @@ const (
 
 type IterParams map[string]interface{}
 
+type GetMessaegsMsg struct {
+	Messages UserConversationResponse
+	Err      error
+}
+
 func (c *JsonRpcClient) GetMessages(
 	pInfo PeerInfoParams,
 	cType ChatType,
 	offsetID *int,
 	chatAreaWidth *int,
 	itParams IterParams,
-) (UserConversationResponse, error) {
+) tea.Cmd {
 	paramsFixed := make([]interface{}, 5)
 	paramsFixed[0] = pInfo
 	paramsFixed[1] = cType
@@ -89,17 +94,23 @@ func (c *JsonRpcClient) GetMessages(
 		paramsFixed[4] = nil
 	}
 
-	allMesssages, err := c.Call("getAllMessages", paramsFixed)
-	if err != nil {
-		//TODO: show toast message
-		// loging the error will make the ui verry ugly
+	return func() tea.Msg {
+		allMesssages, err := c.Call("getAllMessages", paramsFixed)
+		if err != nil {
+			return GetMessaegsMsg{
+				Err: err,
+			}
+		}
+		var formatedMessage UserConversationResponse
+		if err := json.Unmarshal(allMesssages, &formatedMessage); err != nil {
+			return GetMessaegsMsg{
+				Err: err,
+			}
+		}
+		return GetMessaegsMsg{
+			Messages: formatedMessage,
+			Err:      nil,
+		}
 	}
 
-	var formatedMessage UserConversationResponse
-
-	if err := json.Unmarshal(allMesssages, &formatedMessage); err != nil {
-		return UserConversationResponse{}, err
-	}
-
-	return formatedMessage, nil
 }

@@ -43,7 +43,7 @@ func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 }
 
 func (m Model) Init() tea.Cmd {
-	return nil
+	return m.Filepicker.Init()
 }
 
 func getChannelIndex(m Model, channel rpc.ChannelAndGroupInfo) int {
@@ -105,11 +105,25 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 			PeerID:     m.SelectedGroup.ChannelID,
 		}
 	}
+	var messageToReply rpc.FormattedMessage
+	if m.ReplyTo != nil {
+		messageToReply = *m.ReplyTo
+	}
 
-	messageToReply := *m.ReplyTo
+
+	var isFile bool
+	if m.SelectedFile != "" {
+		isFile = true
+	}
+
+	var filepath *string
+	if isFile {
+		filepath = &m.SelectedFile
+	}
+	
+
 	replayToMessageId := strconv.FormatInt(messageToReply.ID, 10)
-
-	response, err := rpc.RpcClient.SendMessage(peerInfo, userMsg, m.IsReply && m.ReplyTo != nil, replayToMessageId, cType, false, nil)
+	response, err := rpc.RpcClient.SendMessage(peerInfo, userMsg, m.IsReply && m.ReplyTo != nil, replayToMessageId, cType, isFile, filepath)
 	if err != nil {
 		//TODO: trigger to show toast message
 		fmt.Println(err.Error())
@@ -143,25 +157,40 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 
 func updateFocusedComponent(m *Model, msg tea.Msg) (Model, tea.Cmd) {
 	var cmd tea.Cmd
+
+	var cmds []tea.Cmd
+	m.Filepicker, cmd = m.Filepicker.Update(msg)
+	m.Filepicker.SetHeight(m.Height - 13)
+	cmds = append(cmds, cmd)
+
+	if didSelect, path := m.Filepicker.DidSelectFile(msg); didSelect {
+		m.SelectedFile = path
+	}
+
 	switch m.FocusedOn {
 	case Input:
 		m.Input.Focus()
 		m.Input, cmd = m.Input.Update(msg)
+		cmds = append(cmds, cmd)
 	case SideBar:
 		m.Input.Blur()
 		switch m.Mode {
 		case ModeChannels:
 			m.Channels, cmd = m.Channels.Update(msg)
+			cmds = append(cmds, cmd)
 		case ModeUsers:
 			m.Users, cmd = m.Users.Update(msg)
+			cmds = append(cmds, cmd)
 		default:
 			m.Groups, cmd = m.Groups.Update(msg)
+			cmds = append(cmds, cmd)
 		}
 
 	default:
 		m.ChatUI, cmd = m.ChatUI.Update(msg)
+		cmds = append(cmds, cmd)
 	}
-	return *m, cmd
+	return *m, tea.Batch(cmds...)
 }
 
 func handleUserChange(m *Model) (Model, tea.Cmd) {
@@ -197,17 +226,9 @@ func handleUserChange(m *Model) (Model, tea.Cmd) {
 			UserFirstNameOrChannelTitle: m.SelectedGroup.ChannelTitle,
 		}
 	}
-	result, err := rpc.RpcClient.GetMessages(pInfo, cType, nil, nil, nil)
-	if err != nil {
-		//TODO: SHOW toast message here
-		// fmt.Println(strings.Repeat("uff there is something off", 10), err.Error())
-		return *m, nil
-	}
-
-	formatedMessages := result.Result
-	m.Conversations = formatedMessages
-	m.updateConverstaions()
-	return *m, nil
+	cmd := rpc.RpcClient.GetMessages(pInfo, cType, nil, nil, nil)
+	m.MainViewLoading = true
+	return *m, cmd
 }
 
 func changeFocusMode(m *Model, msg string) (Model, tea.Cmd) {

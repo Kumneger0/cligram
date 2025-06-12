@@ -21,7 +21,6 @@ type GetEntityTypes = {
 };
 
 
-
 const getEntity = ({ peer, type }: GetEntityTypes) => {
 	const entity =
 		type === 'user'
@@ -363,7 +362,6 @@ export async function getAllMessages<T extends ChatType>(
 	} catch (err) {
 		const error = err as Error
 		throw new Error(`${error.message} ${error.stack} ${error.name} ${error.cause}`)
-		return [];
 	}
 }
 /**
@@ -436,7 +434,7 @@ export const listenForEvents = async (
 						onUserOnlineStatus({
 							accessHash: user.accessHash.toString(),
 							firstName: user.firstName,
-							status: 'online'
+							status: 'online', 
 						});
 				}
 				if (event.status.className === 'UserStatusOffline') {
