@@ -6,10 +6,10 @@ import { TelegramClient } from 'telegram';
 import { RPCError as TelegramRpcError } from 'telegram/errors/index.js';
 import { LogLevel } from 'telegram/extensions/Logger.js';
 import { login, logout } from './commands';
+import { FormattedMessage, UserInfo } from './lib/types';
 import { getTelegramClient } from './lib/utils/auth';
 import { getUserChats, getUserInfo, searchUsers, setUserPrivacy } from './telegram/client';
-import { deleteMessage, editMessage, forwardMessage, getAllMessages, sendMessage, listenForEvents } from './telegram/messages';
-import { FormattedMessage, UserInfo } from './lib/types';
+import { deleteMessage, editMessage, forwardMessage, getAllMessages, listenForEvents, sendMessage } from './telegram/messages';
 
 // import { stringify } from 'flatted';
 

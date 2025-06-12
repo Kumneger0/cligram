@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"sync"
 
@@ -131,19 +132,21 @@ func newRootCmd(version string) *cobra.Command {
 
 			msg := rpc.RpcClient.GetUserChats()
 
+			modalContent := ""
+			isModalVisible := false
+
+			var duplicatedUsers []rpc.UserInfo = []rpc.UserInfo{}
+
 			if msg.Err != nil {
-				fmt.Fprintf(os.Stderr, "failed to get user chats: %v\n", msg.Err)
-				return nil
+				modalContent = msg.Err.Error()
+				isModalVisible = true
+			} else {
+				if msg.Response.Result != nil {
+					duplicatedUsers = msg.Response.Result
+				}
 			}
 
-			if msg.Response.Error != nil {
-				fmt.Println(msg.Response.Error.Message)
-				return nil
-			}
-
-			duplicatedUsers := msg.Response.Result
-
-			var users []list.Item
+			var users []list.Item = []list.Item{}
 			for _, du := range duplicatedUsers {
 				users = append(users, rpc.UserInfo{
 					UnreadCount: du.UnreadCount,
@@ -193,10 +196,11 @@ func newRootCmd(version string) *cobra.Command {
 				Input:          input,
 				Users:          userList,
 				Groups:         groupList,
+				ModalContent:   modalContent,
 				Height:         height - 4,
 				Width:          width - 4,
 				Channels:       channelList,
-				IsModalVisible: false,
+				IsModalVisible: isModalVisible,
 				Mode:           "users",
 				FocusedOn:      "sideBar",
 				ChatUI:         chatList,
@@ -239,8 +243,18 @@ func newRootCmd(version string) *cobra.Command {
 }
 
 func Execute(version string) error {
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, os.Interrupt)
 	if err := newRootCmd(version).Execute(); err != nil {
 		return fmt.Errorf("error executing root command: %w", err)
+	}
+
+	fmt.Println("Press Ctrl+C to exit")
+	_ = <-signalChan
+	err := rpc.JsProcess.Signal(os.Interrupt)
+
+	if err != nil {
+		return fmt.Errorf("error sending signal to JS process: %w", err)
 	}
 
 	return nil
