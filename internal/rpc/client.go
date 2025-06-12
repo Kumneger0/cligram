@@ -55,7 +55,7 @@ type UserGroupsMsg struct {
 
 func (c *JsonRpcClient) GetUserGroups() tea.Cmd {
 	userGroupsRpcResponse, err := c.Call("getUserChats", []string{"group"})
-	return  func() tea.Msg {
+	return func() tea.Msg {
 		if err != nil {
 			return UserGroupsMsg{Err: err}
 		}
@@ -108,9 +108,23 @@ func (c *JsonRpcClient) Call(method string, params interface{}) ([]byte, error) 
 		return nil, fmt.Errorf("failed to write request to stdin: %w", err)
 	}
 
-	reader := bufio.NewReader(c.Stdout)
-	var contentLength int = -1
+	jsonPayloadBytes, err := ReadStdOut(c)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
 
+	cwd, _ := os.Getwd()
+	file, _ := os.Create(filepath.Join(cwd, "logs.json"))
+
+	//TODO:don't forget to remove this is just for debuging purpose
+	writeLosToFIle(file, jsonPayloadBytes)
+
+	return jsonPayloadBytes, nil
+}
+
+func ReadStdOut(rpcClient *JsonRpcClient) ([]byte, error) {
+	reader := bufio.NewReader((rpcClient.Stdout))
+	var contentLength int = -1
 	for {
 		lineBytes, _, err := reader.ReadLine()
 		if err != nil {
@@ -157,16 +171,8 @@ func (c *JsonRpcClient) Call(method string, params interface{}) ([]byte, error) 
 	if n != contentLength {
 		return nil, fmt.Errorf("short read for JSON payload: expected %d bytes, got %d", contentLength, n)
 	}
-
-	cwd, _ := os.Getwd()
-	file, _ := os.Create(filepath.Join(cwd, "logs.json"))
-
-	//TODO:don't forget to remove this is just for debuging purpose
-	writeLosToFIle(file, jsonPayloadBytes)
-
 	return jsonPayloadBytes, nil
 }
-
 
 type UserInfo struct {
 	FirstName   string  `json:"firstName"`
@@ -188,7 +194,6 @@ type ChannelAndGroupInfo struct {
 	ParticipantsCount *int    `json:"participantsCount"`
 	UnreadCount       int     `json:"unreadCount"`
 }
-
 
 func (u UserInfo) Title() string {
 	return u.FirstName

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/charmbracelet/bubbles/filepicker"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -68,23 +69,28 @@ const (
 )
 
 type Model struct {
-	Users           list.Model
-	SelectedUser    rpc.UserInfo
-	Channels        list.Model
-	IsModalVisible  bool
-	ModalContent    string
-	SelectedChannel rpc.ChannelAndGroupInfo
-	Groups          list.Model
-	SelectedGroup   rpc.ChannelAndGroupInfo
-	Height          int
-	Width           int
-	Mode            Mode
-	Input           textinput.Model
-	FocusedOn       FocusedOn
-	ChatUI          list.Model
-	Conversations   []rpc.FormattedMessage
-	IsReply         bool
-	ReplyTo         *rpc.FormattedMessage
+	Filepicker          filepicker.Model
+	IsFilepickerVisible bool
+	SelectedFile        string
+	Users               list.Model
+	SelectedUser        rpc.UserInfo
+	Channels            list.Model
+	IsModalVisible      bool
+	ModalContent        string
+	SelectedChannel     rpc.ChannelAndGroupInfo
+	Groups              list.Model
+	SelectedGroup       rpc.ChannelAndGroupInfo
+	Height              int
+	Width               int
+	MainViewLoading     bool
+	SideBarLoading      bool
+	Mode                Mode
+	Input               textinput.Model
+	FocusedOn           FocusedOn
+	ChatUI              list.Model
+	Conversations       []rpc.FormattedMessage
+	IsReply             bool
+	ReplyTo             *rpc.FormattedMessage
 }
 
 func formatMessages(msgs []rpc.FormattedMessage) []list.Item {
@@ -107,7 +113,6 @@ func GetModalContent(errorMessage string) string {
 }
 
 func setItemStyles(m *Model) string {
-
 	if m.IsModalVisible {
 		modalView := lipgloss.Place(
 			m.Width,
@@ -121,7 +126,6 @@ func setItemStyles(m *Model) string {
 	mainWidth := m.Width - sidebarWidth
 	contentHeight := m.Height * 90 / 100
 	inputHeight := m.Height - contentHeight
-
 	m.Users.SetHeight(contentHeight - 4)
 	m.Users.SetWidth(sidebarWidth)
 	m.Channels.SetWidth(sidebarWidth)
@@ -183,13 +187,32 @@ func setItemStyles(m *Model) string {
 	line := strings.Repeat("─", max(0, mainWidth-4-lipgloss.Width(title)))
 	headerView := lipgloss.JoinVertical(lipgloss.Center, title, line)
 
+	var s strings.Builder
+	s.WriteString("\n  ")
+	if m.SelectedFile == "" {
+		s.WriteString("Pick a file:")
+	} else {
+		s.WriteString("Selected file: click ctrl + a to close file picker\n" + m.Filepicker.Styles.Selected.Render(m.SelectedFile))
+	}
+
+	mainViewContent := m.ChatUI.View()
+
+	if m.IsFilepickerVisible {
+		s.WriteString("\n\n" + m.Filepicker.View() + "\n")
+		mainViewContent = s.String()
+	}
+
 	mainContent := lipgloss.JoinVertical(
 		lipgloss.Top,
 		headerView,
-		m.ChatUI.View(),
+		mainViewContent,
 	)
-
-	chatView := mainStyle.Render(mainContent)
+	var chatView string
+	if m.MainViewLoading {
+		chatView = mainStyle.Render("Loading...")
+	} else {
+		chatView = mainStyle.Render(mainContent)
+	}
 	var sideBarContent string
 	switch m.Mode {
 	case ModeUsers:

@@ -8,6 +8,7 @@ import (
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+
 	case MessageDeletionConfrimResponseMsg:
 		if msg.yes {
 			var peer rpc.PeerInfo
@@ -65,13 +66,40 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			return m, nil
 		}
+
+	case rpc.GetMessaegsMsg:
+		if msg.Err != nil {
+			m.IsModalVisible = true
+			m.ModalContent = GetModalContent(msg.Err.Error())
+			m.MainViewLoading = false
+			return m, nil
+		}
+		m.Conversations = msg.Messages.Result
+		m.updateConverstaions()
+		m.MainViewLoading = false
+		return m, nil
 	case tea.KeyMsg:
 		switch msg.String() {
+		case "ctrl+a":
+			if m.FocusedOn == Input {
+				m.IsFilepickerVisible = true
+				m.FocusedOn = Mainview
+				return m, nil
+			}
+			if m.IsFilepickerVisible {
+				m.IsFilepickerVisible = false
+				m.FocusedOn = Input
+			}
+			return m, nil
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		case "tab":
-			return changeFocusMode(&m, "tab")
+			if !m.IsFilepickerVisible {
+				return changeFocusMode(&m, "tab")
+			}
+			return m, nil
 		case "m":
+
 			if m.FocusedOn != Input {
 				m.IsModalVisible = true
 				return m, nil
