@@ -8,7 +8,8 @@ import { LogLevel } from 'telegram/extensions/Logger.js';
 import { login, logout } from './commands';
 import { getTelegramClient } from './lib/utils/auth';
 import { getUserChats, getUserInfo, searchUsers, setUserPrivacy } from './telegram/client';
-import { deleteMessage, editMessage, forwardMessage, getAllMessages, sendMessage } from './telegram/messages';
+import { deleteMessage, editMessage, forwardMessage, getAllMessages, sendMessage, listenForEvents } from './telegram/messages';
+import { FormattedMessage, UserInfo } from './lib/types';
 
 // import { stringify } from 'flatted';
 
@@ -96,6 +97,25 @@ type RpcErrorResponse = {
 
 type IncomingMessage = TypedRpcRequest | TypedRpcNotification;
 
+type NewMessageParams = {
+	message: FormattedMessage, user: Omit<UserInfo, "unreadCount">
+}
+
+type UserOnlineOfflineParams = {
+	accessHash: string, firstName: string, status: 'online' | 'offline', lastSeen?: Date
+}
+
+type RpcTelegramEventsNotification = {
+	jsonrpc: '2.0';
+} & ({
+	method: "newMessage";
+	params: NewMessageParams;
+} | {
+	method: "userOnlineOffline";
+	params: UserOnlineOfflineParams;
+})
+
+
 async function readHeaders(reader: typeof stdin): Promise<{ [key: string]: string }> {
 	const headers: { [key: string]: string } = {};
 	let lineBuffer = '';
@@ -169,7 +189,7 @@ async function readMessage(): Promise<IncomingMessage> {
 	}
 }
 
-function writeToStdout(msg: RpcSuccess | RpcErrorResponse): void {
+function writeToStdout(msg: RpcSuccess | RpcErrorResponse | RpcTelegramEventsNotification): void {
 	const json = stringify(msg);
 	const header = `Content-Length: ${Buffer.byteLength(json, 'utf8')}\r\n\r\n`;
 	stdout.write(header + json);
@@ -189,6 +209,9 @@ function createRpcError(
 }
 
 let telegramClientInstance: TelegramClient | null = null;
+
+
+let cleanUp: () => void;
 
 async function startup() {
 	try {
@@ -241,6 +264,31 @@ async function startup() {
 }
 
 async function messageProcessingLoop(client: TelegramClient) {
+	cleanUp = await listenForEvents(client, {
+		onMessage(message, user) {
+			if (!user) return
+			const telegramMessageEvent: RpcTelegramEventsNotification = {
+				jsonrpc: '2.0',
+				method: 'newMessage',
+				params: {
+					message,
+					user
+				}
+			}
+			writeToStdout(telegramMessageEvent)
+		},
+		onUserOnlineStatus(user) {
+			const telegramUserOnlineEvent: RpcTelegramEventsNotification = {
+				jsonrpc: '2.0',
+				method: 'userOnlineOffline',
+				params: {
+					...user,
+					lastSeen: user.lastSeen ? new Date(user.lastSeen * 1000) : undefined
+				}
+			}
+			writeToStdout(telegramUserOnlineEvent)
+		}
+	});
 	while (true) {
 		let msg: IncomingMessage;
 		try {
@@ -374,6 +422,7 @@ async function shutdown(signal: string) {
 			stderr.write(`Error during client disconnect: ${e.message}\n`);
 		}
 	}
+	cleanUp?.()
 	process.exit(0);
 }
 

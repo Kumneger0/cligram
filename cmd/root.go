@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/charmbracelet/bubbles/filepicker"
 	list "github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -88,7 +89,31 @@ func startSeparateJsProces(wg *sync.WaitGroup) {
 	}()
 
 	wg.Done()
+}
 
+func processIncommingNotifications() {
+	logFile, err := os.Create(filepath.Join(".", "incoming-notifications.log"))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create log file, stderr will be discarded: %v\n", err)
+		return
+	}
+	defer func() {
+		logFile.Close()
+	}()
+
+	for {
+		jsonPayload := make([]byte, 1)
+		_, err := rpc.RpcClient.Stdout.Read(jsonPayload)
+		if err != nil {
+			fmt.Fprintf(logFile, "Notifications channel closed\n")
+			return
+		}
+
+		if _, err := logFile.WriteString(string(jsonPayload)); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to write to log file: %v\n", err)
+			return
+		}
+	}
 }
 
 func newRootCmd(version string) *cobra.Command {
@@ -102,13 +127,22 @@ func newRootCmd(version string) *cobra.Command {
 			go startSeparateJsProces(&wg)
 			wg.Wait()
 
+			// go processIncommingNotifications()
+
 			msg := rpc.RpcClient.GetUserChats()
 
 			if msg.Err != nil {
-				// return fmt.Errorf("failed to get user chats: %w", msg.Err)
+				fmt.Fprintf(os.Stderr, "failed to get user chats: %v\n", msg.Err)
+				return nil
+			}
+
+			if msg.Response.Error != nil {
+				fmt.Println(msg.Response.Error.Message)
+				return nil
 			}
 
 			duplicatedUsers := msg.Response.Result
+
 			var users []list.Item
 			for _, du := range duplicatedUsers {
 				users = append(users, rpc.UserInfo{
@@ -150,12 +184,15 @@ func newRootCmd(version string) *cobra.Command {
 			chatList.SetShowTitle(false)
 			chatList.SetShowStatusBar(false)
 
+			fp := filepicker.New()
+			fp.AllowedTypes = []string{}
+			fp.CurrentDirectory, _ = os.UserHomeDir()
+
 			m := ui.Model{
-				Input:  input,
-				Users:  userList,
-				Groups: groupList,
-				//for some reason the view streching
-				//subtracting 4 from height and width fixed the issue
+				Filepicker:     fp,
+				Input:          input,
+				Users:          userList,
+				Groups:         groupList,
 				Height:         height - 4,
 				Width:          width - 4,
 				Channels:       channelList,
@@ -163,6 +200,7 @@ func newRootCmd(version string) *cobra.Command {
 				Mode:           "users",
 				FocusedOn:      "sideBar",
 				ChatUI:         chatList,
+				SelectedFile:   "",
 			}
 
 			backgorund := m
