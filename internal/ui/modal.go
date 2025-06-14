@@ -1,7 +1,11 @@
 package ui
 
 import (
+	"fmt"
+	"os"
+
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/kumneger0/cligram/internal/rpc"
 )
 
 type SessionState int
@@ -52,6 +56,10 @@ func (m Manager) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", "ctrl+c", "esc":
 			if m.State == MainView {
+				err := rpc.JsProcess.Signal(os.Interrupt)
+				if err != nil {
+					fmt.Println(err)
+				}
 				return m, tea.Quit
 			} else {
 				m.State = MainView

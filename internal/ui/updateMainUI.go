@@ -9,6 +9,35 @@ import (
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
+	case rpc.NewMessageMsg:
+		if m.SelectedUser.PeerID == msg.User.PeerID {
+			if m.Mode == ModeUsers {
+				m.SelectedUser.UnreadCount++
+				var isCurrentConversationUsersChat bool = false
+				for _, v := range m.Conversations {
+					if v.Sender == m.SelectedUser.FirstName {
+						isCurrentConversationUsersChat = true
+						break
+					}
+				}
+				if isCurrentConversationUsersChat {
+					m.Conversations = append(m.Conversations, msg.Message)
+				}
+			}
+		} else {
+			userIndex := getUserIndex(m, msg.User)
+			if userIndex != -1 {
+				items := m.Users.Items()
+				user := items[userIndex].(rpc.UserInfo)
+				user.UnreadCount++
+				items[userIndex] = user
+				m.Users.SetItems(items)
+			}
+		}
+		return m, nil
+	case rpc.UserOnlineOffline:
+		//TODO: handle user online offline event here
+
 	case MessageDeletionConfrimResponseMsg:
 		if msg.yes {
 			var peer rpc.PeerInfo

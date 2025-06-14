@@ -20,9 +20,18 @@ type CustomDelegate struct {
 func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	var title string
 
+	var hasUnreadMessages bool = false
+
 	if entry, ok := item.(rpc.UserInfo); ok {
+		if entry.UnreadCount > 0 {
+			hasUnreadMessages = true
+		}
 		title = entry.Title()
 		title = "👤 " + title
+		if hasUnreadMessages {
+			title = title + " 🔴" + "(" + strconv.Itoa(entry.UnreadCount) + ")"
+		}
+
 	} else if entry, ok := item.(rpc.ChannelAndGroupInfo); ok {
 		title = entry.Title()
 		if entry.IsBroadcast {
@@ -110,7 +119,6 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 		messageToReply = *m.ReplyTo
 	}
 
-
 	var isFile bool
 	if m.SelectedFile != "" {
 		isFile = true
@@ -120,7 +128,6 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 	if isFile {
 		filepath = &m.SelectedFile
 	}
-	
 
 	replayToMessageId := strconv.FormatInt(messageToReply.ID, 10)
 	response, err := rpc.RpcClient.SendMessage(peerInfo, userMsg, m.IsReply && m.ReplyTo != nil, replayToMessageId, cType, isFile, filepath)
