@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"os/signal"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/charmbracelet/bubbles/filepicker"
 	list "github.com/charmbracelet/bubbles/list"
@@ -19,6 +19,14 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
+
+var (
+	Program *tea.Program
+)
+
+func getCligramLogFilePath() string {
+	return filepath.Join(os.TempDir(), "cligram.log")
+}
 
 func startSeparateJsProces(wg *sync.WaitGroup) {
 	jsExcutable, err := runner.GetJSExcutable()
@@ -46,12 +54,7 @@ func startSeparateJsProces(wg *sync.WaitGroup) {
 		return
 	}
 
-	logDir := filepath.Join(os.TempDir(), "tg-cli-logs")
-	if err := os.MkdirAll(logDir, 0755); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create log directory: %v\n", err)
-	}
-
-	logFile, err := os.Create(filepath.Join(logDir, "js-process.log"))
+	logFile, err := os.Create(getCligramLogFilePath())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create log file, stderr will be discarded: %v\n", err)
 		jsExcute.Stderr = nil
@@ -92,31 +95,6 @@ func startSeparateJsProces(wg *sync.WaitGroup) {
 	wg.Done()
 }
 
-func processIncommingNotifications() {
-	logFile, err := os.Create(filepath.Join(".", "incoming-notifications.log"))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create log file, stderr will be discarded: %v\n", err)
-		return
-	}
-	defer func() {
-		logFile.Close()
-	}()
-
-	for {
-		jsonPayload := make([]byte, 1)
-		_, err := rpc.RpcClient.Stdout.Read(jsonPayload)
-		if err != nil {
-			fmt.Fprintf(logFile, "Notifications channel closed\n")
-			return
-		}
-
-		if _, err := logFile.WriteString(string(jsonPayload)); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to write to log file: %v\n", err)
-			return
-		}
-	}
-}
-
 func newRootCmd(version string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cligram",
@@ -128,26 +106,28 @@ func newRootCmd(version string) *cobra.Command {
 			go startSeparateJsProces(&wg)
 			wg.Wait()
 
-			// go processIncommingNotifications()
+			notificationChannel := make(chan rpc.Notification)
+
+			go rpc.ProcessIncomingNotifications(notificationChannel)
 
 			msg := rpc.RpcClient.GetUserChats()
 
 			modalContent := ""
 			isModalVisible := false
 
-			var duplicatedUsers []rpc.UserInfo = []rpc.UserInfo{}
+			var result []rpc.UserInfo = []rpc.UserInfo{}
 
 			if msg.Err != nil {
 				modalContent = msg.Err.Error()
 				isModalVisible = true
 			} else {
 				if msg.Response.Result != nil {
-					duplicatedUsers = msg.Response.Result
+					result = msg.Response.Result
 				}
 			}
 
 			var users []list.Item = []list.Item{}
-			for _, du := range duplicatedUsers {
+			for _, du := range result {
 				users = append(users, rpc.UserInfo{
 					UnreadCount: du.UnreadCount,
 					FirstName:   du.FirstName,
@@ -224,9 +204,27 @@ func newRootCmd(version string) *cobra.Command {
 				),
 			}
 
-			p := tea.NewProgram(manager, tea.WithAltScreen(), tea.WithMouseCellMotion())
+			Program = tea.NewProgram(manager, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
-			_, err := p.Run()
+			go func() {
+				for {
+					time.Sleep(1 * time.Second)
+					select {
+					case msg := <-notificationChannel:
+						if msg.NewMessageMsg != (rpc.NewMessageMsg{}) {
+							Program.Send(msg.NewMessageMsg)
+						}
+						if msg.UserOnlineOfflineMsg != (rpc.UserOnlineOffline{}) {
+							Program.Send(msg.UserOnlineOfflineMsg)
+						}
+
+					case <-time.After(1 * time.Second):
+						// fmt.Println("sent tick")
+					}
+				}
+			}()
+
+			_, err := Program.Run()
 			if err != nil {
 				return fmt.Errorf("failed to start TUI: %w", err)
 			}
@@ -243,18 +241,9 @@ func newRootCmd(version string) *cobra.Command {
 }
 
 func Execute(version string) error {
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
+
 	if err := newRootCmd(version).Execute(); err != nil {
 		return fmt.Errorf("error executing root command: %w", err)
-	}
-
-	fmt.Println("Press Ctrl+C to exit")
-	_ = <-signalChan
-	err := rpc.JsProcess.Signal(os.Interrupt)
-
-	if err != nil {
-		return fmt.Errorf("error sending signal to JS process: %w", err)
 	}
 
 	return nil

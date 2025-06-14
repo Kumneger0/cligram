@@ -3,6 +3,7 @@ import { cache, formatLastSeen } from '@/lib/utils/index.js';
 import { Api, TelegramClient } from 'telegram';
 import { Channel, ChannelInfo, ChatType, TelegramUser, UserInfo } from '../lib/types/index.js';
 import { DialogInfo } from './client.types.js';
+import bigInt from 'big-integer';
 
 export let chatUsers: UserInfo[] = [];
 
@@ -99,7 +100,7 @@ export async function getChannelInfo(client: TelegramClient, channelId: bigInt.B
 export async function searchUsers(
 	client: TelegramClient,
 	query: string
-): Promise<{users:UserInfo[], channels:ChannelInfo[]}> {
+): Promise<{ users: UserInfo[], channels: ChannelInfo[] }> {
 	if (!client.connected) {
 		await client.connect();
 	}
@@ -124,7 +125,7 @@ export async function searchUsers(
 				isOnline: false
 			} satisfies UserInfo;
 		});
-    //TODO: i'll come back later and fix this
+	//TODO: i'll come back later and fix this
 	// const chats = result.chats
 	// 	.filter((chat) => {
 	// 		return chat.className === 'Chat';
@@ -136,8 +137,8 @@ export async function searchUsers(
 	// 		};
 	// 	});
 
-		   //TODO: i'll come back later and fix this
-		//@ts-ignore 
+	//TODO: i'll come back later and fix this
+	//@ts-ignore 
 	const channels = await Promise.all(
 		result.results
 			.filter((result) => {
@@ -158,7 +159,7 @@ export async function searchUsers(
 			})
 	);
 
-	return {users, channels}
+	return { users, channels }
 }
 
 /**
@@ -288,7 +289,7 @@ export async function getUserChats<T extends ChatType>(
 export async function getUserInfo(
 	client: TelegramClient,
 	userId: bigInt.BigInteger
-): Promise<Omit<UserInfo, 'unreadCount'> | null> {
+): Promise<UserInfo | null> {
 	try {
 		if (!client.connected) {
 			await client.connect();
@@ -310,9 +311,9 @@ export async function getUserInfo(
 			: {
 				type: 'status' as const,
 				value: user.status?.className
-						? (lastSeenMessages[user.status?.className as keyof typeof lastSeenMessages] ??
-							'last seen a long time ago')
-						: 'last seen a long time ago'
+					? (lastSeenMessages[user.status?.className as keyof typeof lastSeenMessages] ??
+						'last seen a long time ago')
+					: 'last seen a long time ago'
 			}
 
 
@@ -322,8 +323,9 @@ export async function getUserInfo(
 			peerId: userId.toString() ?? "",
 			accessHash: user?.accessHash?.toString(),
 			lastSeen: formatLastSeen(lastSeen),
-			isOnline: user.status?.className === 'UserStatusOnline'
-		} satisfies Omit<UserInfo, 'unreadCount'>;
+			isOnline: user.status?.className === 'UserStatusOnline',
+			unreadCount: 0
+		} satisfies UserInfo;
 	} catch (err) {
 		return null;
 	}

@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -80,6 +81,14 @@ type PeerInfo struct {
 	PeerID     string `json:"peerId"`
 }
 
+var (
+	JsonPayloadBytesChan = make(chan struct {
+		Data  []byte
+		Error error
+	}, 1)
+	ProducerWg sync.WaitGroup
+)
+
 func (c *JsonRpcClient) Call(method string, params interface{}) ([]byte, error) {
 	c.Mu.Lock()
 	id := c.NextID
@@ -102,24 +111,27 @@ func (c *JsonRpcClient) Call(method string, params interface{}) ([]byte, error) 
 	requestBuffer.WriteString(fmt.Sprintf("Content-Length: %d\r\n", len(requestPayloadBytes)))
 	requestBuffer.WriteString("\r\n")
 	requestBuffer.Write(requestPayloadBytes)
-
+	ProducerWg.Add(1)
 	_, err = c.Stdin.Write(requestBuffer.Bytes())
 	if err != nil {
 		return nil, fmt.Errorf("failed to write request to stdin: %w", err)
 	}
+	jsonPayloadBytes := <-JsonPayloadBytesChan
+	ProducerWg.Wait()
 
-	jsonPayloadBytes, err := ReadStdOut(c)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+	if jsonPayloadBytes.Error != nil {
+		return nil, fmt.Errorf("failed to read response: %w", jsonPayloadBytes.Error)
 	}
 
 	cwd, _ := os.Getwd()
 	file, _ := os.Create(filepath.Join(cwd, "logs.json"))
 
-	//TODO:don't forget to remove this is just for debuging purpose
-	writeLosToFIle(file, jsonPayloadBytes)
+	defer file.Close()
 
-	return jsonPayloadBytes, nil
+	//TODO:don't forget to remove this is just for debuging purpose
+	writeLosToFIle(file, jsonPayloadBytes.Data)
+
+	return jsonPayloadBytes.Data, nil
 }
 
 func ReadStdOut(rpcClient *JsonRpcClient) ([]byte, error) {
@@ -131,7 +143,7 @@ func ReadStdOut(rpcClient *JsonRpcClient) ([]byte, error) {
 			if err == io.EOF && contentLength != -1 {
 				return nil, fmt.Errorf("EOF while expecting JSON content of length %d", contentLength)
 			}
-			return nil, fmt.Errorf("failed to read response header line: %w", err)
+			return nil, fmt.Errorf("failed to read response header line: %v", err.Error())
 		}
 		line := string(lineBytes)
 
@@ -209,4 +221,111 @@ func (c ChannelAndGroupInfo) FilterValue() string {
 
 func (c ChannelAndGroupInfo) Title() string {
 	return c.ChannelTitle
+}
+
+type NewMessageMsg struct {
+	Message FormattedMessage
+	User    UserInfo
+}
+
+type UserOnlineOffline struct {
+	AccessHash string    `json:"accessHash,omitempty"`
+	FirstName  string    `json:"firstName,omitempty"`
+	Status     string    `json:"status,omitempty"`
+	LastSeen   time.Time `json:"lastSeen,omitempty"`
+}
+
+type RpcTelegramNotification struct {
+	JSONRPC string      `json:"jsonrpc"`
+	Method  string      `json:"method"`
+	Params  interface{} `json:"params"`
+}
+
+type Notification struct {
+	NewMessageMsg        NewMessageMsg
+	UserOnlineOfflineMsg UserOnlineOffline
+}
+
+func ProcessIncomingNotifications(p chan Notification) {
+	logFile, err := os.Create(filepath.Join(".", "incoming-notifications.log"))
+	if err != nil {
+		fmt.Fprintf(logFile, "Failed to create log file, stderr will be discarded: %v\n", err)
+		return
+	}
+	defer func() {
+		logFile.Close()
+	}()
+
+	for {
+		jsonPayload, err := ReadStdOut(RpcClient)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Notifications channel closed: %v\n", err.Error())
+			return
+		}
+
+		if _, err := logFile.WriteString(string(jsonPayload)); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to write to log file: %v\n", err.Error())
+			return
+		}
+
+		var notification RpcTelegramNotification
+		if err := json.Unmarshal(jsonPayload, &notification); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to parse JSON payload: %v\n", err.Error())
+			return
+		}
+
+		if notification.Method == "newMessage" || notification.Method == "userOnlineOffline" {
+			if notification.Method == "newMessage" {
+				paramsBytes, err := json.Marshal(notification.Params)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Failed to marshal params: %v\n", err.Error())
+					//TODO: handle error here
+					return
+				}
+
+				var newMessage NewMessageMsg
+				if err := json.Unmarshal(paramsBytes, &newMessage); err != nil {
+					fmt.Fprintf(os.Stderr, "Failed to unmarshal params: %v\n", err.Error())
+					//TODO: handle error here
+					return
+				}
+				if p != nil {
+					p <- Notification{NewMessageMsg: newMessage}
+				} else {
+					fmt.Println("bubble tea event loop is not initialized")
+				}
+			}
+			if notification.Method == "userOnlineOffline" {
+				paramsBytes, err := json.Marshal(notification.Params)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Failed to marshal params: %v\n", err.Error())
+					//TODO: handle error here
+					return
+				}
+
+				var userOnlineOffline UserOnlineOffline
+				if err := json.Unmarshal(paramsBytes, &userOnlineOffline); err != nil {
+					fmt.Fprintf(os.Stderr, "Failed to unmarshal params: %v\n", err.Error())
+					return
+				}
+
+				if p != nil {
+					p <- Notification{UserOnlineOfflineMsg: userOnlineOffline}
+				}
+			}
+		} else {
+			JsonPayloadBytesChan <- struct {
+				Data  []byte
+				Error error
+			}{
+				Data:  jsonPayload,
+				Error: err,
+			}
+
+			// this is not working when closed figure out and why this doesn't work
+			// close(JsonPayloadBytesChan)
+			ProducerWg.Done()
+		}
+
+	}
 }

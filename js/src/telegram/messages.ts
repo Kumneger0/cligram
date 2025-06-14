@@ -380,7 +380,7 @@ export const listenForEvents = async (
 		onMessage,
 		onUserOnlineStatus
 	}: {
-		onMessage: (message: FormattedMessage, user: Omit<UserInfo, 'unreadCount'> | null) => void;
+			onMessage: (message: FormattedMessage, user: UserInfo) => void;
 		onUserOnlineStatus?: (user: {
 			accessHash: string;
 			firstName: string;
