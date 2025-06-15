@@ -26,7 +26,13 @@ func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 		if entry.UnreadCount > 0 {
 			hasUnreadMessages = true
 		}
+
 		title = entry.Title()
+
+		if entry.IsOnline {
+			title = "🟢 " + title
+		}
+
 		title = "👤 " + title
 		if hasUnreadMessages {
 			title = title + " 🔴" + "(" + strconv.Itoa(entry.UnreadCount) + ")"
