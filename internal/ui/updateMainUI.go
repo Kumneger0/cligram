@@ -36,7 +36,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case rpc.UserOnlineOffline:
-		//TODO: handle user online offline event here
+		var user rpc.UserInfo
+		for _, v := range m.Users.Items() {
+			u, ok := v.(rpc.UserInfo)
+			if ok && u.FirstName == msg.FirstName {
+				user = u
+				break
+			}
+		}
+
+		userIndex := getUserIndex(m, user)
+		if userIndex != -1 {
+			items := m.Users.Items()
+			user := items[userIndex].(rpc.UserInfo)
+			user.IsOnline = msg.Status == "online"
+			items[userIndex] = user
+			m.Users.SetItems(items)
+		}
 
 	case MessageDeletionConfrimResponseMsg:
 		if msg.yes {
