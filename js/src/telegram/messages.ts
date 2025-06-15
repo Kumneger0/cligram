@@ -4,6 +4,7 @@ import { Raw } from 'telegram/events';
 import terminalSize from 'term-size';
 import terminalImage from 'terminal-image';
 import fs from 'node:fs/promises';
+import notifier from 'node-notifier';
 import {
 	FormattedMessage,
 	Media,
@@ -14,6 +15,7 @@ import {
 } from '../lib/types/index';
 import { getUserInfo } from './client';
 import { CustomFile } from 'telegram/client/uploads';
+import { getConfig } from '@/config/configManager';
 
 type GetEntityTypes = {
 	peer: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger };
@@ -380,7 +382,7 @@ export const listenForEvents = async (
 		onMessage,
 		onUserOnlineStatus
 	}: {
-		onMessage: (message: FormattedMessage, user: Omit<UserInfo, 'unreadCount'> | null) => void;
+			onMessage: (message: FormattedMessage, user: UserInfo) => void;
 		onUserOnlineStatus?: (user: {
 			accessHash: string;
 			firstName: string;
@@ -414,7 +416,14 @@ export const listenForEvents = async (
 
 		switch (event.className) {
 			case 'UpdateShortMessage':
-				console.log(event);
+				const config = getConfig('notifications');
+				if (config.enabled) {
+					notifier.notify({
+						title: `Cligram - ${user.firstName} sent you a message`,
+						message: config.showMessagePreview ? event.message : '',
+						icon: 'https://telegram.org/favicon.ico',
+					});
+				}
 				onMessage(
 					{
 						id: event.id,
@@ -434,7 +443,7 @@ export const listenForEvents = async (
 						onUserOnlineStatus({
 							accessHash: user.accessHash.toString(),
 							firstName: user.firstName,
-							status: 'online', 
+							status: 'online',
 						});
 				}
 				if (event.status.className === 'UserStatusOffline') {

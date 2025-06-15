@@ -95,10 +95,11 @@ type RpcErrorResponse = {
 	};
 };
 
+
 type IncomingMessage = TypedRpcRequest | TypedRpcNotification;
 
 type NewMessageParams = {
-	message: FormattedMessage, user: Omit<UserInfo, "unreadCount">
+	message: FormattedMessage, user: UserInfo
 }
 
 type UserOnlineOfflineParams = {
@@ -266,7 +267,6 @@ async function startup() {
 async function messageProcessingLoop(client: TelegramClient) {
 	cleanUp = await listenForEvents(client, {
 		onMessage(message, user) {
-			if (!user) return
 			const telegramMessageEvent: RpcTelegramEventsNotification = {
 				jsonrpc: '2.0',
 				method: 'newMessage',

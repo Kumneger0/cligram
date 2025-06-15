@@ -19,14 +19,12 @@ type SendMessageResponseType struct {
 	MessageId *int `json:"messageId,omitempty"`
 }
 
-
 func (c *JsonRpcClient) SendMessage(pInfo PeerInfo,
 	msg string,
 	isReplay bool,
 	replyToMessageId string,
 	cType ChatType, isFile bool,
 	filePath *string) (SendMessageRpcResponse, error) {
-
 
 	paramsFixed := make([]interface{}, 7)
 	paramsFixed[0] = pInfo

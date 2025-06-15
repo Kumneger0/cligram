@@ -9,6 +9,51 @@ import (
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
+	case rpc.NewMessageMsg:
+		if m.SelectedUser.PeerID == msg.User.PeerID {
+			if m.Mode == ModeUsers {
+				m.SelectedUser.UnreadCount++
+				var isCurrentConversationUsersChat bool = false
+				for _, v := range m.Conversations {
+					if v.Sender == m.SelectedUser.FirstName {
+						isCurrentConversationUsersChat = true
+						break
+					}
+				}
+				if isCurrentConversationUsersChat {
+					m.Conversations = append(m.Conversations, msg.Message)
+				}
+			}
+		} else {
+			userIndex := getUserIndex(m, msg.User)
+			if userIndex != -1 {
+				items := m.Users.Items()
+				user := items[userIndex].(rpc.UserInfo)
+				user.UnreadCount++
+				items[userIndex] = user
+				m.Users.SetItems(items)
+			}
+		}
+		return m, nil
+	case rpc.UserOnlineOffline:
+		var user rpc.UserInfo
+		for _, v := range m.Users.Items() {
+			u, ok := v.(rpc.UserInfo)
+			if ok && u.FirstName == msg.FirstName {
+				user = u
+				break
+			}
+		}
+
+		userIndex := getUserIndex(m, user)
+		if userIndex != -1 {
+			items := m.Users.Items()
+			user := items[userIndex].(rpc.UserInfo)
+			user.IsOnline = msg.Status == "online"
+			items[userIndex] = user
+			m.Users.SetItems(items)
+		}
+
 	case MessageDeletionConfrimResponseMsg:
 		if msg.yes {
 			var peer rpc.PeerInfo

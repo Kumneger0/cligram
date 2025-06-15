@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 )
+
 type UserChannelResponse struct {
 	JsonRPC string `json:"jsonrpc"`
 	ID      int    `json:"id"`
@@ -30,9 +31,8 @@ func (c *JsonRpcClient) GetUserChannel() tea.Cmd {
 	cwd, _ := os.Getwd()
 	file, _ := os.Create(filepath.Join(cwd, "channels.json"))
 
-    //TODO:don't forget to remove this is just for debuging purpose 
+	//TODO:don't forget to remove this is just for debuging purpose
 	writeLosToFIle(file, userChannelRpcResponse)
-
 
 	return func() tea.Msg {
 		if err != nil {
