@@ -15,7 +15,7 @@ type UserConversationResponse struct {
 		Message string      `json:"message"`
 		Data    interface{} `json:"data,omitempty"`
 	} `json:"error,omitempty"`
-	Result []FormattedMessage `json:"result,omitempty"`
+	Result [50]FormattedMessage `json:"result,omitempty"`
 }
 
 type FormattedMessage struct {
@@ -60,7 +60,7 @@ const (
 
 type IterParams map[string]interface{}
 
-type GetMessaegsMsg struct {
+type GetMessagesMsg struct {
 	Messages UserConversationResponse
 	Err      error
 }
@@ -97,17 +97,17 @@ func (c *JsonRpcClient) GetMessages(
 	return func() tea.Msg {
 		allMesssages, err := c.Call("getAllMessages", paramsFixed)
 		if err != nil {
-			return GetMessaegsMsg{
+			return GetMessagesMsg{
 				Err: err,
 			}
 		}
 		var formatedMessage UserConversationResponse
 		if err := json.Unmarshal(allMesssages, &formatedMessage); err != nil {
-			return GetMessaegsMsg{
+			return GetMessagesMsg{
 				Err: err,
 			}
 		}
-		return GetMessaegsMsg{
+		return GetMessagesMsg{
 			Messages: formatedMessage,
 			Err:      nil,
 		}
