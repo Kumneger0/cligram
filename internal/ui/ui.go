@@ -137,6 +137,7 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 
 	replayToMessageId := strconv.FormatInt(messageToReply.ID, 10)
 	response, err := rpc.RpcClient.SendMessage(peerInfo, userMsg, m.IsReply && m.ReplyTo != nil, replayToMessageId, cType, isFile, filepath)
+	m.SelectedFile = ""
 	if err != nil {
 		//TODO: trigger to show toast message
 		fmt.Println(err.Error())
@@ -147,9 +148,7 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 		return *m, nil
 	}
 
-	m.Conversations = append(m.Conversations, rpc.FormattedMessage{
-		//This is just to show the message immediatly after sending
-		// so we don't have to refetch the whole message since we are the one who is sending
+	newMessage := rpc.FormattedMessage{
 		ID:                   int64(rand.Int()),
 		Sender:               "you",
 		IsFromMe:             true,
@@ -160,24 +159,32 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 		WebPage:              nil,
 		Document:             nil,
 		FromID:               nil,
-	})
-
+	}
+	// * This is just to show the message immediatly after sending
+	// so we don't have to refetch the whole message since we are the one who is sending
+	totalConversationsSoFar := len(m.Conversations)
+	if totalConversationsSoFar < 50 {
+		m.Conversations[totalConversationsSoFar] = newMessage
+	} else {
+		firstOneRemoved := m.Conversations[1:]
+		m.Conversations[len(firstOneRemoved)] = newMessage
+	}
 	m.Input.Reset()
 	m.IsReply = false
 	m.ReplyTo = nil
 	return *m, nil
 }
 
-func updateFocusedComponent(m *Model, msg tea.Msg) (Model, tea.Cmd) {
+func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (Model, tea.Cmd) {
 	var cmd tea.Cmd
-
-	var cmds []tea.Cmd
+	var cmds = *cmdsFromParent
 	m.Filepicker, cmd = m.Filepicker.Update(msg)
 	m.Filepicker.SetHeight(m.Height - 13)
 	cmds = append(cmds, cmd)
 
 	if didSelect, path := m.Filepicker.DidSelectFile(msg); didSelect {
 		m.SelectedFile = path
+		m.IsFilepickerVisible = false
 	}
 
 	switch m.FocusedOn {
@@ -207,44 +214,17 @@ func updateFocusedComponent(m *Model, msg tea.Msg) (Model, tea.Cmd) {
 }
 
 func handleUserChange(m *Model) (Model, tea.Cmd) {
-	var cType rpc.ChatType
-	var pInfo rpc.PeerInfoParams
-	if m.Mode == ModeUsers {
-		m.SelectedUser = m.Users.SelectedItem().(rpc.UserInfo)
-		cType = "user"
-		pInfo = rpc.PeerInfoParams{
-			AccessHash:                  m.SelectedUser.AccessHash,
-			PeerID:                      m.SelectedUser.PeerID,
-			UserFirstNameOrChannelTitle: m.SelectedUser.FirstName,
-		}
-	}
-	if m.Mode == ModeChannels {
-		m.SelectedChannel = m.Channels.SelectedItem().(rpc.ChannelAndGroupInfo)
-		cType = "channel"
-		pInfo = rpc.PeerInfoParams{
-			AccessHash:                  m.SelectedChannel.AccessHash,
-			PeerID:                      m.SelectedChannel.ChannelID,
-			UserFirstNameOrChannelTitle: m.SelectedChannel.ChannelTitle,
-		}
-		if m.SelectedChannel.IsCreator {
-			m.Input.Reset()
-		}
-	}
-	if m.Mode == ModeGroups {
-		m.SelectedGroup = m.Groups.SelectedItem().(rpc.ChannelAndGroupInfo)
-		cType = "group"
-		pInfo = rpc.PeerInfoParams{
-			AccessHash:                  m.SelectedGroup.AccessHash,
-			PeerID:                      m.SelectedGroup.ChannelID,
-			UserFirstNameOrChannelTitle: m.SelectedGroup.ChannelTitle,
-		}
-	}
+	pInfo, cType := getGetMessageParams(m)
 	cmd := rpc.RpcClient.GetMessages(pInfo, cType, nil, nil, nil)
+	// conversationLastIndex := len(m.Conversations) - 1
+	// m.ChatUI.Select(conversationLastIndex)
+	m.Conversations = [50]rpc.FormattedMessage{}
 	m.MainViewLoading = true
 	return *m, cmd
 }
 
 func changeFocusMode(m *Model, msg string) (Model, tea.Cmd) {
+	var cmds []tea.Cmd
 	currentlyFoucsedOn := m.FocusedOn
 	canWrite := (m.Mode == ModeUsers || m.Mode == ModeGroups) || (m.Mode == ModeChannels && m.SelectedChannel.IsCreator)
 
@@ -255,12 +235,12 @@ func changeFocusMode(m *Model, msg string) (Model, tea.Cmd) {
 	} else {
 		m.FocusedOn = SideBar
 	}
-	return updateFocusedComponent(m, msg)
+	return updateFocusedComponent(m, msg, &cmds)
 }
 
 func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 	if m.FocusedOn != SideBar {
-		return updateFocusedComponent(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(msg)})
+		return updateFocusedComponent(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(msg)}, &[]tea.Cmd{})
 	}
 	switch msg {
 	case "c":
@@ -284,17 +264,10 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 func (m *Model) updateConverstaions() {
 	sidebarWidth := m.Width * 30 / 100
 	mainWidth := m.Width - sidebarWidth
-	// contentHeight := m.Height * 90 / 100
-
 	w := mainWidth * 70 / 100
 	m.ChatUI.SetWidth(w)
 	m.ChatUI.SetHeight(int(float64(m.Height) / 2.6666666665))
-
-	conversations := m.Conversations
-	conversationLastIndex := len(conversations) - 1
-
 	m.ChatUI.SetItems(formatMessages(m.Conversations))
-	m.ChatUI.Select(conversationLastIndex)
 }
 
 func getItemBorder(isSelected bool) lipgloss.Border {

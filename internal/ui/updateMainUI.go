@@ -1,12 +1,15 @@
 package ui
 
 import (
+	"fmt"
+
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kumneger0/cligram/internal/rpc"
 )
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
 	switch msg := msg.(type) {
 
 	case rpc.NewMessageMsg:
@@ -21,7 +24,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 				if isCurrentConversationUsersChat {
-					m.Conversations = append(m.Conversations, msg.Message)
+					totalConversationsSoFar := len(m.Conversations)
+					if totalConversationsSoFar < 50 {
+						m.Conversations[totalConversationsSoFar] = msg.Message
+					} else {
+						firstOneRemoved := m.Conversations[1:]
+						m.Conversations[len(firstOneRemoved)] = msg.Message
+					}
 				}
 			}
 		} else {
@@ -98,10 +107,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			if response.Result.Status == "success" {
-				var updatedConversations []rpc.FormattedMessage
-				for _, v := range m.Conversations {
+				var updatedConversations [50]rpc.FormattedMessage
+				for i, v := range m.Conversations {
 					if v.ID != selectedItemInChat.ID {
-						updatedConversations = append(updatedConversations, v)
+						updatedConversations[i] = v
 					}
 				}
 				m.Conversations = updatedConversations
@@ -112,19 +121,64 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-	case rpc.GetMessaegsMsg:
+	case rpc.GetMessagesMsg:
 		if msg.Err != nil {
+			fmt.Println("wtf is happeing", msg.Err.Error())
 			m.IsModalVisible = true
 			m.ModalContent = GetModalContent(msg.Err.Error())
 			m.MainViewLoading = false
 			return m, nil
 		}
-		m.Conversations = msg.Messages.Result
+
+		messagesWeGot := len(filterEmptyMessages(msg.Messages.Result))
+		if messagesWeGot < 1 {
+			m.MainViewLoading = false
+			return m, nil
+		}
+		var updatedConversations [50]rpc.FormattedMessage
+		var oldMessages []rpc.FormattedMessage
+		if messagesWeGot < 50 {
+			for _, v := range m.ChatUI.Items() {
+				if msg, ok := v.(rpc.FormattedMessage); ok && msg.ID != 0 {
+					oldMessages = append(oldMessages, msg)
+				} else {
+					fmt.Println(msg.ID)
+				}
+			}
+			oldMessagesLength := len(oldMessages)
+			if (messagesWeGot + oldMessagesLength) <= 50 {
+				updatedConversations = msg.Messages.Result
+			} else {
+				numberMessagesWeShouldTakeFromOldConversation := 50 - messagesWeGot
+				messagesToAppend := m.Conversations[:numberMessagesWeShouldTakeFromOldConversation]
+				messagesToAppend = append(messagesToAppend, msg.Messages.Result[:]...)
+				copy(updatedConversations[:], messagesToAppend)
+			}
+
+			// emptySlots := 50 - messagesWeGot
+			// for i := 0; i < emptySlots; i++ {
+			// 	updatedConversations[i] = rpc.FormattedMessage{}
+			// }
+			// for i := emptySlots; i < 50; i++ {
+			// 	updatedConversations[i] = msg.Messages.Result[i-emptySlots]
+			// }
+		} else {
+			updatedConversations = msg.Messages.Result
+		}
+		m.Conversations = updatedConversations
+		conversationLastIndex := len(m.Conversations) - 1
 		m.updateConverstaions()
+		m.ChatUI.Select(conversationLastIndex)
 		m.MainViewLoading = false
 		return m, nil
 	case tea.KeyMsg:
 		switch msg.String() {
+		case "up":
+			// _, cmd := handleUpDownArrowKeys(&m, true)
+			// cmds = append(cmds, cmd)
+		case "down":
+		//  _, cmd :=handleUpDownArrowKeys(&m, false)
+		//   cmds = append(cmds, cmd)
 		case "ctrl+a":
 			if m.FocusedOn == Input {
 				m.IsFilepickerVisible = true
@@ -391,5 +445,5 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, setItemsCmd
 		}
 	}
-	return updateFocusedComponent(&m, msg)
+	return updateFocusedComponent(&m, msg, &cmds)
 }
