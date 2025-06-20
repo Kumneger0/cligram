@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -129,92 +128,118 @@ func GetModalContent(errorMessage string) string {
 
 func setItemStyles(m *Model) string {
 	if m.IsModalVisible {
-		modalView := lipgloss.Place(
-			m.Width,
-			m.Height,
-			lipgloss.Center, lipgloss.Center, m.ModalContent,
-		)
-		return modalView
+		return renderModal(m)
 	}
 
+	dimensions := calculateLayoutDimensions(m)
+	
+	updateListDimensions(m, dimensions)
+
+	mainContent := prepareMainContent(m, dimensions)
+
+	sidebarContent := prepareSidebarContent(m, dimensions)
+	
+	inputView := prepareInputView(m, dimensions)
+
+	row := lipgloss.JoinHorizontal(lipgloss.Top, sidebarContent, mainContent)
+	return lipgloss.JoinVertical(lipgloss.Top, row, inputView)
+}
+
+type layoutDimensions struct {
+	sidebarWidth  int
+	mainWidth     int
+	contentHeight int
+	inputHeight   int
+}
+
+func calculateLayoutDimensions(m *Model) layoutDimensions {
 	sidebarWidth := m.Width * 30 / 100
-	mainWidth := m.Width - sidebarWidth
-	contentHeight := m.Height * 90 / 100
-	inputHeight := m.Height - contentHeight
-	m.Users.SetHeight(contentHeight - 4)
-	m.Users.SetWidth(sidebarWidth)
-	m.Channels.SetWidth(sidebarWidth)
-	m.Channels.SetHeight(contentHeight - 4)
-	m.Groups.SetWidth(sidebarWidth)
+	return layoutDimensions{
+		sidebarWidth:  sidebarWidth,
+		mainWidth:     m.Width - sidebarWidth,
+		contentHeight: m.Height * 90 / 100,
+		inputHeight:   m.Height - (m.Height * 90 / 100),
+	}
+}
 
-	m.Groups.SetHeight(contentHeight - 4)
+func updateListDimensions(m *Model, d layoutDimensions) {
+	listHeight := d.contentHeight - 4
+	m.Users.SetHeight(listHeight)
+	m.Users.SetWidth(d.sidebarWidth)
+	m.Channels.SetWidth(d.sidebarWidth)
+	m.Channels.SetHeight(listHeight)
+	m.Groups.SetWidth(d.sidebarWidth)
+	m.Groups.SetHeight(listHeight)
+}
 
-	mainStyle := getMainStyle(mainWidth, contentHeight, m)
+func renderModal(m *Model) string {
+	return lipgloss.Place(
+		m.Width,
+		m.Height,
+		lipgloss.Center,
+		lipgloss.Center,
+		m.ModalContent,
+	)
+}
+
+func getUserOrChannelName(m *Model) string {
+	switch m.Mode {
+	case ModeUsers:
+		return formatUserName(m.SelectedUser)
+	case ModeChannels:
+		return formatChannelName(m.SelectedChannel)
+	case ModeGroups:
+		return formatGroupName(m.SelectedGroup)
+	default:
+		return ""
+	}
+}
+
+func formatUserName(user rpc.UserInfo) string {
+	name := user.Title()
+	if user.IsOnline {
+		return name + " Online"
+	}
+	if user.LastSeen != nil {
+		return name + " " + *user.LastSeen
+	}
+	return name
+}
+
+func formatChannelOrGroupName(name string, count *int) string {
+	if count == nil {
+		return name
+	}
+	return fmt.Sprintf("%s %d Members", name, *count)
+}
+
+func formatChannelName(channel rpc.ChannelAndGroupInfo) string {
+	return formatChannelOrGroupName(channel.FilterValue(), channel.ParticipantsCount)
+}
+
+func formatGroupName(group rpc.ChannelAndGroupInfo) string {
+	return formatChannelOrGroupName(group.FilterValue(), group.ParticipantsCount)
+}
+
+func prepareMainContent(m *Model, d layoutDimensions) string {
+	mainStyle := getMainStyle(d.mainWidth, d.contentHeight, m)
+
+	if m.MainViewLoading {
+		return mainStyle.Render("Loading...")
+	}
+
 	m.ChatUI.SetItems(formatMessages(m.Conversations))
-
-	w := mainWidth * 70 / 100
-	m.ChatUI.SetWidth(w)
+	m.ChatUI.SetWidth(d.mainWidth * 70 / 100)
 	m.ChatUI.SetHeight(15)
-	var userNameOrChannelName string
-	if m.Mode == ModeUsers {
-		lastSeenTime := m.SelectedUser.LastSeen
-		userNameOrChannelName = m.SelectedUser.Title()
 
-		if m.SelectedUser.IsOnline {
-			userNameOrChannelName += " " + "Online"
-		} else if lastSeenTime != nil {
-			userNameOrChannelName += " " + *lastSeenTime
-		}
-	}
-
-	if m.Mode == ModeChannels {
-		selectedChannel := m.SelectedChannel
-		userNameOrChannelName = selectedChannel.FilterValue()
-		if selectedChannel.ParticipantsCount != nil {
-			var sb strings.Builder
-			sb.WriteString(selectedChannel.FilterValue())
-			sb.WriteString(" ")
-			if selectedChannel.ParticipantsCount != nil {
-				sb.WriteString(strconv.Itoa(*selectedChannel.ParticipantsCount))
-				sb.WriteString(" ")
-				sb.WriteString("Members")
-			}
-			userNameOrChannelName = sb.String()
-		}
-	}
-	if m.Mode == ModeGroups {
-		selectedGroup := m.SelectedGroup
-		userNameOrChannelName = selectedGroup.FilterValue()
-		if selectedGroup.ParticipantsCount != nil {
-			var sb strings.Builder
-			sb.WriteString(selectedGroup.FilterValue())
-			sb.WriteString(" ")
-			if selectedGroup.ParticipantsCount != nil {
-				sb.WriteString(strconv.Itoa(*selectedGroup.ParticipantsCount))
-				sb.WriteString(" ")
-				sb.WriteString("Members")
-			}
-			userNameOrChannelName = sb.String()
-		}
-	}
-
+	userNameOrChannelName := getUserOrChannelName(m)
 	title := titleStyle.Render(userNameOrChannelName)
-	line := strings.Repeat("─", max(0, mainWidth-4-lipgloss.Width(title)))
+	line := strings.Repeat("─", max(0, d.mainWidth-4-lipgloss.Width(title)))
 	headerView := lipgloss.JoinVertical(lipgloss.Center, title, line)
 
-	var s strings.Builder
-	s.WriteString("\n  ")
-	if m.SelectedFile == "" {
-		s.WriteString("Pick a file:")
-	} else {
-		s.WriteString("Selected file: click ctrl + a to close file picker\n" + m.Filepicker.Styles.Selected.Render(m.SelectedFile))
-	}
-
 	mainViewContent := m.ChatUI.View()
-
 	if m.IsFilepickerVisible {
-		s.WriteString("\n\n" + m.Filepicker.View() + "\n")
-		mainViewContent = s.String()
+		mainViewContent = prepareFilepickerView(m)
 	}
 
 	mainContent := lipgloss.JoinVertical(
@@ -222,43 +247,53 @@ func setItemStyles(m *Model) string {
 		headerView,
 		mainViewContent,
 	)
-	var chatView string
-	if m.MainViewLoading {
-		chatView = mainStyle.Render("Loading...")
+
+	return mainStyle.Render(mainContent)
+}
+
+func prepareFilepickerView(m *Model) string {
+	var s strings.Builder
+	s.WriteString("\n  ")
+	if m.SelectedFile == "" {
+		s.WriteString("Pick a file:")
 	} else {
-		chatView = mainStyle.Render(mainContent)
+		s.WriteString("Selected file: click ctrl + a to close file picker\n" + m.Filepicker.Styles.Selected.Render(m.SelectedFile))
 	}
-	var sideBarContent string
+	s.WriteString("\n\n" + m.Filepicker.View() + "\n")
+	return s.String()
+}
+
+func prepareSidebarContent(m *Model, d layoutDimensions) string {
+	var content string
 	switch m.Mode {
 	case ModeUsers:
-		sideBarContent = m.Users.View()
+		content = m.Users.View()
 	case ModeChannels:
-		sideBarContent = m.Channels.View()
+		content = m.Channels.View()
 	case ModeGroups:
-		sideBarContent = m.Groups.View()
-	default:
-		sideBarContent = ""
+		content = m.Groups.View()
 	}
-	sidebar := getSideBarStyles(sidebarWidth, contentHeight, m).Render(sideBarContent)
+	return getSideBarStyles(d.sidebarWidth, d.contentHeight, m).Render(content)
+}
 
+func prepareInputView(m *Model, d layoutDimensions) string {
 	if m.FocusedOn == Input {
 		m.Input.Focus()
 	}
 
-	inputView := getInputStyle(m, inputHeight).Render(m.Input.View())
+	inputView := getInputStyle(m, d.inputHeight).Render(m.Input.View())
+	
 	if m.IsReply && m.ReplyTo != nil {
-		str := strings.Join([]string{"Reply to \n", strings.Split(m.ReplyTo.Content, "\n")[0]}, "")
-		inputView = lipgloss.JoinVertical(lipgloss.Top, str, inputView)
+		replyContext := fmt.Sprintf("Reply to \n%s", strings.Split(m.ReplyTo.Content, "\n")[0])
+		inputView = lipgloss.JoinVertical(lipgloss.Top, replyContext, inputView)
 	}
 
 	if m.SelectedFile != "" {
-		str := strings.Join([]string{"File \n", strings.Split(m.SelectedFile, "\n")[0]}, "")
-		inputView = lipgloss.JoinVertical(lipgloss.Top, str, inputView)
+		fileContext := fmt.Sprintf("File \n%s", strings.Split(m.SelectedFile, "\n")[0])
+		inputView = lipgloss.JoinVertical(lipgloss.Top, fileContext, inputView)
 	}
 
-	row := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, chatView)
-	ui := lipgloss.JoinVertical(lipgloss.Top, row, inputView)
-	return ui
+	return inputView
 }
 
 func Debounce(fn func(args ...interface{}) tea.Msg, delay time.Duration) func(args ...interface{}) tea.Cmd {
@@ -353,7 +388,6 @@ func handleUpDownArrowKeys(m *Model, isUp bool) (Model, tea.Cmd) {
 			cmd = func() tea.Msg {
 				return messagesMsg
 			}
-			//get those chats from lru cache insted when we go down basically we are gonna see chat we already saw so making new rpc request is kinda unnessary
 		}
 
 	}
