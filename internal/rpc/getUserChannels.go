@@ -3,8 +3,6 @@ package rpc
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -27,13 +25,6 @@ type UserChannelMsg struct {
 
 func (c *JsonRpcClient) GetUserChannel() tea.Cmd {
 	userChannelRpcResponse, err := c.Call("getUserChats", []string{"channel"})
-
-	cwd, _ := os.Getwd()
-	file, _ := os.Create(filepath.Join(cwd, "channels.json"))
-
-	//TODO:don't forget to remove this is just for debuging purpose
-	writeLosToFIle(file, userChannelRpcResponse)
-
 	return func() tea.Msg {
 		if err != nil {
 			return UserChannelMsg{Err: err}

@@ -1,7 +1,7 @@
 package ui
 
 import (
-	"fmt"
+	"log/slog"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
@@ -182,7 +182,7 @@ func (m Model) getPeerInfoAndChatType() (rpc.PeerInfo, rpc.ChatType) {
 
 func (m Model) handleGetMessages(msg rpc.GetMessagesMsg) (tea.Model, tea.Cmd) {
 	if msg.Err != nil {
-		fmt.Println("wtf is happeing", msg.Err.Error())
+		slog.Error("Failed to get messages", "error", msg.Err.Error())
 		m.IsModalVisible = true
 		m.ModalContent = GetModalContent(msg.Err.Error())
 		m.MainViewLoading = false
@@ -411,12 +411,12 @@ func (m Model) handleForwardMessage(msg ForwardMsg) (tea.Model, tea.Cmd) {
 
 	response, err := rpc.RpcClient.ForwardMessages(from, messageIDs, toPeer, cType)
 	if err != nil {
-		//TODO:show toast message
+		slog.Error("Failed to forward message", "error", err.Error())
 		return m, nil
 	}
 
 	if response.Error != nil {
-		//TODO:show toast message
+		slog.Error("Failed to forward message", "error", response.Error.Message)
 	}
 
 	return m, nil

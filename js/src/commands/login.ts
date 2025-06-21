@@ -6,13 +6,13 @@ export async function login () {
 		const client = await authenticateUser({ isCalledFromLogin: true });
 		const me = await client?.getMe();
 		if (me?.firstName) {
-			console.log(`${green('✔')} You have Successfully loged in`);
+			const successMessage = `${green('✔')} You have Successfully loged`;
+			process.stdout.write(successMessage);
 			process.exit(0);
 		}
 	} catch (error) {
-		console.error(
-			`${red('✖')} ${error instanceof Error ? error.message : 'An unknown error occurred'}`
-		);
+		const errMessage = `${red('✖')} ${error instanceof Error ? error.message : 'An unknown error occurred'}`;
+		process.stdout.write(errMessage);
 		process.exit(1);
 	}
 }

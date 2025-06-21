@@ -82,15 +82,18 @@ export async function authenticateUser({isCalledFromLogin}:{ isCalledFromLogin: 
 	} catch (err) {
 		if (err instanceof RPCError) {
 			const message = err.message;
-			console.log(`${red('✖')} ${message}`);
+			const errMessage = `${red('✖')} ${message}`;
+			process.stdout.write(errMessage);
 			return null;
 		}
 		if (err && typeof err === 'object' && 'message' in err && typeof err.message === 'string') {
-			console.log(`${red('✖')} ${err.message}`);
+			const errMessage = `${red('✖')} ${err.message}`;
+			process.stdout.write(errMessage);
 		}
 	}
 	return null;
 }
+
 
 export const getTelegramClient = async (isCalledFromLogin:boolean = false) => {
 	if (!telegramClient) {

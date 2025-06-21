@@ -9,6 +9,7 @@ import (
 
 	"github.com/gofrs/flock"
 	"github.com/kumneger0/cligram/cmd"
+	"github.com/kumneger0/cligram/internal/logger"
 )
 
 var version = ""
@@ -37,6 +38,9 @@ func main() {
 	if err := os.WriteFile(lockFilePath, []byte(strconv.Itoa(pid)), 0644); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: could not write PID to lock file: %v\n", err)
 	}
+
+	loggerFile := logger.Init()
+	defer loggerFile.Close()
 
 	if err := cmd.Execute(version); err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)

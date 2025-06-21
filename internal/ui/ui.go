@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"math/rand"
 	"strconv"
 	"time"
@@ -139,12 +140,12 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 	response, err := rpc.RpcClient.SendMessage(peerInfo, userMsg, m.IsReply && m.ReplyTo != nil, replayToMessageId, cType, isFile, filepath)
 	m.SelectedFile = ""
 	if err != nil {
-		//TODO: trigger to show toast message
-		fmt.Println(err.Error())
+		slog.Error("Failed to send message", "error", err.Error())
 		return *m, nil
 	}
 
 	if response.Error != nil {
+		slog.Error("Failed to send message", "error", response.Error.Message)
 		return *m, nil
 	}
 

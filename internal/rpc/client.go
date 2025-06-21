@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -71,11 +72,6 @@ func (c *JsonRpcClient) GetUserGroups() tea.Cmd {
 	}
 }
 
-func writeLosToFIle(file *os.File, content []byte) error {
-	_, err := file.Write(content)
-	return err
-}
-
 type PeerInfo struct {
 	AccessHash string `json:"accessHash"`
 	PeerID     string `json:"peerId"`
@@ -122,14 +118,6 @@ func (c *JsonRpcClient) Call(method string, params interface{}) ([]byte, error) 
 	if jsonPayloadBytes.Error != nil {
 		return nil, fmt.Errorf("failed to read response: %w", jsonPayloadBytes.Error)
 	}
-
-	cwd, _ := os.Getwd()
-	file, _ := os.Create(filepath.Join(cwd, "logs.json"))
-
-	defer file.Close()
-
-	//TODO:don't forget to remove this is just for debuging purpose
-	writeLosToFIle(file, jsonPayloadBytes.Data)
 
 	return jsonPayloadBytes.Data, nil
 }
@@ -257,6 +245,7 @@ func ProcessIncomingNotifications(p chan Notification) {
 	}()
 
 	for {
+		time.Sleep(1 * time.Second)
 		jsonPayload, err := ReadStdOut(RpcClient)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Notifications channel closed: %v\n", err.Error())
@@ -279,27 +268,27 @@ func ProcessIncomingNotifications(p chan Notification) {
 				paramsBytes, err := json.Marshal(notification.Params)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "Failed to marshal params: %v\n", err.Error())
-					//TODO: handle error here
+					slog.Error("Failed to marshal params", "error", err.Error())
 					return
 				}
 
 				var newMessage NewMessageMsg
 				if err := json.Unmarshal(paramsBytes, &newMessage); err != nil {
 					fmt.Fprintf(os.Stderr, "Failed to unmarshal params: %v\n", err.Error())
-					//TODO: handle error here
+					slog.Error("Failed to unmarshal params", "error", err.Error())
 					return
 				}
 				if p != nil {
 					p <- Notification{NewMessageMsg: newMessage}
 				} else {
-					fmt.Println("bubble tea event loop is not initialized")
+					slog.Error("bubble tea event loop is not initialized")
 				}
 			}
 			if notification.Method == "userOnlineOffline" {
 				paramsBytes, err := json.Marshal(notification.Params)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "Failed to marshal params: %v\n", err.Error())
-					//TODO: handle error here
+					slog.Error("Failed to marshal params", "error", err.Error())
 					return
 				}
 
