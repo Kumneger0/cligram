@@ -11,12 +11,10 @@ import { getTelegramClient } from './lib/utils/auth';
 import { getUserChats, getUserInfo, searchUsers, setUserPrivacy } from './telegram/client';
 import { deleteMessage, editMessage, forwardMessage, getAllMessages, listenForEvents, sendMessage } from './telegram/messages';
 
-// import { stringify } from 'flatted';
-
 const stringify = JSON.stringify
 
 /**
- * gram has logs that we don't need i tried setting log level to none but it didn't work
+ * gram.js has logs that we don't need i tried setting log level to none but it didn't work
  * so we just patch the global console object to ignore all logs
  */
 console.log = () => { };

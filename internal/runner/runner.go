@@ -32,6 +32,7 @@ func GetJSExcutable() (*string, error) {
 		hasher := sha256.New()
 		if _, err := io.Copy(hasher, fileOnDisk); err == nil {
 			diskHashStr := hex.EncodeToString(hasher.Sum(nil))
+			
 			if diskHashStr == embeddedHashStr {
 				fileOnDisk.Close()
 				return &backendPath, nil
@@ -40,6 +41,9 @@ func GetJSExcutable() (*string, error) {
 		fileOnDisk.Close()
 	}
 
+	if err := os.Remove(backendPath); err != nil {
+		return nil, fmt.Errorf("could not remove existing backend binary: %w", err)
+	}
 	if err := os.WriteFile(backendPath, assets.JSBackendBinary, 0755); err != nil {
 		return nil, fmt.Errorf("could not write embedded backend binary: %w", err)
 	}

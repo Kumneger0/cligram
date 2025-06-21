@@ -169,6 +169,7 @@ func newRootCmd(version string) *cobra.Command {
 
 			fp := filepicker.New()
 			fp.AllowedTypes = []string{}
+			fp.DirAllowed = false
 			fp.CurrentDirectory, _ = os.UserHomeDir()
 
 			m := ui.Model{

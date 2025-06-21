@@ -1,7 +1,7 @@
 package ui
 
 import (
-	"fmt"
+	"log/slog"
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -58,13 +58,12 @@ func (m Manager) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			if m.State == MainView {
 				err := rpc.JsProcess.Signal(os.Interrupt)
 				if err != nil {
-					fmt.Println(err)
+					slog.Error("Failed to send interrupt signal to JS process", "error", err.Error())
 				}
 				return m, tea.Quit
-			} else {
-				m.State = MainView
-				return m, nil
 			}
+			m.State = MainView
+			return m, nil
 		case "ctrl+k":
 			if m.State == MainView {
 				m.State = ModalView

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"math/rand"
 	"strings"
 	"sync"
@@ -343,14 +344,9 @@ func handleUpDownArrowKeys(m *Model, isUp bool) (Model, tea.Cmd) {
 				if len(m.Conversations) > 1 {
 					messages, err := json.Marshal(m.Conversations[:])
 					if err != nil {
-						fmt.Println("uff wht")
+						slog.Error("Failed to marshal messages", "error", err.Error())
 					}
-					isAdded := AddToCache(cacheKey, string(messages))
-					if !isAdded {
-						// fmt.Println("we have failed to add items to cache")
-					} else {
-						// fmt.Println("Added to cache")
-					}
+					AddToCache(cacheKey, string(messages))
 				}
 				cmd = rpc.RpcClient.GetMessages(pInfo, cType, &offsetID, nil, nil)
 				conversationLastIndex := len(m.Conversations) - 1
@@ -360,7 +356,7 @@ func handleUpDownArrowKeys(m *Model, isUp bool) (Model, tea.Cmd) {
 			cacheKey := pInfo.AccessHash + pInfo.PeerID
 			messages, err := GetFromCache(cacheKey)
 			if err != nil {
-				fmt.Printf("we have failed to get messages from cache %s", err.Error())
+				slog.Error("Failed to get messages from cache", "error", err.Error())
 			}
 			if messages == nil {
 				return *m, nil
@@ -369,7 +365,7 @@ func handleUpDownArrowKeys(m *Model, isUp bool) (Model, tea.Cmd) {
 			err = json.Unmarshal([]byte(*messages), &formattedMessages)
 
 			if err != nil {
-				fmt.Println("oops what the fuck is happening", err.Error())
+				slog.Error("Failed to unmarshal messages", "error", err.Error())
 			}
 
 			if len(formattedMessages) == 0 {
