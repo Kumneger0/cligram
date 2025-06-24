@@ -34,7 +34,7 @@ RUN cp js/bin/cligram-js internal/assets/resources/cligram-js-backend
 RUN go build -ldflags "-X main.version=$(git describe --abbrev=0 --tags || echo dev)" -o cligram
 
 # Final stage
-FROM alpine:3.18
+FROM alpine:3.22
 
 # Install runtime dependencies if any
 RUN apk add --no-cache ca-certificates
