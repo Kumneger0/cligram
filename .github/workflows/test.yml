@@ -1,41 +1,35 @@
-name: test pull request
+name: Test and coverage
 
-on:
-  pull_request:
-    branches:
-      - main
+on: [push, pull_request]
 
 jobs:
   test:
-    if: false
-    runs-on: ubuntu-latest
-    env:
-      TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
-      TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
-      SESSION_STRING: ${{ secrets.SESSION_STRING }}
+    strategy:
+      matrix:
+        go-version: [1.24.x]
+        os: [ubuntu-latest, macos-latest, windows-latest]
 
-    permissions:
-      contents: read
-      id-token: write
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-          registry-url: 'https://registry.npmjs.org'
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20.x'
-          registry-url: 'https://registry.npmjs.org'
+      - name: Build application and assets
+        run: make build
 
-      - name: Install Dependencies
-        run: bun install
-        working-directory: .
+      - name: Run tests
+        run: make test
 
-      - name: Test
-        run: bun test
-        working-directory: .
+      - name: Upload coverage to Codecov
+        if: matrix.os == 'ubuntu-latest'
+        run: bash <(curl -s https://codecov.io/bash)

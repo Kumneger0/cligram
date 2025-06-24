@@ -1,0 +1,69 @@
+{
+  "name": "cligram",
+  "description": "CLI-based Telegram client",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "type": "module",
+  "bin": {
+    "telegram-cli": "dist/index.js",
+    "cligram": "dist/index.js"
+  },
+  "keywords": [
+    "Telegram"
+  ],
+  "author": "kumneger wondimu <kumnegerwondimu@gmail.com>",
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kumneger0/cligram"
+  },
+  "scripts": {
+    "dev": "nodemon --watch src --watch test --ext ts,json --exec 'bun run build'",
+    "build": "bun build src/index.ts --compile --outfile bin/cligram-js",
+    "build:esm": "tsdown src/index.ts --format esm",
+    "start": "bun src/index.ts",
+    "test:": "vitest",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "lint": "eslint . --fix",
+    "lint:check": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.2",
+    "@typescript-eslint/eslint-plugin": "6.21.0",
+    "@typescript-eslint/parser": "6.21.0",
+    "eslint": "8.57.0",
+    "eslint-config-prettier": "9.1.0",
+    "nodemon": "^3.1.10",
+    "prettier": "3.3.3",
+    "tsdown": "^0.12.7",
+    "typescript": "5.5.4",
+    "vitest": "^3.0.7"
+  },
+  "dependencies": {
+    "@types/node-notifier": "^8.0.5",
+    "date-fns": "^4.1.0",
+    "debounce": "^2.2.0",
+    "dotenv": "^16.4.7",
+    "input": "^1.0.1",
+    "kolorist": "^1.8.0",
+    "lru-cache": "^11.1.0",
+    "node-notifier": "^10.0.1",
+    "telegram": "^2.26.22",
+    "term-size": "^4.0.0",
+    "terminal-image": "^3.1.1",
+    "zod": "^3.24.2"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "bufferutil",
+      "core-js",
+      "es5-ext",
+      "utf-8-validate"
+    ]
+  }
+}

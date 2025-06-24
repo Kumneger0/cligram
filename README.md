@@ -75,13 +75,9 @@ To make these variables persistent across sessions, you can add them to your sys
 
 After setting the variables, restart your terminal to apply the changes.
 
-### Installation with npm
+# Installation
 
-You'll need to have `bun` installed to use this package:
-
-```bash
-npm install -g cligram
-```
+For detailed installation instructions, please see [install.md](install.md).
 
 ## Using Docker
 
@@ -104,13 +100,6 @@ If the command is too long, you can create an alias to make it easier to use.
 - **Login**: Use `cligram login` in your terminal and follow the prompts.
 - **Logout**: Use `cligram logout` when you're done.
 
-## First Time?
-
-When you start, you'll land on the Help Page. You can:
-
-- Hit **c** to jump into the main chat interface.
-- Hit **x** to skip the help page next time.
-
 ## The Look
 
 - Sidebar takes 30% of the width.
@@ -132,15 +121,13 @@ When you start, you'll land on the Help Page. You can:
 
 - **Message Actions**: When you've got a message selected in the chat area:
   - **d** to delete it.
-  - **e** to edit it.
   - **r** to reply to it.
   - **f** to forward it.
-  - **u** to open direct message with the user (in group chats, this lets you quickly start a private conversation with any message sender)
+ 
 
 ## Working with the Message Input
 
-- **ctrl + x**: Toggle focus on the message input box
-- **ctrl + a**: Open file picker to attach a file (requires zenity to be installed)
+- **ctrl + a**: When input is focused, opens or closes the file picker to attach a file (requires zenity to be installed)
 - When a file is selected, you can add an optional caption or just press Enter to send the file as is
 - File upload progress is displayed while sending
 
