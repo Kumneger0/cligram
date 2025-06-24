@@ -28,7 +28,7 @@ Before building cligram from source, ensure you have the following prerequisites
 
 ## Verifying Installation
 
-After installation, you can verify that tg-cli is working correctly by running:
+After installation, you can verify that cligram is working correctly by running:
 ```bash
 cligram --version
 ```
