@@ -75,13 +75,9 @@ To make these variables persistent across sessions, you can add them to your sys
 
 After setting the variables, restart your terminal to apply the changes.
 
-### Installation with npm
+# Installation
 
-You'll need to have `bun` installed to use this package:
-
-```bash
-npm install -g cligram
-```
+For detailed installation instructions, please see [install.md](install.md).
 
 ## Using Docker
 
@@ -127,6 +123,7 @@ If the command is too long, you can create an alias to make it easier to use.
   - **d** to delete it.
   - **r** to reply to it.
   - **f** to forward it.
+ 
 
 ## Working with the Message Input
 
