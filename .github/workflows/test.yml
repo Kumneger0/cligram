@@ -22,7 +22,7 @@ jobs:
           go-version: ${{ matrix.go-version }}
 
       - name: Set up Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@v2
 
       - name: Build application and assets
         run: make build
