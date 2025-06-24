@@ -37,8 +37,10 @@ $(JS_BUILD_OUTPUT): $(JS_SOURCES)
 	@cd js && bun install && bun run build
 
 .PHONY: install
-install: ## install golang binary
-	@go install -ldflags "-X main.version=$(shell git describe --abbrev=0 --tags)"
+install: build ## install binary to /usr/local/bin
+	@echo "--> Installing cligram to /usr/local/bin..."
+	@sudo cp $(projectname) /usr/local/bin/
+	@echo "--> Installation complete. Run 'cligram' to start."
 
 .PHONY: run
 run: build ## build and run the app
