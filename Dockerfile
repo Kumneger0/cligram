@@ -1,5 +1,5 @@
 # Build stage for Node.js and Go
-FROM oven/bun:1.2.5 AS builder
+FROM oven/bun:1.2.17 AS builder
 
 # Install Go 1.24
 RUN apt-get update && apt-get install -y \
