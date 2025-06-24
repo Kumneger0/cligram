@@ -32,7 +32,7 @@ func GetJSExcutable() (*string, error) {
 		hasher := sha256.New()
 		if _, err := io.Copy(hasher, fileOnDisk); err == nil {
 			diskHashStr := hex.EncodeToString(hasher.Sum(nil))
-			
+
 			if diskHashStr == embeddedHashStr {
 				fileOnDisk.Close()
 				return &backendPath, nil

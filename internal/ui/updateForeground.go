@@ -28,7 +28,6 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		input.CharLimit = 256
 		m.input = input
 		m.input.Focus()
-		cmds = append(cmds, debouncedSearch(""))
 	case tea.KeyMsg:
 		model, cmd := m.handleKeyPress(msg, &cmds)
 		m = model.(*Foreground)

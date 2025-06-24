@@ -4,6 +4,7 @@ import (
 	"log/slog"
 
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kumneger0/cligram/internal/rpc"
 )
@@ -52,6 +53,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		model, cmd := m.handleWindowSize(msg)
 		m = model.(Model)
+		cmds = append(cmds, cmd)
+		m.Filepicker, cmd = m.Filepicker.Update(msg)
 		cmds = append(cmds, cmd)
 	case SelectSearchedUserResult:
 		model, cmd := m.handleSearchedUserResult(msg)
@@ -279,14 +282,12 @@ func (m Model) handleCtrlA() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) handleMKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleMKey(_ tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.FocusedOn != Input {
 		m.IsModalVisible = true
 		return m, nil
 	}
-	input, cmd := m.Input.Update(msg)
-	m.Input = input
-	return m, cmd
+	return m, nil
 }
 
 func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
@@ -451,6 +452,11 @@ func (m Model) extractPeerInfo(fromPeer, reciever interface{}) (from, toPeer rpc
 func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	m.Width = msg.Width - 4
 	m.Height = msg.Height - 4
+	headerHeight := 7
+	footerHeight := 7
+	verticalMarginHeight := headerHeight + footerHeight
+	m.viewport = viewport.New(msg.Width, msg.Height-verticalMarginHeight)
+	m.viewport.YPosition = headerHeight
 	m.updateConverstaions()
 	return m, nil
 }

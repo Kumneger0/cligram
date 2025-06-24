@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -30,25 +31,22 @@ func getCligramLogFilePath() string {
 
 func startSeparateJsProces(wg *sync.WaitGroup) {
 	jsExcutable, err := runner.GetJSExcutable()
-
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to get JS executable: %v\n", err)
+		slog.Error("Failed to get JS executable", "Error", err.Error())
 		wg.Done()
 		return
 	}
 
 	jsExcute := exec.Command(*jsExcutable)
-
 	stdin, err := jsExcute.StdinPipe()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create stdin pipe: %v\n", err)
+		slog.Error("Failed to create stdin pipe", "Error", err.Error())
 		wg.Done()
 		return
 	}
-
 	stdout, err := jsExcute.StdoutPipe()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create stdout pipe: %v\n", err)
+		slog.Error("Failed to create stdout pipe", "error", err.Error())
 		stdin.Close()
 		wg.Done()
 		return
@@ -56,7 +54,7 @@ func startSeparateJsProces(wg *sync.WaitGroup) {
 
 	logFile, err := os.Create(getCligramLogFilePath())
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create log file, stderr will be discarded: %v\n", err)
+		slog.Error("Failed to create log file, stderr will be discarded", "error", err.Error())
 		jsExcute.Stderr = nil
 	} else {
 		jsExcute.Stderr = logFile
@@ -66,7 +64,7 @@ func startSeparateJsProces(wg *sync.WaitGroup) {
 	}
 
 	if err := jsExcute.Start(); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to start JavaScript process: %v\n", err)
+		slog.Error("Failed to start JavaScript process", "error", err.Error())
 		stdin.Close()
 		if logFile != nil {
 			logFile.Close()
@@ -87,7 +85,7 @@ func startSeparateJsProces(wg *sync.WaitGroup) {
 	go func() {
 		if err := jsExcute.Wait(); err != nil {
 			if logFile != nil {
-				fmt.Fprintf(logFile, "JavaScript process exited with error: %v\n", err)
+				slog.Error("JavaScript process exited with error", "error", err.Error())
 			}
 		}
 	}()
@@ -237,7 +235,6 @@ func newRootCmd(version string) *cobra.Command {
 	cmd.AddCommand(newVersionCmd(version))
 	cmd.AddCommand(login())
 	cmd.AddCommand(logout())
-
 	return cmd
 }
 
