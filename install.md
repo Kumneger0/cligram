@@ -34,4 +34,4 @@ cligram --version
 ```
 
 If you encounter any issues during installation:
-For additional help, please [open an issue](https://github.com/kumneger/tg-cli/issues/new) on GitHub.
+For additional help, please [open an issue](https://github.com/kumneger/cligram/issues/new) on GitHub.
