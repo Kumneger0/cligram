@@ -22,18 +22,19 @@ builds:
 
 archives:
   -
-    builds:
+    ids:
       - cligram
     format_overrides:
       - goos: windows
         format: zip
-    replacements:
-      darwin: Darwin
-      linux: Linux
-      amd64: x86_64
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else }}{{ .Arch }}{{ end }}
 
 nfpms:
-  - builds:
+  - ids:
       - cligram
     vendor: kumneger0
     homepage:  https://github.com/kumneger0/cligram
