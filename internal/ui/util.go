@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/bubbles/filepicker"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kumneger0/cligram/internal/rpc"
@@ -90,6 +91,7 @@ type Model struct {
 	SideBarLoading      bool
 	Mode                Mode
 	Input               textinput.Model
+	viewport            viewport.Model
 	FocusedOn           FocusedOn
 	ChatUI              list.Model
 	Conversations       [50]rpc.FormattedMessage
@@ -133,13 +135,13 @@ func setItemStyles(m *Model) string {
 	}
 
 	dimensions := calculateLayoutDimensions(m)
-	
+
 	updateListDimensions(m, dimensions)
 
 	mainContent := prepareMainContent(m, dimensions)
 
 	sidebarContent := prepareSidebarContent(m, dimensions)
-	
+
 	inputView := prepareInputView(m, dimensions)
 
 	row := lipgloss.JoinHorizontal(lipgloss.Top, sidebarContent, mainContent)
@@ -238,7 +240,9 @@ func prepareMainContent(m *Model, d layoutDimensions) string {
 	line := strings.Repeat("─", max(0, d.mainWidth-4-lipgloss.Width(title)))
 	headerView := lipgloss.JoinVertical(lipgloss.Center, title, line)
 
-	mainViewContent := m.ChatUI.View()
+	chatsView := m.ChatUI.View()
+	m.viewport.SetContent(chatsView)
+	mainViewContent := m.viewport.View()
 	if m.IsFilepickerVisible {
 		mainViewContent = prepareFilepickerView(m)
 	}
@@ -283,7 +287,7 @@ func prepareInputView(m *Model, d layoutDimensions) string {
 	}
 
 	inputView := getInputStyle(m, d.inputHeight).Render(m.Input.View())
-	
+
 	if m.IsReply && m.ReplyTo != nil {
 		replyContext := fmt.Sprintf("Reply to \n%s", strings.Split(m.ReplyTo.Content, "\n")[0])
 		inputView = lipgloss.JoinVertical(lipgloss.Top, replyContext, inputView)

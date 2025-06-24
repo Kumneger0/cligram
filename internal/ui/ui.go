@@ -161,15 +161,10 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 		Document:             nil,
 		FromID:               nil,
 	}
-	// * This is just to show the message immediatly after sending
-	// so we don't have to refetch the whole message since we are the one who is sending
-	totalConversationsSoFar := len(m.Conversations)
-	if totalConversationsSoFar < 50 {
-		m.Conversations[totalConversationsSoFar] = newMessage
-	} else {
-		firstOneRemoved := m.Conversations[1:]
-		m.Conversations[len(firstOneRemoved)] = newMessage
-	}
+	firstOneRemoved := m.Conversations[1:]
+	firstOneRemoved = append(firstOneRemoved, newMessage)
+	copy(m.Conversations[:], firstOneRemoved)
+
 	m.Input.Reset()
 	m.IsReply = false
 	m.ReplyTo = nil
@@ -183,7 +178,7 @@ func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (M
 	m.Filepicker.SetHeight(m.Height - 13)
 	cmds = append(cmds, cmd)
 
-	if didSelect, path := m.Filepicker.DidSelectFile(msg); didSelect {
+	if didSelect, path := m.Filepicker.DidSelectFile(msg); didSelect && m.IsFilepickerVisible {
 		m.SelectedFile = path
 		m.IsFilepickerVisible = false
 	}
@@ -241,7 +236,7 @@ func changeFocusMode(m *Model, msg string) (Model, tea.Cmd) {
 
 func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 	if m.FocusedOn != SideBar {
-		return updateFocusedComponent(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(msg)}, &[]tea.Cmd{})
+		return *m, nil
 	}
 	switch msg {
 	case "c":
