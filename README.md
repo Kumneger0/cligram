@@ -77,7 +77,11 @@ After setting the variables, restart your terminal to apply the changes.
 
 # Installation
 
-For detailed installation instructions, please see [install.md](install.md).
+You can download pre-built binaries for your operating system (Linux, macOS) from the [releases page](https://github.com/Kumneger0/cligram/releases).
+
+## Build from Source
+
+For instructions on building from source, please see [install.md](install.md).
 
 ## Using Docker
 
