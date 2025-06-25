@@ -1,24 +1,35 @@
 version: 2
 
+project_name: cligram
+
 env:
   - GO111MODULE=on
   - CGO_ENABLED=0
 
 before:
   hooks:
+    # Install and setup bun, then build JS backend in a single shell command
+    - /bin/bash -c 'curl -fsSL https://bun.sh/install | bash && export BUN_INSTALL="$HOME/.bun" && export PATH="$BUN_INSTALL/bin:$PATH" && cd js && bun install && bun run build'
+    - mkdir -p internal/assets/resources
+    - cp js/bin/cligram-js internal/assets/resources/cligram-js-backend
+    # Then run the completion and manpage scripts
     - ./scripts/manpages.sh
     - ./scripts/completions.sh
 
 builds:
-  -
+  - id: cligram
     binary: cligram
+    main: .
     ldflags: -s -w -X main.version={{ .Version }}
     goos:
       - linux
       - darwin
+      - windows
     goarch:
       - amd64
       - arm64
+    env:
+      - CGO_ENABLED=0
 
 archives:
   -
@@ -63,62 +74,6 @@ nfpms:
         dst:  /usr/share/zsh/vendor-completions/_cligram
         file_info:
           mode: 0644
-
-dockers:
-- image_templates:
-  - 'kumneger0/{{.ProjectName}}:{{ .Tag }}-amd64'
-  - 'ghcr.io/kumneger0/{{.ProjectName}}:{{ .Tag }}-amd64'
-  dockerfile: Dockerfile
-  use: buildx
-  build_flag_templates:
-  - "--pull"
-  - "--label=io.artifacthub.package.readme-url=https://raw.githubusercontent.com/kumneger0/cligram/master/README.md"
-  - "--label=io.artifacthub.package.maintainers=[{\"name\":\"Kumneger wondimu\",\"email\":\"Kumnegerwondimu@gmail.com\"}]"
-  - "--label=io.artifacthub.package.license=MIT"
-  - "--label=org.opencontainers.image.description=CLI-based Telegram client"
-  - "--label=org.opencontainers.image.created={{.Date}}"
-  - "--label=org.opencontainers.image.name={{.ProjectName}}"
-  - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-  - "--label=org.opencontainers.image.version={{.Version}}"
-  - "--label=org.opencontainers.image.source={{.GitURL}}"
-  - "--platform=linux/amd64"
-- image_templates:
-  - 'kumneger0/{{.ProjectName}}:{{ .Tag }}-arm64'
-  - 'ghcr.io/kumneger0/{{.ProjectName}}:{{ .Tag }}-arm64'
-  dockerfile:  Dockerfile
-  use: buildx
-  build_flag_templates:
-  - "--pull"
-  - "--label=io.artifacthub.package.readme-url=https://raw.githubusercontent.com/kumneger0/cligram/master/README.md"
-  - "--label=io.artifacthub.package.logo-url=https://raw.githubusercontent.com/kumneger0/cligram/master/www/static/images/logo.png"
-  - "--label=io.artifacthub.package.maintainers=[{\"name\":\"Kumneger wondimu\",\"email\":\"Kumnegerwondimu@gmail.com\"}]"
-  - "--label=io.artifacthub.package.license=MIT"
-  - "--label=org.opencontainers.image.description=CLI-based Telegram client"
-  - "--label=org.opencontainers.image.created={{.Date}}"
-  - "--label=org.opencontainers.image.name={{.ProjectName}}"
-  - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-  - "--label=org.opencontainers.image.version={{.Version}}"
-  - "--label=org.opencontainers.image.source={{.GitURL}}"
-  - "--platform=linux/arm64"
-  goarch: arm64
-
-docker_manifests:
-- name_template: 'kumneger0/{{.ProjectName}}:{{ .Tag }}'
-  image_templates:
-  - 'kumneger0/{{.ProjectName}}:{{ .Tag }}-amd64'
-  - 'kumneger0/{{.ProjectName}}:{{ .Tag }}-arm64'
-- name_template: 'ghcr.io/kumneger0/{{.ProjectName}}:{{ .Tag }}'
-  image_templates:
-  - 'ghcr.io/kumneger0/{{.ProjectName}}:{{ .Tag }}-amd64'
-  - 'ghcr.io/kumneger0/{{.ProjectName}}:{{ .Tag }}-arm64'
-- name_template: 'kumneger0/{{.ProjectName}}:latest'
-  image_templates:
-  - 'kumneger0/{{.ProjectName}}:{{ .Tag }}-amd64'
-  - 'kumneger0/{{.ProjectName}}:{{ .Tag }}-arm64'
-- name_template: 'ghcr.io/kumneger0/{{.ProjectName}}:latest'
-  image_templates:
-  - 'ghcr.io/kumneger0/{{.ProjectName}}:{{ .Tag }}-amd64'
-  - 'ghcr.io/kumneger0/{{.ProjectName}}:{{ .Tag }}-arm64'
 
 checksum:
   name_template: "checksums.txt"
