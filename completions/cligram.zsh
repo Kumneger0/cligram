@@ -1,6 +1,7 @@
 #compdef cligram
+compdef _cligram cligram
 
-# zsh completion for cligram                  -*- shell-script -*-
+# zsh completion for cligram                              -*- shell-script -*-
 
 __cligram_debug()
 {
@@ -17,8 +18,9 @@ _cligram()
     local shellCompDirectiveNoFileComp=4
     local shellCompDirectiveFilterFileExt=8
     local shellCompDirectiveFilterDirs=16
+    local shellCompDirectiveKeepOrder=32
 
-    local lastParam lastChar flagPrefix requestComp out directive comp lastComp noSpace
+    local lastParam lastChar flagPrefix requestComp out directive comp lastComp noSpace keepOrder
     local -a completions
 
     __cligram_debug "\n========= starting completion logic =========="
@@ -136,6 +138,11 @@ _cligram()
         noSpace="-S ''"
     fi
 
+    if [ $((directive & shellCompDirectiveKeepOrder)) -ne 0 ]; then
+        __cligram_debug "Activating keep order."
+        keepOrder="-V"
+    fi
+
     if [ $((directive & shellCompDirectiveFilterFileExt)) -ne 0 ]; then
         # File extension filtering
         local filteringCmd
@@ -171,7 +178,7 @@ _cligram()
         return $result
     else
         __cligram_debug "Calling _describe"
-        if eval _describe "completions" completions $flagPrefix $noSpace; then
+        if eval _describe $keepOrder "completions" completions $flagPrefix $noSpace; then
             __cligram_debug "_describe found some completions"
 
             # Return the success of having called _describe
