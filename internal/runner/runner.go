@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -42,10 +43,12 @@ func GetJSExcutable() (*string, error) {
 	}
 
 	if err := os.Remove(backendPath); err != nil {
-		return nil, fmt.Errorf("could not remove existing backend binary: %w", err)
+		slog.Error("error removing file", "error", err.Error())
 	}
 	if err := os.WriteFile(backendPath, assets.JSBackendBinary, 0755); err != nil {
+		slog.Error("error writing file", "error", err.Error())
 		return nil, fmt.Errorf("could not write embedded backend binary: %w", err)
 	}
+
 	return &backendPath, nil
 }

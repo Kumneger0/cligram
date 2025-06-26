@@ -12,7 +12,7 @@ Before building cligram from source, ensure you have the following prerequisites
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/kumneger/cligram.git
+   git clone https://github.com/kumneger0/cligram.git
    cd cligram
    ```
 
@@ -30,7 +30,7 @@ Before building cligram from source, ensure you have the following prerequisites
 
 After installation, you can verify that cligram is working correctly by running:
 ```bash
-cligram --version
+cligram version
 ```
 
 If you encounter any issues during installation:
