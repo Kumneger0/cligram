@@ -15,7 +15,7 @@ require (
 	github.com/spf13/cobra v1.8.0
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616
-	golang.org/x/tools v0.22.0
+	golang.org/x/tools v0.34.0
 	mvdan.cc/gofumpt v0.6.0
 )
 
@@ -207,9 +207,10 @@ require (
 	go.uber.org/zap v1.24.0 // indirect
 	golang.org/x/exp v0.0.0-20240103183307-be819d1f06fc // indirect
 	golang.org/x/exp/typeparams v0.0.0-20240314144324-c7f7c6466f7f // indirect
-	golang.org/x/mod v0.18.0 // indirect
-	golang.org/x/sync v0.13.0 // indirect
+	golang.org/x/mod v0.25.0 // indirect
+	golang.org/x/sync v0.15.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect
+	golang.org/x/telemetry v0.0.0-20240521205824-bda55230c457 // indirect
 	golang.org/x/term v0.32.0 // indirect
 	golang.org/x/text v0.15.0 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
@@ -220,3 +221,5 @@ require (
 	honnef.co/go/tools v0.4.7 // indirect
 	mvdan.cc/unparam v0.0.0-20240528143540-8a5130ca722f // indirect
 )
+
+tool golang.org/x/tools/cmd/deadcode
