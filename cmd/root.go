@@ -31,6 +31,7 @@ func getCligramLogFilePath() string {
 
 func startSeparateJsProces(wg *sync.WaitGroup) {
 	jsExcutable, err := runner.GetJSExcutable()
+
 	if err != nil {
 		slog.Error("Failed to get JS executable", "Error", err.Error())
 		wg.Done()

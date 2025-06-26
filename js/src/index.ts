@@ -17,23 +17,13 @@ const stringify = JSON.stringify
  * gram.js has logs that we don't need i tried setting log level to none but it didn't work
  * so we just patch the global console object to ignore all logs
  */
-console.log = () => { };
-console.error = () => { };
-console.warn = () => { };
-console.info = () => { };
-console.debug = () => { };
-console.trace = () => { };
-console.dir = () => { };
-console.table = () => { };
-console.group = () => { };
-console.groupEnd = () => { };
-console.time = () => { };
-console.timeEnd = () => { };
-console.timeLog = () => { };
-console.count = () => { };
-console.countReset = () => { };
-console.clear = () => { };
-console.assert = () => { };
+
+
+for (const mName of Object.keys(console)) {
+	console[mName] = () => {
+		// do nothing 
+	}
+}
 
 const arg = process.argv[2]
 
