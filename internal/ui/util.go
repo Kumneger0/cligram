@@ -462,9 +462,18 @@ func SendUserIsTyping(m *Model) tea.Cmd {
 	}
 
 	if (m.Mode == ModeUsers || m.Mode == ModeGroups) && m.FocusedOn == Input {
-		pInfo := rpc.PeerInfo{
-			PeerID:     m.SelectedUser.PeerID,
-			AccessHash: m.SelectedUser.AccessHash,
+		var pInfo rpc.PeerInfo
+		if m.Mode == ModeUsers {
+			pInfo = rpc.PeerInfo{
+				PeerID:     m.SelectedUser.PeerID,
+				AccessHash: m.SelectedUser.AccessHash,
+			}
+		}
+		if m.Mode == ModeGroups {
+			pInfo = rpc.PeerInfo{
+				PeerID:     m.SelectedGroup.ChannelID,
+				AccessHash: m.SelectedGroup.AccessHash,
+			}
 		}
 		err := rpc.RpcClient.SetUserTyping(pInfo, "user")
 		if err != nil {
