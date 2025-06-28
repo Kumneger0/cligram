@@ -24,9 +24,9 @@ type UserChatsJsonRpcResponse struct {
 }
 
 func (c *JsonRpcClient) GetUserChats() UserChatsMsg {
-	// if c == nil {
-	// 	return UserChatsMsg{Err: fmt.Errorf("c is nil")}
-	// }
+	if c == nil {
+		return UserChatsMsg{Err: fmt.Errorf("Js BACKEND IS NOT RUNNING Try Restarting the app, please open an issue on github if the problem persists")}
+	}
 	userChatRpcResponse, err := c.Call("getUserChats", []string{"user"})
 
 	if err != nil {

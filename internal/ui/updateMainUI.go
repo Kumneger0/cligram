@@ -12,7 +12,10 @@ import (
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	switch msg := msg.(type) {
-
+	case rpc.MarkMessagesAsReadMsg:
+		model, cmd := m.handleMarkMessagesAsRead(msg)
+		m = model.(Model)
+		cmds = append(cmds, cmd)
 	case rpc.NewMessageMsg:
 		model, cmd := m.handleNewMessage(msg)
 		m = model.(Model)
@@ -62,6 +65,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	}
 	return updateFocusedComponent(&m, msg, &cmds)
+}
+
+func (m Model) handleMarkMessagesAsRead(msg rpc.MarkMessagesAsReadMsg) (tea.Model, tea.Cmd) {
+	if msg.Err != nil {
+		slog.Error("Failed to mark messages as read", "error", msg.Err.Error())
+		return m, nil
+	}
+	if msg.Response.Result {
+		m.SelectedUser.UnreadCount = 0
+	}
+	userIndex := getUserIndex(m, m.SelectedUser)
+	if userIndex != -1 {
+		items := m.Users.Items()
+		user := items[userIndex].(rpc.UserInfo)
+		user.UnreadCount = 0
+		items[userIndex] = user
+		m.Users.SetItems(items)
+	}
+	return m, nil
 }
 
 func (m Model) handleNewMessage(msg rpc.NewMessageMsg) (tea.Model, tea.Cmd) {
@@ -233,6 +255,8 @@ func (m Model) mergeConversations(newMessages [50]rpc.FormattedMessage, messages
 }
 
 func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	SendUserIsTyping(&m)
+
 	switch msg.String() {
 	case "up", "down":
 		/*

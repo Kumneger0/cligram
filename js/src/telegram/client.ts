@@ -195,7 +195,6 @@ export async function getUserChats<T extends ChatType>(
 	const cached = cache.get(CACHE_KEY);
 	const result = cached ?? ((await client.getDialogs({})) as unknown as DialogInfo[]);
 	cache.set(CACHE_KEY, result);
-
 	if (type === 'channel' || type === 'group') {
 		const groupOrChannels =
 			type === 'channel'

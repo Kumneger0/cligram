@@ -16,6 +16,10 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	// "github.com/kumneger0/cligram/internal/config"
+
+	"github.com/kumneger0/cligram/internal/config"
 	"github.com/kumneger0/cligram/internal/rpc"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
@@ -449,4 +453,23 @@ func GetFromCache(key string) (*string, error) {
 		return nil, fmt.Errorf("failed to find value for key %s", key)
 	}
 	return &oldMessages, nil
+}
+
+func SendUserIsTyping(m *Model) tea.Cmd {
+	userConfig := config.GetConfig()
+	if !*userConfig.Chat.SendTypingState {
+		return nil
+	}
+
+	if (m.Mode == ModeUsers || m.Mode == ModeGroups) && m.FocusedOn == Input {
+		pInfo := rpc.PeerInfo{
+			PeerID:     m.SelectedUser.PeerID,
+			AccessHash: m.SelectedUser.AccessHash,
+		}
+		err := rpc.RpcClient.SetUserTyping(pInfo, "user")
+		if err != nil {
+			slog.Error("Failed to send user is typing event", "error", err.Error())
+		}
+	}
+	return nil
 }

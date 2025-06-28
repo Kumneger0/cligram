@@ -65,12 +65,6 @@ export const setUserTyping = async (
 	}
 };
 
-type MarkUnReadParams = {
-	client: TelegramClient;
-	peer: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger };
-	type: ChatType;
-};
-
 /**
  * Marks messages from a peer as unread on Telegram.
  *
@@ -82,7 +76,7 @@ type MarkUnReadParams = {
  * @param {ChatType} params.type - The type of the peer (e.g., 'user' or 'channel')
  * @returns {Promise<any>} The result of marking messages as unread
  */
-export const markUnRead = async ({ client, peer, type }: MarkUnReadParams) => {
+export const markUnRead = async (client: TelegramClient, peer: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger }, type: ChatType) => {
 	try {
 		const entity = getEntity({ peer, type });
 		const result = await markAsRead(client, entity);

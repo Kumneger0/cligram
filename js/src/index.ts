@@ -9,7 +9,7 @@ import { login, logout } from './commands';
 import { FormattedMessage, UserInfo } from './lib/types';
 import { getTelegramClient } from './lib/utils/auth';
 import { getUserChats, getUserInfo, searchUsers, setUserPrivacy } from './telegram/client';
-import { deleteMessage, editMessage, forwardMessage, getAllMessages, listenForEvents, sendMessage } from './telegram/messages';
+import { deleteMessage, editMessage, forwardMessage, getAllMessages, listenForEvents, sendMessage, markUnRead, setUserTyping } from './telegram/messages';
 
 const stringify = JSON.stringify
 
@@ -36,6 +36,8 @@ const handlers = {
 	getUserInfo,
 	getAllMessages,
 	forwardMessage,
+	markUnRead,
+	setUserTyping,
 };
 
 
@@ -223,7 +225,9 @@ async function startup() {
 			const me = await telegramClientInstance.getMe();
 			if (typeof me !== 'boolean' && me?.phone) {
 				telegramClientInstance.setLogLevel(LogLevel.NONE);
-				await setUserPrivacy(telegramClientInstance);
+				//TODO: this is making the app to freeze 
+				// fix this
+				// await setUserPrivacy(telegramClientInstance);
 			} else if (typeof me !== 'boolean' && !me?.phone) {
 				telegramClientInstance.setLogLevel(LogLevel.NONE);
 			} else {
@@ -340,6 +344,12 @@ async function messageProcessingLoop(client: TelegramClient) {
 						break
 					case "forwardMessage":
 						result = await handlers.forwardMessage(client, ...request.params)
+						break
+					case "markUnRead":
+						result = await handlers.markUnRead(client, ...request.params)
+						break
+					case "setUserTyping":
+						result = await handlers.setUserTyping(client, ...request.params)
 						break
 					default:
 						writeToStdout(

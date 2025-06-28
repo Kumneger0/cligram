@@ -53,10 +53,10 @@ RUN cp js/bin/cligram-js internal/assets/resources/cligram-js-backend
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags "-X main.version=$(git describe --abbrev=0 --tags || echo dev)" -o cligram
 
 # Final stage
-FROM alpine:3.18
+FROM debian:stable-slim
 
 # Install runtime dependencies if any
-RUN apk add --no-cache ca-certificates
+RUN apt-get update && apt-get install -y ca-certificates
 
 # Copy only the final binary
 COPY --from=builder /app/cligram /usr/bin/cligram
@@ -69,7 +69,10 @@ RUN mkdir -p /root/.cache/cligram /root/.cligram
 COPY --from=builder /app/internal/assets/resources/cligram-js-backend /root/.cache/cligram/cligram-js-backend
 
 # Set proper permissions to allow for removal/replacement of the binary
-RUN chmod 755 /root/.cache/cligram/cligram-js-backend
+RUN chmod +x /root/.cache/cligram/cligram-js-backend
+
+# Verify permissions
+RUN ls -l /root/.cache/cligram/cligram-js-backend
 
 # Set the entrypoint
-ENTRYPOINT ["/usr/bin/cligram"]
+ENTRYPOINT ["sh"]

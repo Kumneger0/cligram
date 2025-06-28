@@ -43,7 +43,7 @@ export const DEFAULT_CONFIG: CliGramConfigSchema = {
 		readReceiptMode: 'default'
 	},
 	privacy: {
-		lastSeenVisibility: undefined
+		lastSeenVisibility: 'everyone'
 	},
 	notifications: {
 		enabled: true,
