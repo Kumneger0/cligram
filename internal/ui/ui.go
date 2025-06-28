@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/kumneger0/cligram/internal/config"
 	"github.com/kumneger0/cligram/internal/rpc"
 )
 
@@ -138,6 +139,9 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 
 	replayToMessageId := strconv.FormatInt(messageToReply.ID, 10)
 	response, err := rpc.RpcClient.SendMessage(peerInfo, userMsg, m.IsReply && m.ReplyTo != nil, replayToMessageId, cType, isFile, filepath)
+
+	config := config.GetConfig()
+
 	m.SelectedFile = ""
 	if err != nil {
 		slog.Error("Failed to send message", "error", err.Error())
@@ -165,10 +169,20 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 	firstOneRemoved = append(firstOneRemoved, newMessage)
 	copy(m.Conversations[:], firstOneRemoved)
 
+	var cmd tea.Cmd
+
+	if *config.Chat.ReadReceiptMode == "default" {
+		cmd = rpc.RpcClient.MarkMessagesAsRead(rpc.PeerInfo{
+			AccessHash: peerInfo.AccessHash,
+			PeerID:     peerInfo.PeerID,
+		}, cType)
+	}
+
 	m.Input.Reset()
 	m.IsReply = false
 	m.ReplyTo = nil
-	return *m, nil
+
+	return *m, cmd
 }
 
 func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (Model, tea.Cmd) {
@@ -212,8 +226,15 @@ func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (M
 func handleUserChange(m *Model) (Model, tea.Cmd) {
 	pInfo, cType := getGetMessageParams(m)
 	cmd := rpc.RpcClient.GetMessages(pInfo, cType, nil, nil, nil)
-	// conversationLastIndex := len(m.Conversations) - 1
-	// m.ChatUI.Select(conversationLastIndex)
+	config := config.GetConfig()
+
+	if *config.Chat.ReadReceiptMode == "instant" {
+		cmd = tea.Batch(cmd, rpc.RpcClient.MarkMessagesAsRead(rpc.PeerInfo{
+			AccessHash: pInfo.AccessHash,
+			PeerID:     pInfo.PeerID,
+		}, cType))
+	}
+
 	m.Conversations = [50]rpc.FormattedMessage{}
 	m.MainViewLoading = true
 	return *m, cmd

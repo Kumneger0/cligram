@@ -53,22 +53,22 @@ func startSeparateJsProces(wg *sync.WaitGroup) {
 		return
 	}
 
-	logFile, err := os.Create(getCligramLogFilePath())
+	jsLogFile, err := os.Create("/tmp/cligram-js.log")
 	if err != nil {
-		slog.Error("Failed to create log file, stderr will be discarded", "error", err.Error())
+		slog.Error("Failed to create JavaScript log file", "error", err.Error())
 		jsExcute.Stderr = nil
 	} else {
-		jsExcute.Stderr = logFile
+		jsExcute.Stderr = jsLogFile
 		defer func() {
-			logFile.Close()
+			jsLogFile.Close()
 		}()
 	}
 
 	if err := jsExcute.Start(); err != nil {
 		slog.Error("Failed to start JavaScript process", "error", err.Error())
 		stdin.Close()
-		if logFile != nil {
-			logFile.Close()
+		if jsLogFile != nil {
+			jsLogFile.Close()
 		}
 		wg.Done()
 		return
@@ -85,7 +85,7 @@ func startSeparateJsProces(wg *sync.WaitGroup) {
 
 	go func() {
 		if err := jsExcute.Wait(); err != nil {
-			if logFile != nil {
+			if jsLogFile != nil {
 				slog.Error("JavaScript process exited with error", "error", err.Error())
 			}
 		}
@@ -106,6 +106,7 @@ func newRootCmd(version string) *cobra.Command {
 			wg.Wait()
 
 			notificationChannel := make(chan rpc.Notification)
+
 
 			go rpc.ProcessIncomingNotifications(notificationChannel)
 

@@ -37,7 +37,7 @@ func GetJSExcutable() (*string, error) {
 			if diskHashStr == embeddedHashStr {
 				fileOnDisk.Close()
 				return &backendPath, nil
-			}
+			} 
 		}
 		fileOnDisk.Close()
 	}

@@ -15,13 +15,13 @@ export const loadConfig = (): CliGramConfigSchema => {
 			const fileContent = fs.readFileSync(CONFIG_PATH, 'utf-8');
 			try {
 				const parsedConfig = cliGramConfigSchema.parse(
-					JSON.parse(fileContent) as Partial<CliGramConfigSchema>
+					JSON.parse(fileContent)
 				);
+
 				return { ...DEFAULT_CONFIG, ...parsedConfig };
 			} catch (error) {
 				if (error instanceof Error) {
 					console.error('Invalid config:', error.message);
-					process.exit(1);
 				}
 				return DEFAULT_CONFIG;
 			}

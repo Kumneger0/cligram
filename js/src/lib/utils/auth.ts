@@ -3,7 +3,6 @@ import { RPCError } from 'telegram/errors/index.js';
 import { StringSession } from 'telegram/sessions/index.js';
 
 import { config } from 'dotenv';
-//@ts-expect-error
 import input from 'input';
 import os from 'node:os';
 
