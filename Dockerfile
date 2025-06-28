@@ -75,4 +75,4 @@ RUN chmod +x /root/.cache/cligram/cligram-js-backend
 RUN ls -l /root/.cache/cligram/cligram-js-backend
 
 # Set the entrypoint
-ENTRYPOINT ["sh"]
+ENTRYPOINT ["/usr/bin/cligram"]
