@@ -270,9 +270,11 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "tab":
 		if !m.IsFilepickerVisible {
-			return changeFocusMode(&m, "tab")
+			return changeFocusMode(&m, "tab", false)
 		}
 		return m, nil
+	case "shift+tab":
+		return changeFocusMode(&m, "tab", true)
 	case "m":
 		return m.handleMKey(msg)
 	case "c":
