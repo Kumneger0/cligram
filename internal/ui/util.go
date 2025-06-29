@@ -235,7 +235,7 @@ func prepareMainContent(m *Model, d layoutDimensions) string {
 		return mainStyle.Render("Loading...")
 	}
 
-	m.ChatUI.SetItems(formatMessages(m.Conversations))
+	// m.ChatUI.SetItems(formatMessages(m.Conversations))
 	m.ChatUI.SetWidth(d.mainWidth * 70 / 100)
 	m.ChatUI.SetHeight(15)
 

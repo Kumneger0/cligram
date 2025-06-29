@@ -237,6 +237,7 @@ func handleUserChange(m *Model) (Model, tea.Cmd) {
 
 	m.Conversations = [50]rpc.FormattedMessage{}
 	m.MainViewLoading = true
+	m.ChatUI.SetItems([]list.Item{})
 	return *m, cmd
 }
 
