@@ -22,19 +22,8 @@ type GetEntityTypes = {
 	type: ChatType;
 };
 
-
-const getEntity = ({ peer, type }: GetEntityTypes) => {
-	const entity =
-		type === 'user'
-			? new Api.InputPeerUser({
-				userId: peer.peerId,
-				accessHash: peer.accessHash
-			})
-			: new Api.InputPeerChannel({
-				channelId: peer.peerId,
-				accessHash: peer.accessHash
-			});
-	return entity;
+const getEntity = async ({ peer }: GetEntityTypes, client: TelegramClient) => {
+	return await client.getInputEntity(peer.peerId)
 };
 
 /**
@@ -53,7 +42,7 @@ export const setUserTyping = async (
 	type: ChatType
 ) => {
 	try {
-		const entity = getEntity({ peer, type });
+		const entity = await getEntity({ peer, type }, client);
 		await client.invoke(
 			new Api.messages.SetTyping({
 				peer: entity,
@@ -78,7 +67,7 @@ export const setUserTyping = async (
  */
 export const markUnRead = async (client: TelegramClient, peer: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger }, type: ChatType) => {
 	try {
-		const entity = getEntity({ peer, type });
+		const entity = await getEntity({ peer, type }, client);
 		const result = await markAsRead(client, entity);
 		return result;
 	} catch (err) {
@@ -109,15 +98,15 @@ type ForwardMessageParams = {
  * @returns {Promise<Api.messages.ForwardMessages>} The result of the forward operation.
  */
 export async function forwardMessage(client: TelegramClient, params: ForwardMessageParams) {
-	const fromPeerEntity = getEntity({
+	const fromPeerEntity = await getEntity({
 		peer: { accessHash: params.fromPeer.accessHash, peerId: params.fromPeer.peerId },
 		type: params.type
-	});
-	const toPeerEntity = getEntity({
+	}, client);
+	const toPeerEntity = await getEntity({
 		peer: { accessHash: params.toPeer.accessHash, peerId: params.toPeer.peerId },
 		//TODO: we need to allow forwarding to groups, own channel and bot let's hard this for now 
 		type: "user"
-	});
+	}, client);
 
 	const result = await client.invoke(
 		new Api.messages.ForwardMessages({
@@ -157,7 +146,7 @@ export const sendMessage = async (
 	if (!client.connected) {
 		await client.connect();
 	}
-	const entityLike = type === 'group' ? peerInfo.peerId : getEntity({ peer: peerInfo, type });
+	const entityLike = type === 'group' ? peerInfo.peerId : await getEntity({ peer: peerInfo, type }, client);
 	if (isFile && path) {
 		const buffer = await fs.readFile(path);
 		const fileName = path.split('/').pop() ?? 'file';
@@ -211,7 +200,7 @@ export const deleteMessage = async (
 	messageId: number,
 	type: ChatType = 'user'
 ) => {
-	const entity = getEntity({ peer: peerInfo, type });
+	const entity = await getEntity({ peer: peerInfo, type }, client);
 	await client.deleteMessages(entity, [Number(messageId)], { revoke: true });
 	return {
 		status: 'success'
@@ -235,7 +224,7 @@ export const editMessage = async (
 	type: ChatType = 'user'
 ) => {
 	try {
-		const entity = getEntity({ peer: peerInfo, type });
+		const entity = await getEntity({ peer: peerInfo, type }, client);
 		const result = await client.invoke(
 			new Api.messages.EditMessage({
 				peer: entity,
@@ -294,10 +283,10 @@ export async function getAllMessages<T extends ChatType>(
 		const { accessHash, peerId: userId, userFirtNameOrChannelTitle } = peerInfo
 
 		const messages = [];
-		const entity = getEntity({
+		const entity = await getEntity({
 			peer: { peerId: userId as bigInt.BigInteger, accessHash: accessHash as bigInt.BigInteger },
 			type
-		});
+		}, client);
 		const entityLike = type === 'group' ? userId : entity;
 		for await (const message of client.iterMessages(entityLike, {
 			limit: 50,

@@ -60,11 +60,8 @@ func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list
 	} else {
 		return
 	}
-    
-	
 
-
-	str := lipgloss.NewStyle().Width(50).Height(2).Render(title)
+	str := messageStyle.Render(title)
 	if index == m.Index() {
 		fmt.Fprint(w, selectedStyle.Render(" "+str+" "))
 	} else {
