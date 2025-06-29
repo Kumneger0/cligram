@@ -241,17 +241,30 @@ func handleUserChange(m *Model) (Model, tea.Cmd) {
 	return *m, cmd
 }
 
-func changeFocusMode(m *Model, msg string) (Model, tea.Cmd) {
+
+func changeFocusMode(m *Model, msg string, shift bool) (Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	currentlyFoucsedOn := m.FocusedOn
 	canWrite := (m.Mode == ModeUsers || m.Mode == ModeGroups) || (m.Mode == ModeChannels && m.SelectedChannel.IsCreator)
 
 	if currentlyFoucsedOn == SideBar {
-		m.FocusedOn = Mainview
+		if shift {
+			m.FocusedOn = Input
+		} else {
+			m.FocusedOn = Mainview
+		}
 	} else if currentlyFoucsedOn == Mainview && canWrite {
-		m.FocusedOn = Input
+		if shift {
+			m.FocusedOn = SideBar
+		} else {
+			m.FocusedOn = Input
+		}
 	} else {
-		m.FocusedOn = SideBar
+		if shift {
+			m.FocusedOn = Mainview
+		} else {
+			m.FocusedOn = SideBar
+		}
 	}
 	return updateFocusedComponent(m, msg, &cmds)
 }

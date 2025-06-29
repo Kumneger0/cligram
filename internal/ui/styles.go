@@ -15,10 +15,10 @@ var (
 			Bold(true).
 			Foreground(lipgloss.Color("205")).Padding(0, 1)
 
-	timestampStyle = lipgloss.NewStyle().
+	timestampStyle = lipgloss.NewStyle().Height(1).
 			Foreground(lipgloss.Color("#999999")).
 			Italic(true).
-			MarginRight(1)
+			MarginRight(1).PaddingLeft(4)
 
 	senderStyle = lipgloss.NewStyle().
 			Bold(true).
