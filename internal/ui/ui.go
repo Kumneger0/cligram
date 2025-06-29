@@ -241,7 +241,6 @@ func handleUserChange(m *Model) (Model, tea.Cmd) {
 	return *m, cmd
 }
 
-
 func changeFocusMode(m *Model, msg string, shift bool) (Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	currentlyFoucsedOn := m.FocusedOn

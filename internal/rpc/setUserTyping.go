@@ -23,15 +23,15 @@ type SetUserTypingMsg struct {
 
 func (c *JsonRpcClient) SetUserTyping(userPeer PeerInfo, chatType ChatType) error {
 	rpcResponse, err := c.Call("setUserTyping", []interface{}{userPeer, chatType})
-		if err != nil {
-			return err
-		}
-		var response SetUserTypingJsonRpcResponse
-		if err := json.Unmarshal(rpcResponse, &response); err != nil {
-			return fmt.Errorf("failed to unmarshal response JSON '%s': %w", string(rpcResponse), err)
-		}
-		if response.Error != nil {
-			return fmt.Errorf("ERROR: %s", response.Error.Message)
-		}
-		return nil
+	if err != nil {
+		return err
+	}
+	var response SetUserTypingJsonRpcResponse
+	if err := json.Unmarshal(rpcResponse, &response); err != nil {
+		return fmt.Errorf("failed to unmarshal response JSON '%s': %w", string(rpcResponse), err)
+	}
+	if response.Error != nil {
+		return fmt.Errorf("ERROR: %s", response.Error.Message)
+	}
+	return nil
 }

@@ -107,7 +107,6 @@ func newRootCmd(version string) *cobra.Command {
 
 			notificationChannel := make(chan rpc.Notification)
 
-
 			go rpc.ProcessIncomingNotifications(notificationChannel)
 
 			msg := rpc.RpcClient.GetUserChats()

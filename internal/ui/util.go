@@ -41,7 +41,7 @@ type MessagesDelegate struct {
 	list.DefaultDelegate
 }
 
-func (d MessagesDelegate) Height() int                               { return 1 } 
+func (d MessagesDelegate) Height() int                               { return 1 }
 func (d MessagesDelegate) Spacing() int                              { return 0 }
 func (d MessagesDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd { return nil }
 
