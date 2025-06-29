@@ -269,26 +269,66 @@ func changeFocusMode(m *Model, msg string, shift bool) (Model, tea.Cmd) {
 }
 
 func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
-	if m.FocusedOn != SideBar {
-		return *m, nil
-	}
-	switch msg {
-	case "c":
-		m.Mode = ModeChannels
-		if !m.SelectedChannel.IsCreator {
-			m.Input.SetValue("Not Allowed To Type")
-		} else {
-			m.Input.Reset()
+	areWeInGroupMode := m.Mode == ModeGroups && m.FocusedOn == Mainview
+	if m.FocusedOn == SideBar || areWeInGroupMode {
+		switch msg {
+		case "c":
+			m.Mode = ModeChannels
+			if !m.SelectedChannel.IsCreator {
+				m.Input.SetValue("Not Allowed To Type")
+			} else {
+				m.Input.Reset()
+			}
+			return *m, rpc.RpcClient.GetUserChannel()
+		case "u":
+			m.Mode = ModeUsers
+			if areWeInGroupMode {
+				selectedUser := m.getMessageSenderUserInfo()
+				if selectedUser != nil {
+					m.SelectedUser = *selectedUser
+					userItems := m.Users.Items()
+
+					var foundIndex int = -1
+
+					for i, v := range userItems {
+						if v.FilterValue() == m.SelectedUser.FilterValue() {
+							foundIndex = i
+							break
+						}
+					}
+
+					if foundIndex == -1 {
+						userItems = append(userItems, list.Item(m.SelectedUser))
+						m.Users.SetItems(userItems)
+						m.Users.Select(len(userItems) - 1)
+					} else {
+						m.Users.Select(foundIndex)
+					}
+
+					m.ChatUI.SetItems([]list.Item{})
+					return *m, rpc.RpcClient.GetMessages(rpc.PeerInfoParams{
+						AccessHash: m.SelectedUser.AccessHash,
+						PeerID:     m.SelectedUser.PeerID,
+					}, rpc.UserChat, nil, nil, nil)
+				}
+			}
+			return *m, nil
+		case "g":
+			m.Mode = ModeGroups
+
+			return *m, rpc.RpcClient.GetUserGroups()
 		}
-		return *m, rpc.RpcClient.GetUserChannel()
-	case "u":
-		m.Mode = ModeUsers
 		return *m, nil
-	case "g":
-		m.Mode = ModeGroups
-		return *m, rpc.RpcClient.GetUserGroups()
 	}
 	return *m, nil
+
+}
+
+func (m *Model) getMessageSenderUserInfo() *rpc.UserInfo {
+	if selectedItem, ok := m.ChatUI.SelectedItem().(rpc.FormattedMessage); ok {
+		return selectedItem.SenderUserInfo
+	}
+	return nil
 }
 
 func (m *Model) updateConverstaions() {

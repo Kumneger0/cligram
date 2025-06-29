@@ -127,6 +127,7 @@ If the command is too long, you can create an alias to make it easier to use.
   - **d** to delete it.
   - **r** to reply to it.
   - **f** to forward it.
+  - **u** to open direct message with the user (in group chats, this lets you quickly start a private conversation with any message sender)
  
 
 ## Working with the Message Input
