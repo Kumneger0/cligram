@@ -8,8 +8,8 @@ import { LogLevel } from 'telegram/extensions/Logger.js';
 import { login, logout } from './commands';
 import { FormattedMessage, UserInfo } from './lib/types';
 import { getTelegramClient } from './lib/utils/auth';
-import { getUserChats, getUserInfo, searchUsers, setUserPrivacy } from './telegram/client';
-import { deleteMessage, editMessage, forwardMessage, getAllMessages, listenForEvents, sendMessage, markUnRead, setUserTyping } from './telegram/messages';
+import { getUserChats, getUserInfo, searchUsers } from './telegram/client';
+import { deleteMessage, editMessage, forwardMessage, getAllMessages, listenForEvents, markUnRead, sendMessage, setUserTyping } from './telegram/messages';
 
 const stringify = JSON.stringify
 

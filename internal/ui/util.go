@@ -16,12 +16,9 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/reflow/wordwrap"
-
-	// "github.com/kumneger0/cligram/internal/config"
-
 	"github.com/kumneger0/cligram/internal/config"
 	"github.com/kumneger0/cligram/internal/rpc"
+	"github.com/muesli/reflow/wordwrap"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
 )
@@ -53,7 +50,11 @@ func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list
 		if entry.IsFromMe {
 			title = "You: " + title
 		} else {
-			title = entry.Sender + ": " + title
+			if entry.SenderUserInfo != nil {
+				title = entry.SenderUserInfo.FirstName + ": " + title
+			} else {
+				title = entry.Sender + ": " + title
+			}
 		}
 		date := timestampStyle.Render(entry.Date.Format("02/01/2006 03:04 PM"))
 		title = title + "\n" + date

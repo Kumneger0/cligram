@@ -315,6 +315,12 @@ export async function getAllMessages<T extends ChatType>(
 						})
 						: null);
 
+					const senderPeerId = type === 'group' && 'fromId' in message
+						? (message.fromId as { userId: bigInt.BigInteger }).userId
+						: null
+
+					let senderUserInfo = senderPeerId ? await getUserInfo(client, senderPeerId) : null
+
 					return {
 						isUnsupportedMessage: !!(media || document),
 						id: message.id,
@@ -328,10 +334,8 @@ export async function getAllMessages<T extends ChatType>(
 						date,
 						webPage,
 						document,
-						fromId:
-							type === 'group' && 'fromId' in message
-								? (message.fromId as { userId: bigInt.BigInteger }).userId
-								: null
+						fromId: senderPeerId,
+						senderUserInfo
 					};
 				})
 			)

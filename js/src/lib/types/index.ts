@@ -132,6 +132,7 @@ export type FormattedMessage = {
 		document: string;
 	} | null;
 	fromId?: bigInt.BigInteger | null;
+	senderUserInfo?: UserInfo | null;
 };
 
 export const eventClassNames = ['UpdateUserStatus', 'UpdateShortMessage'] as const;

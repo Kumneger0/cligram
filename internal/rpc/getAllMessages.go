@@ -33,7 +33,8 @@ type FormattedMessage struct {
 	Document *struct {
 		Document string `json:"document"`
 	} `json:"document,omitempty"`
-	FromID *string `json:"fromId"`
+	FromID         *string   `json:"fromId"`
+	SenderUserInfo *UserInfo `json:"senderUserInfo,omitempty"`
 }
 
 func (m FormattedMessage) Title() string {
