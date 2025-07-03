@@ -17,9 +17,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case rpc.SendMessageMsg:
 		if msg.Err != nil || msg.Response.Error != nil {
 			slog.Error("Failed to send message", "error", msg.Err.Error())
-			items := m.ChatUI.Items()
-			items = items[:len(items)-1]
-			m.ChatUI.SetItems(items)
+			m.IsModalVisible = true
+			m.ModalContent = GetModalContent(msg.Err.Error())
 			return m, nil
 		}
 		return m, nil
