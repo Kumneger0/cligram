@@ -9,7 +9,6 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -235,25 +234,12 @@ type Notification struct {
 }
 
 func ProcessIncomingNotifications(p chan Notification) {
-	logFile, err := os.Create(filepath.Join(".", "incoming-notifications.log"))
-	if err != nil {
-		fmt.Fprintf(logFile, "Failed to create log file, stderr will be discarded: %v\n", err)
-		return
-	}
-	defer func() {
-		logFile.Close()
-	}()
 
 	for {
 		time.Sleep(1 * time.Second)
 		jsonPayload, err := ReadStdOut(RpcClient)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Notifications channel closed: %v\n", err.Error())
-			return
-		}
-
-		if _, err := logFile.WriteString(string(jsonPayload)); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to write to log file: %v\n", err.Error())
 			return
 		}
 

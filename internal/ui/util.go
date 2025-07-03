@@ -110,6 +110,7 @@ type Model struct {
 	Conversations       [50]rpc.FormattedMessage
 	IsReply             bool
 	ReplyTo             *rpc.FormattedMessage
+	EditMessage         *rpc.FormattedMessage
 }
 
 func filterEmptyMessages(msgs [50]rpc.FormattedMessage) []rpc.FormattedMessage {
@@ -484,10 +485,7 @@ func SendUserIsTyping(m *Model) tea.Cmd {
 				AccessHash: m.SelectedGroup.AccessHash,
 			}
 		}
-		err := rpc.RpcClient.SetUserTyping(pInfo, "user")
-		if err != nil {
-			slog.Error("Failed to send user is typing event", "error", err.Error())
-		}
+		go rpc.RpcClient.SetUserTyping(pInfo, "user")
 	}
 	return nil
 }

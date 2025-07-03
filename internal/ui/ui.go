@@ -3,7 +3,6 @@ package ui
 import (
 	"fmt"
 	"io"
-	"log/slog"
 	"math/rand"
 	"strconv"
 	"time"
@@ -137,21 +136,17 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 		filepath = &m.SelectedFile
 	}
 
+	var cmds []tea.Cmd
+
+	if m.EditMessage != nil {
+		m, cmd := m.editMessage(peerInfo, cType, userMsg)
+		cmds = append(cmds, cmd)
+		return m, tea.Batch(cmds...)
+	}
+
 	replayToMessageId := strconv.FormatInt(messageToReply.ID, 10)
-	response, err := rpc.RpcClient.SendMessage(peerInfo, userMsg, m.IsReply && m.ReplyTo != nil, replayToMessageId, cType, isFile, filepath)
-
+	cmds = append(cmds, rpc.RpcClient.SendMessage(peerInfo, userMsg, m.IsReply && m.ReplyTo != nil, replayToMessageId, cType, isFile, filepath))
 	config := config.GetConfig()
-
-	m.SelectedFile = ""
-	if err != nil {
-		slog.Error("Failed to send message", "error", err.Error())
-		return *m, nil
-	}
-
-	if response.Error != nil {
-		slog.Error("Failed to send message", "error", response.Error.Message)
-		return *m, nil
-	}
 
 	newMessage := rpc.FormattedMessage{
 		ID:                   int64(rand.Int()),
@@ -176,13 +171,24 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 			AccessHash: peerInfo.AccessHash,
 			PeerID:     peerInfo.PeerID,
 		}, cType)
+		cmds = append(cmds, cmd)
 	}
 
 	m.Input.Reset()
 	m.IsReply = false
 	m.ReplyTo = nil
+	m.updateConverstaions()
 
-	return *m, cmd
+	return *m, tea.Batch(cmds...)
+}
+
+func (m *Model) editMessage(peerInfo rpc.PeerInfo, cType rpc.ChatType, userMsg string) (Model, tea.Cmd) {
+	cmd := rpc.RpcClient.EditMessage(rpc.PeerInfo{
+		AccessHash: peerInfo.AccessHash,
+		PeerID:     peerInfo.PeerID,
+	}, cType, int(m.EditMessage.ID), userMsg)
+
+	return *m, tea.Batch(cmd)
 }
 
 func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (Model, tea.Cmd) {

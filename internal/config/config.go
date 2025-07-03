@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 type CliGramConfig struct {
@@ -50,7 +51,18 @@ func defaultCliGramConfig() CliGramConfig {
 	}
 }
 
+// read the config only once, mostly it won't change that often so we can cache it
+var config CliGramConfig
+var configOnce sync.Once
+
 func GetConfig() CliGramConfig {
+	configOnce.Do(func() {
+		config = readConfig()
+	})
+	return config
+}
+
+func readConfig() CliGramConfig {
 	userHomeDir, err := os.UserHomeDir()
 	if err != nil {
 		return defaultCliGramConfig()

@@ -1,29 +1,38 @@
+import { getConfig } from '@/config/configManager';
+import { entityCache } from '@/lib/utils';
+import notifier from 'node-notifier';
+import fs from 'node:fs/promises';
 import { Api, TelegramClient } from 'telegram';
 import { IterMessagesParams, markAsRead } from 'telegram/client/messages';
+import { CustomFile } from 'telegram/client/uploads';
 import { Raw } from 'telegram/events';
 import terminalSize from 'term-size';
 import terminalImage from 'terminal-image';
-import fs from 'node:fs/promises';
-import notifier from 'node-notifier';
 import {
+	ChatType,
 	FormattedMessage,
 	Media,
 	MessageMediaWebPage,
 	TelegramUser,
-	ChatType,
 	UserInfo
 } from '../lib/types/index';
 import { getUserInfo } from './client';
-import { CustomFile } from 'telegram/client/uploads';
-import { getConfig } from '@/config/configManager';
 
 type GetEntityTypes = {
 	peer: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger };
 	type: ChatType;
 };
 
+
 const getEntity = async ({ peer }: GetEntityTypes, client: TelegramClient) => {
-	return await client.getInputEntity(peer.peerId)
+	const peerIdString = peer.peerId.toString();
+	if (entityCache.has(peerIdString)) {
+		const entity = entityCache.get(peerIdString);
+		return entity;
+	}
+	const entity = await client.getInputEntity(peer.peerId);
+	entityCache.set(peerIdString, entity);
+	return entity;
 };
 
 /**
@@ -223,19 +232,15 @@ export const editMessage = async (
 	newMessage: string,
 	type: ChatType = 'user'
 ) => {
-	try {
-		const entity = await getEntity({ peer: peerInfo, type }, client);
-		const result = await client.invoke(
-			new Api.messages.EditMessage({
-				peer: entity,
-				id: messageId,
-				message: newMessage
-			})
-		);
-		return result;
-	} catch (err) {
-		return null;
-	}
+	const entity = await getEntity({ peer: peerInfo, type }, client);
+	await client.invoke(
+		new Api.messages.EditMessage({
+			peer: entity,
+			id: messageId,
+			message: newMessage
+		})
+	);
+	return true
 };
 
 const getOrganizedWebPageMedia = (

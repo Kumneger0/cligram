@@ -2,6 +2,7 @@ package ui
 
 import (
 	"log/slog"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -11,7 +12,47 @@ import (
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
+
 	switch msg := msg.(type) {
+	case rpc.SendMessageMsg:
+		if msg.Err != nil || msg.Response.Error != nil {
+			slog.Error("Failed to send message", "error", msg.Err.Error())
+			items := m.ChatUI.Items()
+			items = items[:len(items)-1]
+			m.ChatUI.SetItems(items)
+			return m, nil
+		}
+		return m, nil
+	case rpc.EditMessageMsg:
+		if msg.Err != nil {
+			slog.Error("Failed to edit message", "error", msg.Err.Error())
+			m.IsModalVisible = true
+			m.ModalContent = GetModalContent(msg.Err.Error())
+			return m, nil
+		}
+		response := msg.Response
+		if response.Error != nil {
+			slog.Error("Failed to edit message", "error", response.Error.Message)
+			m.IsModalVisible = true
+			m.ModalContent = GetModalContent(response.Error.Message)
+			return m, nil
+		}
+		if response.Result {
+			if selectedMessage, ok := m.ChatUI.SelectedItem().(rpc.FormattedMessage); ok {
+				selectedMessage.Content = msg.UpdatedMessage
+				items := m.ChatUI.Items()
+				items[m.ChatUI.GlobalIndex()] = selectedMessage
+				m.ChatUI.SetItems(items)
+			}
+			m.EditMessage = nil
+		}
+
+	case rpc.SetUserTypingMsg:
+		if msg.Err != nil {
+			slog.Error("failed to set user typing", "error", msg.Err.Error())
+		}
+		return m, nil
+
 	case rpc.MarkMessagesAsReadMsg:
 		model, cmd := m.handleMarkMessagesAsRead(msg)
 		m = model.(Model)
@@ -255,7 +296,7 @@ func (m Model) mergeConversations(newMessages [50]rpc.FormattedMessage, messages
 }
 
 func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	SendUserIsTyping(&m)
+	cmds := []tea.Cmd{}
 
 	switch msg.String() {
 	case "up", "down":
@@ -265,32 +306,71 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		*/
 		// return m, nil
 	case "ctrl+a":
-		return m.handleCtrlA()
+		m, cmd := m.handleCtrlA()
+		cmds = append(cmds, cmd)
+		return m, tea.Batch(cmds...)
 	case "q", "ctrl+c":
 		return m, tea.Quit
 	case "tab":
 		if !m.IsFilepickerVisible {
-			return changeFocusMode(&m, "tab", false)
+			m, cmd := changeFocusMode(&m, "tab", false)
+			cmds = append(cmds, cmd)
+			return m, tea.Batch(cmds...)
 		}
 		return m, nil
 	case "shift+tab":
-		return changeFocusMode(&m, "tab", true)
+		m, cmd := changeFocusMode(&m, "tab", true)
+		cmds = append(cmds, cmd)
+		return m, tea.Batch(cmds...)
 	case "m":
-		return m.handleMKey(msg)
+		m, cmd := m.handleMKey(msg)
+		cmds = append(cmds, cmd)
+		return m, tea.Batch(cmds...)
 	case "c":
-		return changeSideBarMode(&m, "c")
+		m, cmd := changeSideBarMode(&m, "c")
+		cmds = append(cmds, cmd)
+		return m, tea.Batch(cmds...)
 	case "u":
-		return changeSideBarMode(&m, "u")
+		m, cmd := changeSideBarMode(&m, "u")
+		cmds = append(cmds, cmd)
+		return m, tea.Batch(cmds...)
 	case "g":
-		return changeSideBarMode(&m, "g")
+		m, cmd := changeSideBarMode(&m, "g")
+		cmds = append(cmds, cmd)
+		return m, tea.Batch(cmds...)
 	case "enter":
-		return m.handleEnterKey()
+		m, cmd := m.handleEnterKey()
+		cmds = append(cmds, cmd)
+		return m, tea.Batch(cmds...)
 	case "r":
-		return m.handleReplyKey()
+		m, cmd := m.handleReplyKey()
+		cmds = append(cmds, cmd)
+		return m, tea.Batch(cmds...)
 	case "d":
-		return m.handleDeleteKey()
+		m, cmd := m.handleDeleteKey()
+		cmds = append(cmds, cmd)
+		return m, tea.Batch(cmds...)
 	case "f":
-		return m.handleForwardKey()
+		m, cmd := m.handleForwardKey()
+		cmds = append(cmds, cmd)
+		return m, tea.Batch(cmds...)
+	case "e":
+		m, cmd := m.handleEditKey()
+		cmds = append(cmds, cmd)
+		return m, tea.Batch(cmds...)
+	}
+	cmds = append(cmds, SendUserIsTyping(&m))
+	return m, tea.Batch(cmds...)
+}
+
+func (m Model) handleEditKey() (tea.Model, tea.Cmd) {
+	if m.FocusedOn == Mainview {
+		if selectedItem, ok := m.ChatUI.SelectedItem().(rpc.FormattedMessage); ok && strings.ToLower(selectedItem.Sender) == "you" {
+			m.FocusedOn = Input
+			m.Input.SetValue(selectedItem.Content)
+			m.EditMessage = &selectedItem
+			return m, nil
+		}
 	}
 	return m, nil
 }

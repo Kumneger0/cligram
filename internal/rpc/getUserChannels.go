@@ -24,8 +24,8 @@ type UserChannelMsg struct {
 }
 
 func (c *JsonRpcClient) GetUserChannel() tea.Cmd {
-	userChannelRpcResponse, err := c.Call("getUserChats", []string{"channel"})
 	return func() tea.Msg {
+		userChannelRpcResponse, err := c.Call("getUserChats", []string{"channel"})
 		if err != nil {
 			return UserChannelMsg{Err: err}
 		}
