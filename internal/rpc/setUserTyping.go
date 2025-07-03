@@ -25,9 +25,9 @@ type SetUserTypingMsg struct {
 }
 
 func (c *JsonRpcClient) SetUserTyping(userPeer PeerInfo, chatType ChatType) tea.Cmd {
-	rpcResponse, err := c.Call("setUserTyping", []interface{}{userPeer, chatType})
 	return func() tea.Msg {
 		time.Sleep(1000 * time.Millisecond)
+		rpcResponse, err := c.Call("setUserTyping", []interface{}{userPeer, chatType})
 		if err != nil {
 			return SetUserTypingMsg{Err: err}
 		}
