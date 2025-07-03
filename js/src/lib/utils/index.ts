@@ -35,9 +35,16 @@ export const ICONS = {
 };
 
 export const cache = new LRUCache<string, DialogInfo[]>({
-	max: 1000,
+	max: 100,
 	ttl: 1000 * 60 * 5
 });
+
+
+export const entityCache = new LRUCache<string, any>({
+	max: 100,
+	ttl: 1000 * 60 * 5
+});
+
 
 
 type LastSeen = {

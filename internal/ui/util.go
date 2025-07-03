@@ -16,12 +16,9 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/reflow/wordwrap"
-
-	// "github.com/kumneger0/cligram/internal/config"
-
 	"github.com/kumneger0/cligram/internal/config"
 	"github.com/kumneger0/cligram/internal/rpc"
+	"github.com/muesli/reflow/wordwrap"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
 )
@@ -41,7 +38,7 @@ type MessagesDelegate struct {
 	list.DefaultDelegate
 }
 
-func (d MessagesDelegate) Height() int                               { return 1 } 
+func (d MessagesDelegate) Height() int                               { return 1 }
 func (d MessagesDelegate) Spacing() int                              { return 0 }
 func (d MessagesDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd { return nil }
 
@@ -53,18 +50,19 @@ func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list
 		if entry.IsFromMe {
 			title = "You: " + title
 		} else {
-			title = entry.Sender + ": " + title
+			if entry.SenderUserInfo != nil {
+				title = entry.SenderUserInfo.FirstName + ": " + title
+			} else {
+				title = entry.Sender + ": " + title
+			}
 		}
 		date := timestampStyle.Render(entry.Date.Format("02/01/2006 03:04 PM"))
 		title = title + "\n" + date
 	} else {
 		return
 	}
-    
-	
 
-
-	str := lipgloss.NewStyle().Width(50).Height(2).Render(title)
+	str := messageStyle.Render(title)
 	if index == m.Index() {
 		fmt.Fprint(w, selectedStyle.Render(" "+str+" "))
 	} else {
@@ -112,6 +110,7 @@ type Model struct {
 	Conversations       [50]rpc.FormattedMessage
 	IsReply             bool
 	ReplyTo             *rpc.FormattedMessage
+	EditMessage         *rpc.FormattedMessage
 }
 
 func filterEmptyMessages(msgs [50]rpc.FormattedMessage) []rpc.FormattedMessage {
@@ -486,10 +485,7 @@ func SendUserIsTyping(m *Model) tea.Cmd {
 				AccessHash: m.SelectedGroup.AccessHash,
 			}
 		}
-		err := rpc.RpcClient.SetUserTyping(pInfo, "user")
-		if err != nil {
-			slog.Error("Failed to send user is typing event", "error", err.Error())
-		}
+		go rpc.RpcClient.SetUserTyping(pInfo, "user")
 	}
 	return nil
 }

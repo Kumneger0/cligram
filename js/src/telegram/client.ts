@@ -4,6 +4,7 @@ import { Api, TelegramClient } from 'telegram';
 import { Channel, ChannelInfo, ChatType, TelegramUser, UserInfo } from '../lib/types/index.js';
 import { DialogInfo } from './client.types.js';
 import bigInt from 'big-integer';
+import { LRUCache } from 'lru-cache';
 
 export let chatUsers: UserInfo[] = [];
 
@@ -285,10 +286,18 @@ export async function getUserChats<T extends ChatType>(
 
 }
 
+const userInfoCache = new LRUCache<string, UserInfo>({
+	max: 100,
+	ttl: 1000 * 60 * 5
+});
 export async function getUserInfo(
 	client: TelegramClient,
 	userId: bigInt.BigInteger
 ): Promise<UserInfo | null> {
+	const userIdString = userId.toString();
+	if (userInfoCache.has(userIdString)) {
+		return userInfoCache.get(userIdString)!;
+	}
 	try {
 		if (!client.connected) {
 			await client.connect();
@@ -316,7 +325,7 @@ export async function getUserInfo(
 			}
 
 
-		return {
+		const userInfo = {
 			firstName: user.firstName,
 			isBot: user.bot,
 			peerId: userId.toString() ?? "",
@@ -325,6 +334,8 @@ export async function getUserInfo(
 			isOnline: user.status?.className === 'UserStatusOnline',
 			unreadCount: 0
 		} satisfies UserInfo;
+		userInfoCache.set(userIdString, userInfo);
+		return userInfo;
 	} catch (err) {
 		return null;
 	}

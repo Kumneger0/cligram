@@ -126,7 +126,9 @@ If the command is too long, you can create an alias to make it easier to use.
 - **Message Actions**: When you've got a message selected in the chat area:
   - **d** to delete it.
   - **r** to reply to it.
+  --**e** to edit message
   - **f** to forward it.
+  - **u** to open direct message with the user (in group chats, this lets you quickly start a private conversation with any message sender)
  
 
 ## Working with the Message Input

@@ -24,8 +24,8 @@ type MarkMessagesAsReadMsg struct {
 }
 
 func (c *JsonRpcClient) MarkMessagesAsRead(userPeer PeerInfo, chatType ChatType) tea.Cmd {
-	rpcResponse, err := c.Call("markUnRead", []interface{}{userPeer, chatType})
 	return func() tea.Msg {
+		rpcResponse, err := c.Call("markUnRead", []interface{}{userPeer, chatType})
 		if err != nil {
 			return MarkMessagesAsReadMsg{Err: err}
 		}
