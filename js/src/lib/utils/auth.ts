@@ -7,7 +7,7 @@ import input from 'input';
 import os from 'node:os';
 
 import { red } from 'kolorist';
-import fs from 'node:fs';
+import fs, { writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { LogLevel } from 'telegram/extensions/Logger.js';
 
@@ -38,7 +38,7 @@ export async function authenticateUser({isCalledFromLogin}:{ isCalledFromLogin: 
 			return client;
 		}
 		if (!isCalledFromLogin && !session) {
-			return null;
+			throw Error("Are u logged in ?")
 		}
 		await client.start({
 			phoneNumber: async () => {

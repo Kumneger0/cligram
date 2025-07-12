@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -13,6 +12,7 @@ import (
 	list "github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/kumneger0/cligram/internal/config"
 	"github.com/kumneger0/cligram/internal/rpc"
 	"github.com/kumneger0/cligram/internal/runner"
 	ui "github.com/kumneger0/cligram/internal/ui"
@@ -24,10 +24,6 @@ import (
 var (
 	Program *tea.Program
 )
-
-func getCligramLogFilePath() string {
-	return filepath.Join(os.TempDir(), "cligram.log")
-}
 
 func startSeparateJsProces(wg *sync.WaitGroup) {
 	jsExcutable, err := runner.GetJSExcutable()
@@ -99,6 +95,14 @@ func newRootCmd(version string) *cobra.Command {
 		Use:   "cligram",
 		Short: "cligram a cli based telegram client",
 		RunE: func(cmd *cobra.Command, args []string) error {
+
+			isUserSessionAvaialbe := config.IsUserSessionAvaialable()
+
+			if !isUserSessionAvaialbe {
+				fmt.Println("Are u logged in ?")
+				fmt.Println("run cligram login to login")
+				return nil
+			}
 
 			var wg sync.WaitGroup
 			wg.Add(1)
