@@ -10,6 +10,7 @@ import { FormattedMessage, UserInfo } from './lib/types';
 import { getTelegramClient } from './lib/utils/auth';
 import { getUserChats, getUserInfo, searchUsers } from './telegram/client';
 import { deleteMessage, editMessage, forwardMessage, getAllMessages, listenForEvents, markUnRead, sendMessage, setUserTyping } from './telegram/messages';
+import { writeFileSync } from 'fs';
 
 const stringify = JSON.stringify
 
@@ -245,6 +246,7 @@ async function startup() {
 		} else if (err instanceof Error) {
 			message = err.message;
 		}
+
 		writeToStdout(createRpcError(null, code, message));
 		process.exit(1);
 	}
