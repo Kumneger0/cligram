@@ -31,7 +31,7 @@ func (c *JsonRpcClient) SendMessage(pInfo PeerInfo,
 	isReplay bool,
 	replyToMessageId string,
 	cType ChatType, isFile bool,
-	filePath *string) tea.Cmd {
+	filePath string) tea.Cmd {
 	return func() tea.Msg {
 		paramsFixed := make([]interface{}, 7)
 		paramsFixed[0] = pInfo

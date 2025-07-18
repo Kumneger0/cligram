@@ -145,17 +145,26 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 	}
 
 	replayToMessageId := strconv.FormatInt(messageToReply.ID, 10)
-	cmds = append(cmds, rpc.RpcClient.SendMessage(peerInfo, userMsg, m.IsReply && m.ReplyTo != nil, replayToMessageId, cType, isFile, filepath))
-	config := config.GetConfig()
+	cmds = append(cmds, rpc.RpcClient.SendMessage(peerInfo, userMsg, m.IsReply && m.ReplyTo != nil, replayToMessageId, cType, isFile, *filepath))
+	if (isFile) {
+		m.SelectedFile = "uploading..."
+	}
 
+	content := userMsg
+
+	if isFile {
+     content = "This Message is not supported by this Telegram client."
+	}
+
+	config := config.GetConfig()
 	newMessage := rpc.FormattedMessage{
 		ID:                   int64(rand.Int()),
 		Sender:               "you",
 		IsFromMe:             true,
-		Content:              userMsg,
+		Content:              content,
 		Media:                nil,
 		Date:                 time.Now(),
-		IsUnsupportedMessage: false,
+		IsUnsupportedMessage: isFile,
 		WebPage:              nil,
 		Document:             nil,
 		FromID:               nil,
