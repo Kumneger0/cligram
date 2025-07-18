@@ -10,7 +10,6 @@ import { FormattedMessage, UserInfo } from './lib/types';
 import { getTelegramClient } from './lib/utils/auth';
 import { getUserChats, getUserInfo, searchUsers } from './telegram/client';
 import { deleteMessage, editMessage, forwardMessage, getAllMessages, listenForEvents, markUnRead, sendMessage, setUserTyping } from './telegram/messages';
-import { writeFileSync } from 'fs';
 
 const stringify = JSON.stringify
 
@@ -134,7 +133,7 @@ async function readHeaders(reader: typeof stdin): Promise<{ [key: string]: strin
 			const parts = line.split(':');
 			if (parts.length >= 2) {
 				const headerName = parts[0]!.trim();
-				const headerValue = parts.slice(1).join(':').trim();
+				const headerValue = parts[1].trim();
 				headers[headerName] = headerValue;
 			}
 			lineBuffer = '';

@@ -21,6 +21,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.ModalContent = GetModalContent(msg.Err.Error())
 			return m, nil
 		}
+		if m.SelectedFile == "uploading..." {
+			m.SelectedFile = ""
+		}
 		return m, nil
 	case rpc.EditMessageMsg:
 		if msg.Err != nil {
@@ -138,13 +141,9 @@ func (m Model) handleNewMessage(msg rpc.NewMessageMsg) (tea.Model, tea.Cmd) {
 				}
 			}
 			if isCurrentConversationUsersChat {
-				totalConversationsSoFar := len(m.Conversations)
-				if totalConversationsSoFar < 50 {
-					m.Conversations[totalConversationsSoFar] = msg.Message
-				} else {
-					firstOneRemoved := m.Conversations[1:]
-					m.Conversations[len(firstOneRemoved)] = msg.Message
-				}
+				copy(m.Conversations[:], m.Conversations[1:])
+				m.Conversations[len(m.Conversations)-1] = msg.Message
+				m.updateConverstaions()
 			}
 		}
 	} else {
