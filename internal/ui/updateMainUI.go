@@ -24,7 +24,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.SelectedFile == "uploading..." {
 			m.SelectedFile = ""
 		}
-		return m, nil	
+		return m, nil
 	case rpc.EditMessageMsg:
 		if msg.Err != nil {
 			slog.Error("Failed to edit message", "error", msg.Err.Error())

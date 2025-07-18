@@ -146,14 +146,14 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 
 	replayToMessageId := strconv.FormatInt(messageToReply.ID, 10)
 	cmds = append(cmds, rpc.RpcClient.SendMessage(peerInfo, userMsg, m.IsReply && m.ReplyTo != nil, replayToMessageId, cType, isFile, *filepath))
-	if (isFile) {
+	if isFile {
 		m.SelectedFile = "uploading..."
 	}
 
 	content := userMsg
 
 	if isFile {
-     content = "This Message is not supported by this Telegram client."
+		content = "This Message is not supported by this Telegram client."
 	}
 
 	config := config.GetConfig()
