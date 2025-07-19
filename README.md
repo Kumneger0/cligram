@@ -5,6 +5,10 @@ Right now, you can only chat with personal chats and channels. Group and bot sup
 
 ---
 
+## Demo
+
+![CliGram Demo](./demo.gif)
+
 ## Limitations and Intended Use
 
 CliGram is designed as a lightweight and minimalistic Telegram client for basic use cases. While it provides essential functionality for interacting with personal chats, channels, and groups, it is not intended to replace GUI-based Telegram clients. Some advanced features available in GUI clients are currently missing, including:

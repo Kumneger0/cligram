@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"os"
 	"strconv"
 	"time"
 
@@ -131,9 +132,14 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 		isFile = true
 	}
 
-	var filepath *string
+	var filepath string
 	if isFile {
-		filepath = &m.SelectedFile
+		filepath = m.SelectedFile
+	}
+
+	if _, err := os.Stat(m.SelectedFile); os.IsNotExist(err) && isFile {
+		m.Input.SetValue("Invalid file path")
+		return *m, nil
 	}
 
 	var cmds []tea.Cmd
@@ -145,7 +151,8 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 	}
 
 	replayToMessageId := strconv.FormatInt(messageToReply.ID, 10)
-	cmds = append(cmds, rpc.RpcClient.SendMessage(peerInfo, userMsg, m.IsReply && m.ReplyTo != nil, replayToMessageId, cType, isFile, *filepath))
+
+	cmds = append(cmds, rpc.RpcClient.SendMessage(peerInfo, userMsg, m.IsReply && m.ReplyTo != nil, replayToMessageId, cType, isFile, filepath))
 	if isFile {
 		m.SelectedFile = "uploading..."
 	}
