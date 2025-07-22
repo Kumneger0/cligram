@@ -1,5 +1,5 @@
 
-FROM  oven/bun:1.2.18 AS builder
+FROM  oven/bun:1.2.19 AS builder
 
 ARG TARGETARCH
 ARG BUILDPLATFORM
