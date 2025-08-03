@@ -10,16 +10,15 @@ import (
 )
 
 func login() *cobra.Command {
-
 	return &cobra.Command{
 		Use:          "login",
 		Short:        "cligram login",
-		Args:         cobra.NoArgs,
+		Args:          cobra.NoArgs,
 		SilenceUsage: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			jsExcutable, err := runner.GetJSExcutable()
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to get JS executable: %v\n", err)
+				fmt.Fprintf(os.Stderr, "FaIled to get JS executable: %v\n", err)
 				return
 			}
 			jsExcute := exec.Command(*jsExcutable, "login")

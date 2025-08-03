@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 )
 
@@ -97,7 +96,7 @@ func getUserSessionPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	sessionPath := strings.Join([]string{userHomeDir, ".cligram", "config.txt"}, "/")
+	sessionPath := filepath.Join(userHomeDir, ".cligram", "config.txt")
 	return sessionPath, nil
 }
 

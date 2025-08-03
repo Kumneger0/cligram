@@ -238,6 +238,7 @@ func newRootCmd(version string) *cobra.Command {
 	}
 
 	cmd.AddCommand(newVersionCmd(version))
+	cmd.AddCommand(upgradeCligram(version))
 	cmd.AddCommand(login())
 	cmd.AddCommand(logout())
 	return cmd
