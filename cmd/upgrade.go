@@ -101,7 +101,6 @@ const (
 	REPOURL = "https://api.github.com/repos/kumneger0/cligram/releases/latest"
 )
 
-
 func upgradeCligram(currentVersion string) *cobra.Command {
 	fileExtensions := map[LinuxDisto]string{
 		UBUNTU: "deb",
@@ -181,6 +180,10 @@ func upgradeCligram(currentVersion string) *cobra.Command {
 					assetUrl = v.BrowserDownloadURL
 				}
 			}
+			if assetUrl == "" {
+				log.Fatal("No compatible package found for your system")
+			}
+
 			fmt.Println("Found latest version", latestRelease.TagName)
 			userHomeDir, err := os.UserHomeDir()
 			if err != nil {
@@ -189,10 +192,8 @@ func upgradeCligram(currentVersion string) *cobra.Command {
 			cacheDir := filepath.Join(userHomeDir, ".cache")
 			_, err = os.Stat(cacheDir)
 			if os.IsNotExist(err) {
-				os.Mkdir(cacheDir, 0777)
+				os.Mkdir(cacheDir, 0755)
 			}
-
-			fmt.Println("WE ARE HERE")
 
 			var fileName string
 
@@ -209,8 +210,11 @@ func upgradeCligram(currentVersion string) *cobra.Command {
 
 			filePathToWriteFile := filepath.Join(cacheDir, fileName)
 			_ = os.Remove(filePathToWriteFile)
-			downloadBinary(assetUrl, filePathToWriteFile)
-			fmt.Println(assetUrl)
+			err = downloadBinary(assetUrl, filePathToWriteFile)
+
+			if err != nil {
+				fmt.Println("Failed To downloand the binary", err.Error())
+			}
 
 			if strings.EqualFold(distroName, string(DEBIAN)) || strings.EqualFold(distroName, string(UBUNTU)) {
 				installBinary("dpkg", "-i", filePathToWriteFile)
@@ -247,10 +251,15 @@ func getDistroName() (string, error) {
 
 func downloadBinary(url string, outputPath string) error {
 	resp, err := http.Get(url)
+
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to download file: HTTP %d", resp.StatusCode)
+	}
 
 	out, err := os.Create(outputPath)
 	if err != nil {
@@ -268,6 +277,14 @@ func downloadBinary(url string, outputPath string) error {
 }
 
 func installBinary(installCommand ...string) {
+	fmt.Println("Installing package requires sudo privileges...")
+	fmt.Print("Continue? (y/N): ")
+	var response string
+	fmt.Scanln(&response)
+	if !strings.EqualFold(response, "y") && !strings.EqualFold(response, "yes") {
+		fmt.Println("Installation cancelled")
+		return
+	}
 	cmd := exec.Command("sudo", installCommand...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
