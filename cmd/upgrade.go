@@ -114,11 +114,6 @@ func upgradeCligram(currentVersion string) *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			installedVersion, err := version.NewVersion(strings.Replace(currentVersion, "v", "", 1))
-			if err != nil {
-				fmt.Println(err.Error())
-				log.Fatal(err)
-			}
 			var osName OsName
 			var distroName string
 			switch runtime.GOOS {
@@ -128,6 +123,7 @@ func upgradeCligram(currentVersion string) *cobra.Command {
 				osName = DARWIN
 			case "linux":
 				osName = LINUX
+				var err error
 				distroName, err = getDistroName()
 				if err != nil {
 					log.Fatal("oops we failed to get the distro you are using")
@@ -145,33 +141,13 @@ func upgradeCligram(currentVersion string) *cobra.Command {
 				fmt.Println("upgrade is only supported in debian, ubuntu and  alpine linux")
 				return
 			}
-			response, err := http.Get(REPOURL)
-			if err != nil {
-				fmt.Println(err.Error())
-				log.Fatal(err)
-			}
-			defer response.Body.Close()
-			data, err := io.ReadAll(response.Body)
-			if err != nil {
-				fmt.Println(err.Error())
-				log.Fatal("Failed to Read Response Body")
-			}
-			var latestRelease Release
-			err = json.Unmarshal(data, &latestRelease)
-			if err != nil {
-				fmt.Println(err.Error())
-				log.Fatal("Failed to Unmarshal", err)
-			}
 
-			latestVersion, err := version.NewVersion(strings.Replace(latestRelease.TagName, "v", "", 1))
-			if err != nil {
-				log.Fatal("Failed to get the latest version")
-			}
-
-			if !latestVersion.GreaterThan(installedVersion) {
-				fmt.Println("Already latest version ")
+			newVersionInfo := GetNewVersionInfo(currentVersion)
+			if !newVersionInfo.IsUpdateAvailable {
+				fmt.Println("Already latest version")
 				return
 			}
+			latestRelease := newVersionInfo.LatestRelease
 
 			var assetUrl string
 			format := fileExtensions[LinuxDisto(strings.ToLower(distroName))]
@@ -223,6 +199,56 @@ func upgradeCligram(currentVersion string) *cobra.Command {
 				installBinary("apk", "add", "--allow-untrusted", filePathToWriteFile)
 			}
 		},
+	}
+}
+
+type NewVersionInfo struct {
+	IsUpdateAvailable bool
+	LatestRelease     Release
+}
+
+func GetNewVersionInfo(installedVersion string) NewVersionInfo {
+	cleanVersion := strings.Replace(installedVersion, "v", "", 1)
+	ver, err := version.NewVersion(cleanVersion)
+	if err != nil {
+		fmt.Println("Invalid installed version:", err)
+		return NewVersionInfo{
+			IsUpdateAvailable: false,
+			LatestRelease:     Release{},
+		}
+	}
+	response, err := http.Get(REPOURL)
+	if err != nil {
+		fmt.Println(err.Error())
+		log.Fatal(err)
+	}
+	defer response.Body.Close()
+	data, err := io.ReadAll(response.Body)
+	if err != nil {
+		fmt.Println(err.Error())
+		log.Fatal("Failed to Read Response Body")
+	}
+	var latestRelease Release
+	err = json.Unmarshal(data, &latestRelease)
+	if err != nil {
+		fmt.Println(err.Error())
+		log.Fatal("Failed to Unmarshal", err)
+	}
+	latestVersion, err := version.NewVersion(strings.Replace(latestRelease.TagName, "v", "", 1))
+	if err != nil {
+		log.Fatal("Failed to get the latest version")
+	}
+
+	if !latestVersion.GreaterThan(ver) {
+		fmt.Println("Already latest version ")
+		return NewVersionInfo{
+			IsUpdateAvailable: false,
+			LatestRelease:     latestRelease,
+		}
+	}
+	return NewVersionInfo{
+		IsUpdateAvailable: true,
+		LatestRelease:     latestRelease,
 	}
 }
 

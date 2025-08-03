@@ -46,6 +46,10 @@ func main() {
 		fmt.Fprintf(os.Stderr, "%v", err)
 		os.Exit(1)
 	}
+	IsUpdateAvailable := cmd.GetNewVersionInfo(version)
+	if IsUpdateAvailable.IsUpdateAvailable {
+		fmt.Println("An update is available use cligram upgrade to update to latest version")
+	}
 }
 
 func isProcessRunning(pid int) bool {
