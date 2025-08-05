@@ -409,7 +409,7 @@ export const listenForEvents = async (
 		switch (event.className) {
 			case 'UpdateShortMessage':
 				const config = getConfig('notifications');
-				if (config.enabled) {
+				if (config.enabled && !event.out) {
 					notifier.notify({
 						title: `Cligram - ${user.firstName} sent you a message`,
 						message: config.showMessagePreview ? event.message : '',
