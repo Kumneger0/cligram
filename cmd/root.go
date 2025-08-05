@@ -95,7 +95,6 @@ func newRootCmd(version string) *cobra.Command {
 		Use:   "cligram",
 		Short: "cligram a cli based telegram client",
 		RunE: func(cmd *cobra.Command, args []string) error {
-
 			isUserSessionAvaialbe := config.IsUserSessionAvaialable()
 
 			if !isUserSessionAvaialbe {
@@ -110,9 +109,7 @@ func newRootCmd(version string) *cobra.Command {
 			wg.Wait()
 
 			notificationChannel := make(chan rpc.Notification)
-
 			go rpc.ProcessIncomingNotifications(notificationChannel)
-
 			msg := rpc.RpcClient.GetUserChats()
 
 			modalContent := ""
@@ -141,14 +138,14 @@ func newRootCmd(version string) *cobra.Command {
 					IsOnline:    du.IsOnline,
 				})
 			}
-
-			userList := list.New(users, ui.CustomDelegate{}, 10, 20)
+			model := ui.Model{}
+			userList := list.New(users, ui.CustomDelegate{Model: &model}, 10, 20)
 			userList.SetShowPagination(false)
 			channels := []list.Item{}
-			channelList := (list.New(channels, ui.CustomDelegate{}, 10, 20))
+			channelList := (list.New(channels, ui.CustomDelegate{Model: &model}, 10, 20))
 			channelList.SetShowPagination(false)
 			groups := []list.Item{}
-			groupList := (list.New(groups, ui.CustomDelegate{}, 10, 20))
+			groupList := (list.New(groups, ui.CustomDelegate{Model: &model}, 10, 20))
 			groupList.SetShowPagination(false)
 
 			userList.SetShowHelp(false)
@@ -163,7 +160,7 @@ func newRootCmd(version string) *cobra.Command {
 			fd := int(os.Stdout.Fd())
 			width, height, _ := term.GetSize(fd)
 
-			chatList := list.New([]list.Item{}, ui.MessagesDelegate{}, 10, 20)
+			chatList := list.New([]list.Item{}, ui.MessagesDelegate{Model: &model}, 10, 20)
 			chatList.SetShowPagination(false)
 			chatList.SetShowHelp(false)
 			chatList.SetShowFilter(false)
@@ -175,23 +172,21 @@ func newRootCmd(version string) *cobra.Command {
 			fp.DirAllowed = false
 			fp.CurrentDirectory, _ = os.UserHomeDir()
 
-			m := ui.Model{
-				Filepicker:     fp,
-				Input:          input,
-				Users:          userList,
-				Groups:         groupList,
-				ModalContent:   modalContent,
-				Height:         height - 4,
-				Width:          width - 4,
-				Channels:       channelList,
-				IsModalVisible: isModalVisible,
-				Mode:           "users",
-				FocusedOn:      "sideBar",
-				ChatUI:         chatList,
-				SelectedFile:   "",
-			}
+			model.Filepicker = fp
+			model.Input = input
+			model.Users = userList
+			model.Groups = groupList
+			model.ModalContent = modalContent
+			model.Height = height - 4
+			model.Width = width - 4
+			model.Channels = channelList
+			model.IsModalVisible = isModalVisible
+			model.Mode = ui.ModeUsers
+			model.FocusedOn = ui.SideBar
+			model.ChatUI = chatList
+			model.SelectedFile = ""
 
-			backgorund := m
+			backgorund := model
 			forground := &ui.Foreground{}
 
 			manager := ui.Manager{

@@ -1,11 +1,8 @@
 package ui
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
-	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -36,6 +33,7 @@ var (
 
 type MessagesDelegate struct {
 	list.DefaultDelegate
+	*Model
 }
 
 func (d MessagesDelegate) Height() int                               { return 1 }
@@ -62,8 +60,10 @@ func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list
 		return
 	}
 
+	isMainViewFocused := d.Model.FocusedOn == Mainview
+
 	str := messageStyle.Render(title)
-	if index == m.Index() {
+	if index == m.Index() && isMainViewFocused {
 		fmt.Fprint(w, selectedStyle.Render(" "+str+" "))
 	} else {
 		fmt.Fprint(w, normalStyle.Render(" "+str+" "))
@@ -147,7 +147,6 @@ func setItemStyles(m *Model) string {
 	if m.IsModalVisible {
 		return renderModal(m)
 	}
-
 	dimensions := calculateLayoutDimensions(m)
 
 	updateListDimensions(m, dimensions)
@@ -349,66 +348,66 @@ func Debounce(fn func(args ...interface{}) tea.Msg, delay time.Duration) func(ar
 	}
 }
 
-func handleUpDownArrowKeys(m *Model, isUp bool) (Model, tea.Cmd) {
-	var cmd tea.Cmd
-	if m.FocusedOn == Mainview {
-		totalItems := len(m.ChatUI.Items())
-		globalIndex := m.ChatUI.GlobalIndex()
-		pInfo, cType := getGetMessageParams(m)
-		if isUp && globalIndex == 0 {
-			if selectedConversation, ok := m.ChatUI.SelectedItem().(rpc.FormattedMessage); ok {
-				offsetID := int(selectedConversation.ID)
-				cacheKey := pInfo.AccessHash + pInfo.PeerID
-				if len(m.Conversations) > 1 {
-					messages, err := json.Marshal(m.Conversations[:])
-					if err != nil {
-						slog.Error("Failed to marshal messages", "error", err.Error())
-					}
-					AddToCache(cacheKey, string(messages))
-				}
-				cmd = rpc.RpcClient.GetMessages(pInfo, cType, &offsetID, nil, nil)
-				conversationLastIndex := len(m.Conversations) - 1
-				m.ChatUI.Select(conversationLastIndex)
-			}
-		} else if globalIndex == totalItems-1 && !isUp {
-			cacheKey := pInfo.AccessHash + pInfo.PeerID
-			messages, err := GetFromCache(cacheKey)
-			if err != nil {
-				slog.Error("Failed to get messages from cache", "error", err.Error())
-			}
-			if messages == nil {
-				return *m, nil
-			}
-			var formattedMessages []rpc.FormattedMessage
-			err = json.Unmarshal([]byte(*messages), &formattedMessages)
+// func handleUpDownArrowKeys(m *Model, isUp bool) (Model, tea.Cmd) {
+// 	var cmd tea.Cmd
+// 	if m.FocusedOn == Mainview {
+// 		totalItems := len(m.ChatUI.Items())
+// 		globalIndex := m.ChatUI.GlobalIndex()
+// 		pInfo, cType := getMessageParams(m)
+// 		if isUp && globalIndex == 0 {
+// 			if selectedConversation, ok := m.ChatUI.SelectedItem().(rpc.FormattedMessage); ok {
+// 				offsetID := int(selectedConversation.ID)
+// 				cacheKey := pInfo.AccessHash + pInfo.PeerID
+// 				if len(m.Conversations) > 1 {
+// 					messages, err := json.Marshal(m.Conversations[:])
+// 					if err != nil {
+// 						slog.Error("Failed to marshal messages", "error", err.Error())
+// 					}
+// 					AddToCache(cacheKey, string(messages))
+// 				}
+// 				cmd = rpc.RpcClient.GetMessages(pInfo, cType, &offsetID, nil, nil)
+// 				conversationLastIndex := len(m.Conversations) - 1
+// 				m.ChatUI.Select(conversationLastIndex)
+// 			}
+// 		} else if globalIndex == totalItems-1 && !isUp {
+// 			cacheKey := pInfo.AccessHash + pInfo.PeerID
+// 			messages, err := GetFromCache(cacheKey)
+// 			if err != nil {
+// 				slog.Error("Failed to get messages from cache", "error", err.Error())
+// 			}
+// 			if messages == nil {
+// 				return *m, nil
+// 			}
+// 			var formattedMessages []rpc.FormattedMessage
+// 			err = json.Unmarshal([]byte(*messages), &formattedMessages)
 
-			if err != nil {
-				slog.Error("Failed to unmarshal messages", "error", err.Error())
-			}
+// 			if err != nil {
+// 				slog.Error("Failed to unmarshal messages", "error", err.Error())
+// 			}
 
-			if len(formattedMessages) == 0 {
-				return *m, cmd
-			}
-			userConversation := rpc.UserConversationResponse{
-				JsonRPC: "2.0",
-				ID:      rand.Int(),
-				Error:   nil,
-				Result:  [50]rpc.FormattedMessage(formattedMessages),
-			}
-			messagesMsg := rpc.GetMessagesMsg{
-				Messages: userConversation,
-				Err:      nil,
-			}
-			cmd = func() tea.Msg {
-				return messagesMsg
-			}
-		}
+// 			if len(formattedMessages) == 0 {
+// 				return *m, cmd
+// 			}
+// 			userConversation := rpc.UserConversationResponse{
+// 				JsonRPC: "2.0",
+// 				ID:      rand.Int(),
+// 				Error:   nil,
+// 				Result:  [50]rpc.FormattedMessage(formattedMessages),
+// 			}
+// 			messagesMsg := rpc.GetMessagesMsg{
+// 				Messages: userConversation,
+// 				Err:      nil,
+// 			}
+// 			cmd = func() tea.Msg {
+// 				return messagesMsg
+// 			}
+// 		}
 
-	}
-	return *m, cmd
-}
+// 	}
+// 	return *m, cmd
+// }
 
-func getGetMessageParams(m *Model) (rpc.PeerInfoParams, rpc.ChatType) {
+func getMessageParams(m *Model) (rpc.PeerInfoParams, rpc.ChatType) {
 	var cType rpc.ChatType
 	var pInfo rpc.PeerInfoParams
 	if m.Mode == ModeUsers {

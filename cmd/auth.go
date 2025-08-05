@@ -13,7 +13,7 @@ func login() *cobra.Command {
 	return &cobra.Command{
 		Use:          "login",
 		Short:        "cligram login",
-		Args:          cobra.NoArgs,
+		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			jsExcutable, err := runner.GetJSExcutable()

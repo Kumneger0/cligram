@@ -138,7 +138,7 @@ func upgradeCligram(currentVersion string) *cobra.Command {
 			if !strings.EqualFold(distroName, string(DEBIAN)) &&
 				!strings.EqualFold(distroName, string(UBUNTU)) &&
 				!strings.EqualFold(distroName, string(ALPINE)) {
-				fmt.Println("upgrade is only supported in debian, ubuntu and  alpine linux")
+				fmt.Println("upgrade is only supported in debian, ubuntu and alpine linux")
 				return
 			}
 
