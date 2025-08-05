@@ -297,8 +297,6 @@ func ProcessIncomingNotifications(p chan Notification) {
 				Error: err,
 			}
 
-			// this is not working when closed figure out and why this doesn't work
-			// close(JsonPayloadBytesChan)
 			ProducerWg.Done()
 		}
 

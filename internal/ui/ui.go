@@ -17,11 +17,23 @@ import (
 
 type CustomDelegate struct {
 	list.DefaultDelegate
+	*Model
+}
+
+func (d CustomDelegate) Height() int {
+	return 1
+}
+
+func (d CustomDelegate) Spacing() int {
+	return 0
+}
+
+func (d CustomDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd {
+	return nil
 }
 
 func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	var title string
-
 	var hasUnreadMessages bool = false
 
 	if entry, ok := item.(rpc.UserInfo); ok {
@@ -50,9 +62,9 @@ func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 	} else {
 		return
 	}
-
+	isOnSideBar := d.Model.FocusedOn == SideBar
 	str := lipgloss.NewStyle().Width(50).Render(title)
-	if index == m.Index() {
+	if index == m.Index() && isOnSideBar {
 		fmt.Fprint(w, selectedStyle.Render(" "+str+" "))
 	} else {
 		fmt.Fprint(w, normalStyle.Render(" "+str+" "))
@@ -246,7 +258,7 @@ func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (M
 }
 
 func handleUserChange(m *Model) (Model, tea.Cmd) {
-	pInfo, cType := getGetMessageParams(m)
+	pInfo, cType := getMessageParams(m)
 	cmd := rpc.RpcClient.GetMessages(pInfo, cType, nil, nil, nil)
 	config := config.GetConfig()
 
@@ -383,7 +395,19 @@ func (m Model) View() string {
 	m.Users.SetShowStatusBar(false)
 	m.Groups.Title = "Groups"
 	m.Groups.SetShowStatusBar(false)
+	m.updateDelegates()
 
 	ui := setItemStyles(&m)
 	return ui
+}
+
+func (m *Model) updateDelegates() {
+	usersDelegate := CustomDelegate{Model: m}
+	channelsDelegate := CustomDelegate{Model: m}
+	groupsDelegate := CustomDelegate{Model: m}
+	mainViewDelegate := MessagesDelegate{Model: m}
+	m.Users.SetDelegate(usersDelegate)
+	m.Channels.SetDelegate(channelsDelegate)
+	m.Groups.SetDelegate(groupsDelegate)
+	m.ChatUI.SetDelegate(mainViewDelegate)
 }
