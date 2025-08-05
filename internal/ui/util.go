@@ -243,10 +243,12 @@ func prepareMainContent(m *Model, d layoutDimensions) string {
 	if m.MainViewLoading {
 		return mainStyle.Render("Loading...")
 	}
-
-	// m.ChatUI.SetItems(formatMessages(m.Conversations))
-	m.ChatUI.SetWidth(d.mainWidth * 70 / 100)
-	m.ChatUI.SetHeight(15)
+	m.ChatUI.SetWidth(d.mainWidth - 4)
+	//the terminal height is determined by charater 
+	// one list items takes one 1 charater space since we are showing extra info on chats like time
+	// using the d.contentHeight will make the content out of view 
+	// TODO: can we do better ?
+	m.ChatUI.SetHeight(int(d.contentHeight / 5))
 
 	userNameOrChannelName := getUserOrChannelName(m)
 	title := titleStyle.Render(userNameOrChannelName)
@@ -254,16 +256,19 @@ func prepareMainContent(m *Model, d layoutDimensions) string {
 	headerView := lipgloss.JoinVertical(lipgloss.Center, title, line)
 
 	chatsView := m.ChatUI.View()
-	m.viewport.SetContent(chatsView)
-	mainViewContent := m.viewport.View()
+
+	if len(m.ChatUI.Items()) > 0 {
+		m.ChatUI.Select(len(m.ChatUI.Items()) - 1)
+	}
+
 	if m.IsFilepickerVisible {
-		mainViewContent = prepareFilepickerView(m)
+		chatsView = prepareFilepickerView(m)
 	}
 
 	mainContent := lipgloss.JoinVertical(
 		lipgloss.Top,
 		headerView,
-		mainViewContent,
+		chatsView,
 	)
 
 	return mainStyle.Render(mainContent)
