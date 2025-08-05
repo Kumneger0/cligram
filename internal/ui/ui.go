@@ -366,12 +366,9 @@ func (m *Model) getMessageSenderUserInfo() *rpc.UserInfo {
 }
 
 func (m *Model) updateConverstaions() {
-	sidebarWidth := m.Width * 30 / 100
-	mainWidth := m.Width - sidebarWidth
-	w := mainWidth * 70 / 100
-	m.ChatUI.SetWidth(w)
-	m.ChatUI.SetHeight(int(float64(m.Height) / 2.6666666665))
 	m.ChatUI.SetItems(formatMessages(m.Conversations))
+	m.viewport.SetContent(m.ChatUI.View())
+	m.viewport.GotoBottom()
 }
 
 func getItemBorder(isSelected bool) lipgloss.Border {
