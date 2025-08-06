@@ -274,6 +274,7 @@ async function messageProcessingLoop(client: TelegramClient) {
 				params: {
 					user: {
 						...user,
+						isOnline: true,
 						isTyping: true
 					}
 				}

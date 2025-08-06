@@ -1,9 +1,9 @@
 package ui
 
 import (
-	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -57,20 +57,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case rpc.UserTyping:
-		fmt.Println("yoo we have got new message")
 		user := msg.User
-		var i = -1
-		for idx, v := range m.Users.Items() {
-			if u, ok := v.(rpc.UserInfo); ok {
-				if user.PeerID == u.PeerID {
-					i = idx
-				}
-			}
+		if m.SelectedUser.PeerID == user.PeerID {
+			m.SelectedUser = user
 		}
-		if i != -1 {
-			fmt.Println("yoo,this is cool as fuck", user.FirstName)
+
+		userIndex := getUserIndex(m, user)
+		if userIndex != -1 {
 			items := m.Users.Items()
-			items[i] = user
+			items[userIndex] = user
+			cmd := m.Users.SetItems(items)
+			cmds = append(cmds, cmd)
+		}
+		if user.IsTyping {
+			rcmd := tea.Tick(time.Second*3, func(t time.Time) tea.Msg {
+				user.IsOnline = false
+				user.IsTyping = false
+				return rpc.UserTyping{User: user}
+			})
+			cmds = append(cmds, rcmd)
 		}
 	case rpc.MarkMessagesAsReadMsg:
 		model, cmd := m.handleMarkMessagesAsRead(msg)
