@@ -25,7 +25,7 @@ type UserChatsJsonRpcResponse struct {
 
 func (c *JsonRpcClient) GetUserChats() UserChatsMsg {
 	if c == nil {
-		return UserChatsMsg{Err: fmt.Errorf("Js BACKEND IS NOT RUNNING Try Restarting the app, please open an issue on github if the problem persists")}
+		return UserChatsMsg{Err: fmt.Errorf("js backend is not running try restarting the app, please open an issue on github if the problem persists")}
 	}
 	userChatRpcResponse, err := c.Call("getUserChats", []string{"user"})
 
@@ -42,9 +42,16 @@ func (c *JsonRpcClient) GetUserChats() UserChatsMsg {
 	return UserChatsMsg{Err: nil, Response: &response}
 }
 
-func (c *JsonRpcClient) GetChats() tea.Cmd {
-	userChatRpcResponse, err := c.Call("getUserChats", []string{"user"})
+type Chat string
+
+const (
+	ModeUser Chat = "user"
+	ModeBot  Chat = "bot"
+)
+
+func (c *JsonRpcClient) GetChats(chat Chat) tea.Cmd {
 	return func() tea.Msg {
+		userChatRpcResponse, err := c.Call("getUserChats", []string{string(chat)})
 		if err != nil {
 			return UserChatsMsg{Err: err}
 		}

@@ -111,8 +111,13 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 	var cType rpc.ChatType
 	var peerInfo rpc.PeerInfo
 
-	if m.Mode == ModeUsers {
-		cType = rpc.UserChat
+	if m.Mode == ModeUsers || m.Mode == ModeBots {
+		if m.Mode == ModeUsers {
+			cType = rpc.ChatType(rpc.UserChat)
+		}
+		if m.Mode == ModeBots {
+			cType = rpc.ChatType(rpc.Bot)
+		}
 		peerInfo = rpc.PeerInfo{
 			AccessHash: m.SelectedUser.AccessHash,
 			PeerID:     m.SelectedUser.PeerID,
@@ -120,7 +125,7 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 	}
 
 	if m.Mode == ModeChannels {
-		cType = rpc.ChannelChat
+		cType = rpc.ChatType(rpc.ChannelChat)
 		peerInfo = rpc.PeerInfo{
 			AccessHash: m.SelectedChannel.AccessHash,
 			PeerID:     m.SelectedChannel.ChannelID,
@@ -128,7 +133,7 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 	}
 
 	if m.Mode == ModeGroups {
-		cType = rpc.GroupChat
+		cType = rpc.ChatType(rpc.GroupChat)
 		peerInfo = rpc.PeerInfo{
 			AccessHash: m.SelectedGroup.AccessHash,
 			PeerID:     m.SelectedGroup.ChannelID,
@@ -242,7 +247,7 @@ func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (M
 		case ModeChannels:
 			m.Channels, cmd = m.Channels.Update(msg)
 			cmds = append(cmds, cmd)
-		case ModeUsers:
+		case ModeUsers, ModeBots:
 			m.Users, cmd = m.Users.Update(msg)
 			cmds = append(cmds, cmd)
 		default:
@@ -278,7 +283,7 @@ func handleUserChange(m *Model) (Model, tea.Cmd) {
 func changeFocusMode(m *Model, msg string, shift bool) (Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	currentlyFoucsedOn := m.FocusedOn
-	canWrite := (m.Mode == ModeUsers || m.Mode == ModeGroups) || (m.Mode == ModeChannels && m.SelectedChannel.IsCreator)
+	canWrite := (m.Mode == ModeUsers || m.Mode == ModeGroups || m.Mode == ModeBots) || (m.Mode == ModeChannels && m.SelectedChannel.IsCreator)
 
 	if currentlyFoucsedOn == SideBar {
 		if shift {
@@ -346,11 +351,14 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 					}, rpc.UserChat, nil, nil, nil)
 				}
 			}
-			return *m, nil
+			return *m, rpc.RpcClient.GetChats(rpc.ModeUser)
 		case "g":
 			m.Mode = ModeGroups
-
 			return *m, rpc.RpcClient.GetUserGroups()
+		case "b":
+			m.Mode = ModeBots
+			m.Users.ResetSelected()
+			return *m, rpc.RpcClient.GetChats(rpc.ModeBot)
 		}
 		return *m, nil
 	}

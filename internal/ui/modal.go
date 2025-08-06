@@ -19,7 +19,6 @@ type OverlayMode string
 
 const (
 	Search OverlayMode = "SEARCH"
-	//todo:add more modes here
 )
 
 type Manager struct {
