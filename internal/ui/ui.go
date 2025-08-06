@@ -276,6 +276,7 @@ func handleUserChange(m *Model) (Model, tea.Cmd) {
 
 	m.Conversations = [50]rpc.FormattedMessage{}
 	m.MainViewLoading = true
+	m.ChatUI.ResetSelected()
 	m.ChatUI.SetItems([]list.Item{})
 	return *m, cmd
 }
@@ -308,6 +309,7 @@ func changeFocusMode(m *Model, msg string, shift bool) (Model, tea.Cmd) {
 }
 
 func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
+	m.ChatUI.ResetSelected()
 	areWeInGroupMode := m.Mode == ModeGroups && m.FocusedOn == Mainview
 	if m.FocusedOn == SideBar || areWeInGroupMode {
 		switch msg {
