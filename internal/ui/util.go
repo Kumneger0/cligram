@@ -204,7 +204,7 @@ func renderModal(m *Model) string {
 
 func getUserOrChannelName(m *Model) string {
 	switch m.Mode {
-	case ModeUsers:
+	case ModeUsers, ModeBots:
 		return formatUserName(m.SelectedUser)
 	case ModeChannels:
 		return formatChannelName(m.SelectedChannel)
@@ -217,10 +217,10 @@ func getUserOrChannelName(m *Model) string {
 
 func formatUserName(user rpc.UserInfo) string {
 	name := user.Title()
-	if user.IsOnline {
+	if user.IsOnline && !user.IsBot {
 		return name + " Online"
 	}
-	if user.LastSeen != nil {
+	if user.LastSeen != nil && !user.IsBot {
 		return name + " " + *user.LastSeen
 	}
 	return name
