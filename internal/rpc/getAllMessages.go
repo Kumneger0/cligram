@@ -57,6 +57,7 @@ const (
 	UserChat    ChatType = "user"
 	GroupChat   ChatType = "group"
 	ChannelChat ChatType = "channel"
+	Bot         chatType = "bot"
 )
 
 type IterParams map[string]interface{}

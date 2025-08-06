@@ -76,6 +76,7 @@ const (
 	ModeUsers    Mode = "users"
 	ModeChannels Mode = "channels"
 	ModeGroups   Mode = "groups"
+	ModeBots     Mode = "bot"
 )
 
 type FocusedOn string
@@ -172,7 +173,10 @@ func calculateLayoutDimensions(m *Model) layoutDimensions {
 	sidebarWidth := m.Width * 30 / 100
 	return layoutDimensions{
 		sidebarWidth:  sidebarWidth,
-		mainWidth:     m.Width - sidebarWidth,
+		// takin 90% considering the 10 for padding and some space arorund the content
+		// TODO: can we do better 🤔 ?
+		// do we have better solution
+		mainWidth:     (m.Width - sidebarWidth) * 90 / 100, 
 		contentHeight: m.Height * 90 / 100,
 		inputHeight:   m.Height - (m.Height * 90 / 100),
 	}
@@ -244,10 +248,10 @@ func prepareMainContent(m *Model, d layoutDimensions) string {
 		return mainStyle.Render("Loading...")
 	}
 	m.ChatUI.SetWidth(d.mainWidth - 4)
-	//the terminal height is determined by charater 
-	// one list items takes one 1 charater space since we are showing extra info on chats like time
-	// using the d.contentHeight will make the content out of view 
-	// TODO: can we do better ?
+	//the terminal height is determined by charater
+	// one list items takes one 1 charater space since we are showing extra info on chats like times
+	// using the d.contentHeight will make the content out of view
+	// TODO: can we do better ? this feels like a hack
 	m.ChatUI.SetHeight(int(d.contentHeight / 5))
 
 	userNameOrChannelName := getUserOrChannelName(m)
@@ -289,7 +293,7 @@ func prepareFilepickerView(m *Model) string {
 func prepareSidebarContent(m *Model, d layoutDimensions) string {
 	var content string
 	switch m.Mode {
-	case ModeUsers:
+	case ModeUsers, ModeBots:
 		content = m.Users.View()
 	case ModeChannels:
 		content = m.Channels.View()
@@ -414,9 +418,14 @@ func Debounce(fn func(args ...interface{}) tea.Msg, delay time.Duration) func(ar
 func getMessageParams(m *Model) (rpc.PeerInfoParams, rpc.ChatType) {
 	var cType rpc.ChatType
 	var pInfo rpc.PeerInfoParams
-	if m.Mode == ModeUsers {
+	if m.Mode == ModeUsers || m.Mode == ModeBots {
 		m.SelectedUser = m.Users.SelectedItem().(rpc.UserInfo)
-		cType = "user"
+		if m.Mode == ModeUsers {
+			cType = rpc.ChatType(rpc.UserChat)
+		}
+		if m.Mode == ModeBots {
+			cType = rpc.ChatType(rpc.Bot)
+		}
 		pInfo = rpc.PeerInfoParams{
 			AccessHash:                  m.SelectedUser.AccessHash,
 			PeerID:                      m.SelectedUser.PeerID,
@@ -425,7 +434,7 @@ func getMessageParams(m *Model) (rpc.PeerInfoParams, rpc.ChatType) {
 	}
 	if m.Mode == ModeChannels {
 		m.SelectedChannel = m.Channels.SelectedItem().(rpc.ChannelAndGroupInfo)
-		cType = "channel"
+		cType = rpc.ChatType(rpc.ChannelChat)
 		pInfo = rpc.PeerInfoParams{
 			AccessHash:                  m.SelectedChannel.AccessHash,
 			PeerID:                      m.SelectedChannel.ChannelID,
@@ -437,7 +446,7 @@ func getMessageParams(m *Model) (rpc.PeerInfoParams, rpc.ChatType) {
 	}
 	if m.Mode == ModeGroups {
 		m.SelectedGroup = m.Groups.SelectedItem().(rpc.ChannelAndGroupInfo)
-		cType = "group"
+		cType = rpc.ChatType(rpc.GroupChat)
 		pInfo = rpc.PeerInfoParams{
 			AccessHash:                  m.SelectedGroup.AccessHash,
 			PeerID:                      m.SelectedGroup.ChannelID,

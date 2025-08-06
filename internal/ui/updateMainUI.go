@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"log/slog"
 	"strings"
 
@@ -130,8 +131,9 @@ func (m Model) handleMarkMessagesAsRead(msg rpc.MarkMessagesAsReadMsg) (tea.Mode
 }
 
 func (m Model) handleNewMessage(msg rpc.NewMessageMsg) (tea.Model, tea.Cmd) {
+	fmt.Println("new message is comming", msg.User)
 	if m.SelectedUser.PeerID == msg.User.PeerID {
-		if m.Mode == ModeUsers {
+		if m.Mode == ModeUsers || m.Mode == ModeBots {
 			m.SelectedUser.UnreadCount++
 			var isCurrentConversationUsersChat bool = false
 			for _, v := range m.Conversations {
@@ -334,6 +336,10 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 	case "g":
 		m, cmd := changeSideBarMode(&m, "g")
+		cmds = append(cmds, cmd)
+		return m, tea.Batch(cmds...)
+	case "b":
+		m, cmd := changeSideBarMode(&m, "b")
 		cmds = append(cmds, cmd)
 		return m, tea.Batch(cmds...)
 	case "enter":

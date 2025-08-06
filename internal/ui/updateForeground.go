@@ -73,13 +73,17 @@ func (m *Foreground) handleSearch(msg rpc.SearchUserMsg, cmds *[]tea.Cmd) (tea.M
 		result := msg.Response.Result
 		var users []list.Item
 		for _, v := range result.Users {
+			var channelOrUserType ChannelOrUserType = USER
+			if v.IsBot {
+				channelOrUserType = BOT
+			}
 			users = append(users, SearchResult{
 				Name:              v.FirstName,
 				IsBot:             v.IsBot,
 				PeerID:            v.PeerID,
 				AccessHash:        v.AccessHash,
 				UnreadCount:       v.UnreadCount,
-				ChannelOrUserType: USER,
+				ChannelOrUserType: channelOrUserType,
 			})
 		}
 		for _, v := range result.Channels {
@@ -203,7 +207,7 @@ func handleListSelection(m *Foreground) (tea.Model, tea.Cmd) {
 	switch user.ChannelOrUserType {
 	case CHANNEL:
 		result.channel = findChannel(user.PeerID, m.SearchResultChannels)
-	case USER:
+	case USER, BOT:
 		result.user = findUser(user.PeerID, m.searchResultUsers)
 	case GROUP:
 		result.group = findChannel(user.PeerID, m.SearchResultChannels)

@@ -211,6 +211,7 @@ func newRootCmd(version string) *cobra.Command {
 					select {
 					case msg := <-notificationChannel:
 						if msg.NewMessageMsg != (rpc.NewMessageMsg{}) {
+							fmt.Println("uff what the fuck is happening", msg.NewMessageMsg)
 							Program.Send(msg.NewMessageMsg)
 						}
 						if msg.UserOnlineOfflineMsg != (rpc.UserOnlineOffline{}) {

@@ -240,7 +240,6 @@ func GetNewVersionInfo(installedVersion string) NewVersionInfo {
 	}
 
 	if !latestVersion.GreaterThan(ver) {
-		fmt.Println("Already latest version ")
 		return NewVersionInfo{
 			IsUpdateAvailable: false,
 			LatestRelease:     latestRelease,
