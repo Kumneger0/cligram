@@ -177,6 +177,7 @@ type UserInfo struct {
 	FirstName   string  `json:"firstName"`
 	IsBot       bool    `json:"isBot"`
 	PeerID      string  `json:"peerId"`
+	IsTyping    bool    `json:"isTyping"`
 	AccessHash  string  `json:"accessHash"`
 	UnreadCount int     `json:"unreadCount"`
 	LastSeen    *string `json:"lastSeen"`
@@ -228,9 +229,14 @@ type RpcTelegramNotification struct {
 	Params  interface{} `json:"params"`
 }
 
+type UserTyping struct {
+	User UserInfo
+}
+
 type Notification struct {
 	NewMessageMsg        NewMessageMsg
 	UserOnlineOfflineMsg UserOnlineOffline
+	UserTyping           UserTyping
 }
 
 func ProcessIncomingNotifications(p chan Notification) {
@@ -249,7 +255,7 @@ func ProcessIncomingNotifications(p chan Notification) {
 			return
 		}
 
-		if notification.Method == "newMessage" || notification.Method == "userOnlineOffline" {
+		if notification.Method == "newMessage" || notification.Method == "userOnlineOffline" || notification.Method == "userTyping" {
 			if notification.Method == "newMessage" {
 				paramsBytes, err := json.Marshal(notification.Params)
 				if err != nil {
@@ -288,6 +294,23 @@ func ProcessIncomingNotifications(p chan Notification) {
 					p <- Notification{UserOnlineOfflineMsg: userOnlineOffline}
 				}
 			}
+			if notification.Method == "userTyping" {
+				paramsBytes, err := json.Marshal(notification.Params)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Failed to marshal params: %v\n", err.Error())
+					slog.Error("Failed to marshal params", "error", err.Error())
+					return
+				}
+				var userTyping UserTyping
+				if err := json.Unmarshal(paramsBytes, &userTyping); err != nil {
+					fmt.Fprintf(os.Stderr, "Failed to unmarshal params: %v\n", err.Error())
+					return
+				}
+				if p != nil {
+					p <- Notification{UserTyping: userTyping}
+				}
+			}
+
 		} else {
 			JsonPayloadBytesChan <- struct {
 				Data  []byte

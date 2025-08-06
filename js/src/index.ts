@@ -3,7 +3,7 @@ import { Buffer } from 'buffer';
 import { stderr, stdin, stdout } from 'process';
 
 import { TelegramClient } from 'telegram';
-import { RPCError as TelegramRpcError } from 'telegram/errors/index.js';
+import { RPCMessageToError, RPCError as TelegramRpcError } from 'telegram/errors/index.js';
 import { LogLevel } from 'telegram/extensions/Logger.js';
 import { login, logout } from './commands';
 import { FormattedMessage, UserInfo } from './lib/types';
@@ -89,7 +89,11 @@ type RpcErrorResponse = {
 type IncomingMessage = TypedRpcRequest | TypedRpcNotification;
 
 type NewMessageParams = {
-	message: FormattedMessage, user: UserInfo
+	message: FormattedMessage,
+	user: UserInfo
+}
+type UserTypingParams = {
+	user: UserInfo
 }
 
 type UserOnlineOfflineParams = {
@@ -104,6 +108,9 @@ type RpcTelegramEventsNotification = {
 } | {
 	method: "userOnlineOffline";
 	params: UserOnlineOfflineParams;
+} | {
+	method: 'userTyping',
+	params: UserTypingParams
 })
 
 
@@ -258,7 +265,21 @@ async function startup() {
 }
 
 async function messageProcessingLoop(client: TelegramClient) {
+
 	cleanUp = await listenForEvents(client, {
+		updateUserTyping(user) {
+			const userTypingEvent: RpcTelegramEventsNotification = {
+				jsonrpc: '2.0',
+				method: 'userTyping',
+				params: {
+					user: {
+						...user,
+						isTyping: true
+					}
+				}
+			}
+			writeToStdout(userTypingEvent)
+		},
 		onMessage(message, user) {
 			const telegramMessageEvent: RpcTelegramEventsNotification = {
 				jsonrpc: '2.0',

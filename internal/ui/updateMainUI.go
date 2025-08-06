@@ -56,6 +56,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case rpc.UserTyping:
+		fmt.Println("yoo we have got new message")
+		user := msg.User
+		var i = -1
+		for idx, v := range m.Users.Items() {
+			if u, ok := v.(rpc.UserInfo); ok {
+				if user.PeerID == u.PeerID {
+					i = idx
+				}
+			}
+		}
+		if i != -1 {
+			fmt.Println("yoo,this is cool as fuck", user.FirstName)
+			items := m.Users.Items()
+			items[i] = user
+		}
 	case rpc.MarkMessagesAsReadMsg:
 		model, cmd := m.handleMarkMessagesAsRead(msg)
 		m = model.(Model)
@@ -131,7 +147,6 @@ func (m Model) handleMarkMessagesAsRead(msg rpc.MarkMessagesAsReadMsg) (tea.Mode
 }
 
 func (m Model) handleNewMessage(msg rpc.NewMessageMsg) (tea.Model, tea.Cmd) {
-	fmt.Println("new message is comming", msg.User)
 	if m.SelectedUser.PeerID == msg.User.PeerID {
 		if m.Mode == ModeUsers || m.Mode == ModeBots {
 			m.SelectedUser.UnreadCount++

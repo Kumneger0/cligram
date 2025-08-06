@@ -121,7 +121,8 @@ export async function searchUsers(
 				isBot: user.bot ?? false,
 				unreadCount: 0,
 				lastSeen: "",
-				isOnline: false
+				isOnline: false,
+				isTyping: false,
 			} satisfies UserInfo;
 		});
 	//TODO: i'll come back later and fix this
@@ -326,6 +327,7 @@ export async function getUserInfo(
 			accessHash: user?.accessHash?.toString(),
 			lastSeen: formatLastSeen(lastSeen),
 			isOnline: user.status?.className === 'UserStatusOnline',
+			isTyping: false,
 			unreadCount: 0
 		} satisfies UserInfo;
 		userInfoCache.set(userIdString, userInfo);

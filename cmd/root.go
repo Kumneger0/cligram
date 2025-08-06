@@ -216,7 +216,9 @@ func newRootCmd(version string) *cobra.Command {
 						if msg.UserOnlineOfflineMsg != (rpc.UserOnlineOffline{}) {
 							Program.Send(msg.UserOnlineOfflineMsg)
 						}
-
+						if msg.UserTyping != (rpc.UserTyping{}) {
+							Program.Send(msg.UserTyping)
+						}
 					case <-time.After(1 * time.Second):
 						// fmt.Println("sent tick")
 					}
