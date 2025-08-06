@@ -172,11 +172,11 @@ type layoutDimensions struct {
 func calculateLayoutDimensions(m *Model) layoutDimensions {
 	sidebarWidth := m.Width * 30 / 100
 	return layoutDimensions{
-		sidebarWidth:  sidebarWidth,
+		sidebarWidth: sidebarWidth,
 		// takin 90% considering the 10 for padding and some space arorund the content
 		// TODO: can we do better 🤔 ?
 		// do we have better solution
-		mainWidth:     (m.Width - sidebarWidth) * 90 / 100, 
+		mainWidth:     (m.Width - sidebarWidth) * 90 / 100,
 		contentHeight: m.Height * 90 / 100,
 		inputHeight:   m.Height - (m.Height * 90 / 100),
 	}

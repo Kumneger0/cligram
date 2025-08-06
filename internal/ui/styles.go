@@ -29,11 +29,11 @@ var (
 
 func getSideBarStyles(sidebarWidth int, contentHeight int, m *Model) lipgloss.Style {
 	sideBarStyle := lipgloss.NewStyle().
-	Width(sidebarWidth).
-	Height(contentHeight).
-	Padding(1).
-	Border(getItemBorder(m.FocusedOn == "sideBar")).
-	MaxHeight(contentHeight)
+		Width(sidebarWidth).
+		Height(contentHeight).
+		Padding(1).
+		Border(getItemBorder(m.FocusedOn == "sideBar")).
+		MaxHeight(contentHeight)
 	return sideBarStyle
 }
 

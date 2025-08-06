@@ -112,7 +112,7 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 	var peerInfo rpc.PeerInfo
 
 	if m.Mode == ModeUsers || m.Mode == ModeBots {
-		if m.Mode == ModeUsers{
+		if m.Mode == ModeUsers {
 			cType = rpc.ChatType(rpc.UserChat)
 		}
 		if m.Mode == ModeBots {
@@ -357,7 +357,7 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 			return *m, rpc.RpcClient.GetUserGroups()
 		case "b":
 			m.Mode = ModeBots
-	        m.Users.ResetSelected()
+			m.Users.ResetSelected()
 			return *m, rpc.RpcClient.GetChats(rpc.ModeBot)
 		}
 		return *m, nil
@@ -401,7 +401,6 @@ func (m Model) View() string {
 	m.Groups.Title = "Groups"
 	m.Groups.SetShowStatusBar(false)
 	m.updateDelegates()
-	
 
 	ui := setItemStyles(&m)
 	return ui

@@ -42,7 +42,7 @@ func (c *JsonRpcClient) SendMessage(pInfo PeerInfo,
 		paramsFixed[5] = isFile
 		paramsFixed[6] = filePath
 		sendMessageRpcResponse, err := c.Call("sendMessage", paramsFixed)
-		
+
 		if err != nil {
 			return SendMessageMsg{Err: err}
 		}

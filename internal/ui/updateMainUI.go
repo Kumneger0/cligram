@@ -257,6 +257,12 @@ func (m Model) handleGetMessages(msg rpc.GetMessagesMsg) (tea.Model, tea.Cmd) {
 
 	messagesWeGot := len(filterEmptyMessages(msg.Messages.Result))
 	if messagesWeGot < 1 {
+		if selectedChat, ok := m.Users.SelectedItem().(rpc.UserInfo); ok && selectedChat.IsBot {
+			m.Input.SetValue("/start")
+		}
+	}
+
+	if messagesWeGot < 1 {
 		m.MainViewLoading = false
 		return m, nil
 	}
