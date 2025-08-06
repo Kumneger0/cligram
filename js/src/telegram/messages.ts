@@ -23,7 +23,6 @@ type GetEntityTypes = {
 	type: ChatType;
 };
 
-
 const getEntity = async ({ peer }: GetEntityTypes, client: TelegramClient) => {
 	const peerIdString = peer.peerId.toString();
 	if (entityCache.has(peerIdString)) {
@@ -372,9 +371,11 @@ export const listenForEvents = async (
 	client: TelegramClient,
 	{
 		onMessage,
-		onUserOnlineStatus
+		onUserOnlineStatus,
+		updateUserTyping
 	}: {
 			onMessage: (message: FormattedMessage, user: UserInfo) => void;
+			updateUserTyping: (user: UserInfo) => void;
 		onUserOnlineStatus?: (user: {
 			accessHash: string;
 			firstName: string;
@@ -401,12 +402,13 @@ export const listenForEvents = async (
 	const hanlder = async (event: Event) => {
 		const userId = event.userId;
 		const user = await getUserInfo(client, userId);
-
 		if (!user) {
 			return;
 		}
-
 		switch (event.className) {
+			case "UpdateUserTyping":
+				updateUserTyping(user)
+				break
 			case 'UpdateShortMessage':
 				const config = getConfig('notifications');
 				if (config.enabled && !event.out) {
@@ -454,6 +456,7 @@ export const listenForEvents = async (
 						});
 				}
 				break;
+
 			default:
 				break;
 		}

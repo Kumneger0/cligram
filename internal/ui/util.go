@@ -217,6 +217,9 @@ func getUserOrChannelName(m *Model) string {
 
 func formatUserName(user rpc.UserInfo) string {
 	name := user.Title()
+	if user.IsTyping {
+		return name + " Typing..."
+	}
 	if user.IsOnline && !user.IsBot {
 		return name + " Online"
 	}

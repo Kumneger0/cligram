@@ -1,9 +1,9 @@
 package ui
 
 import (
-	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -56,6 +56,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case rpc.UserTyping:
+		user := msg.User
+		if m.SelectedUser.PeerID == user.PeerID {
+			m.SelectedUser = user
+		}
+
+		userIndex := getUserIndex(m, user)
+		if userIndex != -1 {
+			items := m.Users.Items()
+			items[userIndex] = user
+			cmd := m.Users.SetItems(items)
+			cmds = append(cmds, cmd)
+		}
+		if user.IsTyping {
+			rcmd := tea.Tick(time.Second*3, func(t time.Time) tea.Msg {
+				user.IsOnline = false
+				user.IsTyping = false
+				return rpc.UserTyping{User: user}
+			})
+			cmds = append(cmds, rcmd)
+		}
 	case rpc.MarkMessagesAsReadMsg:
 		model, cmd := m.handleMarkMessagesAsRead(msg)
 		m = model.(Model)
@@ -131,7 +152,6 @@ func (m Model) handleMarkMessagesAsRead(msg rpc.MarkMessagesAsReadMsg) (tea.Mode
 }
 
 func (m Model) handleNewMessage(msg rpc.NewMessageMsg) (tea.Model, tea.Cmd) {
-	fmt.Println("new message is comming", msg.User)
 	if m.SelectedUser.PeerID == msg.User.PeerID {
 		if m.Mode == ModeUsers || m.Mode == ModeBots {
 			m.SelectedUser.UnreadCount++
