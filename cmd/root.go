@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"sync"
-	"time"
 
 	"github.com/charmbracelet/bubbles/filepicker"
 	list "github.com/charmbracelet/bubbles/list"
@@ -207,21 +206,15 @@ func newRootCmd(version string) *cobra.Command {
 			Program = tea.NewProgram(manager, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 			go func() {
-				for {
-					time.Sleep(1 * time.Second)
-					select {
-					case msg := <-notificationChannel:
-						if msg.NewMessageMsg != (rpc.NewMessageMsg{}) {
-							Program.Send(msg.NewMessageMsg)
-						}
-						if msg.UserOnlineOfflineMsg != (rpc.UserOnlineOffline{}) {
-							Program.Send(msg.UserOnlineOfflineMsg)
-						}
-						if msg.UserTyping != (rpc.UserTyping{}) {
-							Program.Send(msg.UserTyping)
-						}
-					case <-time.After(1 * time.Second):
-						// fmt.Println("sent tick")
+				for msg := range notificationChannel {
+					if msg.NewMessageMsg != (rpc.NewMessageMsg{}) {
+						Program.Send(msg.NewMessageMsg)
+					}
+					if msg.UserOnlineOfflineMsg != (rpc.UserOnlineOffline{}) {
+						Program.Send(msg.UserOnlineOfflineMsg)
+					}
+					if msg.UserTyping != (rpc.UserTyping{}) {
+						Program.Send(msg.UserTyping)
 					}
 				}
 			}()

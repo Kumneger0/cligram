@@ -266,6 +266,7 @@ func (m Model) getPeerInfoAndChatType() (rpc.PeerInfo, rpc.ChatType) {
 }
 
 func (m Model) handleGetMessages(msg rpc.GetMessagesMsg) (tea.Model, tea.Cmd) {
+	m.AreWeSwitchingModes = false
 	if msg.Err != nil {
 		slog.Error("Failed to get messages", "error", msg.Err.Error())
 		m.IsModalVisible = true
