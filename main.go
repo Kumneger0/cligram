@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"syscall"
 
@@ -46,9 +47,12 @@ func main() {
 		fmt.Fprintf(os.Stderr, "%v", err)
 		os.Exit(1)
 	}
-	IsUpdateAvailable := cmd.GetNewVersionInfo(version)
-	if IsUpdateAvailable.IsUpdateAvailable {
-		fmt.Println("An update is available use cligram upgrade to update to latest version")
+
+	if !slices.Contains(os.Args, "upgrade") {
+		IsUpdateAvailable := cmd.GetNewVersionInfo(version)
+		if IsUpdateAvailable.IsUpdateAvailable {
+			fmt.Println("An update is available use cligram upgrade to update to latest version")
+		}
 	}
 }
 

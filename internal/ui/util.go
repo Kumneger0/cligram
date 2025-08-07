@@ -94,6 +94,7 @@ type Model struct {
 	Users               list.Model
 	SelectedUser        rpc.UserInfo
 	Channels            list.Model
+	AreWeSwitchingModes bool
 	IsModalVisible      bool
 	ModalContent        string
 	SelectedChannel     rpc.ChannelAndGroupInfo
@@ -295,6 +296,9 @@ func prepareFilepickerView(m *Model) string {
 
 func prepareSidebarContent(m *Model, d layoutDimensions) string {
 	var content string
+	if m.AreWeSwitchingModes {
+		return "Please Wait ......."
+	}
 	switch m.Mode {
 	case ModeUsers, ModeBots:
 		content = m.Users.View()
