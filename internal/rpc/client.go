@@ -55,8 +55,8 @@ type UserGroupsMsg struct {
 }
 
 func (c *JsonRpcClient) GetUserGroups() tea.Cmd {
-	userGroupsRpcResponse, err := c.Call("getUserChats", []string{"group"})
 	return func() tea.Msg {
+		userGroupsRpcResponse, err := c.Call("getUserChats", []string{"group"})
 		if err != nil {
 			return UserGroupsMsg{Err: err}
 		}
@@ -128,12 +128,12 @@ func ReadStdOut(rpcClient *JsonRpcClient) ([]byte, error) {
 		lineBytes, _, err := reader.ReadLine()
 		if err != nil {
 			if err == io.EOF && contentLength != -1 {
-				return nil, fmt.Errorf("EOF while expecting JSON content of length %d", contentLength)
+				return nil, err
 			}
-			return nil, fmt.Errorf("failed to read response header line: %v", err.Error())
+			slog.Error(err.Error())
+			return nil, err
 		}
 		line := string(lineBytes)
-
 		if line == "" {
 			break
 		}
@@ -150,6 +150,7 @@ func ReadStdOut(rpcClient *JsonRpcClient) ([]byte, error) {
 				contentLength = cl
 			}
 		}
+
 	}
 
 	if contentLength == -1 {
@@ -240,13 +241,16 @@ type Notification struct {
 }
 
 func ProcessIncomingNotifications(p chan Notification) {
-
 	for {
 		time.Sleep(1 * time.Second)
 		jsonPayload, err := ReadStdOut(RpcClient)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Notifications channel closed: %v\n", err.Error())
-			return
+			if err == io.EOF {
+				slog.Info("EOF reached while reading from RpcClient, continuing to next iteration")
+				continue
+			}
+			slog.Error("Error reading from RpcClient", "error", err.Error())
+			continue
 		}
 
 		var notification RpcTelegramNotification
@@ -279,7 +283,7 @@ func ProcessIncomingNotifications(p chan Notification) {
 			if notification.Method == "userOnlineOffline" {
 				paramsBytes, err := json.Marshal(notification.Params)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "Failed to marshal params: %v\n", err.Error())
+
 					slog.Error("Failed to marshal params", "error", err.Error())
 					return
 				}

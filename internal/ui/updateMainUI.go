@@ -206,7 +206,6 @@ func (m Model) handleMessageDeletion(msg MessageDeletionConfrimResponseMsg) (tea
 	if !msg.yes {
 		return m, nil
 	}
-
 	peer, cType := m.getPeerInfoAndChatType()
 	selectedItemInChat := m.ChatUI.SelectedItem().(rpc.FormattedMessage)
 
