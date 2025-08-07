@@ -117,8 +117,6 @@ func newRootCmd(version string) *cobra.Command {
 
 			var result []rpc.UserInfo = []rpc.UserInfo{}
 
-			
-
 			if msg.Err != nil {
 				modalContent = msg.Err.Error()
 				isModalVisible = true
@@ -173,7 +171,7 @@ func newRootCmd(version string) *cobra.Command {
 			fp.AllowedTypes = []string{}
 			fp.DirAllowed = false
 			fp.CurrentDirectory, _ = os.UserHomeDir()
-            
+
 			model.AreWeSwitchingModes = false
 			model.Filepicker = fp
 			model.Input = input
