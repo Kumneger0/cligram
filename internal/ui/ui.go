@@ -230,7 +230,6 @@ func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (M
 	m.Filepicker, cmd = m.Filepicker.Update(msg)
 	m.Filepicker.SetHeight(m.Height - 13)
 	cmds = append(cmds, cmd)
-
 	if didSelect, path := m.Filepicker.DidSelectFile(msg); didSelect && m.IsFilepickerVisible {
 		m.SelectedFile = path
 		m.IsFilepickerVisible = false
@@ -310,10 +309,11 @@ func changeFocusMode(m *Model, msg string, shift bool) (Model, tea.Cmd) {
 
 func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 	m.ChatUI.ResetSelected()
+	m.AreWeSwitchingModes = true
 	areWeInGroupMode := m.Mode == ModeGroups && m.FocusedOn == Mainview
-	//i don't think 🤔 we should keep the list in memory 
-	// if we keep this is in memory this will cause high memory usage especailly for users 
-	// who has many chats so for now le't clear this up 
+	//i don't think 🤔 we should keep the list in memory
+	// if we keep this is in memory this will cause high memory usage especailly for users
+	// who has many chats so for now le't clear this up
 	// TODO:🤔 can we do better
 	clearSidebarLists := func(clearUsers, clearChannels, clearGroups bool) {
 		if clearUsers {
@@ -385,8 +385,6 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 	}
 	return *m, nil
 }
-
-
 
 func (m *Model) getMessageSenderUserInfo() *rpc.UserInfo {
 	if selectedItem, ok := m.ChatUI.SelectedItem().(rpc.FormattedMessage); ok {

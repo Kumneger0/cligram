@@ -504,6 +504,7 @@ func (m Model) handleUserChats(msg rpc.UserChatsMsg) (tea.Model, tea.Cmd) {
 		users = append(users, du)
 	}
 	m.Users.SetItems(users)
+	m.AreWeSwitchingModes = false
 	return m, nil
 }
 
@@ -519,6 +520,7 @@ func (m Model) handleUserChannels(msg rpc.UserChannelMsg) (tea.Model, tea.Cmd) {
 		channels = append(channels, du)
 	}
 	m.Channels.SetItems(channels)
+	m.AreWeSwitchingModes = false
 	return m, nil
 }
 
@@ -534,6 +536,7 @@ func (m Model) handleUserGroups(msg rpc.UserGroupsMsg) (tea.Model, tea.Cmd) {
 		groups = append(groups, du)
 	}
 	m.Groups.SetItems(groups)
+	m.AreWeSwitchingModes = false
 	return m, nil
 }
 
