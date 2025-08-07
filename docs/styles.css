@@ -1,0 +1,223 @@
+body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+      background: #1a1a1a; /* Dark background for the whole page */
+      color: #e0e0e0; /* Light text color for general body */
+      line-height: 1.6;
+    }
+    .container {
+      display: flex;
+      min-height: 100vh;
+    }
+    .sidebar {
+      position: sticky;
+      top: 0;
+      width: 260px; /* Slightly wider sidebar */
+      background: #2c3e50; /* Dark blue-grey */
+      color: #ecf0f1; /* Light text color */
+      height: 100vh;
+      padding: 32px 0 0 0;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      box-shadow: 2px 0 5px rgba(0,0,0,0.3); /* Subtle shadow */
+    }
+    .sidebar h2 {
+      margin: 0 0 32px 32px; /* More space below title */
+      font-size: 1.4em;
+      letter-spacing: 1px;
+      color: #ecf0f1;
+    }
+    .sidebar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      padding: 0 32px 32px 32px;
+      box-sizing: border-box;
+    }
+    .menu-toggle {
+      display: none; /* Hidden by default on desktop */
+      background: none;
+      border: none;
+      color: #ecf0f1;
+      font-size: 1.8em;
+      cursor: pointer;
+      padding: 0;
+    }
+    .sidebar nav {
+      width: 100%;
+    }
+    .sidebar a {
+      display: block;
+      color: #ecf0f1;
+      text-decoration: none;
+      padding: 14px 32px; /* Increased padding */
+      transition: background 0.2s ease-in-out, color 0.2s ease-in-out;
+      font-size: 0.95em;
+      border-left: 4px solid transparent; /* For active state highlight */
+    }
+    .sidebar a:hover {
+      background: #34495e; /* Slightly lighter blue-grey on hover */
+      color: #fff;
+    }
+    .sidebar a.active {
+      background: #34495e;
+      border-left-color: #3498db; /* Accent color for active link */
+      color: #fff;
+    }
+    .main {
+      flex: 1;
+      padding: 40px 60px; /* Increased padding */
+      max-width: 960px; /* Slightly wider content area */
+      margin: 0 auto;
+      background: #282828; /* Dark background for main content */
+      color: #e0e0e0; /* Light text color for main content */
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5); /* Stronger, softer shadow for dark mode */
+      border-radius: 8px; /* Rounded corners for main content */
+      margin-top: 20px; /* Space from top */
+      margin-bottom: 20px; /* Space from bottom */
+    }
+    section {
+      margin-bottom: 48px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid #444; /* Darker separator between sections */
+    }
+    section:last-child {
+      border-bottom: none;
+    }
+    section h1 {
+      font-size: 2.5em;
+      color: #e0e0e0;
+      margin-bottom: 24px;
+      border-bottom: 2px solid #3498db; /* Accent line under H1 */
+      padding-bottom: 10px;
+    }
+    section h2 {
+      font-size: 1.8em;
+      color: #e0e0e0;
+      margin-top: 36px;
+      margin-bottom: 20px;
+    }
+    section h3 {
+      font-size: 1.4em;
+      color: #e0e0e0;
+      margin-top: 28px;
+      margin-bottom: 16px;
+    }
+    pre {
+      background: #3a3a3a; /* Darker background for code blocks */
+      color: #f0f0f0; /* Lighter text for code blocks */
+      padding: 15px;
+      border-radius: 5px;
+      overflow-x: auto;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+      font-size: 0.9em;
+    }
+    code {
+      background: #4a4a4a; /* Darker background for inline code */
+      color: #f0f0f0; /* Lighter text for inline code */
+      padding: 2px 4px;
+      border-radius: 3px;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+      font-size: 0.9em;
+    }
+    a {
+      color: #66b3ff; /* Lighter accent color for links */
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    ul {
+      list-style-type: disc;
+      margin-left: 20px;
+    }
+    ul li {
+      margin-bottom: 8px;
+    }
+
+    .github-link-footer {
+      text-align: center;
+      padding: 20px;
+      background: #282828;
+      color: #e0e0e0;
+      border-top: 1px solid #444;
+      margin-top: auto; /* Pushes the footer to the bottom */
+    }
+    .github-link-footer a {
+      color: #66b3ff;
+      text-decoration: none;
+      font-weight: bold;
+    }
+    .github-link-footer a:hover {
+      text-decoration: underline;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 900px) {
+      .container {
+        flex-direction: column;
+      }
+      .sidebar {
+        width: 100%;
+        height: auto;
+        position: static;
+        padding: 20px 0;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+      }
+      .sidebar-header {
+        padding: 0 20px 20px 20px;
+      }
+      .sidebar h2 {
+        text-align: left;
+        margin-bottom: 0;
+      }
+      .menu-toggle {
+        display: block; /* Show hamburger on mobile */
+      }
+      .sidebar-nav {
+        display: none; /* Hide nav by default on mobile */
+        flex-direction: column;
+        width: 100%;
+      }
+      .sidebar-nav.active {
+        display: flex; /* Show nav when active */
+      }
+      .sidebar a {
+        padding: 10px 20px;
+        border-left: none;
+        border-bottom: 2px solid transparent;
+      }
+      .sidebar a.active {
+        border-bottom-color: #3498db;
+        border-left-color: transparent;
+      }
+      .main {
+        padding: 20px 5vw;
+        margin-top: 0;
+        margin-bottom: 0;
+        border-radius: 0;
+        box-shadow: none;
+      }
+      section h1 {
+        font-size: 2em;
+      }
+      section h2 {
+        font-size: 1.5em;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .sidebar nav {
+        flex-direction: column; /* Stack links vertically on very small screens */
+        align-items: center;
+      }
+      .sidebar a {
+        width: 90%; /* Make links take more width */
+        text-align: center;
+      }
+      .main {
+        padding: 15px 4vw;
+      }
+    }
