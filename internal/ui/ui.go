@@ -311,9 +311,26 @@ func changeFocusMode(m *Model, msg string, shift bool) (Model, tea.Cmd) {
 func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 	m.ChatUI.ResetSelected()
 	areWeInGroupMode := m.Mode == ModeGroups && m.FocusedOn == Mainview
+	//i don't think 🤔 we should keep the list in memory 
+	// if we keep this is in memory this will cause high memory usage especailly for users 
+	// who has many chats so for now le't clear this up 
+	// TODO:🤔 can we do better
+	clearSidebarLists := func(clearUsers, clearChannels, clearGroups bool) {
+		if clearUsers {
+			m.Users.SetItems(nil)
+		}
+		if clearChannels {
+			m.Channels.SetItems(nil)
+		}
+		if clearGroups {
+			m.Groups.SetItems(nil)
+		}
+	}
+
 	if m.FocusedOn == SideBar || areWeInGroupMode {
 		switch msg {
 		case "c":
+			clearSidebarLists(true, false, true)
 			m.Mode = ModeChannels
 			if !m.SelectedChannel.IsCreator {
 				m.Input.SetValue("Not Allowed To Type")
@@ -323,6 +340,7 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 			return *m, rpc.RpcClient.GetUserChannel()
 		case "u":
 			m.Mode = ModeUsers
+			clearSidebarLists(false, true, true)
 			if areWeInGroupMode {
 				selectedUser := m.getMessageSenderUserInfo()
 				if selectedUser != nil {
@@ -330,7 +348,6 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 					userItems := m.Users.Items()
 
 					var foundIndex int = -1
-
 					for i, v := range userItems {
 						if v.FilterValue() == m.SelectedUser.FilterValue() {
 							foundIndex = i
@@ -346,7 +363,7 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 						m.Users.Select(foundIndex)
 					}
 
-					m.ChatUI.SetItems([]list.Item{})
+					m.ChatUI.SetItems(nil)
 					return *m, rpc.RpcClient.GetMessages(rpc.PeerInfoParams{
 						AccessHash: m.SelectedUser.AccessHash,
 						PeerID:     m.SelectedUser.PeerID,
@@ -356,17 +373,20 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 			return *m, rpc.RpcClient.GetChats(rpc.ModeUser)
 		case "g":
 			m.Mode = ModeGroups
+			clearSidebarLists(true, true, false)
 			return *m, rpc.RpcClient.GetUserGroups()
 		case "b":
 			m.Mode = ModeBots
+			clearSidebarLists(false, true, true)
 			m.Users.ResetSelected()
 			return *m, rpc.RpcClient.GetChats(rpc.ModeBot)
 		}
 		return *m, nil
 	}
 	return *m, nil
-
 }
+
+
 
 func (m *Model) getMessageSenderUserInfo() *rpc.UserInfo {
 	if selectedItem, ok := m.ChatUI.SelectedItem().(rpc.FormattedMessage); ok {
