@@ -11,15 +11,18 @@
     <aside class="sidebar">
       <div class="sidebar-header">
         <h2>cligram Docs</h2>
-        <button class="menu-toggle" aria-label="Toggle navigation menu">
-          &#9776; <!-- Hamburger icon -->
-        </button>
+        <div class="header-actions">
+          <button class="menu-toggle" aria-label="Toggle navigation menu" title="Toggle navigation menu">
+            &#9776;
+          </button>
+        </div>
       </div>
       <nav class="sidebar-nav">
         <a href="#introduction">Introduction</a>
         <a href="#installation">Installation</a>
         <a href="#usage">Usage</a>
         <a href="#configuration">Configuration</a>
+        <a href="#troubleshooting">Troubleshooting</a>
         <a href="#contributing">Contributing</a>
         <a href="#faq">FAQ</a>
         <a href="#license">License</a>
@@ -29,6 +32,9 @@
       <section id="introduction">
         <h1>Introduction</h1>
         <p><strong>Cligram</strong> is a Telegram client written with a Bun/JavaScript backend and a Go client.</p>
+        <div class="demo-wrap">
+          <img src="demo.gif" alt="cligram demo" class="demo-gif" />
+        </div>
         <ul>
           <li>Currently supports chatting with personal chats, channels, and has beta support for bots.</li>
           <li>Lightweight, minimalistic, and terminal-based for basic messaging tasks.</li>
@@ -70,40 +76,47 @@ export TELEGRAM_API_HASH=your_api_hash_from_telegram</code></pre>
       </section>
       <section id="usage">
         <h2>Usage</h2>
-        <h3>Getting Started</h3>
+        <h3>Quick Start</h3>
         <ul>
           <li><strong>Login:</strong> Run <code>cligram login</code> and follow the prompts.</li>
-          <li><strong>Logout:</strong> Run <code>cligram logout</code> to sign out.</li>
+          <li><strong>Logout:</strong> Run <code>cligram logout</code>.</li>
+          <li><strong>Upgrade:</strong> On Debian/Ubuntu/Alpine, run <code>cligram upgrade</code>.</li>
         </ul>
-        <h3>Interface Overview</h3>
+        <h3>Layout</h3>
         <ul>
-          <li><strong>Sidebar:</strong> Lists all your personal chats (about 30% of the screen).</li>
-          <li><strong>Chat Area:</strong> Where chat messages show up (about 70% of the screen).</li>
-          <li><strong>Help Page:</strong> The first thing you'll see, with navigation tips.</li>
+          <li><strong>Sidebar:</strong> Your chats list (Users, Groups, Channels).</li>
+          <li><strong>Chat Area:</strong> Messages of the selected chat.</li>
+          <li><strong>Focus:</strong> The active area has a green border. Use Tab to switch.</li>
         </ul>
-        <h3>Navigation</h3>
+        <h3>Navigation & Shortcuts</h3>
         <ul>
-          <li><strong>Tab:</strong> Switch between sidebar and chat area (active section has a green border).</li>
-          <li><strong>↑ / k:</strong> Move up (in chat list and messages).</li>
-          <li><strong>↓ / j:</strong> Move down (in chat list and messages).</li>
-          <li><strong>ctrl + k:</strong> Open search menu.</li>
-          <li><strong>c:</strong> Switch to Channels (sidebar).</li>
-          <li><strong>g:</strong> Switch to Groups (sidebar).</li>
-          <li><strong>u:</strong> Switch back to users (sidebar).</li>
+          <li><strong>Focus</strong>: Tab toggles focus between sidebar and chat.</li>
+          <li><strong>Move</strong>: ↑ / k moves up; ↓ / j moves down.</li>
+          <li><strong>Filter (sidebar)</strong>: c = Channels, g = Groups, u = Users.</li>
+          <li><strong>Search</strong>: ctrl + k opens search. Type to search; results appear below. Tab switches between input and results. Enter opens selection; Esc closes.</li>
         </ul>
-        <h3>Message Actions</h3>
+        <h3>Working in Chats</h3>
         <ul>
-          <li><strong>d:</strong> Delete selected message.</li>
-          <li><strong>r:</strong> Reply to selected message.</li>
-          <li><strong>e:</strong> Edit selected message.</li>
-          <li><strong>f:</strong> Forward selected message.</li>
-          <li><strong>u:</strong> Open direct message with user (in group chats).</li>
+          <li>Select messages by moving with ↑/↓ (or k/j) in the chat area.</li>
+          <li><strong>d</strong>: delete • <strong>r</strong>: reply • <strong>e</strong>: edit • <strong>f</strong>: forward • <strong>u</strong>: DM the sender (from a group)</li>
         </ul>
-        <h3>Message Input</h3>
+        <p><em>Tips:</em> Replies show a quoted preview while composing. Forward keeps original sender and timestamp context.</p>
+        <h3>Compose & Attachments</h3>
         <ul>
-          <li><strong>ctrl + a:</strong> Open/close file picker to attach a file.</li>
-          <li>After selecting a file, add an optional caption or press Enter to send.</li>
-          <li>File upload progress is displayed while sending.</li>
+          <li><strong>ctrl + a</strong>: Toggle the file picker when the input is focused.</li>
+          <li>After picking a file, optionally add a caption, then press Enter to send.</li>
+          <li>Upload progress is displayed while sending.</li>
+        </ul>
+        <h3>Reading Behavior</h3>
+        <ul>
+          <li><strong>Typing indicator</strong>: If enabled, others see “typing…” while you compose.</li>
+          <li><strong>Read receipts</strong> (<code>chat.readReceiptMode</code>):
+            <ul>
+              <li><code>default</code>: Mark read only when you interact (e.g., reply).</li>
+              <li><code>instant</code>: Mark read as soon as you view.</li>
+              <li><code>never</code>: Never mark read automatically.</li>
+            </ul>
+          </li>
         </ul>
       </section>
       <section id="configuration">
@@ -145,6 +158,15 @@ export TELEGRAM_API_HASH=your_api_hash_from_telegram</code></pre>
           <li><strong>notifications.showMessagePreview</strong>: Show message content in notifications (<code>true</code> = default, <code>false</code> = only sender name).</li>
         </ul>
         <p>All settings are optional. Changes take effect the next time you start cligram.</p>
+      </section>
+      <section id="troubleshooting">
+        <h2>Troubleshooting</h2>
+        <ul>
+          <li><strong>File picker does not open</strong>: Make sure the message input is focused, then press <code>ctrl + a</code> again. Update to the latest version if it persists.</li>
+          <li><strong>Messages not marked read</strong>: Set <code>chat.readReceiptMode</code> to <code>instant</code>.</li>
+          <li><strong>Others cannot see typing</strong>: Set <code>chat.sendTypingState</code> to <code>true</code>.</li>
+          <li><strong>Where is data stored</strong>: App data and session live under <code>~/.cligram/</code>.</li>
+        </ul>
       </section>
       <section id="contributing">
         <h2>Contributing</h2>

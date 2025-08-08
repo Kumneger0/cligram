@@ -1,10 +1,29 @@
+:root {
+  --bg: #1a1a1a;
+  --bg-elev: #222326;
+  --text: #e6e6e6;
+  --muted: #b1b1b1;
+  --border: #2f3136;
+  --accent: #66b3ff;
+  --link: #8cc9ff;
+  --code-bg: #2b2d31;
+  --code-text: #e6edf3;
+  --shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+html,
 body {
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
-      background: #1a1a1a; /* Dark background for the whole page */
-      color: #e0e0e0; /* Light text color for general body */
-      line-height: 1.6;
-    }
+  height: 100%;
+}
+body {
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
     .container {
       display: flex;
       min-height: 100vh;
@@ -13,20 +32,21 @@ body {
       position: sticky;
       top: 0;
       width: 260px; /* Slightly wider sidebar */
-      background: #2c3e50; /* Dark blue-grey */
-      color: #ecf0f1; /* Light text color */
+      background: var(--bg-elev);
+        color: var(--text);
       height: 100vh;
       padding: 32px 0 0 0;
       display: flex;
       flex-direction: column;
       align-items: flex-start;
-      box-shadow: 2px 0 5px rgba(0,0,0,0.3); /* Subtle shadow */
+      box-shadow: var(--shadow);
     }
     .sidebar h2 {
-      margin: 0 0 32px 32px; /* More space below title */
+      margin: 0;
+        /* Align with .sidebar-header padding */
       font-size: 1.4em;
       letter-spacing: 1px;
-      color: #ecf0f1;
+      color: var(--text);
     }
     .sidebar-header {
       display: flex;
@@ -36,21 +56,28 @@ body {
       padding: 0 32px 32px 32px;
       box-sizing: border-box;
     }
-    .menu-toggle {
+                                                                                                                                                                                                                                                                .header-actions {
+                                                                                                                                                                                                                                                                  display: flex;
+                                                                                                                                                                                                                                                                  gap: 12px;
+                                                                                                                                                                                                                                                                  align-items: center;
+                                                                                                                                                                                                                                                                }
+                                                                                                                                                                                                                                                                .menu-toggle {
       display: none; /* Hidden by default on desktop */
       background: none;
-      border: none;
-      color: #ecf0f1;
+      border: 1px solid var(--border);
+        color: var(--text);
+        background-color: transparent;
+        border-radius: 6px;
       font-size: 1.8em;
       cursor: pointer;
-      padding: 0;
+      padding: 2px 8px;
     }
     .sidebar nav {
       width: 100%;
     }
     .sidebar a {
       display: block;
-      color: #ecf0f1;
+      color: var(--text);
       text-decoration: none;
       padding: 14px 32px; /* Increased padding */
       transition: background 0.2s ease-in-out, color 0.2s ease-in-out;
@@ -58,22 +85,23 @@ body {
       border-left: 4px solid transparent; /* For active state highlight */
     }
     .sidebar a:hover {
-      background: #34495e; /* Slightly lighter blue-grey on hover */
-      color: #fff;
+      background: rgba(13, 110, 253, 0.08);
+        color: var(--text);
     }
     .sidebar a.active {
-      background: #34495e;
-      border-left-color: #3498db; /* Accent color for active link */
-      color: #fff;
+      background: rgba(13, 110, 253, 0.12);
+        border-left-color: var(--accent);
+        /* Accent color for active link */
+        color: var(--text);
     }
     .main {
       flex: 1;
       padding: 40px 60px; /* Increased padding */
       max-width: 960px; /* Slightly wider content area */
       margin: 0 auto;
-      background: #282828; /* Dark background for main content */
-      color: #e0e0e0; /* Light text color for main content */
-      box-shadow: 0 4px 12px rgba(0,0,0,0.5); /* Stronger, softer shadow for dark mode */
+      background: var(--bg-elev);
+        color: var(--text);
+        box-shadow: var(--shadow);
       border-radius: 8px; /* Rounded corners for main content */
       margin-top: 20px; /* Space from top */
       margin-bottom: 20px; /* Space from bottom */
@@ -88,42 +116,58 @@ body {
     }
     section h1 {
       font-size: 2.5em;
-      color: #e0e0e0;
+      color: var(--text);
       margin-bottom: 24px;
-      border-bottom: 2px solid #3498db; /* Accent line under H1 */
+      border-bottom: 2px solid var(--accent);
+        /* Accent line under H1 */
       padding-bottom: 10px;
     }
     section h2 {
       font-size: 1.8em;
-      color: #e0e0e0;
+      color: var(--text);
       margin-top: 36px;
       margin-bottom: 20px;
     }
     section h3 {
       font-size: 1.4em;
-      color: #e0e0e0;
+      color: var(--text);
       margin-top: 28px;
       margin-bottom: 16px;
     }
+                .demo-wrap {
+                  margin: 16px 0 24px 0;
+                  display: flex;
+                  justify-content: center;
+                }
+        
+                .demo-gif {
+                  max-width: 100%;
+                  height: auto;
+                  border-radius: 8px;
+                  border: 1px solid var(--border);
+                  box-shadow: var(--shadow);
+                }
     pre {
-      background: #3a3a3a; /* Darker background for code blocks */
-      color: #f0f0f0; /* Lighter text for code blocks */
+      position: relative;
+        background: var(--code-bg);
+        color: var(--code-text);
       padding: 15px;
       border-radius: 5px;
       overflow-x: auto;
       font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
       font-size: 0.9em;
+      border: 1px solid var(--border);
     }
     code {
-      background: #4a4a4a; /* Darker background for inline code */
-      color: #f0f0f0; /* Lighter text for inline code */
+      background: var(--code-bg);
+        color: var(--code-text);
       padding: 2px 4px;
       border-radius: 3px;
       font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
       font-size: 0.9em;
     }
     a {
-      color: #66b3ff; /* Lighter accent color for links */
+      color: var(--link);
       text-decoration: none;
     }
     a:hover {
@@ -140,13 +184,13 @@ body {
     .github-link-footer {
       text-align: center;
       padding: 20px;
-      background: #282828;
-      color: #e0e0e0;
-      border-top: 1px solid #444;
+      background: var(--bg-elev);
+        color: var(--text);
+        border-top: 1px solid var(--border);
       margin-top: auto; /* Pushes the footer to the bottom */
     }
     .github-link-footer a {
-      color: #66b3ff;
+      color: var(--link);
       text-decoration: none;
       font-weight: bold;
     }
@@ -164,7 +208,7 @@ body {
         height: auto;
         position: static;
         padding: 20px 0;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        box-shadow: var(--shadow);
       }
       .sidebar-header {
         padding: 0 20px 20px 20px;
@@ -173,7 +217,7 @@ body {
         text-align: left;
         margin-bottom: 0;
       }
-      .menu-toggle {
+                                                                                                                                                                                                                                                                                                                                                                                                .menu-toggle {
         display: block; /* Show hamburger on mobile */
       }
       .sidebar-nav {
@@ -221,3 +265,20 @@ body {
         padding: 15px 4vw;
       }
     }
+/* Copy button for code blocks */
+.copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.copy-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
