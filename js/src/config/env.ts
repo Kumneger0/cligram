@@ -7,7 +7,7 @@ export const getApiKeys = () => {
   const apiHash = process.env.TELEGRAM_API_HASH;
 
   if (!apiId || !apiHash) {
-    throw new Error('Error: TELEGRAM_API_ID and TELEGRAM_API_HASH must be set in your environment during build.');
+    return { apiId: null, apiHash: null, error: 'Missing keys' };
   }
 
   return { apiId, apiHash };
