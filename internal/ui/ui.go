@@ -309,7 +309,7 @@ func changeFocusMode(m *Model, msg string, shift bool) (Model, tea.Cmd) {
 
 func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 	m.ChatUI.ResetSelected()
-	if m.FocusedOn == SideBar{
+	if m.FocusedOn == SideBar {
 		m.AreWeSwitchingModes = true
 	}
 	areWeInGroupMode := m.Mode == ModeGroups && m.FocusedOn == Mainview

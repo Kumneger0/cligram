@@ -228,7 +228,6 @@ func newRootCmd(version string) *cobra.Command {
 				return fmt.Errorf("failed to start TUI: %w", err)
 			}
 
-
 			return nil
 		},
 	}
