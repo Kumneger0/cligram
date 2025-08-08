@@ -2,7 +2,6 @@ import { TelegramClient } from 'telegram';
 import { RPCError } from 'telegram/errors/index.js';
 import { StringSession } from 'telegram/sessions/index.js';
 
-import { config } from 'dotenv';
 import input from 'input';
 import os from 'node:os';
 
@@ -11,10 +10,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { LogLevel } from 'telegram/extensions/Logger.js';
 
-config();
+import { getApiKeys } from '@/config/env.js' with { type: 'macro' };
 
-const apiId = process.env.TELEGRAM_API_ID;
-const apiHash = process.env.TELEGRAM_API_HASH;
+const { apiId, apiHash } = getApiKeys();
 
 type Config = {
 	session: string;
