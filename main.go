@@ -16,18 +16,6 @@ import (
 var version = ""
 
 func main() {
-	// apiId, isPresent := os.LookupEnv("TELEGRAM_API_ID")
-
-	// if !isPresent || apiId == "" {
-	// 	fmt.Fprintln(os.Stderr, "Telegram api is missing")
-	// 	os.Exit(1)
-	// }
-	// apiHash, isPresent := os.LookupEnv("TELEGRAM_API_HASH")
-
-	// if !isPresent || apiHash == "" {
-	// 	fmt.Fprintln(os.Stderr, "Telegram api has is missing")
-    //     os.Exit(1)
-	// }
 
 	lockFilePath := filepath.Join(os.TempDir(), "cligram.lock")
 	fileLock := flock.New(lockFilePath)
