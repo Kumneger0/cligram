@@ -4,6 +4,10 @@ cligram is a Telegram client written with a Bun/JavaScript backend and a Go clie
 
 For full documentation, please visit: [kumneger0.github.io/cligram](https://kumneger0.github.io/cligram)
 
+## Demo
+
+![cligram demo](docs/demo.gif)
+
 ## Contributing
 
 We welcome contributions to cligram! For detailed guidelines, please refer to the [CONTRIBUTING.md](CONTRIBUTING.md) file.

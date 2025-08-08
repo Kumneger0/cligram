@@ -134,6 +134,19 @@ body {
       margin-top: 28px;
       margin-bottom: 16px;
     }
+                .demo-wrap {
+                  margin: 16px 0 24px 0;
+                  display: flex;
+                  justify-content: center;
+                }
+        
+                .demo-gif {
+                  max-width: 100%;
+                  height: auto;
+                  border-radius: 8px;
+                  border: 1px solid var(--border);
+                  box-shadow: var(--shadow);
+                }
     pre {
       position: relative;
         background: var(--code-bg);
