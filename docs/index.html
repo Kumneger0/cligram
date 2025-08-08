@@ -53,26 +53,16 @@
       </section>
       <section id="installation">
         <h2>Installation</h2>
-        <h3>1. Get Telegram API Credentials</h3>
-        <p>First, get your <code>api_id</code> and <code>api_hash</code> from <a href="https://my.telegram.org/apps" target="_blank">Telegram</a>.</p>
-        <h3>2. Set Environment Variables</h3>
-        <p><strong>Unix (Linux/macOS):</strong></p>
-        <pre><code>export TELEGRAM_API_ID=your_api_id_from_telegram
-export TELEGRAM_API_HASH=your_api_hash_from_telegram</code></pre>
-        <p>Add these to your <code>.zshrc</code> or <code>.bashrc</code> for persistence.</p>
-        
-        <h3>3. Download or Build cligram</h3>
+        <h3>1. Download or Build cligram</h3>
         <ul>
           <li><strong>Pre-built binaries:</strong> <a href="https://github.com/Kumneger0/cligram/releases" target="_blank">Download from releases page</a> (Linux, macOS).</li>
           <li><strong>Build from source:</strong> See <code>install.md</code> in the repo for instructions.</li>
         </ul>
-        <h3>4. Using Docker</h3>
-        <pre><code>docker run --rm -it -v tele_cli_data:/root/.cligram \
-  -e TELEGRAM_API_ID=$TELEGRAM_API_ID \
-  -e TELEGRAM_API_HASH=$TELEGRAM_API_HASH \
+        <h3>2. Using Docker</h3>
+        <pre><code>docker run --rm -it -v cligram_data:/root/.cligram \
   kumneger/cligram:latest
 </code></pre>
-        <p>This persists your session and passes required environment variables.</p>
+        <p>This persists your session.</p>
       </section>
       <section id="usage">
         <h2>Usage</h2>
