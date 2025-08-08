@@ -31,8 +31,10 @@ func main() {
 	}
 
 	defer func() {
-		fileLock.Unlock()
-		os.Remove(lockFilePath)
+		if err := fileLock.Unlock(); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: could not unlock file: %v\n", err)
+		}
+		_ = os.Remove(lockFilePath)
 	}()
 
 	pid := os.Getpid()

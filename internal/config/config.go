@@ -86,7 +86,9 @@ func readConfig() CliGramConfig {
 		return defaultCliGramConfig()
 	}
 
-	json.Unmarshal(configFileContent, &config)
+	if err := json.Unmarshal(configFileContent, &config); err != nil {
+		return defaultCliGramConfig()
+	}
 
 	return config
 }
