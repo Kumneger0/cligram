@@ -211,7 +211,7 @@ type NewVersionInfo struct {
 
 func GetNewVersionInfo(installedVersion string) NewVersionInfo {
 	cleanVersion := strings.Replace(installedVersion, "v", "", 1)
-    ver, err := goversion.NewVersion(cleanVersion)
+	ver, err := goversion.NewVersion(cleanVersion)
 	if err != nil {
 		fmt.Println("Invalid installed version:", err)
 		return NewVersionInfo{
@@ -236,7 +236,7 @@ func GetNewVersionInfo(installedVersion string) NewVersionInfo {
 		fmt.Println(err.Error())
 		log.Fatal("Failed to Unmarshal", err)
 	}
-    latestVersion, err := goversion.NewVersion(strings.Replace(latestRelease.TagName, "v", "", 1))
+	latestVersion, err := goversion.NewVersion(strings.Replace(latestRelease.TagName, "v", "", 1))
 	if err != nil {
 		log.Fatal("Failed to get the latest version")
 	}
@@ -294,7 +294,7 @@ func downloadBinary(url string, outputPath string) error {
 	}
 	defer out.Close()
 
-    bar := pb.DefaultBytes(
+	bar := pb.DefaultBytes(
 		resp.ContentLength,
 		"downloading",
 	)
