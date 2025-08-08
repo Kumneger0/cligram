@@ -256,7 +256,7 @@ func ProcessIncomingNotifications(p chan Notification) {
 		var notification RpcTelegramNotification
 		if err := json.Unmarshal(jsonPayload, &notification); err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to parse JSON payload: %v\n", err.Error())
-			return
+			continue
 		}
 
 		if notification.Method == "newMessage" || notification.Method == "userOnlineOffline" || notification.Method == "userTyping" {
@@ -265,14 +265,14 @@ func ProcessIncomingNotifications(p chan Notification) {
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "Failed to marshal params: %v\n", err.Error())
 					slog.Error("Failed to marshal params", "error", err.Error())
-					return
+					continue
 				}
 
 				var newMessage NewMessageMsg
 				if err := json.Unmarshal(paramsBytes, &newMessage); err != nil {
 					fmt.Fprintf(os.Stderr, "Failed to unmarshal params: %v\n", err.Error())
 					slog.Error("Failed to unmarshal params", "error", err.Error())
-					return
+					continue
 				}
 				if p != nil {
 					p <- Notification{NewMessageMsg: newMessage}
@@ -285,13 +285,13 @@ func ProcessIncomingNotifications(p chan Notification) {
 				if err != nil {
 
 					slog.Error("Failed to marshal params", "error", err.Error())
-					return
+					continue
 				}
 
 				var userOnlineOffline UserOnlineOffline
 				if err := json.Unmarshal(paramsBytes, &userOnlineOffline); err != nil {
 					fmt.Fprintf(os.Stderr, "Failed to unmarshal params: %v\n", err.Error())
-					return
+					continue
 				}
 
 				if p != nil {
@@ -303,12 +303,12 @@ func ProcessIncomingNotifications(p chan Notification) {
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "Failed to marshal params: %v\n", err.Error())
 					slog.Error("Failed to marshal params", "error", err.Error())
-					return
+					continue
 				}
 				var userTyping UserTyping
 				if err := json.Unmarshal(paramsBytes, &userTyping); err != nil {
 					fmt.Fprintf(os.Stderr, "Failed to unmarshal params: %v\n", err.Error())
-					return
+					continue
 				}
 				if p != nil {
 					p <- Notification{UserTyping: userTyping}

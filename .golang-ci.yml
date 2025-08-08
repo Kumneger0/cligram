@@ -2,8 +2,10 @@ run:
   timeout: 5m
 
 issues:
-  exclude-files:
-    - internal/assets/assets.go  
+  exclude-rules:
+    - path: internal/assets/assets.go
+      text: "pattern resources/cligram-js-backend: no matching files found"
+       
 linters-settings:
   lll:
     line-length: 180

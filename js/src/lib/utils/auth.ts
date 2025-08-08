@@ -7,7 +7,7 @@ import input from 'input';
 import os from 'node:os';
 
 import { red } from 'kolorist';
-import fs, { writeFileSync } from 'node:fs';
+import fs from 'node:fs';
 import path from 'node:path';
 import { LogLevel } from 'telegram/extensions/Logger.js';
 
