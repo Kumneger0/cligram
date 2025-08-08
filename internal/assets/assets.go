@@ -1,3 +1,4 @@
+// nolint
 package assets
 
 import _ "embed"

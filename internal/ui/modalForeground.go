@@ -122,7 +122,6 @@ type Foreground struct {
 }
 
 func (f Foreground) Init() tea.Cmd {
-	f.focusedOn = SEARCH
 	return nil
 }
 

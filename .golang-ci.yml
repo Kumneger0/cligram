@@ -1,6 +1,9 @@
 run:
   timeout: 5m
 
+issues:
+  exclude-files:
+    - internal/assets/assets.go  
 linters-settings:
   lll:
     line-length: 180
