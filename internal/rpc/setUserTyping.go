@@ -2,10 +2,8 @@ package rpc
 
 import (
 	"encoding/json"
-	"fmt"
+	"log/slog"
 	"time"
-
-	tea "github.com/charmbracelet/bubbletea"
 )
 
 type SetUserTypingJsonRpcResponse struct {
@@ -19,25 +17,17 @@ type SetUserTypingJsonRpcResponse struct {
 	Result bool `json:"result,omitempty"`
 }
 
-type SetUserTypingMsg struct {
-	Response SetUserTypingJsonRpcResponse
-	Err      error
-}
-
-func (c *JsonRpcClient) SetUserTyping(userPeer PeerInfo, chatType ChatType) tea.Cmd {
-	return func() tea.Msg {
-		time.Sleep(1000 * time.Millisecond)
-		rpcResponse, err := c.Call("setUserTyping", []interface{}{userPeer, chatType})
-		if err != nil {
-			return SetUserTypingMsg{Err: err}
-		}
-		var response SetUserTypingJsonRpcResponse
-		if err := json.Unmarshal(rpcResponse, &response); err != nil {
-			return SetUserTypingMsg{Err: fmt.Errorf("failed to unmarshal response JSON '%s': %w", string(rpcResponse), err)}
-		}
-		if response.Error != nil {
-			return SetUserTypingMsg{Err: fmt.Errorf("ERROR: %s", response.Error.Message)}
-		}
-		return SetUserTypingMsg{Response: response}
+func (c *JsonRpcClient) SetUserTyping(userPeer PeerInfo, chatType ChatType) {
+	time.Sleep(1000 * time.Millisecond)
+	rpcResponse, err := c.Call("setUserTyping", []any{userPeer, chatType})
+	if err != nil {
+		slog.Error(err.Error())
+	}
+	var response SetUserTypingJsonRpcResponse
+	if err := json.Unmarshal(rpcResponse, &response); err != nil {
+		slog.Error(err.Error())
+	}
+	if response.Error != nil {
+		slog.Error(err.Error())
 	}
 }

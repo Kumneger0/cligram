@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -24,7 +25,7 @@ var (
 	Program *tea.Program
 )
 
-func startSeparateJsProces(wg *sync.WaitGroup) {
+func startSeparateJsProces(ctx context.Context, wg *sync.WaitGroup) {
 	jsExcutable, err := runner.GetJSExcutable()
 
 	if err != nil {
@@ -33,7 +34,7 @@ func startSeparateJsProces(wg *sync.WaitGroup) {
 		return
 	}
 
-	jsExcute := exec.Command(*jsExcutable)
+	jsExcute := exec.CommandContext(ctx, *jsExcutable)
 	stdin, err := jsExcute.StdinPipe()
 	if err != nil {
 		slog.Error("Failed to create stdin pipe", "Error", err.Error())
@@ -102,9 +103,11 @@ func newRootCmd(version string) *cobra.Command {
 				return nil
 			}
 
+			ctx, cancel := context.WithCancel(context.Background())
+
 			var wg sync.WaitGroup
 			wg.Add(1)
-			go startSeparateJsProces(&wg)
+			go startSeparateJsProces(ctx, &wg)
 			wg.Wait()
 
 			notificationChannel := make(chan rpc.Notification)
@@ -203,7 +206,7 @@ func newRootCmd(version string) *cobra.Command {
 				),
 			}
 
-			Program = tea.NewProgram(manager, tea.WithAltScreen(), tea.WithMouseCellMotion())
+			Program = tea.NewProgram(manager, tea.WithAltScreen())
 
 			go func() {
 				for msg := range notificationChannel {
@@ -220,9 +223,11 @@ func newRootCmd(version string) *cobra.Command {
 			}()
 
 			_, err := Program.Run()
+			cancel()
 			if err != nil {
 				return fmt.Errorf("failed to start TUI: %w", err)
 			}
+
 
 			return nil
 		},

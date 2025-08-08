@@ -50,12 +50,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.EditMessage = nil
 		}
 
-	case rpc.SetUserTypingMsg:
-		if msg.Err != nil {
-			slog.Error("failed to set user typing", "error", msg.Err.Error())
-		}
-		return m, nil
-
 	case rpc.UserTyping:
 		user := msg.User
 		if m.SelectedUser.PeerID == user.PeerID {

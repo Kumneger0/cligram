@@ -309,7 +309,9 @@ func changeFocusMode(m *Model, msg string, shift bool) (Model, tea.Cmd) {
 
 func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 	m.ChatUI.ResetSelected()
-	m.AreWeSwitchingModes = true
+	if m.FocusedOn == SideBar{
+		m.AreWeSwitchingModes = true
+	}
 	areWeInGroupMode := m.Mode == ModeGroups && m.FocusedOn == Mainview
 	//i don't think 🤔 we should keep the list in memory
 	// if we keep this is in memory this will cause high memory usage especailly for users
