@@ -25,7 +25,9 @@ func login() *cobra.Command {
 			jsExcute.Stdin = os.Stdin
 			jsExcute.Stdout = os.Stdout
 			jsExcute.Stderr = os.Stderr
-			jsExcute.Run()
+			if err := jsExcute.Run(); err != nil {
+				fmt.Fprintf(os.Stderr, "login failed: %v\n", err)
+			}
 		},
 	}
 }
@@ -46,7 +48,9 @@ func logout() *cobra.Command {
 			jsExcute.Stdin = os.Stdin
 			jsExcute.Stdout = os.Stdout
 			jsExcute.Stderr = os.Stderr
-			jsExcute.Run()
+			if err := jsExcute.Run(); err != nil {
+				fmt.Fprintf(os.Stderr, "logout failed: %v\n", err)
+			}
 		},
 	}
 }

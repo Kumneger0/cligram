@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hashicorp/go-version"
-	"github.com/schollz/progressbar/v3"
+	goversion "github.com/hashicorp/go-version"
+	pb "github.com/schollz/progressbar/v3"
 	"github.com/spf13/cobra"
 )
 
@@ -168,7 +168,9 @@ func upgradeCligram(currentVersion string) *cobra.Command {
 			cacheDir := filepath.Join(userHomeDir, ".cache")
 			_, err = os.Stat(cacheDir)
 			if os.IsNotExist(err) {
-				os.Mkdir(cacheDir, 0755)
+				if mkErr := os.Mkdir(cacheDir, 0o755); mkErr != nil {
+					log.Fatal("failed to create cache dir:", mkErr)
+				}
 			}
 
 			var fileName string
@@ -209,7 +211,7 @@ type NewVersionInfo struct {
 
 func GetNewVersionInfo(installedVersion string) NewVersionInfo {
 	cleanVersion := strings.Replace(installedVersion, "v", "", 1)
-	ver, err := version.NewVersion(cleanVersion)
+    ver, err := goversion.NewVersion(cleanVersion)
 	if err != nil {
 		fmt.Println("Invalid installed version:", err)
 		return NewVersionInfo{
@@ -234,7 +236,7 @@ func GetNewVersionInfo(installedVersion string) NewVersionInfo {
 		fmt.Println(err.Error())
 		log.Fatal("Failed to Unmarshal", err)
 	}
-	latestVersion, err := version.NewVersion(strings.Replace(latestRelease.TagName, "v", "", 1))
+    latestVersion, err := goversion.NewVersion(strings.Replace(latestRelease.TagName, "v", "", 1))
 	if err != nil {
 		log.Fatal("Failed to get the latest version")
 	}
@@ -292,7 +294,7 @@ func downloadBinary(url string, outputPath string) error {
 	}
 	defer out.Close()
 
-	bar := progressbar.DefaultBytes(
+    bar := pb.DefaultBytes(
 		resp.ContentLength,
 		"downloading",
 	)
@@ -305,7 +307,10 @@ func installBinary(installCommand ...string) {
 	fmt.Println("Installing package requires sudo privileges...")
 	fmt.Print("Continue? (y/N): ")
 	var response string
-	fmt.Scanln(&response)
+	if _, scanErr := fmt.Scanln(&response); scanErr != nil {
+		fmt.Println("Installation cancelled")
+		return
+	}
 	if !strings.EqualFold(response, "y") && !strings.EqualFold(response, "yes") {
 		fmt.Println("Installation cancelled")
 		return
