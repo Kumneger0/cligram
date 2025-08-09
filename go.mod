@@ -6,7 +6,7 @@ require (
 	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/bubbletea v1.3.5
 	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/daixiang0/gci v0.13.4
+	github.com/daixiang0/gci v0.13.7
 	github.com/go-critic/go-critic v0.11.4
 	github.com/gofrs/flock v0.12.1
 	github.com/golangci/golangci-lint v1.59.1
