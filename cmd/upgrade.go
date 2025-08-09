@@ -210,6 +210,12 @@ type NewVersionInfo struct {
 }
 
 func GetNewVersionInfo(installedVersion string) NewVersionInfo {
+	if installedVersion == "" {
+		return NewVersionInfo{
+			IsUpdateAvailable: false,
+			LatestRelease:     Release{},
+		}
+	}
 	cleanVersion := strings.Replace(installedVersion, "v", "", 1)
 	ver, err := goversion.NewVersion(cleanVersion)
 	if err != nil {

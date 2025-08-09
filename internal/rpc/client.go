@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -127,7 +128,7 @@ func ReadStdOut(rpcClient *JsonRpcClient) ([]byte, error) {
 	for {
 		lineBytes, _, err := reader.ReadLine()
 		if err != nil {
-			if err == io.EOF && contentLength != -1 {
+			if errors.Is(err, io.EOF) && contentLength != -1 {
 				return nil, err
 			}
 			slog.Error(err.Error())
@@ -135,7 +136,7 @@ func ReadStdOut(rpcClient *JsonRpcClient) ([]byte, error) {
 		}
 		line := string(lineBytes)
 		if line == "" {
-			break
+			break	
 		}
 
 		parts := strings.SplitN(line, ":", 2)
@@ -245,7 +246,7 @@ func ProcessIncomingNotifications(p chan Notification) {
 		time.Sleep(1 * time.Second)
 		jsonPayload, err := ReadStdOut(RpcClient)
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				slog.Info("EOF reached while reading from RpcClient, continuing to next iteration")
 				continue
 			}
