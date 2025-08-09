@@ -95,10 +95,9 @@ func startSeparateJsProces(ctx context.Context, wg *sync.WaitGroup) {
 		if err := jsExcute.Wait(); err != nil {
 			if errors.Is(err, context.Canceled) {
 				os.Exit(0)
-			} else if jsLogFile != nil {
-				slog.Error("JavaScript process exited with error", "error", err.Error())
-				exitWithJsError()
 			}
+			slog.Error("JavaScript process exited with error", "error", err.Error())
+			exitWithJsError()
 		}
 	}()
 

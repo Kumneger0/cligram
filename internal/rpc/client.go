@@ -128,7 +128,7 @@ func ReadStdOut(rpcClient *JsonRpcClient) ([]byte, error) {
 	for {
 		lineBytes, _, err := reader.ReadLine()
 		if err != nil {
-			if err == io.EOF && contentLength != -1 {
+			if errors.Is(err, io.EOF) && contentLength != -1 {
 				return nil, err
 			}
 			slog.Error(err.Error())
@@ -136,7 +136,7 @@ func ReadStdOut(rpcClient *JsonRpcClient) ([]byte, error) {
 		}
 		line := string(lineBytes)
 		if line == "" {
-			break
+			break	
 		}
 
 		parts := strings.SplitN(line, ":", 2)
