@@ -9,13 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type ManCmd struct {
-	Cmd *cobra.Command
-}
-
-func NewManCmd() *ManCmd {
-	root := &ManCmd{}
-
+func ManCmd(root *cobra.Command) *cobra.Command {
 	c := &cobra.Command{
 		Use:                   "man",
 		Short:                 "Generates command line manpages",
@@ -24,7 +18,7 @@ func NewManCmd() *ManCmd {
 		Hidden:                true,
 		Args:                  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			manPage, err := mcoral.NewManPage(1, root.Cmd.Root())
+			manPage, err := mcoral.NewManPage(1, root)
 			if err != nil {
 				return err
 			}
@@ -35,7 +29,5 @@ func NewManCmd() *ManCmd {
 		},
 	}
 
-	root.Cmd = c
-
-	return root
+	return c
 }

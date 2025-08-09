@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -92,7 +93,9 @@ func startSeparateJsProces(ctx context.Context, wg *sync.WaitGroup) {
 
 	go func() {
 		if err := jsExcute.Wait(); err != nil {
-			if jsLogFile != nil {
+			if errors.Is(err, context.Canceled) {
+				os.Exit(0)
+			} else if jsLogFile != nil {
 				slog.Error("JavaScript process exited with error", "error", err.Error())
 				exitWithJsError()
 			}
@@ -125,7 +128,6 @@ func newRootCmd(version string) *cobra.Command {
 			notificationChannel := make(chan rpc.Notification)
 			go rpc.ProcessIncomingNotifications(notificationChannel)
 			msg := rpc.RpcClient.GetUserChats()
-
 
 			modalContent := ""
 			isModalVisible := false
@@ -250,6 +252,7 @@ func newRootCmd(version string) *cobra.Command {
 	cmd.AddCommand(login())
 	cmd.AddCommand(logout())
 	cmd.AddCommand(cligramLog())
+	cmd.AddCommand(ManCmd(cmd))
 	return cmd
 }
 

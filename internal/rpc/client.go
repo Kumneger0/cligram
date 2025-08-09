@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -245,7 +246,7 @@ func ProcessIncomingNotifications(p chan Notification) {
 		time.Sleep(1 * time.Second)
 		jsonPayload, err := ReadStdOut(RpcClient)
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				slog.Info("EOF reached while reading from RpcClient, continuing to next iteration")
 				continue
 			}
