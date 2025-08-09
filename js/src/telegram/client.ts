@@ -1,12 +1,10 @@
 import { getConfig } from '@/config/configManager.js';
 import { cache, formatLastSeen } from '@/lib/utils/index.js';
 import { Api, TelegramClient } from 'telegram';
-import { Channel, ChannelInfo, ChatType, TelegramUser, UserInfo } from '../lib/types/index.js';
+import { Channel, ChannelInfo, TelegramUser, UserInfo } from '../lib/types/index.js';
 import { DialogInfo } from './client.types.js';
 import bigInt from 'big-integer';
 import { LRUCache } from 'lru-cache';
-
-export let chatUsers: UserInfo[] = [];
 
 //we are fetching diloags at once so no need to cache users, channels, groups separately we can cache all of them together
 const CACHE_KEY = 'dialogs';
@@ -123,7 +121,8 @@ export async function searchUsers(
 				isBot: user.bot ?? false,
 				unreadCount: 0,
 				lastSeen: "",
-				isOnline: false
+				isOnline: false,
+				isTyping: false,
 			} satisfies UserInfo;
 		});
 	//TODO: i'll come back later and fix this
@@ -163,15 +162,11 @@ export async function searchUsers(
 	return { users, channels }
 }
 
-/**
- * Retrieves user chats or channels from Telegram based on the specified type.
- *
- * @template T - The type of peer to retrieve ('channel' or 'user')
- * @param {TelegramClient} client - The Telegram client instance
- * @param {T} type - The type of peers to retrieve ('channel' or 'user')
- * @returns {Promise< T extends 'channel' ? ChannelInfo[] : UserInfo[]>} A promise that resolves to:
- *   - dialogs: Array of channel info or user info objects
- */
+export function getUserChats(client: TelegramClient, type: "user"): Promise<UserInfo[]>
+export function getUserChats(client: TelegramClient, type: "channel"): Promise<ChannelInfo[]>
+export function getUserChats(client: TelegramClient, type: "group"): Promise<ChannelInfo[]>
+export function getUserChats(client: TelegramClient, type: "bot"): Promise<ChannelInfo[]>
+
 /**
  * Retrieves a list of chats for the connected Telegram client, filtered by the specified chat type.
  *
@@ -181,15 +176,14 @@ export async function searchUsers(
  * The function uses a cache to avoid unnecessary network requests and fetches additional information
  * for each chat as needed.
  *
- * @template T - The chat type to filter by ('channel', 'group', or 'user').
  * @param client - The Telegram client instance. Will connect if not already connected.
  * @param type - The type of chats to retrieve: 'channel', 'group', or 'user'.
  * @returns A promise that resolves to an array of `ChannelInfo` or `UserInfo` depending on the `type` parameter.
  */
-export async function getUserChats<T extends ChatType>(
+export async function getUserChats(
 	client: TelegramClient,
-	type: T
-): Promise<T extends 'channel' | 'group' ? ChannelInfo[] : UserInfo[]> {
+	type: "channel" | 'group' | 'user' | "bot"
+): Promise<ChannelInfo[] | UserInfo[]> {
 	if (!client.connected) {
 		await client.connect();
 	}
@@ -242,11 +236,11 @@ export async function getUserChats<T extends ChatType>(
 				} satisfies ChannelInfo;
 			})
 		);
-		return channelsInfo as T extends 'channel' | 'group' ? ChannelInfo[] : UserInfo[]
+		return channelsInfo as ChannelInfo[]
 
 	}
 
-	if (type === 'user') {
+	if (type === 'user' || type == 'bot') {
 		const userChats = result.filter((dialog) => {
 			return dialog.dialog.peer.className === 'PeerUser';
 		});
@@ -271,18 +265,19 @@ export async function getUserChats<T extends ChatType>(
 			})
 		);
 
-		chatUsers = users
+		const chatUsers = users
 			.filter((user): user is NonNullable<typeof user> => {
 				return user !== null;
 			})
 			.filter(({ isBot, firstName }) => {
+				if (type === 'bot') return isBot && firstName
 				return !isBot && firstName;
 			});
 
-		return chatUsers as T extends 'channel' | 'group' ? ChannelInfo[] : UserInfo[]
+		return chatUsers as UserInfo[]
 
 	}
-	return [] as unknown as T extends 'channel' | 'group' ? ChannelInfo[] : UserInfo[]
+	return [] as UserInfo[]
 
 }
 
@@ -332,6 +327,7 @@ export async function getUserInfo(
 			accessHash: user?.accessHash?.toString(),
 			lastSeen: formatLastSeen(lastSeen),
 			isOnline: user.status?.className === 'UserStatusOnline',
+			isTyping: false,
 			unreadCount: 0
 		} satisfies UserInfo;
 		userInfoCache.set(userIdString, userInfo);

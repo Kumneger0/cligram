@@ -1,12 +1,12 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
 	"sync"
-	"time"
 
 	"github.com/charmbracelet/bubbles/filepicker"
 	list "github.com/charmbracelet/bubbles/list"
@@ -25,20 +25,29 @@ var (
 	Program *tea.Program
 )
 
-func startSeparateJsProces(wg *sync.WaitGroup) {
+func exitWithJsError() {
+	fmt.Println("\nThe backend process failed to start. This is unexpected.")
+	fmt.Println("Please open an issue on GitHub and include the output of 'cligram log'.")
+	fmt.Println("You can create an issue here: https://github.com/kumneger0/cligram/issues/new")
+	os.Exit(1)
+}
+
+func startSeparateJsProces(ctx context.Context, wg *sync.WaitGroup) {
 	jsExcutable, err := runner.GetJSExcutable()
 
 	if err != nil {
 		slog.Error("Failed to get JS executable", "Error", err.Error())
 		wg.Done()
+		exitWithJsError()
 		return
 	}
 
-	jsExcute := exec.Command(*jsExcutable)
+	jsExcute := exec.CommandContext(ctx, *jsExcutable)
 	stdin, err := jsExcute.StdinPipe()
 	if err != nil {
 		slog.Error("Failed to create stdin pipe", "Error", err.Error())
 		wg.Done()
+		exitWithJsError()
 		return
 	}
 	stdout, err := jsExcute.StdoutPipe()
@@ -46,6 +55,7 @@ func startSeparateJsProces(wg *sync.WaitGroup) {
 		slog.Error("Failed to create stdout pipe", "error", err.Error())
 		stdin.Close()
 		wg.Done()
+		exitWithJsError()
 		return
 	}
 
@@ -67,6 +77,7 @@ func startSeparateJsProces(wg *sync.WaitGroup) {
 			jsLogFile.Close()
 		}
 		wg.Done()
+		exitWithJsError()
 		return
 	}
 
@@ -83,6 +94,7 @@ func startSeparateJsProces(wg *sync.WaitGroup) {
 		if err := jsExcute.Wait(); err != nil {
 			if jsLogFile != nil {
 				slog.Error("JavaScript process exited with error", "error", err.Error())
+				exitWithJsError()
 			}
 		}
 	}()
@@ -95,7 +107,6 @@ func newRootCmd(version string) *cobra.Command {
 		Use:   "cligram",
 		Short: "cligram a cli based telegram client",
 		RunE: func(cmd *cobra.Command, args []string) error {
-
 			isUserSessionAvaialbe := config.IsUserSessionAvaialable()
 
 			if !isUserSessionAvaialbe {
@@ -104,16 +115,17 @@ func newRootCmd(version string) *cobra.Command {
 				return nil
 			}
 
+			ctx, cancel := context.WithCancel(context.Background())
+
 			var wg sync.WaitGroup
 			wg.Add(1)
-			go startSeparateJsProces(&wg)
+			go startSeparateJsProces(ctx, &wg)
 			wg.Wait()
 
 			notificationChannel := make(chan rpc.Notification)
-
 			go rpc.ProcessIncomingNotifications(notificationChannel)
-
 			msg := rpc.RpcClient.GetUserChats()
+
 
 			modalContent := ""
 			isModalVisible := false
@@ -141,14 +153,14 @@ func newRootCmd(version string) *cobra.Command {
 					IsOnline:    du.IsOnline,
 				})
 			}
-
-			userList := list.New(users, ui.CustomDelegate{}, 10, 20)
+			model := ui.Model{}
+			userList := list.New(users, ui.CustomDelegate{Model: &model}, 10, 20)
 			userList.SetShowPagination(false)
 			channels := []list.Item{}
-			channelList := (list.New(channels, ui.CustomDelegate{}, 10, 20))
+			channelList := (list.New(channels, ui.CustomDelegate{Model: &model}, 10, 20))
 			channelList.SetShowPagination(false)
 			groups := []list.Item{}
-			groupList := (list.New(groups, ui.CustomDelegate{}, 10, 20))
+			groupList := (list.New(groups, ui.CustomDelegate{Model: &model}, 10, 20))
 			groupList.SetShowPagination(false)
 
 			userList.SetShowHelp(false)
@@ -163,7 +175,7 @@ func newRootCmd(version string) *cobra.Command {
 			fd := int(os.Stdout.Fd())
 			width, height, _ := term.GetSize(fd)
 
-			chatList := list.New([]list.Item{}, ui.MessagesDelegate{}, 10, 20)
+			chatList := list.New([]list.Item{}, ui.MessagesDelegate{Model: &model}, 10, 20)
 			chatList.SetShowPagination(false)
 			chatList.SetShowHelp(false)
 			chatList.SetShowFilter(false)
@@ -175,23 +187,22 @@ func newRootCmd(version string) *cobra.Command {
 			fp.DirAllowed = false
 			fp.CurrentDirectory, _ = os.UserHomeDir()
 
-			m := ui.Model{
-				Filepicker:     fp,
-				Input:          input,
-				Users:          userList,
-				Groups:         groupList,
-				ModalContent:   modalContent,
-				Height:         height - 4,
-				Width:          width - 4,
-				Channels:       channelList,
-				IsModalVisible: isModalVisible,
-				Mode:           "users",
-				FocusedOn:      "sideBar",
-				ChatUI:         chatList,
-				SelectedFile:   "",
-			}
+			model.AreWeSwitchingModes = false
+			model.Filepicker = fp
+			model.Input = input
+			model.Users = userList
+			model.Groups = groupList
+			model.ModalContent = modalContent
+			model.Height = height - 4
+			model.Width = width - 4
+			model.Channels = channelList
+			model.IsModalVisible = isModalVisible
+			model.Mode = ui.ModeUsers
+			model.FocusedOn = ui.SideBar
+			model.ChatUI = chatList
+			model.SelectedFile = ""
 
-			backgorund := m
+			backgorund := model
 			forground := &ui.Foreground{}
 
 			manager := ui.Manager{
@@ -208,27 +219,24 @@ func newRootCmd(version string) *cobra.Command {
 				),
 			}
 
-			Program = tea.NewProgram(manager, tea.WithAltScreen(), tea.WithMouseCellMotion())
+			Program = tea.NewProgram(manager, tea.WithAltScreen())
 
 			go func() {
-				for {
-					time.Sleep(1 * time.Second)
-					select {
-					case msg := <-notificationChannel:
-						if msg.NewMessageMsg != (rpc.NewMessageMsg{}) {
-							Program.Send(msg.NewMessageMsg)
-						}
-						if msg.UserOnlineOfflineMsg != (rpc.UserOnlineOffline{}) {
-							Program.Send(msg.UserOnlineOfflineMsg)
-						}
-
-					case <-time.After(1 * time.Second):
-						// fmt.Println("sent tick")
+				for msg := range notificationChannel {
+					if msg.NewMessageMsg != (rpc.NewMessageMsg{}) {
+						Program.Send(msg.NewMessageMsg)
+					}
+					if msg.UserOnlineOfflineMsg != (rpc.UserOnlineOffline{}) {
+						Program.Send(msg.UserOnlineOfflineMsg)
+					}
+					if msg.UserTyping != (rpc.UserTyping{}) {
+						Program.Send(msg.UserTyping)
 					}
 				}
 			}()
 
 			_, err := Program.Run()
+			cancel()
 			if err != nil {
 				return fmt.Errorf("failed to start TUI: %w", err)
 			}
@@ -238,16 +246,16 @@ func newRootCmd(version string) *cobra.Command {
 	}
 
 	cmd.AddCommand(newVersionCmd(version))
+	cmd.AddCommand(upgradeCligram(version))
 	cmd.AddCommand(login())
 	cmd.AddCommand(logout())
+	cmd.AddCommand(cligramLog())
 	return cmd
 }
 
 func Execute(version string) error {
-
 	if err := newRootCmd(version).Execute(); err != nil {
 		return fmt.Errorf("error executing root command: %w", err)
 	}
-
 	return nil
 }

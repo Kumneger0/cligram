@@ -26,6 +26,7 @@ const (
 	CHANNEL ChannelOrUserType = "CHANNEL"
 	GROUP   ChannelOrUserType = "GROUP"
 	USER    ChannelOrUserType = "USER"
+	BOT     ChannelOrUserType = "BOT"
 )
 
 type SearchDelegate struct {
@@ -45,6 +46,8 @@ func (d SearchDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 			title = "👥 " + title
 		case CHANNEL:
 			title = "📢 " + title
+		case BOT:
+			title = "🤖 " + title
 		}
 	} else {
 		return
@@ -119,7 +122,6 @@ type Foreground struct {
 }
 
 func (f Foreground) Init() tea.Cmd {
-	f.focusedOn = SEARCH
 	return nil
 }
 

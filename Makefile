@@ -80,3 +80,9 @@ lint: ## lint go files
 .PHONY: pre-commit
 pre-commit:	## run pre-commit hooks
 	pre-commit run --all-files
+
+.PHONY: hooks
+hooks: ## install git commit-msg hook for commitlint (local)
+	@chmod +x scripts/hooks/commit-msg
+	@git config core.hooksPath scripts/hooks
+	@echo "--> Git hooks installed (commit-msg)."

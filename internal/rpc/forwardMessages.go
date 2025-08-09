@@ -30,11 +30,6 @@ type ForwardMessagesRpcResponse struct {
 	Result *json.RawMessage `json:"result,omitempty"`
 }
 
-type forwardMessageMsg struct {
-	result ForwardMessagesRpcResponse
-	err    error
-}
-
 func (c *JsonRpcClient) ForwardMessages(
 	fromPeer PeerInfo,
 	messageIDs []int,

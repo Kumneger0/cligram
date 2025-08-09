@@ -17,11 +17,23 @@ import (
 
 type CustomDelegate struct {
 	list.DefaultDelegate
+	*Model
+}
+
+func (d CustomDelegate) Height() int {
+	return 1
+}
+
+func (d CustomDelegate) Spacing() int {
+	return 0
+}
+
+func (d CustomDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd {
+	return nil
 }
 
 func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	var title string
-
 	var hasUnreadMessages bool = false
 
 	if entry, ok := item.(rpc.UserInfo); ok {
@@ -50,9 +62,9 @@ func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 	} else {
 		return
 	}
-
+	isOnSideBar := d.Model.FocusedOn == SideBar
 	str := lipgloss.NewStyle().Width(50).Render(title)
-	if index == m.Index() {
+	if index == m.Index() && isOnSideBar {
 		fmt.Fprint(w, selectedStyle.Render(" "+str+" "))
 	} else {
 		fmt.Fprint(w, normalStyle.Render(" "+str+" "))
@@ -99,8 +111,13 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 	var cType rpc.ChatType
 	var peerInfo rpc.PeerInfo
 
-	if m.Mode == ModeUsers {
-		cType = rpc.UserChat
+	if m.Mode == ModeUsers || m.Mode == ModeBots {
+		if m.Mode == ModeUsers {
+			cType = rpc.ChatType(rpc.UserChat)
+		}
+		if m.Mode == ModeBots {
+			cType = rpc.ChatType(rpc.Bot)
+		}
 		peerInfo = rpc.PeerInfo{
 			AccessHash: m.SelectedUser.AccessHash,
 			PeerID:     m.SelectedUser.PeerID,
@@ -108,7 +125,7 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 	}
 
 	if m.Mode == ModeChannels {
-		cType = rpc.ChannelChat
+		cType = rpc.ChatType(rpc.ChannelChat)
 		peerInfo = rpc.PeerInfo{
 			AccessHash: m.SelectedChannel.AccessHash,
 			PeerID:     m.SelectedChannel.ChannelID,
@@ -116,7 +133,7 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 	}
 
 	if m.Mode == ModeGroups {
-		cType = rpc.GroupChat
+		cType = rpc.ChatType(rpc.GroupChat)
 		peerInfo = rpc.PeerInfo{
 			AccessHash: m.SelectedGroup.AccessHash,
 			PeerID:     m.SelectedGroup.ChannelID,
@@ -213,7 +230,6 @@ func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (M
 	m.Filepicker, cmd = m.Filepicker.Update(msg)
 	m.Filepicker.SetHeight(m.Height - 13)
 	cmds = append(cmds, cmd)
-
 	if didSelect, path := m.Filepicker.DidSelectFile(msg); didSelect && m.IsFilepickerVisible {
 		m.SelectedFile = path
 		m.IsFilepickerVisible = false
@@ -230,7 +246,7 @@ func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (M
 		case ModeChannels:
 			m.Channels, cmd = m.Channels.Update(msg)
 			cmds = append(cmds, cmd)
-		case ModeUsers:
+		case ModeUsers, ModeBots:
 			m.Users, cmd = m.Users.Update(msg)
 			cmds = append(cmds, cmd)
 		default:
@@ -246,7 +262,7 @@ func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (M
 }
 
 func handleUserChange(m *Model) (Model, tea.Cmd) {
-	pInfo, cType := getGetMessageParams(m)
+	pInfo, cType := getMessageParams(m)
 	cmd := rpc.RpcClient.GetMessages(pInfo, cType, nil, nil, nil)
 	config := config.GetConfig()
 
@@ -259,6 +275,7 @@ func handleUserChange(m *Model) (Model, tea.Cmd) {
 
 	m.Conversations = [50]rpc.FormattedMessage{}
 	m.MainViewLoading = true
+	m.ChatUI.ResetSelected()
 	m.ChatUI.SetItems([]list.Item{})
 	return *m, cmd
 }
@@ -266,7 +283,7 @@ func handleUserChange(m *Model) (Model, tea.Cmd) {
 func changeFocusMode(m *Model, msg string, shift bool) (Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	currentlyFoucsedOn := m.FocusedOn
-	canWrite := (m.Mode == ModeUsers || m.Mode == ModeGroups) || (m.Mode == ModeChannels && m.SelectedChannel.IsCreator)
+	canWrite := (m.Mode == ModeUsers || m.Mode == ModeGroups || m.Mode == ModeBots) || (m.Mode == ModeChannels && m.SelectedChannel.IsCreator)
 
 	if currentlyFoucsedOn == SideBar {
 		if shift {
@@ -291,10 +308,31 @@ func changeFocusMode(m *Model, msg string, shift bool) (Model, tea.Cmd) {
 }
 
 func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
+	m.ChatUI.ResetSelected()
+	if m.FocusedOn == SideBar {
+		m.AreWeSwitchingModes = true
+	}
 	areWeInGroupMode := m.Mode == ModeGroups && m.FocusedOn == Mainview
+	//i don't think 🤔 we should keep the list in memory
+	// if we keep this is in memory this will cause high memory usage especailly for users
+	// who has many chats so for now le't clear this up
+	// TODO:🤔 can we do better
+	clearSidebarLists := func(clearUsers, clearChannels, clearGroups bool) {
+		if clearUsers {
+			m.Users.SetItems(nil)
+		}
+		if clearChannels {
+			m.Channels.SetItems(nil)
+		}
+		if clearGroups {
+			m.Groups.SetItems(nil)
+		}
+	}
+
 	if m.FocusedOn == SideBar || areWeInGroupMode {
 		switch msg {
 		case "c":
+			clearSidebarLists(true, false, true)
 			m.Mode = ModeChannels
 			if !m.SelectedChannel.IsCreator {
 				m.Input.SetValue("Not Allowed To Type")
@@ -304,6 +342,7 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 			return *m, rpc.RpcClient.GetUserChannel()
 		case "u":
 			m.Mode = ModeUsers
+			clearSidebarLists(false, true, true)
 			if areWeInGroupMode {
 				selectedUser := m.getMessageSenderUserInfo()
 				if selectedUser != nil {
@@ -311,7 +350,6 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 					userItems := m.Users.Items()
 
 					var foundIndex int = -1
-
 					for i, v := range userItems {
 						if v.FilterValue() == m.SelectedUser.FilterValue() {
 							foundIndex = i
@@ -327,23 +365,27 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 						m.Users.Select(foundIndex)
 					}
 
-					m.ChatUI.SetItems([]list.Item{})
+					m.ChatUI.SetItems(nil)
 					return *m, rpc.RpcClient.GetMessages(rpc.PeerInfoParams{
 						AccessHash: m.SelectedUser.AccessHash,
 						PeerID:     m.SelectedUser.PeerID,
 					}, rpc.UserChat, nil, nil, nil)
 				}
 			}
-			return *m, nil
+			return *m, rpc.RpcClient.GetChats(rpc.ModeUser)
 		case "g":
 			m.Mode = ModeGroups
-
+			clearSidebarLists(true, true, false)
 			return *m, rpc.RpcClient.GetUserGroups()
+		case "b":
+			m.Mode = ModeBots
+			clearSidebarLists(false, true, true)
+			m.Users.ResetSelected()
+			return *m, rpc.RpcClient.GetChats(rpc.ModeBot)
 		}
 		return *m, nil
 	}
 	return *m, nil
-
 }
 
 func (m *Model) getMessageSenderUserInfo() *rpc.UserInfo {
@@ -354,12 +396,9 @@ func (m *Model) getMessageSenderUserInfo() *rpc.UserInfo {
 }
 
 func (m *Model) updateConverstaions() {
-	sidebarWidth := m.Width * 30 / 100
-	mainWidth := m.Width - sidebarWidth
-	w := mainWidth * 70 / 100
-	m.ChatUI.SetWidth(w)
-	m.ChatUI.SetHeight(int(float64(m.Height) / 2.6666666665))
 	m.ChatUI.SetItems(formatMessages(m.Conversations))
+	m.viewport.SetContent(m.ChatUI.View())
+	m.viewport.GotoBottom()
 }
 
 func getItemBorder(isSelected bool) lipgloss.Border {
@@ -383,7 +422,19 @@ func (m Model) View() string {
 	m.Users.SetShowStatusBar(false)
 	m.Groups.Title = "Groups"
 	m.Groups.SetShowStatusBar(false)
+	m.updateDelegates()
 
 	ui := setItemStyles(&m)
 	return ui
+}
+
+func (m *Model) updateDelegates() {
+	usersDelegate := CustomDelegate{Model: m}
+	channelsDelegate := CustomDelegate{Model: m}
+	groupsDelegate := CustomDelegate{Model: m}
+	mainViewDelegate := MessagesDelegate{Model: m}
+	m.Users.SetDelegate(usersDelegate)
+	m.Channels.SetDelegate(channelsDelegate)
+	m.Groups.SetDelegate(groupsDelegate)
+	m.ChatUI.SetDelegate(mainViewDelegate)
 }

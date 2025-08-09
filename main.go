@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"syscall"
 
@@ -15,6 +16,7 @@ import (
 var version = ""
 
 func main() {
+
 	lockFilePath := filepath.Join(os.TempDir(), "cligram.lock")
 	fileLock := flock.New(lockFilePath)
 
@@ -30,8 +32,10 @@ func main() {
 	}
 
 	defer func() {
-		fileLock.Unlock()
-		os.Remove(lockFilePath)
+		if err := fileLock.Unlock(); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: could not unlock file: %v\n", err)
+		}
+		_ = os.Remove(lockFilePath)
 	}()
 
 	pid := os.Getpid()
@@ -45,6 +49,13 @@ func main() {
 	if err := cmd.Execute(version); err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)
 		os.Exit(1)
+	}
+
+	if !slices.Contains(os.Args, "upgrade") {
+		IsUpdateAvailable := cmd.GetNewVersionInfo(version)
+		if IsUpdateAvailable.IsUpdateAvailable {
+			fmt.Println("An update is available use cligram upgrade to update to latest version")
+		}
 	}
 }
 

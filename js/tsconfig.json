@@ -6,7 +6,7 @@
 		"outDir": "build",
 		"baseUrl": ".",
 		"moduleResolution": "Bundler",
-		"module": "ES2022",
+		"module": "esnext",
 		"allowUnusedLabels": false,
 		"allowUnreachableCode": false,
 		"noFallthroughCasesInSwitch": true,

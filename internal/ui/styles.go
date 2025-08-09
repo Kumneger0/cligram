@@ -1,6 +1,8 @@
 package ui
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"github.com/charmbracelet/lipgloss"
+)
 
 var (
 	normalStyle = lipgloss.NewStyle().
@@ -20,25 +22,18 @@ var (
 			Italic(true).
 			MarginRight(1).PaddingLeft(4)
 
-	senderStyle = lipgloss.NewStyle().
-			Bold(true).
-			MarginRight(1)
-
-	myMessageStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#00FFFF")).
-			Bold(true).
-			MarginRight(1)
-
-	contentStyle = lipgloss.NewStyle().
-			PaddingLeft(1)
-
 	messageStyle = lipgloss.NewStyle().
 			PaddingTop(1).
 			PaddingBottom(1)
 )
 
 func getSideBarStyles(sidebarWidth int, contentHeight int, m *Model) lipgloss.Style {
-	sideBarStyle := lipgloss.NewStyle().Width(sidebarWidth).Height(contentHeight).Padding(1).Border(getItemBorder(m.FocusedOn == "sideBar"))
+	sideBarStyle := lipgloss.NewStyle().
+		Width(sidebarWidth).
+		Height(contentHeight).
+		Padding(1).
+		Border(getItemBorder(m.FocusedOn == "sideBar")).
+		MaxHeight(contentHeight)
 	return sideBarStyle
 }
 
@@ -50,7 +45,9 @@ func getInputStyle(m *Model, inputHeight int) lipgloss.Style {
 func getMainStyle(mainWidth int, contentHeight int, m *Model) lipgloss.Style {
 	return lipgloss.NewStyle().
 		Width(mainWidth).
-		Height(contentHeight - 6).
+		Height(contentHeight).
 		Padding(1).
-		Border(getItemBorder(m.FocusedOn == "mainView"))
+		Border(getItemBorder(m.FocusedOn == "mainView")).
+		MaxHeight(contentHeight).
+		MaxWidth(mainWidth)
 }

@@ -1,27 +1,37 @@
+run:
+  timeout: 5m
+
+issues:
+  exclude-rules:
+    - path: internal/assets/assets.go
+      text: "pattern resources/cligram-js-backend: no matching files found"
+       
 linters-settings:
   lll:
     line-length: 180
+  revive:
+    rules:
+      - name: exported
+      - name: indent-error-flow
+      - name: error-naming
+      - name: if-return
+      - name: time-naming
+      - name: receiver-naming
+      - name: empty-lines
+      - name: var-naming
+      - name: superfluous-else
+      - name: unconditional-recursion
+      - name: import-shadowing
+  misspell:
+    locale: US
+
 linters:
-  enable-all: true
-  disable:
-    - testpackage
-    - forbidigo
-    - paralleltest
-    - exhaustivestruct
-    - varnamelen
-    - interfacer
-    - maligned
-    - scopelint
-    - golint
-    - varcheck
-    - nosnakecase
-    - deadcode
-    - ifshort
-    - structcheck
-    - rowserrcheck
-    - sqlclosecheck
-    - structcheck
-    - wastedassign
-    - exhaustruct
-    - nolintlint
-    - wrapcheck
+  disable-all: true
+  enable:
+    - errcheck
+    - ineffassign
+    - gofmt
+    - goimports
+    - revive
+    - misspell
+    - typecheck

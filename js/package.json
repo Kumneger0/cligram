@@ -45,6 +45,7 @@
     "vitest": "^3.0.7"
   },
   "dependencies": {
+    "@types/node": "^24.1.0",
     "@types/node-notifier": "^8.0.5",
     "date-fns": "^4.1.0",
     "debounce": "^2.2.0",

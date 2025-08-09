@@ -1,11 +1,8 @@
 package ui
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
-	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -36,6 +33,7 @@ var (
 
 type MessagesDelegate struct {
 	list.DefaultDelegate
+	*Model
 }
 
 func (d MessagesDelegate) Height() int                               { return 1 }
@@ -62,8 +60,10 @@ func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list
 		return
 	}
 
+	isMainViewFocused := d.Model.FocusedOn == Mainview
+
 	str := messageStyle.Render(title)
-	if index == m.Index() {
+	if index == m.Index() && isMainViewFocused {
 		fmt.Fprint(w, selectedStyle.Render(" "+str+" "))
 	} else {
 		fmt.Fprint(w, normalStyle.Render(" "+str+" "))
@@ -76,6 +76,7 @@ const (
 	ModeUsers    Mode = "users"
 	ModeChannels Mode = "channels"
 	ModeGroups   Mode = "groups"
+	ModeBots     Mode = "bot"
 )
 
 type FocusedOn string
@@ -93,6 +94,7 @@ type Model struct {
 	Users               list.Model
 	SelectedUser        rpc.UserInfo
 	Channels            list.Model
+	AreWeSwitchingModes bool
 	IsModalVisible      bool
 	ModalContent        string
 	SelectedChannel     rpc.ChannelAndGroupInfo
@@ -147,7 +149,6 @@ func setItemStyles(m *Model) string {
 	if m.IsModalVisible {
 		return renderModal(m)
 	}
-
 	dimensions := calculateLayoutDimensions(m)
 
 	updateListDimensions(m, dimensions)
@@ -172,8 +173,11 @@ type layoutDimensions struct {
 func calculateLayoutDimensions(m *Model) layoutDimensions {
 	sidebarWidth := m.Width * 30 / 100
 	return layoutDimensions{
-		sidebarWidth:  sidebarWidth,
-		mainWidth:     m.Width - sidebarWidth,
+		sidebarWidth: sidebarWidth,
+		// takin 90% considering the 10 for padding and some space arorund the content
+		// TODO: can we do better 🤔 ?
+		// do we have better solution
+		mainWidth:     (m.Width - sidebarWidth) * 90 / 100,
 		contentHeight: m.Height * 90 / 100,
 		inputHeight:   m.Height - (m.Height * 90 / 100),
 	}
@@ -201,7 +205,7 @@ func renderModal(m *Model) string {
 
 func getUserOrChannelName(m *Model) string {
 	switch m.Mode {
-	case ModeUsers:
+	case ModeUsers, ModeBots:
 		return formatUserName(m.SelectedUser)
 	case ModeChannels:
 		return formatChannelName(m.SelectedChannel)
@@ -214,10 +218,13 @@ func getUserOrChannelName(m *Model) string {
 
 func formatUserName(user rpc.UserInfo) string {
 	name := user.Title()
-	if user.IsOnline {
+	if user.IsTyping {
+		return name + " Typing..."
+	}
+	if user.IsOnline && !user.IsBot {
 		return name + " Online"
 	}
-	if user.LastSeen != nil {
+	if user.LastSeen != nil && !user.IsBot {
 		return name + " " + *user.LastSeen
 	}
 	return name
@@ -244,10 +251,12 @@ func prepareMainContent(m *Model, d layoutDimensions) string {
 	if m.MainViewLoading {
 		return mainStyle.Render("Loading...")
 	}
-
-	// m.ChatUI.SetItems(formatMessages(m.Conversations))
-	m.ChatUI.SetWidth(d.mainWidth * 70 / 100)
-	m.ChatUI.SetHeight(15)
+	m.ChatUI.SetWidth(d.mainWidth - 4)
+	//the terminal height is determined by charater
+	// one list items takes one 1 charater space since we are showing extra info on chats like times
+	// using the d.contentHeight will make the content out of view
+	// TODO: can we do better ? this feels like a hack
+	m.ChatUI.SetHeight(int(d.contentHeight / 5))
 
 	userNameOrChannelName := getUserOrChannelName(m)
 	title := titleStyle.Render(userNameOrChannelName)
@@ -255,16 +264,19 @@ func prepareMainContent(m *Model, d layoutDimensions) string {
 	headerView := lipgloss.JoinVertical(lipgloss.Center, title, line)
 
 	chatsView := m.ChatUI.View()
-	m.viewport.SetContent(chatsView)
-	mainViewContent := m.viewport.View()
+
+	if len(m.ChatUI.Items()) > 0 {
+		m.ChatUI.Select(len(m.ChatUI.Items()) - 1)
+	}
+
 	if m.IsFilepickerVisible {
-		mainViewContent = prepareFilepickerView(m)
+		chatsView = prepareFilepickerView(m)
 	}
 
 	mainContent := lipgloss.JoinVertical(
 		lipgloss.Top,
 		headerView,
-		mainViewContent,
+		chatsView,
 	)
 
 	return mainStyle.Render(mainContent)
@@ -284,8 +296,11 @@ func prepareFilepickerView(m *Model) string {
 
 func prepareSidebarContent(m *Model, d layoutDimensions) string {
 	var content string
+	if m.AreWeSwitchingModes {
+		return "Please Wait ......."
+	}
 	switch m.Mode {
-	case ModeUsers:
+	case ModeUsers, ModeBots:
 		content = m.Users.View()
 	case ModeChannels:
 		content = m.Channels.View()
@@ -349,71 +364,75 @@ func Debounce(fn func(args ...interface{}) tea.Msg, delay time.Duration) func(ar
 	}
 }
 
-func handleUpDownArrowKeys(m *Model, isUp bool) (Model, tea.Cmd) {
-	var cmd tea.Cmd
-	if m.FocusedOn == Mainview {
-		totalItems := len(m.ChatUI.Items())
-		globalIndex := m.ChatUI.GlobalIndex()
-		pInfo, cType := getGetMessageParams(m)
-		if isUp && globalIndex == 0 {
-			if selectedConversation, ok := m.ChatUI.SelectedItem().(rpc.FormattedMessage); ok {
-				offsetID := int(selectedConversation.ID)
-				cacheKey := pInfo.AccessHash + pInfo.PeerID
-				if len(m.Conversations) > 1 {
-					messages, err := json.Marshal(m.Conversations[:])
-					if err != nil {
-						slog.Error("Failed to marshal messages", "error", err.Error())
-					}
-					AddToCache(cacheKey, string(messages))
-				}
-				cmd = rpc.RpcClient.GetMessages(pInfo, cType, &offsetID, nil, nil)
-				conversationLastIndex := len(m.Conversations) - 1
-				m.ChatUI.Select(conversationLastIndex)
-			}
-		} else if globalIndex == totalItems-1 && !isUp {
-			cacheKey := pInfo.AccessHash + pInfo.PeerID
-			messages, err := GetFromCache(cacheKey)
-			if err != nil {
-				slog.Error("Failed to get messages from cache", "error", err.Error())
-			}
-			if messages == nil {
-				return *m, nil
-			}
-			var formattedMessages []rpc.FormattedMessage
-			err = json.Unmarshal([]byte(*messages), &formattedMessages)
+// func handleUpDownArrowKeys(m *Model, isUp bool) (Model, tea.Cmd) {
+// 	var cmd tea.Cmd
+// 	if m.FocusedOn == Mainview {
+// 		totalItems := len(m.ChatUI.Items())
+// 		globalIndex := m.ChatUI.GlobalIndex()
+// 		pInfo, cType := getMessageParams(m)
+// 		if isUp && globalIndex == 0 {
+// 			if selectedConversation, ok := m.ChatUI.SelectedItem().(rpc.FormattedMessage); ok {
+// 				offsetID := int(selectedConversation.ID)
+// 				cacheKey := pInfo.AccessHash + pInfo.PeerID
+// 				if len(m.Conversations) > 1 {
+// 					messages, err := json.Marshal(m.Conversations[:])
+// 					if err != nil {
+// 						slog.Error("Failed to marshal messages", "error", err.Error())
+// 					}
+// 					AddToCache(cacheKey, string(messages))
+// 				}
+// 				cmd = rpc.RpcClient.GetMessages(pInfo, cType, &offsetID, nil, nil)
+// 				conversationLastIndex := len(m.Conversations) - 1
+// 				m.ChatUI.Select(conversationLastIndex)
+// 			}
+// 		} else if globalIndex == totalItems-1 && !isUp {
+// 			cacheKey := pInfo.AccessHash + pInfo.PeerID
+// 			messages, err := GetFromCache(cacheKey)
+// 			if err != nil {
+// 				slog.Error("Failed to get messages from cache", "error", err.Error())
+// 			}
+// 			if messages == nil {
+// 				return *m, nil
+// 			}
+// 			var formattedMessages []rpc.FormattedMessage
+// 			err = json.Unmarshal([]byte(*messages), &formattedMessages)
 
-			if err != nil {
-				slog.Error("Failed to unmarshal messages", "error", err.Error())
-			}
+// 			if err != nil {
+// 				slog.Error("Failed to unmarshal messages", "error", err.Error())
+// 			}
 
-			if len(formattedMessages) == 0 {
-				return *m, cmd
-			}
-			userConversation := rpc.UserConversationResponse{
-				JsonRPC: "2.0",
-				ID:      rand.Int(),
-				Error:   nil,
-				Result:  [50]rpc.FormattedMessage(formattedMessages),
-			}
-			messagesMsg := rpc.GetMessagesMsg{
-				Messages: userConversation,
-				Err:      nil,
-			}
-			cmd = func() tea.Msg {
-				return messagesMsg
-			}
-		}
+// 			if len(formattedMessages) == 0 {
+// 				return *m, cmd
+// 			}
+// 			userConversation := rpc.UserConversationResponse{
+// 				JsonRPC: "2.0",
+// 				ID:      rand.Int(),
+// 				Error:   nil,
+// 				Result:  [50]rpc.FormattedMessage(formattedMessages),
+// 			}
+// 			messagesMsg := rpc.GetMessagesMsg{
+// 				Messages: userConversation,
+// 				Err:      nil,
+// 			}
+// 			cmd = func() tea.Msg {
+// 				return messagesMsg
+// 			}
+// 		}
+// 	}
+// 	return *m, cmd
+// }
 
-	}
-	return *m, cmd
-}
-
-func getGetMessageParams(m *Model) (rpc.PeerInfoParams, rpc.ChatType) {
+func getMessageParams(m *Model) (rpc.PeerInfoParams, rpc.ChatType) {
 	var cType rpc.ChatType
 	var pInfo rpc.PeerInfoParams
-	if m.Mode == ModeUsers {
+	if m.Mode == ModeUsers || m.Mode == ModeBots {
 		m.SelectedUser = m.Users.SelectedItem().(rpc.UserInfo)
-		cType = "user"
+		if m.Mode == ModeUsers {
+			cType = rpc.ChatType(rpc.UserChat)
+		}
+		if m.Mode == ModeBots {
+			cType = rpc.ChatType(rpc.Bot)
+		}
 		pInfo = rpc.PeerInfoParams{
 			AccessHash:                  m.SelectedUser.AccessHash,
 			PeerID:                      m.SelectedUser.PeerID,
@@ -422,7 +441,7 @@ func getGetMessageParams(m *Model) (rpc.PeerInfoParams, rpc.ChatType) {
 	}
 	if m.Mode == ModeChannels {
 		m.SelectedChannel = m.Channels.SelectedItem().(rpc.ChannelAndGroupInfo)
-		cType = "channel"
+		cType = rpc.ChatType(rpc.ChannelChat)
 		pInfo = rpc.PeerInfoParams{
 			AccessHash:                  m.SelectedChannel.AccessHash,
 			PeerID:                      m.SelectedChannel.ChannelID,
@@ -434,7 +453,7 @@ func getGetMessageParams(m *Model) (rpc.PeerInfoParams, rpc.ChatType) {
 	}
 	if m.Mode == ModeGroups {
 		m.SelectedGroup = m.Groups.SelectedItem().(rpc.ChannelAndGroupInfo)
-		cType = "group"
+		cType = rpc.ChatType(rpc.GroupChat)
 		pInfo = rpc.PeerInfoParams{
 			AccessHash:                  m.SelectedGroup.AccessHash,
 			PeerID:                      m.SelectedGroup.ChannelID,

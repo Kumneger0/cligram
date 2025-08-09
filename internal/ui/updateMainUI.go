@@ -3,6 +3,7 @@ package ui
 import (
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -49,12 +50,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.EditMessage = nil
 		}
 
-	case rpc.SetUserTypingMsg:
-		if msg.Err != nil {
-			slog.Error("failed to set user typing", "error", msg.Err.Error())
+	case rpc.UserTyping:
+		user := msg.User
+		if m.SelectedUser.PeerID == user.PeerID {
+			m.SelectedUser = user
 		}
-		return m, nil
 
+		userIndex := getUserIndex(m, user)
+		if userIndex != -1 {
+			items := m.Users.Items()
+			items[userIndex] = user
+			cmd := m.Users.SetItems(items)
+			cmds = append(cmds, cmd)
+		}
+		if user.IsTyping {
+			rcmd := tea.Tick(time.Second*3, func(t time.Time) tea.Msg {
+				user.IsOnline = false
+				user.IsTyping = false
+				return rpc.UserTyping{User: user}
+			})
+			cmds = append(cmds, rcmd)
+		}
 	case rpc.MarkMessagesAsReadMsg:
 		model, cmd := m.handleMarkMessagesAsRead(msg)
 		m = model.(Model)
@@ -131,7 +147,7 @@ func (m Model) handleMarkMessagesAsRead(msg rpc.MarkMessagesAsReadMsg) (tea.Mode
 
 func (m Model) handleNewMessage(msg rpc.NewMessageMsg) (tea.Model, tea.Cmd) {
 	if m.SelectedUser.PeerID == msg.User.PeerID {
-		if m.Mode == ModeUsers {
+		if m.Mode == ModeUsers || m.Mode == ModeBots {
 			m.SelectedUser.UnreadCount++
 			var isCurrentConversationUsersChat bool = false
 			for _, v := range m.Conversations {
@@ -184,7 +200,6 @@ func (m Model) handleMessageDeletion(msg MessageDeletionConfrimResponseMsg) (tea
 	if !msg.yes {
 		return m, nil
 	}
-
 	peer, cType := m.getPeerInfoAndChatType()
 	selectedItemInChat := m.ChatUI.SelectedItem().(rpc.FormattedMessage)
 
@@ -245,6 +260,7 @@ func (m Model) getPeerInfoAndChatType() (rpc.PeerInfo, rpc.ChatType) {
 }
 
 func (m Model) handleGetMessages(msg rpc.GetMessagesMsg) (tea.Model, tea.Cmd) {
+	m.AreWeSwitchingModes = false
 	if msg.Err != nil {
 		slog.Error("Failed to get messages", "error", msg.Err.Error())
 		m.IsModalVisible = true
@@ -254,6 +270,12 @@ func (m Model) handleGetMessages(msg rpc.GetMessagesMsg) (tea.Model, tea.Cmd) {
 	}
 
 	messagesWeGot := len(filterEmptyMessages(msg.Messages.Result))
+	if messagesWeGot < 1 {
+		if selectedChat, ok := m.Users.SelectedItem().(rpc.UserInfo); ok && selectedChat.IsBot {
+			m.Input.SetValue("/start")
+		}
+	}
+
 	if messagesWeGot < 1 {
 		m.MainViewLoading = false
 		return m, nil
@@ -334,6 +356,10 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 	case "g":
 		m, cmd := changeSideBarMode(&m, "g")
+		cmds = append(cmds, cmd)
+		return m, tea.Batch(cmds...)
+	case "b":
+		m, cmd := changeSideBarMode(&m, "b")
 		cmds = append(cmds, cmd)
 		return m, tea.Batch(cmds...)
 	case "enter":
@@ -473,6 +499,7 @@ func (m Model) handleUserChats(msg rpc.UserChatsMsg) (tea.Model, tea.Cmd) {
 		users = append(users, du)
 	}
 	m.Users.SetItems(users)
+	m.AreWeSwitchingModes = false
 	return m, nil
 }
 
@@ -488,6 +515,7 @@ func (m Model) handleUserChannels(msg rpc.UserChannelMsg) (tea.Model, tea.Cmd) {
 		channels = append(channels, du)
 	}
 	m.Channels.SetItems(channels)
+	m.AreWeSwitchingModes = false
 	return m, nil
 }
 
@@ -503,6 +531,7 @@ func (m Model) handleUserGroups(msg rpc.UserGroupsMsg) (tea.Model, tea.Cmd) {
 		groups = append(groups, du)
 	}
 	m.Groups.SetItems(groups)
+	m.AreWeSwitchingModes = false
 	return m, nil
 }
 

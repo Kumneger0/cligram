@@ -4,7 +4,7 @@ package tools
 
 // https://github.com/golang/go/wiki/Modules#how-can-i-track-tool-dependencies-for-a-module
 
-//go:generate go install github.com/golangci/golangci-lint/cmd/golangci-lint
+//go:generate go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.61.0
 //go:generate go install mvdan.cc/gofumpt
 //go:generate go install github.com/daixiang0/gci
 //go:generate go install github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt

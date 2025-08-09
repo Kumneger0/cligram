@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 )
 
@@ -87,7 +86,9 @@ func readConfig() CliGramConfig {
 		return defaultCliGramConfig()
 	}
 
-	json.Unmarshal(configFileContent, &config)
+	if err := json.Unmarshal(configFileContent, &config); err != nil {
+		return defaultCliGramConfig()
+	}
 
 	return config
 }
@@ -97,7 +98,7 @@ func getUserSessionPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	sessionPath := strings.Join([]string{userHomeDir, ".cligram", "config.txt"}, "/")
+	sessionPath := filepath.Join(userHomeDir, ".cligram", "config.txt")
 	return sessionPath, nil
 }
 
