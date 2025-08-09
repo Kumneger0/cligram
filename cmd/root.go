@@ -25,12 +25,20 @@ var (
 	Program *tea.Program
 )
 
+func exitWithJsError() {
+	fmt.Println("\nThe backend process failed to start. This is unexpected.")
+	fmt.Println("Please open an issue on GitHub and include the output of 'cligram log'.")
+	fmt.Println("You can create an issue here: https://github.com/kumneger0/cligram/issues/new")
+	os.Exit(1)
+}
+
 func startSeparateJsProces(ctx context.Context, wg *sync.WaitGroup) {
 	jsExcutable, err := runner.GetJSExcutable()
 
 	if err != nil {
 		slog.Error("Failed to get JS executable", "Error", err.Error())
 		wg.Done()
+		exitWithJsError()
 		return
 	}
 
@@ -39,6 +47,7 @@ func startSeparateJsProces(ctx context.Context, wg *sync.WaitGroup) {
 	if err != nil {
 		slog.Error("Failed to create stdin pipe", "Error", err.Error())
 		wg.Done()
+		exitWithJsError()
 		return
 	}
 	stdout, err := jsExcute.StdoutPipe()
@@ -46,6 +55,7 @@ func startSeparateJsProces(ctx context.Context, wg *sync.WaitGroup) {
 		slog.Error("Failed to create stdout pipe", "error", err.Error())
 		stdin.Close()
 		wg.Done()
+		exitWithJsError()
 		return
 	}
 
@@ -67,6 +77,7 @@ func startSeparateJsProces(ctx context.Context, wg *sync.WaitGroup) {
 			jsLogFile.Close()
 		}
 		wg.Done()
+		exitWithJsError()
 		return
 	}
 
@@ -83,6 +94,7 @@ func startSeparateJsProces(ctx context.Context, wg *sync.WaitGroup) {
 		if err := jsExcute.Wait(); err != nil {
 			if jsLogFile != nil {
 				slog.Error("JavaScript process exited with error", "error", err.Error())
+				exitWithJsError()
 			}
 		}
 	}()
@@ -113,6 +125,7 @@ func newRootCmd(version string) *cobra.Command {
 			notificationChannel := make(chan rpc.Notification)
 			go rpc.ProcessIncomingNotifications(notificationChannel)
 			msg := rpc.RpcClient.GetUserChats()
+
 
 			modalContent := ""
 			isModalVisible := false
@@ -236,14 +249,13 @@ func newRootCmd(version string) *cobra.Command {
 	cmd.AddCommand(upgradeCligram(version))
 	cmd.AddCommand(login())
 	cmd.AddCommand(logout())
+	cmd.AddCommand(cligramLog())
 	return cmd
 }
 
 func Execute(version string) error {
-
 	if err := newRootCmd(version).Execute(); err != nil {
 		return fmt.Errorf("error executing root command: %w", err)
 	}
-
 	return nil
 }
