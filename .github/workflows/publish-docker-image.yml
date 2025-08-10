@@ -26,3 +26,6 @@ jobs:
           context: .
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/cligram:latest
+          build-args: |
+            TELEGRAM_API_ID=${{ secrets.TELEGRAM_API_ID }}
+            TELEGRAM_API_HASH=${{ secrets.TELEGRAM_API_HASH }}
