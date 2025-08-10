@@ -56,7 +56,8 @@
         <h3>1. Download or Build cligram</h3>
         <ul>
           <li><strong>Pre-built binaries:</strong> <a href="https://github.com/Kumneger0/cligram/releases" target="_blank">Download from releases page</a> (Linux, macOS).</li>
-          <li><strong>Build from source:</strong> See <code>install.md</code> in the repo for instructions.</li>
+          <li><strong>Build from source:</strong> See <a href="https://github.com/Kumneger0/cligram/blob/main/install.md" target="_blank">install.md</a> in the repo for instructions.</li>
+          <li><strong>Windows Support:</strong> While not officially supported, you can try running cligram using <a href="https://learn.microsoft.com/en-us/windows/wsl/" target="_blank">Windows Subsystem for Linux (WSL)</a>.</li>
         </ul>
         <h3>2. Using Docker</h3>
         <pre><code>docker run --rm -it -v cligram_data:/root/.cligram \
@@ -78,6 +79,11 @@
           <li><strong>Chat Area:</strong> Messages of the selected chat.</li>
           <li><strong>Focus:</strong> The active area has a green border. Use Tab to switch.</li>
         </ul>
+        <h3>Indicators</h3>
+        <ul>
+            <li><span class="yellow-icon">●</span> Online Status: A yellow icon before a user's name indicates they are online.</li>
+            <li><span class="red-icon">●</span> Unread Messages: A red icon followed by a number in brackets (e.g., (3)) indicates the number of unread messages in a chat.</li>
+        </ul>
         <h3>Navigation & Shortcuts</h3>
         <ul>
           <li><strong>Focus</strong>: Tab toggles focus between sidebar and chat.</li>
@@ -90,12 +96,12 @@
           <li>Select messages by moving with ↑/↓ (or k/j) in the chat area.</li>
           <li><strong>d</strong>: delete • <strong>r</strong>: reply • <strong>e</strong>: edit • <strong>f</strong>: forward • <strong>u</strong>: DM the sender (from a group)</li>
         </ul>
-        <p><em>Tips:</em> Replies show a quoted preview while composing. Forward keeps original sender and timestamp context.</p>
+        
         <h3>Compose & Attachments</h3>
         <ul>
           <li><strong>ctrl + a</strong>: Toggle the file picker when the input is focused.</li>
-          <li>After picking a file, optionally add a caption, then press Enter to send.</li>
-          <li>Upload progress is displayed while sending.</li>
+          <li>After picking a file, optionally add a caption, then press Enter to send. You may need to press Tab to focus on the input box after selecting the file.</li>
+          <li>You will see a text indicating that the file is being uploaded.</li>
         </ul>
         <h3>Reading Behavior</h3>
         <ul>
@@ -171,7 +177,7 @@
       <section id="faq">
         <h2>FAQ</h2>
         <h4>What platforms are supported?</h4>
-        <p>cligram provides pre-built binaries for Linux and macOS.</p>
+        <p>cligram provides pre-built binaries for Linux and macOS. Windows is not officially supported, but you can try running cligram using <a href="https://learn.microsoft.com/en-us/windows/wsl/" target="_blank">Windows Subsystem for Linux (WSL)</a>.</p>
         <h4>Can I use multiple Telegram accounts?</h4>
         <p>No, only a single Telegram account is supported at a time.</p>
         <h4>Does cligram support bots, groups, or media management?</h4>
