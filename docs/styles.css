@@ -282,3 +282,11 @@ body {
 .copy-btn:hover {
   background: rgba(0, 0, 0, 0.08);
 }
+
+.yellow-icon {
+  color: yellow;
+}
+
+.red-icon {
+  color: red;
+}
