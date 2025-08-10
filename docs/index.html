@@ -64,6 +64,10 @@
   kumneger/cligram:latest
 </code></pre>
         <p>This persists your session.</p>
+        <p><strong>Note on File Attachments:</strong> When using Docker, cligram runs in an isolated environment and cannot directly access files from your host machine. To attach a file, you first need to copy it into the running Docker container using the <code>docker cp</code> command. For example:</p>
+        <pre><code>docker cp /path/to/your/file.jpg &lt;container_id&gt;:/root/
+</code></pre>
+        <p>Once the file is copied, you can then attach it from within cligram.</p>
       </section>
       <section id="usage">
         <h2>Usage</h2>
