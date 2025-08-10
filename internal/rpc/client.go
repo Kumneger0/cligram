@@ -151,7 +151,6 @@ func ReadStdOut(rpcClient *JsonRpcClient) ([]byte, error) {
 				contentLength = cl
 			}
 		}
-
 	}
 
 	if contentLength == -1 {
