@@ -4,6 +4,10 @@ FROM  oven/bun:1.2.19 AS builder
 ARG TARGETARCH
 ARG BUILDPLATFORM
 ARG TARGETOS
+ARG TELEGRAM_API_ID
+ARG TELEGRAM_API_HASH
+ENV TELEGRAM_API_ID=${TELEGRAM_API_ID}
+ENV TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
 
 RUN apt-get update && apt-get install -y \
     wget \
@@ -54,5 +58,6 @@ COPY --from=builder /app/internal/assets/resources/cligram-js-backend /root/.cac
 RUN chmod +x /root/.cache/cligram/cligram-js-backend
 
 RUN ls -l /root/.cache/cligram/cligram-js-backend
+
 
 ENTRYPOINT ["/usr/bin/cligram"]
