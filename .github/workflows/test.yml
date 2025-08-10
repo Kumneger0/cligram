@@ -25,7 +25,11 @@ jobs:
         uses: oven-sh/setup-bun@v1
 
       - name: Build application and assets
+        env:
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
         run: make build
+          
 
       - name: Run tests
         run: make test
