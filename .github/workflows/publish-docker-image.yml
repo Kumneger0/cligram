@@ -2,8 +2,8 @@ name: Publish cligram Docker Image
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - 'v*'
 
 jobs:
   build:
