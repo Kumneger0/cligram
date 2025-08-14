@@ -320,7 +320,13 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	cmds := []tea.Cmd{}
 
 	switch msg.String() {
-	case "up", "down":
+	case "shift+down":
+		if(m.FocusedOn == Mainview){
+        items := m.ChatUI.Items()
+		lastIndex := len(items) - 1
+		m.ChatUI.Select(lastIndex) 
+		}
+	// case "up", "down":
 		/*
 			         as of now we are only showing last 50 messages
 					 TODO: consider implementing pagination and show all messages

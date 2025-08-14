@@ -290,6 +290,8 @@ func changeFocusMode(m *Model, msg string, shift bool) (Model, tea.Cmd) {
 			m.FocusedOn = Input
 		} else {
 			m.FocusedOn = Mainview
+			chatListLastIndex := len(m.ChatUI.Items()) - 1
+			m.ChatUI.Select(chatListLastIndex)
 		}
 	} else if currentlyFoucsedOn == Mainview && canWrite {
 		if shift {
@@ -300,6 +302,8 @@ func changeFocusMode(m *Model, msg string, shift bool) (Model, tea.Cmd) {
 	} else {
 		if shift {
 			m.FocusedOn = Mainview
+			chatListLastIndex := len(m.ChatUI.Items()) - 1
+			m.ChatUI.Select(chatListLastIndex)
 		} else {
 			m.FocusedOn = SideBar
 		}
@@ -308,8 +312,8 @@ func changeFocusMode(m *Model, msg string, shift bool) (Model, tea.Cmd) {
 }
 
 func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
-	m.ChatUI.ResetSelected()
 	if m.FocusedOn == SideBar {
+		m.ChatUI.ResetSelected()
 		m.AreWeSwitchingModes = true
 	}
 	areWeInGroupMode := m.Mode == ModeGroups && m.FocusedOn == Mainview
