@@ -44,6 +44,7 @@ func startSeparateJsProces(ctx context.Context, wg *sync.WaitGroup) {
 	}
 
 	jsExcute := exec.CommandContext(ctx, *jsExcutable)
+	jsExcute.Env = os.Environ()
 	stdin, err := jsExcute.StdinPipe()
 	if err != nil {
 		slog.Error("Failed to create stdin pipe", "Error", err.Error())
@@ -233,9 +234,11 @@ func newRootCmd(version string) *cobra.Command {
 					if msg.UserTyping != (rpc.UserTyping{}) {
 						Program.Send(msg.UserTyping)
 					}
+					if msg.RpcError != (rpc.RpcError{}) {
+						Program.Send(msg.RpcError)
+					}
 				}
 			}()
-
 			_, err := Program.Run()
 			cancel()
 			if err != nil {

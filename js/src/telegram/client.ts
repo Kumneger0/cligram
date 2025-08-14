@@ -1,5 +1,5 @@
 import { getConfig } from '@/config/configManager.js';
-import { cache, formatLastSeen } from '@/lib/utils/index.js';
+import { cache, formatLastSeen, logger } from '@/lib/utils/index.js';
 import { Api, TelegramClient } from 'telegram';
 import { Channel, ChannelInfo, TelegramUser, UserInfo } from '../lib/types/index.js';
 import { DialogInfo } from './client.types.js';
@@ -165,7 +165,7 @@ export async function searchUsers(
 export function getUserChats(client: TelegramClient, type: "user"): Promise<UserInfo[]>
 export function getUserChats(client: TelegramClient, type: "channel"): Promise<ChannelInfo[]>
 export function getUserChats(client: TelegramClient, type: "group"): Promise<ChannelInfo[]>
-export function getUserChats(client: TelegramClient, type: "bot"): Promise<ChannelInfo[]>
+export function getUserChats(client: TelegramClient, type: "bot"): Promise<UserInfo[]>
 
 /**
  * Retrieves a list of chats for the connected Telegram client, filtered by the specified chat type.
@@ -188,6 +188,8 @@ export async function getUserChats(
 		await client.connect();
 	}
 	const cached = cache.get(CACHE_KEY);
+
+
 	const result = cached ?? ((await client.getDialogs({})) as unknown as DialogInfo[]);
 	cache.set(CACHE_KEY, result);
 	if (type === 'channel' || type === 'group') {
@@ -280,6 +282,9 @@ export async function getUserChats(
 	return [] as UserInfo[]
 
 }
+
+
+
 
 const userInfoCache = new LRUCache<string, UserInfo>({
 	max: 100,
