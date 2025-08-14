@@ -184,7 +184,7 @@ func handleForwardMessage(m *Foreground) (tea.Model, tea.Cmd) {
 		func() tea.Msg {
 			return ForwardMsg{
 				msg:      m.Message,
-				reciever: &selectedUser,
+				receiver: &selectedUser,
 				fromPeer: &from,
 			}
 		},

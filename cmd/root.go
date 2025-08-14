@@ -85,7 +85,7 @@ func startSeparateJsProces(ctx context.Context, wg *sync.WaitGroup) {
 
 	rpc.JsProcess = jsExcute.Process
 
-	rpc.RpcClient = &rpc.JsonRpcClient{
+	rpc.RPCClient = &rpc.JSONRPCClient{
 		Stdin:  stdin,
 		Stdout: stdout,
 		Cmd:    jsExcute,
@@ -127,7 +127,7 @@ func newRootCmd(version string) *cobra.Command {
 
 			notificationChannel := make(chan rpc.Notification)
 			go rpc.ProcessIncomingNotifications(notificationChannel)
-			msg := rpc.RpcClient.GetUserChats()
+			msg := rpc.RPCClient.GetUserChats()
 
 			modalContent := ""
 			isModalVisible := false
@@ -204,16 +204,16 @@ func newRootCmd(version string) *cobra.Command {
 			model.ChatUI = chatList
 			model.SelectedFile = ""
 
-			backgorund := model
+			background := model
 			forground := &ui.Foreground{}
 
 			manager := ui.Manager{
 				Foreground: forground,
-				Background: backgorund,
+				Background: background,
 				State:      ui.MainView,
 				Overlay: overlay.New(
 					forground,
-					backgorund,
+					background,
 					overlay.Center,
 					overlay.Top,
 					0,
@@ -234,8 +234,8 @@ func newRootCmd(version string) *cobra.Command {
 					if msg.UserTyping != (rpc.UserTyping{}) {
 						Program.Send(msg.UserTyping)
 					}
-					if msg.RpcError != (rpc.RpcError{}) {
-						Program.Send(msg.RpcError)
+					if msg.RPCError != (rpc.Error{}) {
+						Program.Send(msg.RPCError)
 					}
 				}
 			}()

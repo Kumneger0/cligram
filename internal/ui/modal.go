@@ -39,12 +39,10 @@ func (m Manager) Init() tea.Cmd {
 }
 
 func (m Manager) Update(message tea.Msg) (tea.Model, tea.Cmd) {
-
 	switch msg := message.(type) {
 	case tea.WindowSizeMsg:
 		m.WindowWidth = msg.Width
 		m.WindowHeight = msg.Height
-
 	case CloseOverlay:
 		m.State = MainView
 		return m, nil
@@ -84,16 +82,12 @@ func (m Manager) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 
 	fg, fgCmd := m.Foreground.Update(message)
 	m.Foreground = fg
-
 	bg, bgCmd := m.Background.Update(message)
 	m.Background = bg
-
 	cmds := []tea.Cmd{}
 	cmds = append(cmds, fgCmd, bgCmd)
-
 	return m, tea.Batch(cmds...)
 }
-
 func (m Manager) View() string {
 	if m.State == ModalView {
 		return m.Overlay.View()

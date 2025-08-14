@@ -5,8 +5,8 @@ import (
 	"fmt"
 )
 
-type UserSearchRpcResponse struct {
-	JsonRPC string `json:"jsonrpc"`
+type UserSearchRPCResponse struct {
+	JSONRPC string `json:"jsonrpc"`
 	ID      int    `json:"id"`
 	Error   *struct {
 		Code    int         `json:"code"`
@@ -20,18 +20,18 @@ type UserSearchRpcResponse struct {
 }
 
 type SearchUserMsg struct {
-	Response *UserSearchRpcResponse
+	Response *UserSearchRPCResponse
 	Err      error
 }
 
-func (c *JsonRpcClient) Search(query string) SearchUserMsg {
-	userChatRpcResponse, err := c.Call("searchUsers", []string{query})
+func (c *JSONRPCClient) SearchUsers(query string) SearchUserMsg {
+	userChatRPCResponse, err := c.Call("searchUsers", []string{query})
 	if err != nil {
 		return SearchUserMsg{Err: err}
 	}
-	var response UserSearchRpcResponse
-	if err := json.Unmarshal(userChatRpcResponse, &response); err != nil {
-		return SearchUserMsg{Err: fmt.Errorf("failed to unmarshal response JSON '%s': %w", string(userChatRpcResponse), err)}
+	var response UserSearchRPCResponse
+	if err := json.Unmarshal(userChatRPCResponse, &response); err != nil {
+		return SearchUserMsg{Err: fmt.Errorf("failed to unmarshal response JSON '%s': %w", string(userChatRPCResponse), err)}
 	}
 	if response.Error != nil {
 		return SearchUserMsg{Err: fmt.Errorf("ERROR: %s", response.Error.Message)}

@@ -103,7 +103,7 @@ type OpenModalMsg struct {
 
 type ForwardMsg struct {
 	msg      *rpc.FormattedMessage
-	reciever *list.Item
+	receiver *list.Item
 	fromPeer *list.Item
 }
 
@@ -131,16 +131,14 @@ type MessageDeletionConfrimResponseMsg struct {
 
 var debouncedSearch = Debounce(func(args ...interface{}) tea.Msg {
 	query := args[0].(string)
-	return rpc.RpcClient.Search(query)
+	return rpc.RPCClient.SearchUsers(query)
 }, 300*time.Millisecond)
 
 func setTotalSearchResultUsers(searchMsg rpc.SearchUserMsg, m *Foreground) {
 	m.searchResultUsers = searchMsg.Response.Result.Users
 	m.SearchResultChannels = searchMsg.Response.Result.Channels
 }
-
 func (f Foreground) View() string {
-
 	foreStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder(), true).
 		BorderForeground(lipgloss.Color("6")).
@@ -162,22 +160,18 @@ func (f Foreground) View() string {
 	}
 	if f.ModalMode == ModalModeDeleteMessage {
 		title := "Delete Message"
-
 		yes := lipgloss.NewStyle().
 			Foreground(lipgloss.Color("fff")).
 			Background(lipgloss.Color("#25D366")).
 			Render("Y")
-
 		no := lipgloss.NewStyle().
 			Foreground(lipgloss.Color("fff")).
 			Background(lipgloss.Color("#dc2626")).
 			Render("N")
-
 		contentStyle := lipgloss.NewStyle().
 			Foreground(lipgloss.Color("161b22")).
 			Background(lipgloss.Color("fff")).
 			Padding(1, 2)
-
 		var content strings.Builder
 		content.WriteString("Are You Sure You want to delete this message \n")
 		content.WriteString("Press")
@@ -187,20 +181,16 @@ func (f Foreground) View() string {
 		content.WriteString(" or ")
 		content.WriteString(no)
 		content.WriteString(" to cancel")
-
 		contentString := contentStyle.Render(content.String())
-
 		boldStyle := lipgloss.NewStyle().Bold(true)
 		title = boldStyle.Render(title)
 		layout := lipgloss.JoinVertical(lipgloss.Left, title, contentString)
 		return foreStyle.Render(layout)
 	}
-
 	boldStyle := lipgloss.NewStyle().Bold(true)
 	title := boldStyle.Render("Search")
 	content := getSearchView(f)
 	var border lipgloss.Border
-
 	if f.focusedOn == SEARCH {
 		border = lipgloss.NormalBorder()
 	} else {
@@ -209,19 +199,16 @@ func (f Foreground) View() string {
 
 	searchResult := lipgloss.NewStyle().Border(border).Render(f.searchResultCombined.View())
 	layout := lipgloss.JoinVertical(lipgloss.Left, title, content, searchResult)
-
 	return foreStyle.Render(layout)
 }
 
 func getSearchView(m Foreground) string {
 	var border lipgloss.Border
-
 	if m.focusedOn == LIST {
 		border = lipgloss.NormalBorder()
 	} else {
 		border = lipgloss.DoubleBorder()
 	}
-
 	textViewString := lipgloss.NewStyle().Width(m.windowWidth/3).Height(5).Padding(0, 1).Border(border).Render(m.input.View())
 	return textViewString
 }

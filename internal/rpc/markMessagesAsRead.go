@@ -7,8 +7,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-type MarkMessagesAsReadJsonRpcResponse struct {
-	JsonRPC string `json:"jsonrpc"`
+type MarkMessagesAsReadJSONRPCResponse struct {
+	JSONRPC string `json:"jsonrpc"`
 	ID      int    `json:"id"`
 	Error   *struct {
 		Code    int         `json:"code"`
@@ -19,17 +19,17 @@ type MarkMessagesAsReadJsonRpcResponse struct {
 }
 
 type MarkMessagesAsReadMsg struct {
-	Response MarkMessagesAsReadJsonRpcResponse
+	Response MarkMessagesAsReadJSONRPCResponse
 	Err      error
 }
 
-func (c *JsonRpcClient) MarkMessagesAsRead(userPeer PeerInfo, chatType ChatType) tea.Cmd {
+func (c *JSONRPCClient) MarkMessagesAsRead(userPeer PeerInfo, chatType ChatType) tea.Cmd {
 	return func() tea.Msg {
-		rpcResponse, err := c.Call("markUnRead", []interface{}{userPeer, chatType})
+		rpcResponse, err := c.Call("markUnRead", []any{userPeer, chatType})
 		if err != nil {
 			return MarkMessagesAsReadMsg{Err: err}
 		}
-		var response MarkMessagesAsReadJsonRpcResponse
+		var response MarkMessagesAsReadJSONRPCResponse
 		if err := json.Unmarshal(rpcResponse, &response); err != nil {
 			return MarkMessagesAsReadMsg{Err: fmt.Errorf("failed to unmarshal response JSON '%s': %w", string(rpcResponse), err)}
 		}

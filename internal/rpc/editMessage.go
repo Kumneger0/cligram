@@ -7,8 +7,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-type EditMessageJsonRpcResponse struct {
-	JsonRPC string `json:"jsonrpc"`
+type EditMessageJSONRPCResponse struct {
+	JSONRPC string `json:"jsonrpc"`
 	ID      int    `json:"id"`
 	Error   *struct {
 		Code    int         `json:"code"`
@@ -19,18 +19,18 @@ type EditMessageJsonRpcResponse struct {
 }
 
 type EditMessageMsg struct {
-	Response       EditMessageJsonRpcResponse
+	Response       EditMessageJSONRPCResponse
 	Err            error
 	UpdatedMessage string
 }
 
-func (c *JsonRpcClient) EditMessage(userPeer PeerInfo, chatType ChatType, messageId int, newMessage string) tea.Cmd {
+func (c *JSONRPCClient) EditMessage(userPeer PeerInfo, chatType ChatType, messageID int, newMessage string) tea.Cmd {
 	return func() tea.Msg {
-		rpcResponse, err := c.Call("editMessage", []interface{}{userPeer, messageId, newMessage, chatType})
+		rpcResponse, err := c.Call("editMessage", []interface{}{userPeer, messageID, newMessage, chatType})
 		if err != nil {
 			return EditMessageMsg{Err: err}
 		}
-		var response EditMessageJsonRpcResponse
+		var response EditMessageJSONRPCResponse
 		if err := json.Unmarshal(rpcResponse, &response); err != nil {
 			return EditMessageMsg{Err: fmt.Errorf("failed to unmarshal response JSON '%s': %w", string(rpcResponse), err)}
 		}

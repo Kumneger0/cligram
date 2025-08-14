@@ -7,20 +7,20 @@ type SuccessDeleteMessageResult struct {
 }
 
 type DeleteMessageResultResponse struct {
-	JsonRPC string `json:"jsonrpc"`
+	JSONRPC string `json:"jsonrpc"`
 	ID      int    `json:"id"`
 	Error   *struct {
-		Code    int         `json:"code"`
-		Message string      `json:"message"`
-		Data    interface{} `json:"data,omitempty"`
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+		Data    any    `json:"data,omitempty"`
 	} `json:"error,omitempty"`
 	Result *SuccessDeleteMessageResult `json:"result,omitempty"`
 }
 
-func (c *JsonRpcClient) DeleteMessage(peerInfo PeerInfo, messageId int, chatType ChatType) (DeleteMessageResultResponse, error) {
-	rpcCallParams := []interface{}{}
+func (c *JSONRPCClient) DeleteMessage(peerInfo PeerInfo, messageID int, chatType ChatType) (DeleteMessageResultResponse, error) {
+	rpcCallParams := []any{}
 	rpcCallParams = append(rpcCallParams, peerInfo)
-	rpcCallParams = append(rpcCallParams, messageId)
+	rpcCallParams = append(rpcCallParams, messageID)
 	rpcCallParams = append(rpcCallParams, chatType)
 
 	responseBytes, err := c.Call("deleteMessage", rpcCallParams)

@@ -6,8 +6,8 @@ import (
 	"time"
 )
 
-type SetUserTypingJsonRpcResponse struct {
-	JsonRPC string `json:"jsonrpc"`
+type SetUserTypingJSONRPCResponse struct {
+	JSONRPC string `json:"jsonrpc"`
 	ID      int    `json:"id"`
 	Error   *struct {
 		Code    int         `json:"code"`
@@ -17,13 +17,13 @@ type SetUserTypingJsonRpcResponse struct {
 	Result bool `json:"result,omitempty"`
 }
 
-func (c *JsonRpcClient) SetUserTyping(userPeer PeerInfo, chatType ChatType) {
+func (c *JSONRPCClient) SetUserTyping(userPeer PeerInfo, chatType ChatType) {
 	time.Sleep(1000 * time.Millisecond)
 	rpcResponse, err := c.Call("setUserTyping", []any{userPeer, chatType})
 	if err != nil {
 		slog.Error(err.Error())
 	}
-	var response SetUserTypingJsonRpcResponse
+	var response SetUserTypingJSONRPCResponse
 	if err := json.Unmarshal(rpcResponse, &response); err != nil {
 		slog.Error(err.Error())
 	}

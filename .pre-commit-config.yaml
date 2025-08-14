@@ -12,3 +12,10 @@ repos:
       - id: go-lint
       - id: golangci-lint-mod
         args: [-c.golang-ci.yml]
+  - repo: local
+    hooks:
+      - id: lint
+        name: lint
+        entry: make lint
+        language: system
+        types: [go]

@@ -9,7 +9,6 @@ import (
 )
 
 func Init() *lumberjack.Logger {
-
 	logFilePath := filepath.Join(os.TempDir(), "cligram.log")
 
 	rotator := &lumberjack.Logger{
