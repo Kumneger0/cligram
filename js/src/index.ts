@@ -1,15 +1,18 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 import { Buffer } from 'buffer';
 import { stderr, stdin, stdout } from 'process';
 
 import { TelegramClient } from 'telegram';
-import { RPCMessageToError, RPCError as TelegramRpcError } from 'telegram/errors/index.js';
+import { RPCError as TelegramRpcError } from 'telegram/errors/index.js';
 import { LogLevel } from 'telegram/extensions/Logger.js';
 import { login, logout } from './commands';
 import { FormattedMessage, UserInfo } from './lib/types';
+import { logger } from './lib/utils';
 import { getTelegramClient } from './lib/utils/auth';
 import { getUserChats, getUserInfo, searchUsers } from './telegram/client';
-import { deleteMessage, editMessage, forwardMessage, getAllMessages, listenForEvents, markUnRead, sendMessage, setUserTyping } from './telegram/messages';
+import { deleteMessage, editMessage, forwardMessage, getAllMessages, listenForEvents, markUnRead, phoneCall, sendMessage, setUserTyping } from './telegram/messages';
+
+export const callKey = new Map<"privateKey" | "prime-modulus" | "publicKeyBytes", bigInt.BigInteger | Buffer>()
 
 const stringify = JSON.stringify
 
@@ -26,8 +29,8 @@ for (const mName of Object.keys(console)) {
 }
 
 const arg = process.argv[2]
-
-const handlers = {
+type Handler = (client: TelegramClient, ...args: unknown[]) => Promise<unknown>;
+const handlers: Record<string, Handler> = {
 	sendMessage,
 	deleteMessage,
 	editMessage,
@@ -38,7 +41,8 @@ const handlers = {
 	forwardMessage,
 	markUnRead,
 	setUserTyping,
-};
+	phoneCall
+} as const
 
 
 type RestParameters<TFunc extends (client: any, ...args: any[]) => any> = TFunc extends (
@@ -212,6 +216,7 @@ let telegramClientInstance: TelegramClient | null = null;
 let cleanUp: () => void;
 
 async function startup() {
+	logger.info('Starting up the application');
 	try {
 		if (arg === "login") {
 			await login()
@@ -265,7 +270,6 @@ async function startup() {
 }
 
 async function messageProcessingLoop(client: TelegramClient) {
-
 	cleanUp = await listenForEvents(client, {
 		updateUserTyping(user) {
 			const userTypingEvent: RpcTelegramEventsNotification = {
@@ -304,6 +308,7 @@ async function messageProcessingLoop(client: TelegramClient) {
 			writeToStdout(telegramUserOnlineEvent)
 		}
 	});
+
 	while (true) {
 		let msg: IncomingMessage;
 		try {
@@ -341,52 +346,22 @@ async function messageProcessingLoop(client: TelegramClient) {
 
 			try {
 				let result: unknown;
-				console.log('requestMethod', request.method)
-				switch (request.method) {
-					case 'sendMessage':
-						result = await handlers.sendMessage(client, ...request.params);
-						break;
-					case 'deleteMessage':
-						result = await handlers.deleteMessage(client, ...request.params);
-						break;
-					case 'editMessage':
-						result = await handlers.editMessage(client, ...request.params);
-						break;
-					case 'searchUsers':
-						result = await handlers.searchUsers(client, ...request.params);
-						break;
-					case 'getUserChats':
-						// announce that we are fetching user chats
-						result = await handlers.getUserChats(client, ...request.params);
-						break;
-					case 'getUserInfo':
-						result = await handlers.getUserInfo(client, ...request.params);
-						break;
-					case "getAllMessages":
-						result = await handlers.getAllMessages(client, ...request.params)
-						break
-					case "forwardMessage":
-						result = await handlers.forwardMessage(client, ...request.params)
-						break
-					case "markUnRead":
-						result = await handlers.markUnRead(client, ...request.params)
-						break
-					case "setUserTyping":
-						result = await handlers.setUserTyping(client, ...request.params)
-						break
-					default:
-						writeToStdout(
-							createRpcError(
-								Number((request as { id: number }).id),
-								-32601,
-								`Method not found: ${(request as any).method}`
-							)
-						);
-						continue;
+				try {
+					const method = handlers[request.method]
+					result = await method(client, ...request.params)
+				} catch (error) {
+					writeToStdout(
+						createRpcError(
+							Number((request as { id: number }).id),
+							-32601,
+							`Error handling method ${request.method}: ${error.message || 'Unknown error'}`
+						)
+					);
+					continue;
 				}
 				const response: RpcSuccess = { jsonrpc: '2.0', id: request.id, result };
 				writeToStdout(response);
-			} catch (error: any) {
+			} catch (error) {
 				let errorCode = -32000;
 				let errorMessage = 'An unexpected error occurred in the handler.';
 				let errorData: unknown | undefined;
@@ -399,28 +374,16 @@ async function messageProcessingLoop(client: TelegramClient) {
 				} else if (typeof error === 'string') {
 					errorMessage = error;
 				}
-				console.error(
-					`Error processing method ${request.method}: ${errorMessage}\nStack: ${error?.stack}`
-				);
+				logger.error(error)
 				writeToStdout(createRpcError(request.id, errorCode, errorMessage, errorData));
 			}
 		} else {
 			const notification = msg as TypedRpcNotification;
 			if (typeof handlers[notification.method] === 'function') {
 				try {
-					switch (notification.method) {
-						case 'sendMessage':
-							await handlers.sendMessage(client, ...notification.params);
-							break;
-						case 'deleteMessage':
-							await handlers.deleteMessage(client, ...notification.params);
-							break;
-						default:
-							stderr.write(
-								`Received notification for unhandled or unknown method: ${notification.method}\n`
-							);
-					}
-				} catch (error: any) {
+					await handlers[notification.method]?.(client, ...notification.params)
+				} catch (error) {
+					logger.error(error)
 					stderr.write(
 						`Error in notification handler for ${notification.method}: ${error.message || error}\n`
 					);
@@ -439,8 +402,11 @@ async function shutdown(signal: string) {
 			stderr.write('Disconnecting Telegram client...\n');
 			await telegramClientInstance.disconnect();
 			stderr.write('Telegram client disconnected.\n');
-		} catch (e: any) {
-			stderr.write(`Error during client disconnect: ${e.message}\n`);
+		} catch (e) {
+			if (e instanceof Error) {
+				logger.error(e)
+				stderr.write(`Error during client disconnect: ${e.message}\n`);
+			}
 		}
 	}
 	cleanUp?.()
@@ -450,7 +416,10 @@ async function shutdown(signal: string) {
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 
-startup().catch((err) => {
-	stderr.write(`Fatal error in startup promise: ${err.message || err}\nStack: ${err?.stack}\n`);
-	process.exit(1);
-});
+try {
+	await startup().catch((err) => {
+		stderr.write(`Fatal error in startup promise: ${err.message || err}\nStack: ${err?.stack}\n`);
+	});
+} catch (err) {
+	logger.error(err)
+}

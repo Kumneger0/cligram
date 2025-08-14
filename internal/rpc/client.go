@@ -132,11 +132,12 @@ func ReadStdOut(rpcClient *JsonRpcClient) ([]byte, error) {
 				return nil, err
 			}
 			slog.Error(err.Error())
-			return nil, err
+			// return nil, fmt.Errorf("error reading from stdout: %w", err)
+			break
 		}
 		line := string(lineBytes)
 		if line == "" {
-			break	
+			break
 		}
 
 		parts := strings.SplitN(line, ":", 2)
@@ -234,10 +235,15 @@ type UserTyping struct {
 	User UserInfo
 }
 
+type RpcError struct {
+	Error error
+}
+
 type Notification struct {
 	NewMessageMsg        NewMessageMsg
 	UserOnlineOfflineMsg UserOnlineOffline
 	UserTyping           UserTyping
+	RpcError             RpcError
 }
 
 func ProcessIncomingNotifications(p chan Notification) {
@@ -248,6 +254,11 @@ func ProcessIncomingNotifications(p chan Notification) {
 			if errors.Is(err, io.EOF) {
 				slog.Info("EOF reached while reading from RpcClient, continuing to next iteration")
 				continue
+			}
+			p <- Notification{
+				RpcError: RpcError{
+					Error: fmt.Errorf("AN error occurred while reading from RpcClient. Please check your connection or try restarting the application"),
+				},
 			}
 			slog.Error("Error reading from RpcClient", "error", err.Error())
 			continue

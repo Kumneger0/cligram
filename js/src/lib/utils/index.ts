@@ -87,3 +87,5 @@ export function formatLastSeen(lastSeen: LastSeen) {
 	}
 	return `last seen on ${format(date, 'MMM d, yyyy')} at ${format(date, 'h:mm a')}`;
 }
+
+export { default as logger } from './logger';

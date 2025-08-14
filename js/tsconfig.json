@@ -18,6 +18,7 @@
 		"sourceMap": true,
 		"resolveJsonModule": true,
 		"jsx": "react",
+		"noEmitOnError": false,
 		"esModuleInterop": true,
 		"paths": {
 			"@/*": ["src/*"]

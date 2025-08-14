@@ -43,15 +43,15 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Warning: could not write PID to lock file: %v\n", err)
 	}
 
-	loggerFile := logger.Init()
-	defer loggerFile.Close()
+	logger := logger.Init()
+	defer logger.Close()
 
 	if err := cmd.Execute(version); err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)
 		os.Exit(1)
 	}
 
-	if !slices.Contains(os.Args, "upgrade") {
+	if !slices.Contains(os.Args, "upgrade") && version != "" {
 		IsUpdateAvailable := cmd.GetNewVersionInfo(version)
 		if IsUpdateAvailable.IsUpdateAvailable {
 			fmt.Println("An update is available use cligram upgrade to update to latest version")

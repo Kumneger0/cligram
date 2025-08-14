@@ -1,13 +1,18 @@
 import { getConfig } from '@/config/configManager';
-import { entityCache } from '@/lib/utils';
+import { entityCache, logger } from '@/lib/utils';
+import bigInt from 'big-integer';
 import notifier from 'node-notifier';
+import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import { Api, TelegramClient } from 'telegram';
 import { IterMessagesParams, markAsRead } from 'telegram/client/messages';
 import { CustomFile } from 'telegram/client/uploads';
 import { Raw } from 'telegram/events';
+import { generateRandomBigInt, readBigIntFromBuffer, readBufferFromBigInt, sha256 } from "telegram/Helpers";
 import terminalSize from 'term-size';
 import terminalImage from 'terminal-image';
+
+import { callKey } from '..';
 import {
 	ChatType,
 	FormattedMessage,
@@ -20,14 +25,13 @@ import { getUserInfo } from './client';
 
 type GetEntityTypes = {
 	peer: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger };
-	type: ChatType;
 };
 
 const getEntity = async ({ peer }: GetEntityTypes, client: TelegramClient) => {
 	const peerIdString = peer.peerId.toString();
 	if (entityCache.has(peerIdString)) {
 		const entity = entityCache.get(peerIdString);
-		return entity;
+		return entity as Api.TypeInputPeer
 	}
 	const entity = await client.getInputEntity(peer.peerId);
 	entityCache.set(peerIdString, entity);
@@ -50,7 +54,7 @@ export const setUserTyping = async (
 	type: ChatType
 ) => {
 	try {
-		const entity = await getEntity({ peer, type }, client);
+		const entity = await getEntity({ peer }, client);
 		await client.invoke(
 			new Api.messages.SetTyping({
 				peer: entity,
@@ -73,9 +77,9 @@ export const setUserTyping = async (
  * @param {ChatType} params.type - The type of the peer (e.g., 'user' or 'channel')
  * @returns {Promise<any>} The result of marking messages as unread
  */
-export const markUnRead = async (client: TelegramClient, peer: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger }, type: ChatType) => {
+export const markUnRead = async (client: TelegramClient, peer: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger }) => {
 	try {
-		const entity = await getEntity({ peer, type }, client);
+		const entity = await getEntity({ peer }, client);
 		const result = await markAsRead(client, entity);
 		return result;
 	} catch (err) {
@@ -108,12 +112,9 @@ type ForwardMessageParams = {
 export async function forwardMessage(client: TelegramClient, params: ForwardMessageParams) {
 	const fromPeerEntity = await getEntity({
 		peer: { accessHash: params.fromPeer.accessHash, peerId: params.fromPeer.peerId },
-		type: params.type
 	}, client);
 	const toPeerEntity = await getEntity({
 		peer: { accessHash: params.toPeer.accessHash, peerId: params.toPeer.peerId },
-		//TODO: we need to allow forwarding to groups, own channel and bot let's hard this for now 
-		type: "user"
 	}, client);
 
 	const result = await client.invoke(
@@ -124,6 +125,11 @@ export async function forwardMessage(client: TelegramClient, params: ForwardMess
 		})
 	);
 	return result;
+}
+
+interface PeerInfo {
+	peerId: bigInt.BigInteger;
+	accessHash: bigInt.BigInteger;
 }
 
 /**
@@ -142,7 +148,7 @@ export async function forwardMessage(client: TelegramClient, params: ForwardMess
  */
 export const sendMessage = async (
 	client: TelegramClient,
-	peerInfo: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger },
+	peerInfo: PeerInfo,
 	message: string,
 	isReply?: boolean | undefined,
 	replyToMessageId?: number,
@@ -154,7 +160,7 @@ export const sendMessage = async (
 	if (!client.connected) {
 		await client.connect();
 	}
-	const entityLike = type === 'group' ? peerInfo.peerId : await getEntity({ peer: peerInfo, type }, client);
+	const entityLike = type === 'group' ? peerInfo.peerId : await getEntity({ peer: peerInfo }, client);
 	if (isFile && path) {
 		const buffer = await fs.readFile(path);
 		const fileName = path.split('/').pop() ?? 'file';
@@ -193,6 +199,65 @@ export const sendMessage = async (
 	};
 };
 
+const PROTOCOL_LAYERS = {
+	minLayer: 93,
+	maxLayer: 93,
+};
+
+
+export const phoneCall = async (client: TelegramClient, calleeEntity: Api.TypeInputPeer) => {
+	const dhConfig = await client.invoke(
+		new Api.messages.GetDhConfig({
+			version: 0,
+			randomLength: 256,
+		})
+	);
+	if (dhConfig instanceof Api.messages.DhConfigNotModified) {
+		throw new Error("Invalid DHConfig");
+	}
+
+	const primeP = readBigIntFromBuffer(dhConfig.p, false, false);
+	const generatorG = bigInt(dhConfig.g);
+
+
+	let privateKeyA = bigInt.one;
+	while (!(bigInt.one.lesser(privateKeyA) && privateKeyA.lesser(primeP.minus(1)))) {
+		privateKeyA = generateRandomBigInt();
+	}
+
+	const publicKeyGA = generatorG.modPow(privateKeyA, primeP);
+	const publicKeyGABytes = readBufferFromBigInt(publicKeyGA, 256, false, false);
+	const publicKeyGAHash = await sha256(publicKeyGABytes);
+
+	await client.invoke(
+		new Api.phone.RequestCall({
+			userId: calleeEntity,
+			gAHash: publicKeyGAHash,
+			randomId: bigInt.randBetween("1", "2147483647").toJSNumber(),
+			protocol: new Api.PhoneCallProtocol({
+				minLayer: 65,
+				maxLayer: 139,
+				udpP2p: true,
+				udpReflector: true,
+				libraryVersions: [
+					"4.0.0",
+					"3.0.0",
+					"2.7.7",
+					"2.4.4",
+				],
+			}),
+		})
+
+	);
+
+	callKey.set('prime-modulus', primeP)
+	callKey.set('privateKey', privateKeyA)
+	callKey.set('publicKeyBytes', publicKeyGABytes)
+};
+
+
+
+
 /**
  * Deletes a message from a Telegram chat.
  *
@@ -206,9 +271,8 @@ export const deleteMessage = async (
 	client: TelegramClient,
 	peerInfo: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger },
 	messageId: number,
-	type: ChatType = 'user'
 ) => {
-	const entity = await getEntity({ peer: peerInfo, type }, client);
+	const entity = await getEntity({ peer: peerInfo }, client);
 	await client.deleteMessages(entity, [Number(messageId)], { revoke: true });
 	return {
 		status: 'success'
@@ -229,9 +293,8 @@ export const editMessage = async (
 	peerInfo: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger },
 	messageId: number,
 	newMessage: string,
-	type: ChatType = 'user'
 ) => {
-	const entity = await getEntity({ peer: peerInfo, type }, client);
+	const entity = await getEntity({ peer: peerInfo }, client);
 	await client.invoke(
 		new Api.messages.EditMessage({
 			peer: entity,
@@ -289,7 +352,6 @@ export async function getAllMessages<T extends ChatType>(
 		const messages = [];
 		const entity = await getEntity({
 			peer: { peerId: userId as bigInt.BigInteger, accessHash: accessHash as bigInt.BigInteger },
-			type
 		}, client);
 		const entityLike = type === 'group' ? userId : entity;
 		for await (const message of client.iterMessages(entityLike, {
@@ -357,6 +419,62 @@ export async function getAllMessages<T extends ChatType>(
 		throw new Error(`${error.message} ${error.stack} ${error.name} ${error.cause}`)
 	}
 }
+
+
+
+function bigIntToBuffer(num: bigInt.BigInteger, length: number) {
+	let hex = num.toString(16);
+	if (hex.length % 2) hex = "0" + hex;
+	const buf = Buffer.from(hex, "hex");
+	return Buffer.concat([Buffer.alloc(length - buf.length), buf]);
+}
+
+
+
+export const handlePhoneCallAccepted = async (client: TelegramClient, call: Api.PhoneCallAccepted) => {
+	try {
+		//TODO: need to work this 
+		const myPrivateA = callKey.get("privateKey") as bigInt.BigInteger;
+		const primeP = callKey.get("prime-modulus") as bigInt.BigInteger;
+		const myGABytes = callKey.get("publicKeyBytes") as Buffer;
+
+		const gB = readBigIntFromBuffer(call.gB, false, false);
+		const sharedKey = gB.modPow(myPrivateA, primeP);
+		const sharedKeyBytes = bigIntToBuffer(sharedKey, 256);
+
+		const keyFingerprint = crypto
+			.createHash("sha1")
+			.update(sharedKeyBytes)
+			.digest()
+			.slice(-8);
+
+		const inputPhoneCall = new Api.InputPhoneCall({
+			id: call.id,
+			accessHash: call.accessHash,
+		});
+
+		await client.invoke(
+			new Api.phone.ConfirmCall({
+				peer: inputPhoneCall,
+				gA: myGABytes,
+				keyFingerprint: BigInt("0x" + keyFingerprint.toString("hex")) as unknown as bigInt.BigInteger,
+				protocol: new Api.PhoneCallProtocol({
+					...PROTOCOL_LAYERS,
+					udpP2p: true,
+					udpReflector: true,
+					libraryVersions: ["4.0.0", "3.0.0", "2.7.7", "2.4.4"],
+				}),
+			})
+		);
+
+	} catch (err) {
+		logger.error(err);
+	}
+};
+
+
+
+
 /**
  * Listens for events from the Telegram client and handles them accordingly.
  *
@@ -401,10 +519,21 @@ export const listenForEvents = async (
 	};
 	const hanlder = async (event: Event) => {
 		const userId = event.userId;
+		if (event.className == "UpdatePhoneCall") {
+			const call = (event as unknown as { phoneCall: Api.PhoneCallAccepted }).phoneCall;
+			if (call.className != 'PhoneCallAccepted') {
+				return
+			}
+			//TODO: need to work this 
+			//i should get an PhoneCallAccepted event 
+			await handlePhoneCallAccepted(client, call)
+		}
+
 		const user = await getUserInfo(client, userId);
 		if (!user) {
 			return;
 		}
+
 		switch (event.className) {
 			case "UpdateUserTyping":
 				updateUserTyping(user)

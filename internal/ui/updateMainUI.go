@@ -71,6 +71,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			})
 			cmds = append(cmds, rcmd)
 		}
+	case rpc.RpcError:
+		m.ModalContent = GetModalContent(msg.Error.Error())
+		m.IsModalVisible = true
 	case rpc.MarkMessagesAsReadMsg:
 		model, cmd := m.handleMarkMessagesAsRead(msg)
 		m = model.(Model)
@@ -261,11 +264,11 @@ func (m Model) getPeerInfoAndChatType() (rpc.PeerInfo, rpc.ChatType) {
 
 func (m Model) handleGetMessages(msg rpc.GetMessagesMsg) (tea.Model, tea.Cmd) {
 	m.AreWeSwitchingModes = false
+	m.MainViewLoading = false
 	if msg.Err != nil {
 		slog.Error("Failed to get messages", "error", msg.Err.Error())
 		m.IsModalVisible = true
 		m.ModalContent = GetModalContent(msg.Err.Error())
-		m.MainViewLoading = false
 		return m, nil
 	}
 
@@ -277,7 +280,6 @@ func (m Model) handleGetMessages(msg rpc.GetMessagesMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if messagesWeGot < 1 {
-		m.MainViewLoading = false
 		return m, nil
 	}
 
@@ -285,7 +287,6 @@ func (m Model) handleGetMessages(msg rpc.GetMessagesMsg) (tea.Model, tea.Cmd) {
 	conversationLastIndex := len(m.Conversations) - 1
 	m.updateConverstaions()
 	m.ChatUI.Select(conversationLastIndex)
-	m.MainViewLoading = false
 	return m, nil
 }
 

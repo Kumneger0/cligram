@@ -1,22 +1,27 @@
 package logger
 
 import (
-	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
+
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-func Init() *os.File {
-	loggerFile, err := os.Create(filepath.Join(os.TempDir(), "cligram.log"))
-	if err != nil {
-		fmt.Println(err)
+func Init() *lumberjack.Logger {
+
+	logFilePath := filepath.Join(os.TempDir(), "cligram.log")
+
+	rotator := &lumberjack.Logger{
+		Filename:   logFilePath,
+		MaxSize:    5,
+		MaxBackups: 3,
+		MaxAge:     28,
+		Compress:   true,
 	}
 
-	handler := slog.NewJSONHandler(loggerFile, &slog.HandlerOptions{AddSource: true, Level: slog.LevelDebug})
+	handler := slog.NewJSONHandler(rotator, &slog.HandlerOptions{AddSource: true, Level: slog.LevelDebug})
 	logger := slog.New(handler)
 	slog.SetDefault(logger)
-	return loggerFile
+	return rotator
 }
-
-
