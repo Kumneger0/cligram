@@ -109,7 +109,7 @@ export type MessagesSlice = {
 export type UserInfo = {
 	firstName: string;
 	isBot: boolean;
-	isTyping: boolean
+	isTyping: boolean;
 	peerId: string;
 	accessHash: string;
 	unreadCount: number;

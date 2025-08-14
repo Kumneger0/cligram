@@ -39,21 +39,20 @@ export const cache = new LRUCache<string, DialogInfo[]>({
 	ttl: 1000 * 60 * 5
 });
 
-
 export const entityCache = new LRUCache<string, any>({
 	max: 100,
 	ttl: 1000 * 60 * 5
 });
 
-
-
-type LastSeen = {
-	type: 'time';
-	value: Date;
-} | {
-	type: "status";
-	value: string;
-}
+type LastSeen =
+	| {
+			type: 'time';
+			value: Date;
+	  }
+	| {
+			type: 'status';
+			value: string;
+	  };
 
 export function formatLastSeen(lastSeen: LastSeen) {
 	if (lastSeen?.type === 'status') {

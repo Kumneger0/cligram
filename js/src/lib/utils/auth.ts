@@ -26,7 +26,11 @@ const stringSession = new StringSession((session ?? '') as string);
 
 let telegramClient: TelegramClient;
 
-export async function authenticateUser({isCalledFromLogin}:{ isCalledFromLogin: boolean }): Promise<TelegramClient | null> {
+export async function authenticateUser({
+	isCalledFromLogin
+}: {
+	isCalledFromLogin: boolean;
+}): Promise<TelegramClient | null> {
 	const client = new TelegramClient(stringSession, Number(apiId), apiHash!, {
 		connectionRetries: 5
 	});
@@ -36,7 +40,7 @@ export async function authenticateUser({isCalledFromLogin}:{ isCalledFromLogin: 
 			return client;
 		}
 		if (!isCalledFromLogin && !session) {
-			throw Error("Are u logged in ?")
+			throw Error('Are u logged in ?');
 		}
 		await client.start({
 			phoneNumber: async () => {
@@ -91,10 +95,9 @@ export async function authenticateUser({isCalledFromLogin}:{ isCalledFromLogin: 
 	return null;
 }
 
-
-export const getTelegramClient = async (isCalledFromLogin:boolean = false) => {
+export const getTelegramClient = async (isCalledFromLogin: boolean = false) => {
 	if (!telegramClient) {
-		const result = await authenticateUser({isCalledFromLogin});
+		const result = await authenticateUser({ isCalledFromLogin });
 		if (!result) {
 			throw new Error('Failed to authetiate user');
 		}
