@@ -35,23 +35,19 @@ func (d CustomDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd {
 func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	var title string
 	var hasUnreadMessages bool = false
-
 	if entry, ok := item.(rpc.UserInfo); ok {
 		if entry.UnreadCount > 0 {
 			hasUnreadMessages = true
 		}
-
 		title = entry.Title()
 
 		if entry.IsOnline {
 			title = "🟢 " + title
 		}
-
 		title = "👤 " + title
 		if hasUnreadMessages {
 			title = title + " 🔴" + "(" + strconv.Itoa(entry.UnreadCount) + ")"
 		}
-
 	} else if entry, ok := item.(rpc.ChannelAndGroupInfo); ok {
 		title = entry.Title()
 		if entry.IsBroadcast {
@@ -110,7 +106,6 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 	m.Input.Reset()
 	var cType rpc.ChatType
 	var peerInfo rpc.PeerInfo
-
 	if m.Mode == ModeUsers || m.Mode == ModeBots {
 		if m.Mode == ModeUsers {
 			cType = rpc.ChatType(rpc.UserChat)
@@ -123,7 +118,6 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 			PeerID:     m.SelectedUser.PeerID,
 		}
 	}
-
 	if m.Mode == ModeChannels {
 		cType = rpc.ChatType(rpc.ChannelChat)
 		peerInfo = rpc.PeerInfo{
@@ -131,7 +125,6 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 			PeerID:     m.SelectedChannel.ChannelID,
 		}
 	}
-
 	if m.Mode == ModeGroups {
 		cType = rpc.ChatType(rpc.GroupChat)
 		peerInfo = rpc.PeerInfo{
@@ -143,44 +136,34 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 	if m.ReplyTo != nil {
 		messageToReply = *m.ReplyTo
 	}
-
 	var isFile bool
 	if m.SelectedFile != "" {
 		isFile = true
 	}
-
 	var filepath string
 	if isFile {
 		filepath = m.SelectedFile
 	}
-
 	if _, err := os.Stat(m.SelectedFile); os.IsNotExist(err) && isFile {
 		m.Input.SetValue("Invalid file path")
 		return *m, nil
 	}
-
 	var cmds []tea.Cmd
-
 	if m.EditMessage != nil {
 		m, cmd := m.editMessage(peerInfo, cType, userMsg)
 		cmds = append(cmds, cmd)
 		return m, tea.Batch(cmds...)
 	}
-
-	replayToMessageId := strconv.FormatInt(messageToReply.ID, 10)
-
-	cmds = append(cmds, rpc.RpcClient.SendMessage(peerInfo, userMsg, m.IsReply && m.ReplyTo != nil, replayToMessageId, cType, isFile, filepath))
+	replayToMessageID := strconv.FormatInt(messageToReply.ID, 10)
+	cmds = append(cmds, rpc.RPCClient.SendMessage(peerInfo, userMsg, m.IsReply && m.ReplyTo != nil, replayToMessageID, cType, isFile, filepath))
 	if isFile {
 		m.SelectedFile = "uploading..."
 	}
-
 	content := userMsg
-
 	if isFile {
 		content = "This Message is not supported by this Telegram client."
 	}
-
-	config := config.GetConfig()
+	cligramConfig := config.GetConfig()
 	newMessage := rpc.FormattedMessage{
 		ID:                   int64(rand.Int()),
 		Sender:               "you",
@@ -196,27 +179,23 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 	firstOneRemoved := m.Conversations[1:]
 	firstOneRemoved = append(firstOneRemoved, newMessage)
 	copy(m.Conversations[:], firstOneRemoved)
-
 	var cmd tea.Cmd
-
-	if *config.Chat.ReadReceiptMode == "default" {
-		cmd = rpc.RpcClient.MarkMessagesAsRead(rpc.PeerInfo{
+	if *cligramConfig.Chat.ReadReceiptMode == "default" {
+		cmd = rpc.RPCClient.MarkMessagesAsRead(rpc.PeerInfo{
 			AccessHash: peerInfo.AccessHash,
 			PeerID:     peerInfo.PeerID,
 		}, cType)
 		cmds = append(cmds, cmd)
 	}
-
 	m.Input.Reset()
 	m.IsReply = false
 	m.ReplyTo = nil
 	m.updateConverstaions()
-
 	return *m, tea.Batch(cmds...)
 }
 
 func (m *Model) editMessage(peerInfo rpc.PeerInfo, cType rpc.ChatType, userMsg string) (Model, tea.Cmd) {
-	cmd := rpc.RpcClient.EditMessage(rpc.PeerInfo{
+	cmd := rpc.RPCClient.EditMessage(rpc.PeerInfo{
 		AccessHash: peerInfo.AccessHash,
 		PeerID:     peerInfo.PeerID,
 	}, cType, int(m.EditMessage.ID), userMsg)
@@ -234,7 +213,6 @@ func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (M
 		m.SelectedFile = path
 		m.IsFilepickerVisible = false
 	}
-
 	switch m.FocusedOn {
 	case Input:
 		m.Input.Focus()
@@ -253,7 +231,6 @@ func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (M
 			m.Groups, cmd = m.Groups.Update(msg)
 			cmds = append(cmds, cmd)
 		}
-
 	default:
 		m.ChatUI, cmd = m.ChatUI.Update(msg)
 		cmds = append(cmds, cmd)
@@ -263,16 +240,14 @@ func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (M
 
 func handleUserChange(m *Model) (Model, tea.Cmd) {
 	pInfo, cType := getMessageParams(m)
-	cmd := rpc.RpcClient.GetMessages(pInfo, cType, nil, nil, nil)
-	config := config.GetConfig()
-
-	if *config.Chat.ReadReceiptMode == "instant" {
-		cmd = tea.Batch(cmd, rpc.RpcClient.MarkMessagesAsRead(rpc.PeerInfo{
+	cmd := rpc.RPCClient.GetAllMessages(pInfo, cType, 50, nil, nil, nil)
+	cligramConfig := config.GetConfig()
+	if *cligramConfig.Chat.ReadReceiptMode == "instant" {
+		cmd = tea.Batch(cmd, rpc.RPCClient.MarkMessagesAsRead(rpc.PeerInfo{
 			AccessHash: pInfo.AccessHash,
 			PeerID:     pInfo.PeerID,
 		}, cType))
 	}
-
 	m.Conversations = [50]rpc.FormattedMessage{}
 	m.MainViewLoading = true
 	m.ChatUI.ResetSelected()
@@ -284,7 +259,6 @@ func changeFocusMode(m *Model, msg string, shift bool) (Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	currentlyFoucsedOn := m.FocusedOn
 	canWrite := (m.Mode == ModeUsers || m.Mode == ModeGroups || m.Mode == ModeBots) || (m.Mode == ModeChannels && m.SelectedChannel.IsCreator)
-
 	if currentlyFoucsedOn == SideBar {
 		if shift {
 			m.FocusedOn = Input
@@ -318,7 +292,7 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 	}
 	areWeInGroupMode := m.Mode == ModeGroups && m.FocusedOn == Mainview
 	//i don't think 🤔 we should keep the list in memory
-	// if we keep this is in memory this will cause high memory usage especailly for users
+	// if we keep this is in memory this will cause high memory usage especially for users
 	// who has many chats so for now le't clear this up
 	// TODO:🤔 can we do better
 	clearSidebarLists := func(clearUsers, clearChannels, clearGroups bool) {
@@ -343,7 +317,7 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 			} else {
 				m.Input.Reset()
 			}
-			return *m, rpc.RpcClient.GetUserChannel()
+			return *m, rpc.RPCClient.GetUserChannel()
 		case "u":
 			m.Mode = ModeUsers
 			clearSidebarLists(false, true, true)
@@ -360,7 +334,6 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 							break
 						}
 					}
-
 					if foundIndex == -1 {
 						userItems = append(userItems, list.Item(m.SelectedUser))
 						m.Users.SetItems(userItems)
@@ -368,24 +341,23 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 					} else {
 						m.Users.Select(foundIndex)
 					}
-
 					m.ChatUI.SetItems(nil)
-					return *m, rpc.RpcClient.GetMessages(rpc.PeerInfoParams{
+					return *m, rpc.RPCClient.GetAllMessages(rpc.PeerInfoParams{
 						AccessHash: m.SelectedUser.AccessHash,
 						PeerID:     m.SelectedUser.PeerID,
-					}, rpc.UserChat, nil, nil, nil)
+					}, rpc.UserChat, 50, nil, nil, nil)
 				}
 			}
-			return *m, rpc.RpcClient.GetChats(rpc.ModeUser)
+			return *m, rpc.RPCClient.GetUserChatsCmd(rpc.ModeUser)
 		case "g":
 			m.Mode = ModeGroups
 			clearSidebarLists(true, true, false)
-			return *m, rpc.RpcClient.GetUserGroups()
+			return *m, rpc.RPCClient.GetUserGroups()
 		case "b":
 			m.Mode = ModeBots
 			clearSidebarLists(false, true, true)
 			m.Users.ResetSelected()
-			return *m, rpc.RpcClient.GetChats(rpc.ModeBot)
+			return *m, rpc.RPCClient.GetUserChatsCmd(rpc.ModeBot)
 		}
 		return *m, nil
 	}

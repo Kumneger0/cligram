@@ -99,7 +99,7 @@ export async function getChannelInfo(client: TelegramClient, channelId: bigInt.B
 export async function searchUsers(
 	client: TelegramClient,
 	query: string
-): Promise<{ users: UserInfo[], channels: ChannelInfo[] }> {
+): Promise<{ users: UserInfo[]; channels: ChannelInfo[] }> {
 	if (!client.connected) {
 		await client.connect();
 	}
@@ -117,12 +117,12 @@ export async function searchUsers(
 			return {
 				firstName: user.firstName ?? '',
 				peerId: user.id.toString(),
-				accessHash: user?.accessHash?.toString() ?? "",
+				accessHash: user?.accessHash?.toString() ?? '',
 				isBot: user.bot ?? false,
 				unreadCount: 0,
-				lastSeen: "",
+				lastSeen: '',
 				isOnline: false,
-				isTyping: false,
+				isTyping: false
 			} satisfies UserInfo;
 		});
 	//TODO: i'll come back later and fix this
@@ -138,7 +138,7 @@ export async function searchUsers(
 	// 	});
 
 	//TODO: i'll come back later and fix this
-	//@ts-ignore 
+	//@ts-ignore
 	const channels = await Promise.all(
 		result.results
 			.filter((result) => {
@@ -159,13 +159,13 @@ export async function searchUsers(
 			})
 	);
 
-	return { users, channels }
+	return { users, channels };
 }
 
-export function getUserChats(client: TelegramClient, type: "user"): Promise<UserInfo[]>
-export function getUserChats(client: TelegramClient, type: "channel"): Promise<ChannelInfo[]>
-export function getUserChats(client: TelegramClient, type: "group"): Promise<ChannelInfo[]>
-export function getUserChats(client: TelegramClient, type: "bot"): Promise<UserInfo[]>
+export function getUserChats(client: TelegramClient, type: 'user'): Promise<UserInfo[]>;
+export function getUserChats(client: TelegramClient, type: 'channel'): Promise<ChannelInfo[]>;
+export function getUserChats(client: TelegramClient, type: 'group'): Promise<ChannelInfo[]>;
+export function getUserChats(client: TelegramClient, type: 'bot'): Promise<UserInfo[]>;
 
 /**
  * Retrieves a list of chats for the connected Telegram client, filtered by the specified chat type.
@@ -182,13 +182,12 @@ export function getUserChats(client: TelegramClient, type: "bot"): Promise<UserI
  */
 export async function getUserChats(
 	client: TelegramClient,
-	type: "channel" | 'group' | 'user' | "bot"
+	type: 'channel' | 'group' | 'user' | 'bot'
 ): Promise<ChannelInfo[] | UserInfo[]> {
 	if (!client.connected) {
 		await client.connect();
 	}
 	const cached = cache.get(CACHE_KEY);
-
 
 	const result = cached ?? ((await client.getDialogs({})) as unknown as DialogInfo[]);
 	cache.set(CACHE_KEY, result);
@@ -196,11 +195,11 @@ export async function getUserChats(
 		const groupOrChannels =
 			type === 'channel'
 				? result.filter((dialog) => {
-					return dialog.dialog.peer.className === 'PeerChannel';
-				})
+						return dialog.dialog.peer.className === 'PeerChannel';
+					})
 				: result.filter((dialog) => {
-					return dialog.isGroup;
-				});
+						return dialog.isGroup;
+					});
 
 		const channelsInfo = await Promise.all(
 			groupOrChannels.map(async (chan) => {
@@ -238,8 +237,7 @@ export async function getUserChats(
 				} satisfies ChannelInfo;
 			})
 		);
-		return channelsInfo as ChannelInfo[]
-
+		return channelsInfo as ChannelInfo[];
 	}
 
 	if (type === 'user' || type == 'bot') {
@@ -272,19 +270,14 @@ export async function getUserChats(
 				return user !== null;
 			})
 			.filter(({ isBot, firstName }) => {
-				if (type === 'bot') return isBot && firstName
+				if (type === 'bot') return isBot && firstName;
 				return !isBot && firstName;
 			});
 
-		return chatUsers as UserInfo[]
-
+		return chatUsers as UserInfo[];
 	}
-	return [] as UserInfo[]
-
+	return [] as UserInfo[];
 }
-
-
-
 
 const userInfoCache = new LRUCache<string, UserInfo>({
 	max: 100,
@@ -313,22 +306,21 @@ export async function getUserInfo(
 
 		const lastSeen = wasOnline
 			? {
-				type: 'time' as const,
-				value: date!
-			}
+					type: 'time' as const,
+					value: date!
+				}
 			: {
-				type: 'status' as const,
-				value: user.status?.className
-					? (lastSeenMessages[user.status?.className as keyof typeof lastSeenMessages] ??
-						'last seen a long time ago')
-					: 'last seen a long time ago'
-			}
-
+					type: 'status' as const,
+					value: user.status?.className
+						? (lastSeenMessages[user.status?.className as keyof typeof lastSeenMessages] ??
+							'last seen a long time ago')
+						: 'last seen a long time ago'
+				};
 
 		const userInfo = {
 			firstName: user.firstName,
 			isBot: user.bot,
-			peerId: userId.toString() ?? "",
+			peerId: userId.toString() ?? '',
 			accessHash: user?.accessHash?.toString(),
 			lastSeen: formatLastSeen(lastSeen),
 			isOnline: user.status?.className === 'UserStatusOnline',

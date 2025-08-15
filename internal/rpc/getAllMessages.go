@@ -8,12 +8,12 @@ import (
 )
 
 type UserConversationResponse struct {
-	JsonRPC string `json:"jsonrpc"`
+	JSONRPC string `json:"jsonrpc"`
 	ID      int    `json:"id"`
 	Error   *struct {
-		Code    int         `json:"code"`
-		Message string      `json:"message"`
-		Data    interface{} `json:"data,omitempty"`
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+		Data    any    `json:"data,omitempty"`
 	} `json:"error,omitempty"`
 	Result [50]FormattedMessage `json:"result,omitempty"`
 }
@@ -60,23 +60,24 @@ const (
 	Bot         chatType = "bot"
 )
 
-type IterParams map[string]interface{}
+type IterParams map[string]any
 
 type GetMessagesMsg struct {
 	Messages UserConversationResponse
 	Err      error
 }
 
-func (c *JsonRpcClient) GetMessages(
-	pInfo PeerInfoParams,
-	cType ChatType,
+func (c *JSONRPCClient) GetAllMessages(
+	peerInfo PeerInfoParams,
+	chatType ChatType,
+	limit int,
 	offsetID *int,
 	chatAreaWidth *int,
 	itParams IterParams,
 ) tea.Cmd {
-	paramsFixed := make([]interface{}, 5)
-	paramsFixed[0] = pInfo
-	paramsFixed[1] = cType
+	paramsFixed := make([]any, 5)
+	paramsFixed[0] = peerInfo
+	paramsFixed[1] = chatType
 
 	if offsetID != nil {
 		paramsFixed[2] = *offsetID
@@ -114,5 +115,4 @@ func (c *JsonRpcClient) GetMessages(
 			Err:      nil,
 		}
 	}
-
 }

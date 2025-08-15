@@ -128,7 +128,6 @@ func upgradeCligram(currentVersion string) *cobra.Command {
 				if err != nil {
 					log.Fatal("oops we failed to get the distro you are using")
 				}
-
 			}
 			if osName != LINUX {
 				fmt.Println("upgrade command is only supported in linux")
@@ -149,14 +148,14 @@ func upgradeCligram(currentVersion string) *cobra.Command {
 			}
 			latestRelease := newVersionInfo.LatestRelease
 
-			var assetUrl string
+			var assetURL string
 			format := fileExtensions[LinuxDisto(strings.ToLower(distroName))]
 			for _, v := range latestRelease.Assets {
 				if strings.Contains(v.Name, runtime.GOARCH) && strings.Contains(v.Name, strings.ToLower(string(osName))) && strings.Contains(v.Name, format) {
-					assetUrl = v.BrowserDownloadURL
+					assetURL = v.BrowserDownloadURL
 				}
 			}
-			if assetUrl == "" {
+			if assetURL == "" {
 				log.Fatal("No compatible package found for your system")
 			}
 
@@ -188,7 +187,7 @@ func upgradeCligram(currentVersion string) *cobra.Command {
 
 			filePathToWriteFile := filepath.Join(cacheDir, fileName)
 			_ = os.Remove(filePathToWriteFile)
-			err = downloadBinary(assetUrl, filePathToWriteFile)
+			err = downloadBinary(assetURL, filePathToWriteFile)
 
 			if err != nil {
 				fmt.Println("Failed To downloand the binary", err.Error())
@@ -314,11 +313,11 @@ func installBinary(installCommand ...string) {
 	fmt.Print("Continue? (y/N): ")
 	var response string
 	if _, scanErr := fmt.Scanln(&response); scanErr != nil {
-		fmt.Println("Installation cancelled")
+		fmt.Println("Installation canceled")
 		return
 	}
 	if !strings.EqualFold(response, "y") && !strings.EqualFold(response, "yes") {
-		fmt.Println("Installation cancelled")
+		fmt.Println("Installation canceled")
 		return
 	}
 	cmd := exec.Command("sudo", installCommand...)

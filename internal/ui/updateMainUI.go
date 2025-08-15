@@ -71,7 +71,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			})
 			cmds = append(cmds, rcmd)
 		}
-	case rpc.RpcError:
+	case rpc.Error:
 		m.ModalContent = GetModalContent(msg.Error.Error())
 		m.IsModalVisible = true
 	case rpc.MarkMessagesAsReadMsg:
@@ -206,7 +206,7 @@ func (m Model) handleMessageDeletion(msg MessageDeletionConfrimResponseMsg) (tea
 	peer, cType := m.getPeerInfoAndChatType()
 	selectedItemInChat := m.ChatUI.SelectedItem().(rpc.FormattedMessage)
 
-	response, err := rpc.RpcClient.DeleteMessage(peer, int(selectedItemInChat.ID), cType)
+	response, err := rpc.RPCClient.DeleteMessage(peer, int(selectedItemInChat.ID), cType)
 	if err != nil {
 		m.IsModalVisible = true
 		m.ModalContent = GetModalContent(err.Error())
@@ -321,17 +321,17 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch msg.String() {
 	case "shift+down":
-		if(m.FocusedOn == Mainview){
-        items := m.ChatUI.Items()
-		lastIndex := len(items) - 1
-		m.ChatUI.Select(lastIndex) 
+		if m.FocusedOn == Mainview {
+			items := m.ChatUI.Items()
+			lastIndex := len(items) - 1
+			m.ChatUI.Select(lastIndex)
 		}
 	// case "up", "down":
-		/*
-			         as of now we are only showing last 50 messages
-					 TODO: consider implementing pagination and show all messages
-		*/
-		// return m, nil
+	/*
+		         as of now we are only showing last 50 messages
+				 TODO: consider implementing pagination and show all messages
+	*/
+	// return m, nil
 	case "ctrl+a":
 		m, cmd := m.handleCtrlA()
 		cmds = append(cmds, cmd)
@@ -544,13 +544,13 @@ func (m Model) handleUserGroups(msg rpc.UserGroupsMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleForwardMessage(msg ForwardMsg) (tea.Model, tea.Cmd) {
 	messageToBeForwarded := msg.msg
-	reciever := *msg.reciever
+	receiver := *msg.receiver
 	fromPeer := *msg.fromPeer
 
-	from, toPeer, cType := m.extractPeerInfo(fromPeer, reciever)
+	from, toPeer, cType := m.extractPeerInfo(fromPeer, receiver)
 	messageIDs := []int{int(messageToBeForwarded.ID)}
 
-	response, err := rpc.RpcClient.ForwardMessages(from, messageIDs, toPeer, cType)
+	response, err := rpc.RPCClient.ForwardMessages(from, messageIDs, toPeer, cType)
 	if err != nil {
 		slog.Error("Failed to forward message", "error", err.Error())
 		return m, nil
@@ -563,7 +563,7 @@ func (m Model) handleForwardMessage(msg ForwardMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) extractPeerInfo(fromPeer, reciever interface{}) (from, toPeer rpc.PeerInfo, cType rpc.ChatType) {
+func (m Model) extractPeerInfo(fromPeer, receiver any) (from, toPeer rpc.PeerInfo, cType rpc.ChatType) {
 	if fromUser, ok := fromPeer.(rpc.UserInfo); ok {
 		from.PeerID = fromUser.PeerID
 		from.AccessHash = fromUser.AccessHash
@@ -576,12 +576,12 @@ func (m Model) extractPeerInfo(fromPeer, reciever interface{}) (from, toPeer rpc
 		cType = "channel"
 	}
 
-	if userOrChannel, ok := reciever.(rpc.UserInfo); ok {
+	if userOrChannel, ok := receiver.(rpc.UserInfo); ok {
 		toPeer.PeerID = userOrChannel.PeerID
 		toPeer.AccessHash = userOrChannel.AccessHash
 	}
 
-	if channelOrGroup, ok := reciever.(rpc.ChannelAndGroupInfo); ok {
+	if channelOrGroup, ok := receiver.(rpc.ChannelAndGroupInfo); ok {
 		toPeer.PeerID = channelOrGroup.ChannelID
 		toPeer.AccessHash = channelOrGroup.AccessHash
 	}

@@ -1,7 +1,7 @@
 import { authenticateUser } from '@/lib/utils/auth';
 import { green, red } from 'kolorist';
 
-export async function login () {
+export async function login() {
 	try {
 		const client = await authenticateUser({ isCalledFromLogin: true });
 		const me = await client?.getMe();

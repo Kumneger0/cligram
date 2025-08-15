@@ -10,25 +10,37 @@ import { FormattedMessage, UserInfo } from './lib/types';
 import { logger } from './lib/utils';
 import { getTelegramClient } from './lib/utils/auth';
 import { getUserChats, getUserInfo, searchUsers } from './telegram/client';
-import { deleteMessage, editMessage, forwardMessage, getAllMessages, listenForEvents, markUnRead, phoneCall, sendMessage, setUserTyping } from './telegram/messages';
+import {
+	deleteMessage,
+	editMessage,
+	forwardMessage,
+	getAllMessages,
+	listenForEvents,
+	markUnRead,
+	phoneCall,
+	sendMessage,
+	setUserTyping
+} from './telegram/messages';
 
-export const callKey = new Map<"privateKey" | "prime-modulus" | "publicKeyBytes", bigInt.BigInteger | Buffer>()
+export const callKey = new Map<
+	'privateKey' | 'prime-modulus' | 'publicKeyBytes',
+	bigInt.BigInteger | Buffer
+>();
 
-const stringify = JSON.stringify
+const stringify = JSON.stringify;
 
 /**
  * gram.js has logs that we don't need i tried setting log level to none but it didn't work
  * so we just patch the global console object to ignore all logs
  */
 
-
 for (const mName of Object.keys(console)) {
 	console[mName] = () => {
-		// do nothing 
-	}
+		// do nothing
+	};
 }
 
-const arg = process.argv[2]
+const arg = process.argv[2];
 type Handler = (client: TelegramClient, ...args: unknown[]) => Promise<unknown>;
 const handlers: Record<string, Handler> = {
 	sendMessage,
@@ -42,8 +54,7 @@ const handlers: Record<string, Handler> = {
 	markUnRead,
 	setUserTyping,
 	phoneCall
-} as const
-
+} as const;
 
 type RestParameters<TFunc extends (client: any, ...args: any[]) => any> = TFunc extends (
 	client: TelegramClient,
@@ -89,34 +100,39 @@ type RpcErrorResponse = {
 	};
 };
 
-
 type IncomingMessage = TypedRpcRequest | TypedRpcNotification;
 
 type NewMessageParams = {
-	message: FormattedMessage,
-	user: UserInfo
-}
+	message: FormattedMessage;
+	user: UserInfo;
+};
 type UserTypingParams = {
-	user: UserInfo
-}
+	user: UserInfo;
+};
 
 type UserOnlineOfflineParams = {
-	accessHash: string, firstName: string, status: 'online' | 'offline', lastSeen?: Date
-}
+	accessHash: string;
+	firstName: string;
+	status: 'online' | 'offline';
+	lastSeen?: Date;
+};
 
 type RpcTelegramEventsNotification = {
 	jsonrpc: '2.0';
-} & ({
-	method: "newMessage";
-	params: NewMessageParams;
-} | {
-	method: "userOnlineOffline";
-	params: UserOnlineOfflineParams;
-} | {
-	method: 'userTyping',
-	params: UserTypingParams
-})
-
+} & (
+	| {
+			method: 'newMessage';
+			params: NewMessageParams;
+	  }
+	| {
+			method: 'userOnlineOffline';
+			params: UserOnlineOfflineParams;
+	  }
+	| {
+			method: 'userTyping';
+			params: UserTypingParams;
+	  }
+);
 
 async function readHeaders(reader: typeof stdin): Promise<{ [key: string]: string }> {
 	const headers: { [key: string]: string } = {};
@@ -160,12 +176,12 @@ async function readMessage(): Promise<IncomingMessage> {
 	);
 
 	if (!contentLengthHeader) {
-		stderr.write('Error: Missing Content-Length header\n' + stringify(headers) + '\n');
+		logger.error('Error: Missing Content-Length header\n' + stringify(headers) + '\n');
 		throw new Error('Missing Content-Length header');
 	}
 	const length = parseInt(headers[contentLengthHeader!]!, 10);
 	if (isNaN(length) || length <= 0) {
-		stderr.write('Error: Invalid Content-Length header: ' + headers[contentLengthHeader] + '\n');
+		logger.error('Error: Invalid Content-Length header: ' + headers[contentLengthHeader] + '\n');
 		throw new Error('Invalid Content-Length header');
 	}
 
@@ -186,7 +202,7 @@ async function readMessage(): Promise<IncomingMessage> {
 	try {
 		return JSON.parse(payload) as IncomingMessage;
 	} catch (e) {
-		stderr.write('Error: Failed to parse JSON payload: ' + payload + '\n' + e + '\n');
+		logger.error(e);
 		throw new Error('Parse error');
 	}
 }
@@ -212,24 +228,23 @@ function createRpcError(
 
 let telegramClientInstance: TelegramClient | null = null;
 
-
 let cleanUp: () => void;
 
 async function startup() {
 	logger.info('Starting up the application');
 	try {
-		if (arg === "login") {
-			await login()
-			return
+		if (arg === 'login') {
+			await login();
+			return;
 		}
 
 		if (arg === 'logout') {
-			await logout()
-			return
+			await logout();
+			return;
 		}
 
 		const client = await getTelegramClient();
-		if (!client.connected) await client.connect()
+		if (!client.connected) await client.connect();
 
 		if (client) {
 			telegramClientInstance = client;
@@ -237,7 +252,7 @@ async function startup() {
 			const me = await telegramClientInstance.getMe();
 			if (typeof me !== 'boolean' && me?.phone) {
 				telegramClientInstance.setLogLevel(LogLevel.NONE);
-				//TODO: this is making the app to freeze 
+				//TODO: this is making the app to freeze
 				// fix this
 				// await setUserPrivacy(telegramClientInstance);
 			} else if (typeof me !== 'boolean' && !me?.phone) {
@@ -282,8 +297,8 @@ async function messageProcessingLoop(client: TelegramClient) {
 						isTyping: true
 					}
 				}
-			}
-			writeToStdout(userTypingEvent)
+			};
+			writeToStdout(userTypingEvent);
 		},
 		onMessage(message, user) {
 			const telegramMessageEvent: RpcTelegramEventsNotification = {
@@ -293,8 +308,8 @@ async function messageProcessingLoop(client: TelegramClient) {
 					message,
 					user
 				}
-			}
-			writeToStdout(telegramMessageEvent)
+			};
+			writeToStdout(telegramMessageEvent);
 		},
 		onUserOnlineStatus(user) {
 			const telegramUserOnlineEvent: RpcTelegramEventsNotification = {
@@ -304,8 +319,8 @@ async function messageProcessingLoop(client: TelegramClient) {
 					...user,
 					lastSeen: user.lastSeen ? new Date(user.lastSeen * 1000) : undefined
 				}
-			}
-			writeToStdout(telegramUserOnlineEvent)
+			};
+			writeToStdout(telegramUserOnlineEvent);
 		}
 	});
 
@@ -347,8 +362,8 @@ async function messageProcessingLoop(client: TelegramClient) {
 			try {
 				let result: unknown;
 				try {
-					const method = handlers[request.method]
-					result = await method(client, ...request.params)
+					const method = handlers[request.method];
+					result = await method(client, ...request.params);
 				} catch (error) {
 					writeToStdout(
 						createRpcError(
@@ -374,42 +389,38 @@ async function messageProcessingLoop(client: TelegramClient) {
 				} else if (typeof error === 'string') {
 					errorMessage = error;
 				}
-				logger.error(error)
+				logger.error(error);
 				writeToStdout(createRpcError(request.id, errorCode, errorMessage, errorData));
 			}
 		} else {
 			const notification = msg as TypedRpcNotification;
 			if (typeof handlers[notification.method] === 'function') {
 				try {
-					await handlers[notification.method]?.(client, ...notification.params)
+					await handlers[notification.method]?.(client, ...notification.params);
 				} catch (error) {
-					logger.error(error)
-					stderr.write(
-						`Error in notification handler for ${notification.method}: ${error.message || error}\n`
-					);
+					logger.error(error);
 				}
 			} else {
-				stderr.write(`Received notification for unknown method: ${notification.method}\n`);
+				logger.error(`Received notification for unknown method: ${notification.method}\n`);
 			}
 		}
 	}
 }
 
 async function shutdown(signal: string) {
-	stderr.write(`\nReceived ${signal}. Shutting down...\n`);
+	logger.info(`\nReceived ${signal}. Shutting down...\n`);
 	if (telegramClientInstance && telegramClientInstance.connected) {
 		try {
-			stderr.write('Disconnecting Telegram client...\n');
+			logger.info('Disconnecting Telegram client...\n');
 			await telegramClientInstance.disconnect();
-			stderr.write('Telegram client disconnected.\n');
+			logger.info('Telegram client disconnected.\n');
 		} catch (e) {
 			if (e instanceof Error) {
-				logger.error(e)
-				stderr.write(`Error during client disconnect: ${e.message}\n`);
+				logger.error(e);
 			}
 		}
 	}
-	cleanUp?.()
+	cleanUp?.();
 	process.exit(0);
 }
 
@@ -418,8 +429,8 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 try {
 	await startup().catch((err) => {
-		stderr.write(`Fatal error in startup promise: ${err.message || err}\nStack: ${err?.stack}\n`);
+		logger.error(err);
 	});
 } catch (err) {
-	logger.error(err)
+	logger.error(err);
 }

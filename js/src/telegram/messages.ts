@@ -8,7 +8,12 @@ import { Api, TelegramClient } from 'telegram';
 import { IterMessagesParams, markAsRead } from 'telegram/client/messages';
 import { CustomFile } from 'telegram/client/uploads';
 import { Raw } from 'telegram/events';
-import { generateRandomBigInt, readBigIntFromBuffer, readBufferFromBigInt, sha256 } from "telegram/Helpers";
+import {
+	generateRandomBigInt,
+	readBigIntFromBuffer,
+	readBufferFromBigInt,
+	sha256
+} from 'telegram/Helpers';
 import terminalSize from 'term-size';
 import terminalImage from 'terminal-image';
 
@@ -31,7 +36,7 @@ const getEntity = async ({ peer }: GetEntityTypes, client: TelegramClient) => {
 	const peerIdString = peer.peerId.toString();
 	if (entityCache.has(peerIdString)) {
 		const entity = entityCache.get(peerIdString);
-		return entity as Api.TypeInputPeer
+		return entity as Api.TypeInputPeer;
 	}
 	const entity = await client.getInputEntity(peer.peerId);
 	entityCache.set(peerIdString, entity);
@@ -77,7 +82,10 @@ export const setUserTyping = async (
  * @param {ChatType} params.type - The type of the peer (e.g., 'user' or 'channel')
  * @returns {Promise<any>} The result of marking messages as unread
  */
-export const markUnRead = async (client: TelegramClient, peer: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger }) => {
+export const markUnRead = async (
+	client: TelegramClient,
+	peer: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger }
+) => {
 	try {
 		const entity = await getEntity({ peer }, client);
 		const result = await markAsRead(client, entity);
@@ -110,12 +118,18 @@ type ForwardMessageParams = {
  * @returns {Promise<Api.messages.ForwardMessages>} The result of the forward operation.
  */
 export async function forwardMessage(client: TelegramClient, params: ForwardMessageParams) {
-	const fromPeerEntity = await getEntity({
-		peer: { accessHash: params.fromPeer.accessHash, peerId: params.fromPeer.peerId },
-	}, client);
-	const toPeerEntity = await getEntity({
-		peer: { accessHash: params.toPeer.accessHash, peerId: params.toPeer.peerId },
-	}, client);
+	const fromPeerEntity = await getEntity(
+		{
+			peer: { accessHash: params.fromPeer.accessHash, peerId: params.fromPeer.peerId }
+		},
+		client
+	);
+	const toPeerEntity = await getEntity(
+		{
+			peer: { accessHash: params.toPeer.accessHash, peerId: params.toPeer.peerId }
+		},
+		client
+	);
 
 	const result = await client.invoke(
 		new Api.messages.ForwardMessages({
@@ -160,7 +174,8 @@ export const sendMessage = async (
 	if (!client.connected) {
 		await client.connect();
 	}
-	const entityLike = type === 'group' ? peerInfo.peerId : await getEntity({ peer: peerInfo }, client);
+	const entityLike =
+		type === 'group' ? peerInfo.peerId : await getEntity({ peer: peerInfo }, client);
 	if (isFile && path) {
 		const buffer = await fs.readFile(path);
 		const fileName = path.split('/').pop() ?? 'file';
@@ -185,7 +200,7 @@ export const sendMessage = async (
 		onProgress?.(null);
 
 		return {
-			messageId: result?.id,
+			messageId: result?.id
 		};
 	}
 
@@ -195,30 +210,28 @@ export const sendMessage = async (
 	};
 	const result = await client.sendMessage(entityLike, sendMessageParam);
 	return {
-		messageId: result?.id,
+		messageId: result?.id
 	};
 };
 
 const PROTOCOL_LAYERS = {
 	minLayer: 93,
-	maxLayer: 93,
+	maxLayer: 93
 };
-
 
 export const phoneCall = async (client: TelegramClient, calleeEntity: Api.TypeInputPeer) => {
 	const dhConfig = await client.invoke(
 		new Api.messages.GetDhConfig({
 			version: 0,
-			randomLength: 256,
+			randomLength: 256
 		})
 	);
 	if (dhConfig instanceof Api.messages.DhConfigNotModified) {
-		throw new Error("Invalid DHConfig");
+		throw new Error('Invalid DHConfig');
 	}
 
 	const primeP = readBigIntFromBuffer(dhConfig.p, false, false);
 	const generatorG = bigInt(dhConfig.g);
-
 
 	let privateKeyA = bigInt.one;
 	while (!(bigInt.one.lesser(privateKeyA) && privateKeyA.lesser(primeP.minus(1)))) {
@@ -233,30 +246,21 @@ export const phoneCall = async (client: TelegramClient, calleeEntity: Api.TypeIn
 		new Api.phone.RequestCall({
 			userId: calleeEntity,
 			gAHash: publicKeyGAHash,
-			randomId: bigInt.randBetween("1", "2147483647").toJSNumber(),
+			randomId: bigInt.randBetween('1', '2147483647').toJSNumber(),
 			protocol: new Api.PhoneCallProtocol({
 				minLayer: 65,
 				maxLayer: 139,
 				udpP2p: true,
 				udpReflector: true,
-				libraryVersions: [
-					"4.0.0",
-					"3.0.0",
-					"2.7.7",
-					"2.4.4",
-				],
-			}),
+				libraryVersions: ['4.0.0', '3.0.0', '2.7.7', '2.4.4']
+			})
 		})
-
 	);
 
-	callKey.set('prime-modulus', primeP)
-	callKey.set('privateKey', privateKeyA)
-	callKey.set('publicKeyBytes', publicKeyGABytes)
+	callKey.set('prime-modulus', primeP);
+	callKey.set('privateKey', privateKeyA);
+	callKey.set('publicKeyBytes', publicKeyGABytes);
 };
-
-
-
 
 /**
  * Deletes a message from a Telegram chat.
@@ -270,13 +274,13 @@ export const phoneCall = async (client: TelegramClient, calleeEntity: Api.TypeIn
 export const deleteMessage = async (
 	client: TelegramClient,
 	peerInfo: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger },
-	messageId: number,
+	messageId: number
 ) => {
 	const entity = await getEntity({ peer: peerInfo }, client);
 	await client.deleteMessages(entity, [Number(messageId)], { revoke: true });
 	return {
 		status: 'success'
-	}
+	};
 };
 
 /**
@@ -292,7 +296,7 @@ export const editMessage = async (
 	client: TelegramClient,
 	peerInfo: { peerId: bigInt.BigInteger; accessHash: bigInt.BigInteger },
 	messageId: number,
-	newMessage: string,
+	newMessage: string
 ) => {
 	const entity = await getEntity({ peer: peerInfo }, client);
 	await client.invoke(
@@ -302,7 +306,7 @@ export const editMessage = async (
 			message: newMessage
 		})
 	);
-	return true
+	return true;
 };
 
 const getOrganizedWebPageMedia = (
@@ -347,12 +351,15 @@ export async function getAllMessages<T extends ChatType>(
 		if (!client.connected) {
 			await client.connect();
 		}
-		const { accessHash, peerId: userId, userFirtNameOrChannelTitle } = peerInfo
+		const { accessHash, peerId: userId, userFirtNameOrChannelTitle } = peerInfo;
 
 		const messages = [];
-		const entity = await getEntity({
-			peer: { peerId: userId as bigInt.BigInteger, accessHash: accessHash as bigInt.BigInteger },
-		}, client);
+		const entity = await getEntity(
+			{
+				peer: { peerId: userId as bigInt.BigInteger, accessHash: accessHash as bigInt.BigInteger }
+			},
+			client
+		);
 		const entityLike = type === 'group' ? userId : entity;
 		for await (const message of client.iterMessages(entityLike, {
 			limit: 50,
@@ -377,15 +384,16 @@ export async function getAllMessages<T extends ChatType>(
 					const date = new Date(message.date * 1000);
 					const imageString = await (buffer
 						? terminalImage.buffer(new Uint8Array(buffer), {
-							width
-						})
+								width
+							})
 						: null);
 
-					const senderPeerId = type === 'group' && 'fromId' in message
-						? (message.fromId as { userId: bigInt.BigInteger }).userId
-						: null
+					const senderPeerId =
+						type === 'group' && 'fromId' in message
+							? (message.fromId as { userId: bigInt.BigInteger }).userId
+							: null;
 
-					let senderUserInfo = senderPeerId ? await getUserInfo(client, senderPeerId) : null
+					let senderUserInfo = senderPeerId ? await getUserInfo(client, senderPeerId) : null;
 
 					return {
 						isUnsupportedMessage: !!(media || document),
@@ -415,65 +423,58 @@ export async function getAllMessages<T extends ChatType>(
 
 		return orgnizedMessages;
 	} catch (err) {
-		const error = err as Error
-		throw new Error(`${error.message} ${error.stack} ${error.name} ${error.cause}`)
+		const error = err as Error;
+		throw new Error(`${error.message} ${error.stack} ${error.name} ${error.cause}`);
 	}
 }
 
-
-
 function bigIntToBuffer(num: bigInt.BigInteger, length: number) {
 	let hex = num.toString(16);
-	if (hex.length % 2) hex = "0" + hex;
-	const buf = Buffer.from(hex, "hex");
+	if (hex.length % 2) hex = '0' + hex;
+	const buf = Buffer.from(hex, 'hex');
 	return Buffer.concat([Buffer.alloc(length - buf.length), buf]);
 }
 
-
-
-export const handlePhoneCallAccepted = async (client: TelegramClient, call: Api.PhoneCallAccepted) => {
+export const handlePhoneCallAccepted = async (
+	client: TelegramClient,
+	call: Api.PhoneCallAccepted
+) => {
 	try {
-		//TODO: need to work this 
-		const myPrivateA = callKey.get("privateKey") as bigInt.BigInteger;
-		const primeP = callKey.get("prime-modulus") as bigInt.BigInteger;
-		const myGABytes = callKey.get("publicKeyBytes") as Buffer;
+		//TODO: need to work this
+		const myPrivateA = callKey.get('privateKey') as bigInt.BigInteger;
+		const primeP = callKey.get('prime-modulus') as bigInt.BigInteger;
+		const myGABytes = callKey.get('publicKeyBytes') as Buffer;
 
 		const gB = readBigIntFromBuffer(call.gB, false, false);
 		const sharedKey = gB.modPow(myPrivateA, primeP);
 		const sharedKeyBytes = bigIntToBuffer(sharedKey, 256);
 
-		const keyFingerprint = crypto
-			.createHash("sha1")
-			.update(sharedKeyBytes)
-			.digest()
-			.slice(-8);
+		const keyFingerprint = crypto.createHash('sha1').update(sharedKeyBytes).digest().slice(-8);
 
 		const inputPhoneCall = new Api.InputPhoneCall({
 			id: call.id,
-			accessHash: call.accessHash,
+			accessHash: call.accessHash
 		});
 
 		await client.invoke(
 			new Api.phone.ConfirmCall({
 				peer: inputPhoneCall,
 				gA: myGABytes,
-				keyFingerprint: BigInt("0x" + keyFingerprint.toString("hex")) as unknown as bigInt.BigInteger,
+				keyFingerprint: BigInt(
+					'0x' + keyFingerprint.toString('hex')
+				) as unknown as bigInt.BigInteger,
 				protocol: new Api.PhoneCallProtocol({
 					...PROTOCOL_LAYERS,
 					udpP2p: true,
 					udpReflector: true,
-					libraryVersions: ["4.0.0", "3.0.0", "2.7.7", "2.4.4"],
-				}),
+					libraryVersions: ['4.0.0', '3.0.0', '2.7.7', '2.4.4']
+				})
 			})
 		);
-
 	} catch (err) {
 		logger.error(err);
 	}
 };
-
-
-
 
 /**
  * Listens for events from the Telegram client and handles them accordingly.
@@ -492,8 +493,8 @@ export const listenForEvents = async (
 		onUserOnlineStatus,
 		updateUserTyping
 	}: {
-			onMessage: (message: FormattedMessage, user: UserInfo) => void;
-			updateUserTyping: (user: UserInfo) => void;
+		onMessage: (message: FormattedMessage, user: UserInfo) => void;
+		updateUserTyping: (user: UserInfo) => void;
 		onUserOnlineStatus?: (user: {
 			accessHash: string;
 			firstName: string;
@@ -519,14 +520,14 @@ export const listenForEvents = async (
 	};
 	const hanlder = async (event: Event) => {
 		const userId = event.userId;
-		if (event.className == "UpdatePhoneCall") {
+		if (event.className == 'UpdatePhoneCall') {
 			const call = (event as unknown as { phoneCall: Api.PhoneCallAccepted }).phoneCall;
 			if (call.className != 'PhoneCallAccepted') {
-				return
+				return;
 			}
-			//TODO: need to work this 
-			//i should get an PhoneCallAccepted event 
-			await handlePhoneCallAccepted(client, call)
+			//TODO: need to work this
+			//i should get an PhoneCallAccepted event
+			await handlePhoneCallAccepted(client, call);
 		}
 
 		const user = await getUserInfo(client, userId);
@@ -535,16 +536,16 @@ export const listenForEvents = async (
 		}
 
 		switch (event.className) {
-			case "UpdateUserTyping":
-				updateUserTyping(user)
-				break
+			case 'UpdateUserTyping':
+				updateUserTyping(user);
+				break;
 			case 'UpdateShortMessage':
 				const config = getConfig('notifications');
 				if (config.enabled && !event.out) {
 					notifier.notify({
 						title: `Cligram - ${user.firstName} sent you a message`,
 						message: config.showMessagePreview ? event.message : '',
-						icon: 'https://telegram.org/favicon.ico',
+						icon: 'https://telegram.org/favicon.ico'
 					});
 				}
 				onMessage(
@@ -566,7 +567,7 @@ export const listenForEvents = async (
 						onUserOnlineStatus({
 							accessHash: user.accessHash.toString(),
 							firstName: user.firstName,
-							status: 'online',
+							status: 'online'
 						});
 				}
 				if (event.status.className === 'UserStatusOffline') {

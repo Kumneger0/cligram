@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
@@ -16,21 +17,17 @@ import (
 var version = ""
 
 func main() {
-
 	lockFilePath := filepath.Join(os.TempDir(), "cligram.lock")
 	fileLock := flock.New(lockFilePath)
-
 	locked, err := fileLock.TryLock()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error trying to acquire lock: %v\n", err)
 		os.Exit(1)
 	}
-
 	if !locked {
 		showAnotherProcessIsRunning(lockFilePath)
 		os.Exit(1)
 	}
-
 	defer func() {
 		if err := fileLock.Unlock(); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: could not unlock file: %v\n", err)
@@ -42,15 +39,13 @@ func main() {
 	if err := os.WriteFile(lockFilePath, []byte(strconv.Itoa(pid)), 0644); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: could not write PID to lock file: %v\n", err)
 	}
-
-	logger := logger.Init()
-	defer logger.Close()
-
+	logRotator := logger.Init()
+	defer logRotator.Close()
+	slog.Info("Starting Application")
 	if err := cmd.Execute(version); err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)
 		os.Exit(1)
 	}
-
 	if !slices.Contains(os.Args, "upgrade") && version != "" {
 		IsUpdateAvailable := cmd.GetNewVersionInfo(version)
 		if IsUpdateAvailable.IsUpdateAvailable {
@@ -64,11 +59,9 @@ func isProcessRunning(pid int) bool {
 	if err != nil {
 		return false
 	}
-
 	err = process.Signal(syscall.Signal(0))
 	return err == nil
 }
-
 func showAnotherProcessIsRunning(lockFilePath string) {
 	pidBytes, readErr := os.ReadFile(lockFilePath)
 	if readErr == nil {

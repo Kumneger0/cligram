@@ -109,5 +109,4 @@ func IsUserSessionAvaialable() bool {
 	}
 	_, err = os.Stat(userSessionPath)
 	return err == nil
-
 }

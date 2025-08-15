@@ -20,10 +20,10 @@ import (
 
 var (
 	JsProcess *os.Process
-	RpcClient *JsonRpcClient
+	RPCClient *JSONRPCClient
 )
 
-type JsonRpcClient struct {
+type JSONRPCClient struct {
 	Stdin  io.WriteCloser
 	Stdout io.ReadCloser
 	Cmd    *exec.Cmd
@@ -31,21 +31,21 @@ type JsonRpcClient struct {
 	Mu     sync.Mutex
 }
 
-type JsonRpcRequest struct {
-	JsonRPC string      `json:"jsonrpc"`
-	ID      int         `json:"id"`
-	Method  string      `json:"method"`
-	Params  interface{} `json:"params"`
+type JSONRPCRequest struct {
+	JSONRPC string `json:"jsonrpc"`
+	ID      int    `json:"id"`
+	Method  string `json:"method"`
+	Params  any    `json:"params"`
 }
 
-type BaseJsonRpcResponse struct {
-	JsonRPC string        `json:"jsonrpc"`
-	ID      int           `json:"id"`
-	Result  []interface{} `json:"result,omitempty"`
+type BaseJSONRPCResponse struct {
+	JSONRPC string `json:"jsonrpc"`
+	ID      int    `json:"id"`
+	Result  []any  `json:"result,omitempty"`
 	Error   *struct {
-		Code    int         `json:"code"`
-		Message string      `json:"message"`
-		Data    interface{} `json:"data,omitempty"`
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+		Data    any    `json:"data,omitempty"`
 	} `json:"error,omitempty"`
 }
 
@@ -55,15 +55,15 @@ type UserGroupsMsg struct {
 	Response *UserChannelResponse
 }
 
-func (c *JsonRpcClient) GetUserGroups() tea.Cmd {
+func (c *JSONRPCClient) GetUserGroups() tea.Cmd {
 	return func() tea.Msg {
-		userGroupsRpcResponse, err := c.Call("getUserChats", []string{"group"})
+		userGroupsRPCResponse, err := c.Call("getUserChats", []string{"group"})
 		if err != nil {
 			return UserGroupsMsg{Err: err}
 		}
 		var response UserChannelResponse
-		if err := json.Unmarshal(userGroupsRpcResponse, &response); err != nil {
-			return UserGroupsMsg{Err: fmt.Errorf("failed to unmarshal response JSON '%s': %w", string(userGroupsRpcResponse), err)}
+		if err := json.Unmarshal(userGroupsRPCResponse, &response); err != nil {
+			return UserGroupsMsg{Err: fmt.Errorf("failed to unmarshal response JSON '%s': %w", string(userGroupsRPCResponse), err)}
 		}
 		if response.Error != nil {
 			return UserGroupsMsg{Err: fmt.Errorf("ERROR: %s", response.Error.Message)}
@@ -78,21 +78,21 @@ type PeerInfo struct {
 }
 
 var (
-	JsonPayloadBytesChan = make(chan struct {
+	JSONPayloadBytesChan = make(chan struct {
 		Data  []byte
 		Error error
 	}, 1)
 	ProducerWg sync.WaitGroup
 )
 
-func (c *JsonRpcClient) Call(method string, params interface{}) ([]byte, error) {
+func (c *JSONRPCClient) Call(method string, params any) ([]byte, error) {
 	c.Mu.Lock()
 	id := c.NextID
 	c.NextID++
 	c.Mu.Unlock()
 
-	request := JsonRpcRequest{
-		JsonRPC: "2.0",
+	request := JSONRPCRequest{
+		JSONRPC: "2.0",
 		ID:      id,
 		Method:  method,
 		Params:  params,
@@ -112,7 +112,7 @@ func (c *JsonRpcClient) Call(method string, params interface{}) ([]byte, error) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to write request to stdin: %w", err)
 	}
-	jsonPayloadBytes := <-JsonPayloadBytesChan
+	jsonPayloadBytes := <-JSONPayloadBytesChan
 	ProducerWg.Wait()
 
 	if jsonPayloadBytes.Error != nil {
@@ -122,7 +122,7 @@ func (c *JsonRpcClient) Call(method string, params interface{}) ([]byte, error) 
 	return jsonPayloadBytes.Data, nil
 }
 
-func ReadStdOut(rpcClient *JsonRpcClient) ([]byte, error) {
+func ReadStdOut(rpcClient *JSONRPCClient) ([]byte, error) {
 	reader := bufio.NewReader((rpcClient.Stdout))
 	var contentLength int = -1
 	for {
@@ -225,17 +225,17 @@ type UserOnlineOffline struct {
 	LastSeen   time.Time `json:"lastSeen,omitempty"`
 }
 
-type RpcTelegramNotification struct {
-	JSONRPC string      `json:"jsonrpc"`
-	Method  string      `json:"method"`
-	Params  interface{} `json:"params"`
+type TelegramNotification struct {
+	JSONRPC string `json:"jsonrpc"`
+	Method  string `json:"method"`
+	Params  any    `json:"params"`
 }
 
 type UserTyping struct {
 	User UserInfo
 }
 
-type RpcError struct {
+type Error struct {
 	Error error
 }
 
@@ -243,45 +243,40 @@ type Notification struct {
 	NewMessageMsg        NewMessageMsg
 	UserOnlineOfflineMsg UserOnlineOffline
 	UserTyping           UserTyping
-	RpcError             RpcError
+	RPCError             Error
 }
 
 func ProcessIncomingNotifications(p chan Notification) {
 	for {
 		time.Sleep(1 * time.Second)
-		jsonPayload, err := ReadStdOut(RpcClient)
+		jsonPayload, err := ReadStdOut(RPCClient)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				slog.Info("EOF reached while reading from RpcClient, continuing to next iteration")
 				continue
 			}
 			p <- Notification{
-				RpcError: RpcError{
+				RPCError: Error{
 					Error: fmt.Errorf("AN error occurred while reading from RpcClient. Please check your connection or try restarting the application"),
 				},
 			}
 			slog.Error("Error reading from RpcClient", "error", err.Error())
 			continue
 		}
-
-		var notification RpcTelegramNotification
+		var notification TelegramNotification
 		if err := json.Unmarshal(jsonPayload, &notification); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to parse JSON payload: %v\n", err.Error())
+			slog.Error("Failed to parse JSON payload", "error", err.Error())
 			continue
 		}
-
 		if notification.Method == "newMessage" || notification.Method == "userOnlineOffline" || notification.Method == "userTyping" {
 			if notification.Method == "newMessage" {
 				paramsBytes, err := json.Marshal(notification.Params)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "Failed to marshal params: %v\n", err.Error())
 					slog.Error("Failed to marshal params", "error", err.Error())
 					continue
 				}
-
 				var newMessage NewMessageMsg
 				if err := json.Unmarshal(paramsBytes, &newMessage); err != nil {
-					fmt.Fprintf(os.Stderr, "Failed to unmarshal params: %v\n", err.Error())
 					slog.Error("Failed to unmarshal params", "error", err.Error())
 					continue
 				}
@@ -294,17 +289,14 @@ func ProcessIncomingNotifications(p chan Notification) {
 			if notification.Method == "userOnlineOffline" {
 				paramsBytes, err := json.Marshal(notification.Params)
 				if err != nil {
-
 					slog.Error("Failed to marshal params", "error", err.Error())
 					continue
 				}
-
 				var userOnlineOffline UserOnlineOffline
 				if err := json.Unmarshal(paramsBytes, &userOnlineOffline); err != nil {
-					fmt.Fprintf(os.Stderr, "Failed to unmarshal params: %v\n", err.Error())
+					slog.Error("Failed to unmarshal params", "error", err.Error())
 					continue
 				}
-
 				if p != nil {
 					p <- Notification{UserOnlineOfflineMsg: userOnlineOffline}
 				}
@@ -312,22 +304,20 @@ func ProcessIncomingNotifications(p chan Notification) {
 			if notification.Method == "userTyping" {
 				paramsBytes, err := json.Marshal(notification.Params)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "Failed to marshal params: %v\n", err.Error())
 					slog.Error("Failed to marshal params", "error", err.Error())
 					continue
 				}
 				var userTyping UserTyping
 				if err := json.Unmarshal(paramsBytes, &userTyping); err != nil {
-					fmt.Fprintf(os.Stderr, "Failed to unmarshal params: %v\n", err.Error())
+					slog.Error("Failed to unmarshal params", "error", err.Error())
 					continue
 				}
 				if p != nil {
 					p <- Notification{UserTyping: userTyping}
 				}
 			}
-
 		} else {
-			JsonPayloadBytesChan <- struct {
+			JSONPayloadBytesChan <- struct {
 				Data  []byte
 				Error error
 			}{
@@ -337,6 +327,5 @@ func ProcessIncomingNotifications(p chan Notification) {
 
 			ProducerWg.Done()
 		}
-
 	}
 }

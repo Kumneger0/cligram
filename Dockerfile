@@ -14,9 +14,9 @@ RUN apt-get update && apt-get install -y \
     git \
     make \
     && if [ "$TARGETARCH" = "arm64" ]; then \
-       wget https://go.dev/dl/go1.24.4.linux-arm64.tar.gz -O go.tar.gz; \
+       wget https://go.dev/dl/go1.25.0.linux-arm64.tar.gz -O go.tar.gz; \
     else \
-       wget https://go.dev/dl/go1.24.4.linux-amd64.tar.gz -O go.tar.gz; \
+       wget https://go.dev/dl/go1.25.0.linux-amd64.tar.gz -O go.tar.gz; \
     fi \
     && tar -C /usr/local -xzf go.tar.gz \
     && rm go.tar.gz \

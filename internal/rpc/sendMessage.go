@@ -6,51 +6,51 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-type SendMessageRpcResponse struct {
-	JsonRPC string `json:"jsonrpc"`
+type SendMessageRPCResponse struct {
+	JSONRPC string `json:"jsonrpc"`
 	ID      int    `json:"id"`
 	Error   *struct {
-		Code    int         `json:"code"`
-		Message string      `json:"message"`
-		Data    interface{} `json:"data,omitempty"`
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+		Data    any    `json:"data,omitempty"`
 	} `json:"error,omitempty"`
 	Result SendMessageResponseType `json:"result,omitempty"`
 }
 
 type SendMessageResponseType struct {
-	MessageId *int `json:"messageId,omitempty"`
+	MessageID *int `json:"messageId,omitempty"`
 }
 
 type SendMessageMsg struct {
-	Response SendMessageRpcResponse
+	Response SendMessageRPCResponse
 	Err      error
 }
 
-func (c *JsonRpcClient) SendMessage(pInfo PeerInfo,
+func (c *JSONRPCClient) SendMessage(pInfo PeerInfo,
 	msg string,
 	isReplay bool,
-	replyToMessageId string,
+	replyToMessageID string,
 	cType ChatType, isFile bool,
 	filePath string) tea.Cmd {
 	return func() tea.Msg {
-		paramsFixed := make([]interface{}, 7)
+		paramsFixed := make([]any, 7)
 		paramsFixed[0] = pInfo
 		paramsFixed[1] = msg
 		paramsFixed[2] = isReplay
-		paramsFixed[3] = replyToMessageId
+		paramsFixed[3] = replyToMessageID
 		paramsFixed[4] = cType
 		paramsFixed[5] = isFile
 		paramsFixed[6] = filePath
-		sendMessageRpcResponse, err := c.Call("sendMessage", paramsFixed)
+		rpcResponse, rpcError := c.Call("sendMessage", paramsFixed)
 
-		if err != nil {
-			return SendMessageMsg{Err: err}
+		if rpcError != nil {
+			return SendMessageMsg{Err: rpcError}
 		}
-		var sendMessageRpcResponseResult SendMessageRpcResponse
+		var rpcResponseResult SendMessageRPCResponse
 
-		if err := json.Unmarshal(sendMessageRpcResponse, &sendMessageRpcResponseResult); err != nil {
-			return SendMessageMsg{Err: err}
+		if rpcError := json.Unmarshal(rpcResponse, &rpcResponseResult); rpcError != nil {
+			return SendMessageMsg{Err: rpcError}
 		}
-		return SendMessageMsg{Response: sendMessageRpcResponseResult}
+		return SendMessageMsg{Response: rpcResponseResult}
 	}
 }

@@ -19,23 +19,23 @@ type forwardMessagesMethodParams struct {
 	Type     ChatType `json:"type"`
 }
 
-type ForwardMessagesRpcResponse struct {
-	JsonRPC string `json:"jsonrpc"`
+type ForwardMessagesRPCResponse struct {
+	JSONRPC string `json:"jsonrpc"`
 	ID      int    `json:"id"`
 	Error   *struct {
-		Code    int         `json:"code"`
-		Message string      `json:"message"`
-		Data    interface{} `json:"data,omitempty"`
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+		Data    any    `json:"data,omitempty"`
 	} `json:"error,omitempty"`
 	Result *json.RawMessage `json:"result,omitempty"`
 }
 
-func (c *JsonRpcClient) ForwardMessages(
+func (c *JSONRPCClient) ForwardMessages(
 	fromPeer PeerInfo,
 	messageIDs []int,
 	toPeer PeerInfo,
 	chatType ChatType,
-) (ForwardMessagesRpcResponse, error) {
+) (ForwardMessagesRPCResponse, error) {
 	methodParams := forwardMessagesMethodParams{
 		FromPeer: fromPeer,
 		IDs:      messageIDs,
@@ -43,16 +43,16 @@ func (c *JsonRpcClient) ForwardMessages(
 		Type:     chatType,
 	}
 
-	rpcCallParams := []interface{}{methodParams}
+	rpcCallParams := []any{methodParams}
 
 	responseBytes, err := c.Call("forwardMessage", rpcCallParams)
 	if err != nil {
-		return ForwardMessagesRpcResponse{}, err
+		return ForwardMessagesRPCResponse{}, err
 	}
 
-	var rpcResponse ForwardMessagesRpcResponse
+	var rpcResponse ForwardMessagesRPCResponse
 	if err := json.Unmarshal(responseBytes, &rpcResponse); err != nil {
-		return ForwardMessagesRpcResponse{}, err
+		return ForwardMessagesRPCResponse{}, err
 	}
 
 	return rpcResponse, nil

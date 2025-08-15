@@ -1,8 +1,7 @@
 import { removeConfig } from '@/lib/utils/auth';
 import { green, red } from 'kolorist';
 
-
-export default async function() {
+export default async function () {
 	try {
 		const isSuccess = removeConfig();
 		if (isSuccess) {
@@ -16,6 +15,3 @@ export default async function() {
 		process.exit(1);
 	}
 }
-
-
-

@@ -33,12 +33,12 @@ func exitWithJsError() {
 	os.Exit(1)
 }
 
-func startSeparateJsProces(ctx context.Context, wg *sync.WaitGroup) {
+func startSeparateJsProces(ctx context.Context) {
 	jsExcutable, err := runner.GetJSExcutable()
 
 	if err != nil {
 		slog.Error("Failed to get JS executable", "Error", err.Error())
-		wg.Done()
+		// wg.Done()
 		exitWithJsError()
 		return
 	}
@@ -48,7 +48,7 @@ func startSeparateJsProces(ctx context.Context, wg *sync.WaitGroup) {
 	stdin, err := jsExcute.StdinPipe()
 	if err != nil {
 		slog.Error("Failed to create stdin pipe", "Error", err.Error())
-		wg.Done()
+		// wg.Done()
 		exitWithJsError()
 		return
 	}
@@ -56,7 +56,7 @@ func startSeparateJsProces(ctx context.Context, wg *sync.WaitGroup) {
 	if err != nil {
 		slog.Error("Failed to create stdout pipe", "error", err.Error())
 		stdin.Close()
-		wg.Done()
+		// wg.Done()
 		exitWithJsError()
 		return
 	}
@@ -78,14 +78,14 @@ func startSeparateJsProces(ctx context.Context, wg *sync.WaitGroup) {
 		if jsLogFile != nil {
 			jsLogFile.Close()
 		}
-		wg.Done()
+		// wg.Done()
 		exitWithJsError()
 		return
 	}
 
 	rpc.JsProcess = jsExcute.Process
 
-	rpc.RpcClient = &rpc.JsonRpcClient{
+	rpc.RPCClient = &rpc.JSONRPCClient{
 		Stdin:  stdin,
 		Stdout: stdout,
 		Cmd:    jsExcute,
@@ -102,7 +102,7 @@ func startSeparateJsProces(ctx context.Context, wg *sync.WaitGroup) {
 		}
 	}()
 
-	wg.Done()
+	// wg.Done()
 }
 
 func newRootCmd(version string) *cobra.Command {
@@ -119,15 +119,14 @@ func newRootCmd(version string) *cobra.Command {
 			}
 
 			ctx, cancel := context.WithCancel(context.Background())
-
 			var wg sync.WaitGroup
-			wg.Add(1)
-			go startSeparateJsProces(ctx, &wg)
+			wg.Go(func() {
+				startSeparateJsProces(ctx)
+			})
 			wg.Wait()
-
 			notificationChannel := make(chan rpc.Notification)
 			go rpc.ProcessIncomingNotifications(notificationChannel)
-			msg := rpc.RpcClient.GetUserChats()
+			msg := rpc.RPCClient.GetUserChats()
 
 			modalContent := ""
 			isModalVisible := false
@@ -204,16 +203,16 @@ func newRootCmd(version string) *cobra.Command {
 			model.ChatUI = chatList
 			model.SelectedFile = ""
 
-			backgorund := model
+			background := model
 			forground := &ui.Foreground{}
 
 			manager := ui.Manager{
 				Foreground: forground,
-				Background: backgorund,
+				Background: background,
 				State:      ui.MainView,
 				Overlay: overlay.New(
 					forground,
-					backgorund,
+					background,
 					overlay.Center,
 					overlay.Top,
 					0,
@@ -234,8 +233,8 @@ func newRootCmd(version string) *cobra.Command {
 					if msg.UserTyping != (rpc.UserTyping{}) {
 						Program.Send(msg.UserTyping)
 					}
-					if msg.RpcError != (rpc.RpcError{}) {
-						Program.Send(msg.RpcError)
+					if msg.RPCError != (rpc.Error{}) {
+						Program.Send(msg.RPCError)
 					}
 				}
 			}()

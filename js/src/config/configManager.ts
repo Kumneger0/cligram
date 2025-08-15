@@ -14,9 +14,7 @@ export const loadConfig = (): CliGramConfigSchema => {
 		if (fs.existsSync(CONFIG_PATH)) {
 			const fileContent = fs.readFileSync(CONFIG_PATH, 'utf-8');
 			try {
-				const parsedConfig = cliGramConfigSchema.parse(
-					JSON.parse(fileContent)
-				);
+				const parsedConfig = cliGramConfigSchema.parse(JSON.parse(fileContent));
 
 				return { ...DEFAULT_CONFIG, ...parsedConfig };
 			} catch (error) {

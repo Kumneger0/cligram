@@ -8,12 +8,12 @@ import (
 )
 
 type UserChannelResponse struct {
-	JsonRPC string `json:"jsonrpc"`
+	JSONRPC string `json:"jsonrpc"`
 	ID      int    `json:"id"`
 	Error   *struct {
-		Code    int         `json:"code"`
-		Message string      `json:"message"`
-		Data    interface{} `json:"data,omitempty"`
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+		Data    any    `json:"data,omitempty"`
 	} `json:"error,omitempty"`
 	Result []ChannelAndGroupInfo `json:"result,omitempty"`
 }
@@ -23,15 +23,15 @@ type UserChannelMsg struct {
 	Response *UserChannelResponse
 }
 
-func (c *JsonRpcClient) GetUserChannel() tea.Cmd {
+func (c *JSONRPCClient) GetUserChannel() tea.Cmd {
 	return func() tea.Msg {
-		userChannelRpcResponse, err := c.Call("getUserChats", []string{"channel"})
+		userChannelRPCResponse, err := c.Call("getUserChats", []string{"channel"})
 		if err != nil {
 			return UserChannelMsg{Err: err}
 		}
 		var response UserChannelResponse
-		if err := json.Unmarshal(userChannelRpcResponse, &response); err != nil {
-			return UserChannelMsg{Err: fmt.Errorf("failed to unmarshal response JSON '%s': %w", string(userChannelRpcResponse), err)}
+		if err := json.Unmarshal(userChannelRPCResponse, &response); err != nil {
+			return UserChannelMsg{Err: fmt.Errorf("failed to unmarshal response JSON '%s': %w", string(userChannelRPCResponse), err)}
 		}
 		if response.Error != nil {
 			return UserChannelMsg{Err: fmt.Errorf("ERROR: %s", response.Error.Message)}

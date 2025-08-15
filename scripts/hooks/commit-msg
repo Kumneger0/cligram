@@ -5,10 +5,9 @@
 
 if command -v npx >/dev/null 2>&1; then
   # Use npx with transient installs so @commitlint/config-conventional is always available
-  npx --yes -p @commitlint/cli -p @commitlint/config-conventional \
+ make lint && npx --yes -p @commitlint/cli -p @commitlint/config-conventional \
     commitlint --extends @commitlint/config-conventional --edit "$1"
   status=$?
-  rm -f "$tmpcfg"
 else
   echo "commitlint: 'npx' not found; skipping commit message lint."
   status=0
@@ -22,5 +21,3 @@ if [ $status -ne 0 ]; then
 fi
 
 exit 0
-
-

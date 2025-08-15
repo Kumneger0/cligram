@@ -136,7 +136,7 @@ func formatMessages(msgs [50]rpc.FormattedMessage) []list.Item {
 }
 
 // this is just temporary just to get things working
-// definetly i need to remove this
+// definitely i need to remove this
 func GetModalContent(errorMessage string) string {
 	var modalContent strings.Builder
 	modalContent.WriteString(errorMessage + "\n")
@@ -330,12 +330,12 @@ func prepareInputView(m *Model, d layoutDimensions) string {
 	return inputView
 }
 
-func Debounce(fn func(args ...interface{}) tea.Msg, delay time.Duration) func(args ...interface{}) tea.Cmd {
+func Debounce(fn func(args ...any) tea.Msg, delay time.Duration) func(args ...any) tea.Cmd {
 	var mu sync.Mutex
 	var timer *time.Timer
-	var lastArgs []interface{}
+	var lastArgs []any
 
-	return func(args ...interface{}) tea.Cmd {
+	return func(args ...any) tea.Cmd {
 		mu.Lock()
 		defer mu.Unlock()
 
@@ -352,7 +352,7 @@ func Debounce(fn func(args ...interface{}) tea.Msg, delay time.Duration) func(ar
 				mu.Lock()
 				defer mu.Unlock()
 
-				argsToPass := make([]interface{}, len(lastArgs))
+				argsToPass := make([]any, len(lastArgs))
 				copy(argsToPass, lastArgs)
 
 				msgChan <- fn(argsToPass...)
@@ -381,7 +381,7 @@ func Debounce(fn func(args ...interface{}) tea.Msg, delay time.Duration) func(ar
 // 					}
 // 					AddToCache(cacheKey, string(messages))
 // 				}
-// 				cmd = rpc.RpcClient.GetMessages(pInfo, cType, &offsetID, nil, nil)
+// 				cmd = rpc.RPCClient.GetMessages(pInfo, cType, &offsetID, nil, nil)
 // 				conversationLastIndex := len(m.Conversations) - 1
 // 				m.ChatUI.Select(conversationLastIndex)
 // 			}
@@ -405,7 +405,7 @@ func Debounce(fn func(args ...interface{}) tea.Msg, delay time.Duration) func(ar
 // 				return *m, cmd
 // 			}
 // 			userConversation := rpc.UserConversationResponse{
-// 				JsonRPC: "2.0",
+// 				JSONRPC: "2.0",
 // 				ID:      rand.Int(),
 // 				Error:   nil,
 // 				Result:  [50]rpc.FormattedMessage(formattedMessages),
@@ -504,7 +504,7 @@ func SendUserIsTyping(m *Model) tea.Cmd {
 				AccessHash: m.SelectedGroup.AccessHash,
 			}
 		}
-		go rpc.RpcClient.SetUserTyping(pInfo, "user")
+		go rpc.RPCClient.SetUserTyping(pInfo, "user")
 	}
 	return nil
 }
