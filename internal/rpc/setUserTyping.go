@@ -10,9 +10,9 @@ type SetUserTypingJSONRPCResponse struct {
 	JSONRPC string `json:"jsonrpc"`
 	ID      int    `json:"id"`
 	Error   *struct {
-		Code    int         `json:"code"`
-		Message string      `json:"message"`
-		Data    interface{} `json:"data,omitempty"`
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+		Data    any    `json:"data,omitempty"`
 	} `json:"error,omitempty"`
 	Result bool `json:"result,omitempty"`
 }

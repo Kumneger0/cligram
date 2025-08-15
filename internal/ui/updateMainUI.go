@@ -563,7 +563,7 @@ func (m Model) handleForwardMessage(msg ForwardMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) extractPeerInfo(fromPeer, receiver interface{}) (from, toPeer rpc.PeerInfo, cType rpc.ChatType) {
+func (m Model) extractPeerInfo(fromPeer, receiver any) (from, toPeer rpc.PeerInfo, cType rpc.ChatType) {
 	if fromUser, ok := fromPeer.(rpc.UserInfo); ok {
 		from.PeerID = fromUser.PeerID
 		from.AccessHash = fromUser.AccessHash

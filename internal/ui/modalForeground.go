@@ -129,7 +129,7 @@ type MessageDeletionConfrimResponseMsg struct {
 	yes bool
 }
 
-var debouncedSearch = Debounce(func(args ...interface{}) tea.Msg {
+var debouncedSearch = Debounce(func(args ...any) tea.Msg {
 	query := args[0].(string)
 	return rpc.RPCClient.SearchUsers(query)
 }, 300*time.Millisecond)

@@ -32,20 +32,20 @@ type JSONRPCClient struct {
 }
 
 type JSONRPCRequest struct {
-	JSONRPC string      `json:"jsonrpc"`
-	ID      int         `json:"id"`
-	Method  string      `json:"method"`
-	Params  interface{} `json:"params"`
+	JSONRPC string `json:"jsonrpc"`
+	ID      int    `json:"id"`
+	Method  string `json:"method"`
+	Params  any    `json:"params"`
 }
 
 type BaseJSONRPCResponse struct {
-	JSONRPC string        `json:"jsonrpc"`
-	ID      int           `json:"id"`
-	Result  []interface{} `json:"result,omitempty"`
+	JSONRPC string `json:"jsonrpc"`
+	ID      int    `json:"id"`
+	Result  []any  `json:"result,omitempty"`
 	Error   *struct {
-		Code    int         `json:"code"`
-		Message string      `json:"message"`
-		Data    interface{} `json:"data,omitempty"`
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+		Data    any    `json:"data,omitempty"`
 	} `json:"error,omitempty"`
 }
 
@@ -85,7 +85,7 @@ var (
 	ProducerWg sync.WaitGroup
 )
 
-func (c *JSONRPCClient) Call(method string, params interface{}) ([]byte, error) {
+func (c *JSONRPCClient) Call(method string, params any) ([]byte, error) {
 	c.Mu.Lock()
 	id := c.NextID
 	c.NextID++
@@ -226,9 +226,9 @@ type UserOnlineOffline struct {
 }
 
 type TelegramNotification struct {
-	JSONRPC string      `json:"jsonrpc"`
-	Method  string      `json:"method"`
-	Params  interface{} `json:"params"`
+	JSONRPC string `json:"jsonrpc"`
+	Method  string `json:"method"`
+	Params  any    `json:"params"`
 }
 
 type UserTyping struct {

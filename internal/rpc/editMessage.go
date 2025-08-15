@@ -11,9 +11,9 @@ type EditMessageJSONRPCResponse struct {
 	JSONRPC string `json:"jsonrpc"`
 	ID      int    `json:"id"`
 	Error   *struct {
-		Code    int         `json:"code"`
-		Message string      `json:"message"`
-		Data    interface{} `json:"data,omitempty"`
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+		Data    any    `json:"data,omitempty"`
 	} `json:"error,omitempty"`
 	Result bool `json:"result,omitempty"`
 }
@@ -26,7 +26,7 @@ type EditMessageMsg struct {
 
 func (c *JSONRPCClient) EditMessage(userPeer PeerInfo, chatType ChatType, messageID int, newMessage string) tea.Cmd {
 	return func() tea.Msg {
-		rpcResponse, err := c.Call("editMessage", []interface{}{userPeer, messageID, newMessage, chatType})
+		rpcResponse, err := c.Call("editMessage", []any{userPeer, messageID, newMessage, chatType})
 		if err != nil {
 			return EditMessageMsg{Err: err}
 		}

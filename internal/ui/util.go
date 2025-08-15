@@ -330,12 +330,12 @@ func prepareInputView(m *Model, d layoutDimensions) string {
 	return inputView
 }
 
-func Debounce(fn func(args ...interface{}) tea.Msg, delay time.Duration) func(args ...interface{}) tea.Cmd {
+func Debounce(fn func(args ...any) tea.Msg, delay time.Duration) func(args ...any) tea.Cmd {
 	var mu sync.Mutex
 	var timer *time.Timer
-	var lastArgs []interface{}
+	var lastArgs []any
 
-	return func(args ...interface{}) tea.Cmd {
+	return func(args ...any) tea.Cmd {
 		mu.Lock()
 		defer mu.Unlock()
 
@@ -352,7 +352,7 @@ func Debounce(fn func(args ...interface{}) tea.Msg, delay time.Duration) func(ar
 				mu.Lock()
 				defer mu.Unlock()
 
-				argsToPass := make([]interface{}, len(lastArgs))
+				argsToPass := make([]any, len(lastArgs))
 				copy(argsToPass, lastArgs)
 
 				msgChan <- fn(argsToPass...)

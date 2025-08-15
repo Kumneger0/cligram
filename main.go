@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
@@ -40,6 +41,7 @@ func main() {
 	}
 	logRotator := logger.Init()
 	defer logRotator.Close()
+	slog.Info("Starting Application")
 	if err := cmd.Execute(version); err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)
 		os.Exit(1)
