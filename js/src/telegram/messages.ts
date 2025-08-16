@@ -1,5 +1,5 @@
 import { getConfig } from '@/config/configManager';
-import { entityCache, logger } from '@/lib/utils';
+import { entityCache, logger, sendSystemNotification } from '@/lib/utils';
 import bigInt from 'big-integer';
 import notifier from 'node-notifier';
 import crypto from 'node:crypto';
@@ -19,6 +19,8 @@ import terminalImage from 'terminal-image';
 
 import { callKey } from '..';
 import {
+	Channel,
+	ChannelInfo,
 	ChatType,
 	FormattedMessage,
 	Media,
@@ -353,7 +355,7 @@ export async function getAllMessages<T extends ChatType>(
 		}
 		const { accessHash, peerId: userId, userFirtNameOrChannelTitle } = peerInfo;
 
-		const messages = [];
+		const messages: Api.Message[] = [];
 		const entity = await getEntity(
 			{
 				peer: { peerId: userId as bigInt.BigInteger, accessHash: accessHash as bigInt.BigInteger }
@@ -390,7 +392,7 @@ export async function getAllMessages<T extends ChatType>(
 
 					const senderPeerId =
 						type === 'group' && 'fromId' in message
-							? (message.fromId as { userId: bigInt.BigInteger }).userId
+							? (message?.fromId as { userId: bigInt.BigInteger })?.userId
 							: null;
 
 					let senderUserInfo = senderPeerId ? await getUserInfo(client, senderPeerId) : null;
@@ -476,16 +478,122 @@ export const handlePhoneCallAccepted = async (
 	}
 };
 
-/**
- * Listens for events from the Telegram client and handles them accordingly.
- *
- * @param {TelegramClient} client - The Telegram client instance to listen for events.
- * @param {Object} handlers - An object containing handler functions for different events.
- * @param {function(FormattedMessage): void} handlers.onMessage - A function to handle incoming messages.
- * @param {function(Object): void} [handlers.onUserOnlineStatus] - A function to handle user online status updates.
- *
- * @returns {function(): void} A function to remove the event handler when called.
- */
+type Event = {
+	date: number;
+	userId: bigInt.BigInteger;
+	className: string;
+	id: number;
+	message: string;
+	out: boolean;
+	status: {
+		className: string;
+	};
+};
+
+const handlePhoneCallEvent = async (client: TelegramClient, event: Event) => {
+	if (event.className === 'UpdatePhoneCall') {
+		const call = (event as unknown as { phoneCall: Api.PhoneCallAccepted }).phoneCall;
+		if (call.className !== 'PhoneCallAccepted') {
+			return;
+		}
+		await handlePhoneCallAccepted(client, call);
+	}
+};
+
+const handleTypingEvent = async (
+	client: TelegramClient,
+	event: Event,
+	cb: (u: UserInfo) => void
+) => {
+	if (event.className === 'UpdateUserTyping') {
+		const user = await getUserInfo(client, event.userId);
+		if (user) {
+			cb(user);
+		}
+	}
+};
+
+const handleMessageEvent = async (
+	client: TelegramClient,
+	event: Event,
+	onMessage: (onNewMessage: onMessageArg) => void
+) => {
+	if (event.className === 'UpdateShortMessage') {
+		const user = await getUserInfo(client, event.userId);
+		if (user) {
+			const config = getConfig('notifications');
+			if (config?.enabled && !event.out) {
+				sendSystemNotification({
+					title: `Cligram - ${user.firstName} sent you a message`,
+					message: config.showMessagePreview ? event.message : '',
+					icon: 'https://telegram.org/favicon.ico'
+				});
+			}
+			onMessage({
+				message: {
+					id: event.id,
+					sender: event.out ? 'you' : user.firstName,
+					content: event.message,
+					isFromMe: event.out,
+					media: null,
+					date: event.date ? new Date(event.date * 1000) : new Date(),
+					isUnsupportedMessage: false
+				},
+				user
+			});
+		}
+	}
+};
+
+type OnUserOnlineStatus = (user: {
+	accessHash: string;
+	firstName: string;
+	status: 'online' | 'offline';
+	lastSeen?: number;
+}) => void;
+
+const handleUserStatusEvent = async (
+	client: TelegramClient,
+	event: Event,
+	onUserOnlineStatus: OnUserOnlineStatus
+) => {
+	if (event.className === 'UpdateUserStatus') {
+		const user = await getUserInfo(client, event.userId);
+		if (user) {
+			if (event.status.className === 'UserStatusOnline') {
+				onUserOnlineStatus?.({
+					accessHash: user.accessHash.toString(),
+					firstName: user.firstName,
+					status: 'online'
+				});
+			}
+			if (event.status.className === 'UserStatusOffline') {
+				const userEntity = (await client.getEntity(
+					await client.getInputEntity(event.userId)
+				)) as unknown as TelegramUser | null;
+				if (userEntity) {
+					onUserOnlineStatus?.({
+						accessHash: userEntity.accessHash.toString(),
+						firstName: userEntity.firstName,
+						status: 'offline',
+						lastSeen: userEntity.status?.wasOnline
+					});
+				}
+			}
+		}
+	}
+};
+
+type onMessageArg =
+	| {
+			message: FormattedMessage;
+			user: UserInfo;
+	  }
+	| {
+			message: FormattedMessage;
+			channelOrGroup: ChannelInfo;
+	  };
+
 export const listenForEvents = async (
 	client: TelegramClient,
 	{
@@ -493,108 +601,127 @@ export const listenForEvents = async (
 		onUserOnlineStatus,
 		updateUserTyping
 	}: {
-		onMessage: (message: FormattedMessage, user: UserInfo) => void;
+		onMessage: (onNewMessage: onMessageArg) => void;
 		updateUserTyping: (user: UserInfo) => void;
-		onUserOnlineStatus?: (user: {
-			accessHash: string;
-			firstName: string;
-			status: 'online' | 'offline';
-			lastSeen?: number;
-		}) => void;
+		onUserOnlineStatus?: OnUserOnlineStatus;
 	}
 ) => {
 	if (!client.connected) {
 		await client.connect();
 	}
 
-	type Event = {
-		date: number;
-		userId: bigInt.BigInteger;
-		className: string;
-		id: number;
-		message: string;
-		out: boolean;
-		status: {
-			className: string;
-		};
-	};
-	const hanlder = async (event: Event) => {
-		const userId = event.userId;
-		if (event.className == 'UpdatePhoneCall') {
-			const call = (event as unknown as { phoneCall: Api.PhoneCallAccepted }).phoneCall;
-			if (call.className != 'PhoneCallAccepted') {
-				return;
-			}
-			//TODO: need to work this
-			//i should get an PhoneCallAccepted event
-			await handlePhoneCallAccepted(client, call);
-		}
-
-		const user = await getUserInfo(client, userId);
-		if (!user) {
-			return;
-		}
-
-		switch (event.className) {
-			case 'UpdateUserTyping':
-				updateUserTyping(user);
-				break;
-			case 'UpdateShortMessage':
-				const config = getConfig('notifications');
-				if (config.enabled && !event.out) {
-					notifier.notify({
-						title: `Cligram - ${user.firstName} sent you a message`,
-						message: config.showMessagePreview ? event.message : '',
-						icon: 'https://telegram.org/favicon.ico'
-					});
-				}
-				onMessage(
-					{
-						id: event.id,
-						sender: event.out ? 'you' : user.firstName,
-						content: event.message,
-						isFromMe: event.out,
-						media: null,
-						date: event.date ? new Date(event.date * 1000) : new Date(),
-						isUnsupportedMessage: false
-					},
-					user
-				);
-				break;
-			case 'UpdateUserStatus':
-				if (event.status.className === 'UserStatusOnline') {
-					onUserOnlineStatus &&
-						onUserOnlineStatus({
-							accessHash: user.accessHash.toString(),
-							firstName: user.firstName,
-							status: 'online'
-						});
-				}
-				if (event.status.className === 'UserStatusOffline') {
-					const user = (await client.getEntity(
-						await client.getInputEntity(userId)
-					)) as unknown as TelegramUser | null;
-					if (!user) {
-						return;
-					}
-					onUserOnlineStatus &&
-						onUserOnlineStatus({
-							accessHash: user.accessHash.toString(),
-							firstName: user.firstName,
-							status: 'offline',
-							lastSeen: user.status?.wasOnline
-						});
-				}
-				break;
-
-			default:
-				break;
-		}
+	const eventHandler = async (event: Event) => {
+		await handlePhoneCallEvent(client, event);
+		await handleTypingEvent(client, event, updateUserTyping);
+		await handleMessageEvent(client, event, onMessage);
+		await handleUserStatusEvent(client, event, onUserOnlineStatus);
+		await updateShortChatMessage(client, event, onMessage);
+		await updateNewChannelMessage(client, event, onMessage);
 	};
 
-	client.addEventHandler(hanlder);
+	client.addEventHandler(eventHandler);
 	return () => {
 		const event = new Raw({});
-		return client.removeEventHandler(hanlder, event);
+		return client.removeEventHandler(eventHandler, event);
 	};
 };
+
+async function updateNewChannelMessage(
+	client: TelegramClient,
+	event: Event,
+	onMessage: (onNewMessage: onMessageArg) => void
+) {
+	if (event.className == 'UpdateNewChannelMessage') {
+		const {
+			peerId: { channelId },
+			message,
+			id
+		} = event.message as unknown as Event & {
+			peerId: { channelId: string };
+			id: number;
+			message: string;
+		};
+		const entity = (await client.getEntity(channelId)) as unknown as Channel;
+		const config = getConfig('notifications');
+		if (config.enabled) {
+			sendSystemNotification({
+				title: `new message in ${entity.title}`,
+				message: config.showMessagePreview ? message : '',
+				icon: 'https://telegram.org/favicon.ico'
+			});
+		}
+		const channel = {
+			accessHash: '',
+			channelId: channelId,
+			isBroadcast: true,
+			isCreator: false,
+			participantsCount: entity.participantsCount,
+			title: entity.title,
+			unreadCount: 0, // let's ignore this for now since this is for notification most of time this info will be avaialbe before
+			username: entity.username
+		} satisfies ChannelInfo;
+		onMessage({
+			channelOrGroup: channel,
+			message: {
+				content: message,
+				sender: entity.title,
+				date:
+					'time' in (event.message as unknown as Record<string, unknown>)
+						? new Date(
+								((event.message as unknown as Record<string, unknown>).time as number) * 1000
+							)
+						: new Date(),
+				id,
+				isUnsupportedMessage: false,
+				isFromMe: false,
+				media: null
+			}
+		});
+	}
+}
+
+async function updateShortChatMessage(
+	client: TelegramClient,
+	event: Event,
+	onMessage: (onNewMessage: onMessageArg) => void
+) {
+	if (event.className == 'UpdateShortChatMessage') {
+		const { chatId, fromId } = event as Event & {
+			chatId: bigInt.BigInteger;
+			fromId: bigInt.BigInteger;
+		};
+		const entity = (await client.getEntity(chatId)) as unknown as Channel;
+		const user = await getUserInfo(client, fromId);
+		const config = getConfig('notifications');
+		if (config.enabled) {
+			sendSystemNotification({
+				title: `${user.firstName} sent new message in ${entity.title}`,
+				message: config.showMessagePreview ? event.message : '',
+				icon: 'https://telegram.org/favicon.ico'
+			});
+		}
+		const group = {
+			title: entity.title,
+			username: '',
+			channelId: chatId.toString(),
+			accessHash: String(entity.accessHash),
+			isCreator: entity?.creator ?? false,
+			isBroadcast: false,
+			participantsCount: entity.participantsCount,
+			unreadCount: 0 // let's ignore this for now since this is for notification most of time this info will be avaialbe before
+		} satisfies ChannelInfo;
+
+		onMessage({
+			message: {
+				id: event.id,
+				sender: event.out ? 'you' : user.firstName,
+				content: event.message,
+				isFromMe: event.out,
+				media: null,
+				date: event.date ? new Date(event.date * 1000) : new Date(),
+				isUnsupportedMessage: false
+			},
+			channelOrGroup: group
+		});
+	}
+}

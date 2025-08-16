@@ -214,8 +214,9 @@ func (c ChannelAndGroupInfo) Title() string {
 }
 
 type NewMessageMsg struct {
-	Message FormattedMessage
-	User    UserInfo
+	Message        FormattedMessage
+	User           *UserInfo
+	ChannelOrGroup *ChannelAndGroupInfo
 }
 
 type UserOnlineOffline struct {

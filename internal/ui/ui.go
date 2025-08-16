@@ -34,11 +34,8 @@ func (d CustomDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd {
 
 func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	var title string
-	var hasUnreadMessages bool = false
 	if entry, ok := item.(rpc.UserInfo); ok {
-		if entry.UnreadCount > 0 {
-			hasUnreadMessages = true
-		}
+		hasUnreadMessages := entry.UnreadCount > 0
 		title = entry.Title()
 
 		if entry.IsOnline {

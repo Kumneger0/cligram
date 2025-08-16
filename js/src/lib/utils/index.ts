@@ -1,4 +1,5 @@
 import { DialogInfo } from '@/telegram/client.types';
+import notifier from 'node-notifier';
 import {
 	differenceInCalendarDays,
 	differenceInSeconds,
@@ -9,6 +10,7 @@ import {
 	isYesterday
 } from 'date-fns';
 import { LRUCache } from 'lru-cache';
+import NotificationCenter from 'node-notifier/notifiers/notificationcenter';
 
 export const ICONS = {
 	USER: '👤',
@@ -85,6 +87,10 @@ export function formatLastSeen(lastSeen: LastSeen) {
 		return `last seen on ${format(date, 'MMM d')} at ${format(date, 'h:mm a')}`;
 	}
 	return `last seen on ${format(date, 'MMM d, yyyy')} at ${format(date, 'h:mm a')}`;
+}
+
+export function sendSystemNotification(notification: NotificationCenter.Notification) {
+	notifier.notify(notification);
 }
 
 export { default as logger } from './logger';

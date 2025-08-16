@@ -1,4 +1,5 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
+import { ChannelInfo } from './lib/types/index';
 import { Buffer } from 'buffer';
 import { stderr, stdin, stdout } from 'process';
 
@@ -56,12 +57,8 @@ const handlers: Record<string, Handler> = {
 	phoneCall
 } as const;
 
-type RestParameters<TFunc extends (client: any, ...args: any[]) => any> = TFunc extends (
-	client: TelegramClient,
-	...args: infer P
-) => any
-	? P
-	: never;
+type RestParameters<TFunc extends (client: TelegramClient, ...args: unknown[]) => unknown> =
+	TFunc extends (client: TelegramClient, ...args: infer P) => any ? P : never;
 
 type MethodParamsMap = {
 	[K in keyof typeof handlers]: RestParameters<(typeof handlers)[K]>;
@@ -104,7 +101,8 @@ type IncomingMessage = TypedRpcRequest | TypedRpcNotification;
 
 type NewMessageParams = {
 	message: FormattedMessage;
-	user: UserInfo;
+	user: UserInfo | null;
+	channelOrGroup: ChannelInfo | null;
 };
 type UserTypingParams = {
 	user: UserInfo;
@@ -300,13 +298,14 @@ async function messageProcessingLoop(client: TelegramClient) {
 			};
 			writeToStdout(userTypingEvent);
 		},
-		onMessage(message, user) {
+		onMessage(onMessage) {
 			const telegramMessageEvent: RpcTelegramEventsNotification = {
 				jsonrpc: '2.0',
 				method: 'newMessage',
 				params: {
-					message,
-					user
+					message: onMessage.message,
+					user: 'user' in onMessage ? onMessage.user : null,
+					channelOrGroup: 'channelOrGroup' in onMessage ? onMessage.channelOrGroup : null
 				}
 			};
 			writeToStdout(telegramMessageEvent);
@@ -328,7 +327,7 @@ async function messageProcessingLoop(client: TelegramClient) {
 		let msg: IncomingMessage;
 		try {
 			msg = await readMessage();
-		} catch (err: any) {
+		} catch (err) {
 			if (err.message === 'Parse error') {
 				writeToStdout(
 					createRpcError(null, -32700, 'Parse error: Invalid JSON was received by the server.')
@@ -358,22 +357,9 @@ async function messageProcessingLoop(client: TelegramClient) {
 
 		if ('id' in msg && typeof msg.id === 'number') {
 			const request = msg as TypedRpcRequest;
-
 			try {
-				let result: unknown;
-				try {
-					const method = handlers[request.method];
-					result = await method(client, ...request.params);
-				} catch (error) {
-					writeToStdout(
-						createRpcError(
-							Number((request as { id: number }).id),
-							-32601,
-							`Error handling method ${request.method}: ${error.message || 'Unknown error'}`
-						)
-					);
-					continue;
-				}
+				const method = handlers[request.method];
+				const result = await method(client, ...request.params);
 				const response: RpcSuccess = { jsonrpc: '2.0', id: request.id, result };
 				writeToStdout(response);
 			} catch (error) {

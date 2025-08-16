@@ -142,40 +142,76 @@ func (m Model) handleMarkMessagesAsRead(msg rpc.MarkMessagesAsReadMsg) (tea.Mode
 		items := m.Users.Items()
 		user := items[userIndex].(rpc.UserInfo)
 		user.UnreadCount = 0
-		items[userIndex] = user
-		m.Users.SetItems(items)
+		m.Users.SetItem(userIndex, user)
 	}
 	return m, nil
 }
 
 func (m Model) handleNewMessage(msg rpc.NewMessageMsg) (tea.Model, tea.Cmd) {
-	if m.SelectedUser.PeerID == msg.User.PeerID {
-		if m.Mode == ModeUsers || m.Mode == ModeBots {
-			m.SelectedUser.UnreadCount++
-			var isCurrentConversationUsersChat bool = false
-			for _, v := range m.Conversations {
-				if v.Sender == m.SelectedUser.FirstName {
-					isCurrentConversationUsersChat = true
-					break
-				}
-			}
-			if isCurrentConversationUsersChat {
-				copy(m.Conversations[:], m.Conversations[1:])
-				m.Conversations[len(m.Conversations)-1] = msg.Message
-				m.updateConverstaions()
-			}
+	areInGroupOrChannelMode := m.Mode == ModeGroups || m.Mode == ModeChannels
+	if msg.ChannelOrGroup != nil {
+		if !areInGroupOrChannelMode {
+			return m, nil
 		}
-	} else {
-		userIndex := getUserIndex(m, msg.User)
+		isGroupOrChannelSelected := isChannelOrGroupSelected(&m, &msg)
+		if isGroupOrChannelSelected {
+			copy(m.Conversations[:], m.Conversations[1:])
+			m.Conversations[len(m.Conversations)-1] = msg.Message
+			m.updateConverstaions()
+			return m, nil
+		}
+		groupIndex := getGroupIndex(m, *msg.ChannelOrGroup)
+		if groupIndex != -1 {
+			items := m.Groups.Items()
+			group := items[groupIndex].(rpc.ChannelAndGroupInfo)
+			group.UnreadCount++
+			m.Groups.SetItem(groupIndex, group)
+		}
+	}
+	if msg.User == nil {
+		return m, nil
+	}
+	isSelected := isUserSelected(&m, &msg)
+	areWeInBotOrUserMode := m.Mode == ModeUsers || m.Mode == ModeBots
+
+	if !areWeInBotOrUserMode {
+		return m, nil
+	}
+
+	if !isSelected {
+		userIndex := getUserIndex(m, *msg.User)
 		if userIndex != -1 {
 			items := m.Users.Items()
 			user := items[userIndex].(rpc.UserInfo)
 			user.UnreadCount++
-			items[userIndex] = user
-			m.Users.SetItems(items)
+			m.Users.SetItem(userIndex, user)
+		}
+		return m, nil
+	}
+
+	m.SelectedUser.UnreadCount++
+	var shouldWeUpdateCurrentActiveConversation bool = false
+	for _, v := range m.Conversations {
+		if v.Sender == m.SelectedUser.FirstName {
+			shouldWeUpdateCurrentActiveConversation = true
+			break
 		}
 	}
+	if shouldWeUpdateCurrentActiveConversation {
+		copy(m.Conversations[:], m.Conversations[1:])
+		m.Conversations[len(m.Conversations)-1] = msg.Message
+		m.updateConverstaions()
+	}
 	return m, nil
+}
+
+func isChannelOrGroupSelected(m *Model, msg *rpc.NewMessageMsg) bool {
+	return m.SelectedChannel.ChannelID == msg.ChannelOrGroup.ChannelID ||
+		m.SelectedGroup.ChannelID == msg.ChannelOrGroup.ChannelID
+}
+
+func isUserSelected(m *Model, msg *rpc.NewMessageMsg) bool {
+	return m.SelectedUser.PeerID == msg.User.PeerID
 }
 
 func (m Model) handleUserOnlineOffline(msg rpc.UserOnlineOffline) (tea.Model, tea.Cmd) {
@@ -328,10 +364,8 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	// case "up", "down":
 	/*
-		         as of now we are only showing last 50 messages
-				 TODO: consider implementing pagination and show all messages
+	 TODO: consider implementing pagination and show all messages
 	*/
-	// return m, nil
 	case "ctrl+a":
 		m, cmd := m.handleCtrlA()
 		cmds = append(cmds, cmd)
