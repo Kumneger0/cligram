@@ -31,30 +31,41 @@ func (d CustomDelegate) Spacing() int {
 func (d CustomDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd {
 	return nil
 }
-
 func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	var title string
-	if entry, ok := item.(rpc.UserInfo); ok {
-		hasUnreadMessages := entry.UnreadCount > 0
-		title = entry.Title()
+	var prefix string
 
+	switch item := item.(type) {
+	case rpc.UserInfo:
+		entry := item
+		title = entry.Title()
 		if entry.IsOnline {
-			title = "🟢 " + title
+			prefix = "🟢 "
+		} else {
+			prefix = "👤 "
 		}
-		title = "👤 " + title
-		if hasUnreadMessages {
-			title = title + " 🔴" + "(" + strconv.Itoa(entry.UnreadCount) + ")"
+		if entry.UnreadCount > 0 {
+			title = prefix + title + " 🔴(" + strconv.Itoa(entry.UnreadCount) + ")"
+		} else {
+			title = prefix + title
 		}
-	} else if entry, ok := item.(rpc.ChannelAndGroupInfo); ok {
+	case rpc.ChannelAndGroupInfo:
+		entry := item
 		title = entry.Title()
 		if entry.IsBroadcast {
-			title = "📢 " + title
+			prefix = "📢 "
 		} else {
-			title = "👥 " + title
+			prefix = "👥 "
 		}
-	} else {
+		if entry.UnreadCount > 0 {
+			title = prefix + title + " 🔴(" + strconv.Itoa(entry.UnreadCount) + ")"
+		} else {
+			title = prefix + title
+		}
+	default:
 		return
 	}
+
 	isOnSideBar := d.Model.FocusedOn == SideBar
 	str := lipgloss.NewStyle().Width(50).Render(title)
 	if index == m.Index() && isOnSideBar {
