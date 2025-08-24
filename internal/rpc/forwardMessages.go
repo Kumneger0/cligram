@@ -2,6 +2,10 @@ package rpc
 
 import (
 	"encoding/json"
+	"math/rand"
+	"strconv"
+
+	"github.com/gotd/td/tg"
 )
 
 type chatType string
@@ -12,48 +16,64 @@ const (
 	ChatTypeChannel chatType = "channel"
 )
 
-type forwardMessagesMethodParams struct {
-	FromPeer PeerInfo `json:"fromPeer"`
-	IDs      []int    `json:"id"`
-	ToPeer   PeerInfo `json:"toPeer"`
-	Type     ChatType `json:"type"`
-}
-
 type ForwardMessagesRPCResponse struct {
-	JSONRPC string `json:"jsonrpc"`
-	ID      int    `json:"id"`
-	Error   *struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
-		Data    any    `json:"data,omitempty"`
-	} `json:"error,omitempty"`
 	Result *json.RawMessage `json:"result,omitempty"`
 }
 
-func (c *JSONRPCClient) ForwardMessages(
+func (c *TelegramClient) ForwardMessages(
 	fromPeer PeerInfo,
 	messageIDs []int,
 	toPeer PeerInfo,
-	chatType ChatType,
+	toPeerType ChatType,
+	fromPeerType ChatType,
 ) (ForwardMessagesRPCResponse, error) {
-	methodParams := forwardMessagesMethodParams{
-		FromPeer: fromPeer,
-		IDs:      messageIDs,
-		ToPeer:   toPeer,
-		Type:     chatType,
+	var from tg.InputPeerClass
+	var to tg.InputPeerClass
+
+	peerID, err := strconv.ParseInt(fromPeer.PeerID, 10, 64)
+
+	if err != nil {
+		return ForwardMessagesRPCResponse{Result: nil}, err
 	}
 
-	rpcCallParams := []any{methodParams}
+	toPeerID, err := strconv.ParseInt(toPeer.PeerID, 10, 64)
 
-	responseBytes, err := c.Call("forwardMessage", rpcCallParams)
+	if err != nil {
+		return ForwardMessagesRPCResponse{Result: nil}, err
+	}
+
+	switch fromPeerType {
+	case UserChat, ChatType(Bot):
+		from = &tg.InputPeerUser{
+			UserID: peerID,
+		}
+	case ChannelChat, GroupChat:
+		from = &tg.InputPeerChannel{
+			ChannelID: peerID,
+		}
+	}
+
+	switch toPeerType {
+	case UserChat, ChatType(Bot):
+		to = &tg.InputPeerUser{
+			UserID: toPeerID,
+		}
+	case ChannelChat, GroupChat:
+		to = &tg.InputPeerChannel{
+			ChannelID: toPeerID,
+		}
+	}
+
+	forwardMessages := &tg.MessagesForwardMessagesRequest{
+		FromPeer: from,
+		ToPeer:   to,
+		RandomID: []int64{rand.Int63()},
+		ID:       messageIDs,
+	}
+	_, err = c.Client.API().MessagesForwardMessages(c.ctx, forwardMessages)
+
 	if err != nil {
 		return ForwardMessagesRPCResponse{}, err
 	}
-
-	var rpcResponse ForwardMessagesRPCResponse
-	if err := json.Unmarshal(responseBytes, &rpcResponse); err != nil {
-		return ForwardMessagesRPCResponse{}, err
-	}
-
-	return rpcResponse, nil
+	return ForwardMessagesRPCResponse{}, nil
 }

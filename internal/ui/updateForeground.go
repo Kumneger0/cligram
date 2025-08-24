@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"log/slog"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -14,7 +15,6 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := message.(type) {
 	case tea.WindowSizeMsg:
 		m.searchResultCombined = list.New([]list.Item{}, SearchDelegate{}, 10, 10)
-
 		m.searchResultCombined.Title = "Search User Result"
 		m.searchResultCombined.SetShowStatusBar(false)
 		m.searchResultCombined.SetShowFilter(false)
@@ -67,6 +67,7 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *Foreground) handleSearch(msg rpc.SearchUserMsg, cmds *[]tea.Cmd) (tea.Model, tea.Cmd) {
 	if msg.Err != nil {
+		fmt.Println(msg.Err.Error())
 		slog.Error("Failed to search user", "error", msg.Err.Error())
 	} else {
 		// Wait for the message and return it
@@ -146,7 +147,7 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 		searchValue := m.input.Value()
 		if len(searchValue) >= 3 {
 			searchCmd := debouncedSearch(searchValue)
-			*cmdsFromParent = append(*cmdsFromParent, searchCmd)
+			cmds = append(cmds, searchCmd)
 		}
 	}
 	return m, tea.Batch(cmds...)

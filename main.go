@@ -37,11 +37,18 @@ func main() {
 
 	pid := os.Getpid()
 	if err := os.WriteFile(lockFilePath, []byte(strconv.Itoa(pid)), 0644); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: could not write PID to lock file: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Wasrning: could not write PID to lock file: %v\n", err)
 	}
 	logRotator := logger.Init()
 	defer logRotator.Close()
 	slog.Info("Starting Application")
+
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Println("yoo we have got somthign wrong", err)
+		}
+	}()
+
 	if err := cmd.Execute(version); err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)
 		os.Exit(1)

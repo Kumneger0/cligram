@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -13,10 +14,9 @@ import (
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
-
 	switch msg := msg.(type) {
 	case rpc.SendMessageMsg:
-		if msg.Err != nil || msg.Response.Error != nil {
+		if msg.Err != nil {
 			slog.Error("Failed to send message", "error", msg.Err.Error())
 			m.IsModalVisible = true
 			m.ModalContent = GetModalContent(msg.Err.Error())
@@ -34,12 +34,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		response := msg.Response
-		if response.Error != nil {
-			slog.Error("Failed to edit message", "error", response.Error.Message)
-			m.IsModalVisible = true
-			m.ModalContent = GetModalContent(response.Error.Message)
-			return m, nil
-		}
 		if response.Result {
 			if selectedMessage, ok := m.ChatUI.SelectedItem().(rpc.FormattedMessage); ok {
 				selectedMessage.Content = msg.UpdatedMessage
@@ -55,7 +49,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.SelectedUser.PeerID == user.PeerID {
 			m.SelectedUser = user
 		}
-
 		userIndex := getUserIndex(m, user)
 		if userIndex != -1 {
 			items := m.Users.Items()
@@ -134,7 +127,7 @@ func (m Model) handleMarkMessagesAsRead(msg rpc.MarkMessagesAsReadMsg) (tea.Mode
 		slog.Error("Failed to mark messages as read", "error", msg.Err.Error())
 		return m, nil
 	}
-	if msg.Response.Result {
+	if msg.Response {
 		m.SelectedUser.UnreadCount = 0
 	}
 	userIndex := getUserIndex(m, m.SelectedUser)
@@ -168,10 +161,14 @@ func (m Model) handleNewMessage(msg rpc.NewMessageMsg) (tea.Model, tea.Cmd) {
 			m.Groups.SetItem(groupIndex, group)
 		}
 	}
+
+	fmt.Println("user", msg.User)
 	if msg.User == nil {
+		fmt.Println("user is nil")
 		return m, nil
 	}
 	isSelected := isUserSelected(&m, &msg)
+	fmt.Println("is selected", isSelected)
 	areWeInBotOrUserMode := m.Mode == ModeUsers || m.Mode == ModeBots
 
 	if !areWeInBotOrUserMode {
@@ -218,7 +215,7 @@ func (m Model) handleUserOnlineOffline(msg rpc.UserOnlineOffline) (tea.Model, te
 	var user rpc.UserInfo
 	for _, v := range m.Users.Items() {
 		u, ok := v.(rpc.UserInfo)
-		if ok && u.FirstName == msg.FirstName {
+		if ok && u.PeerID == msg.PeerID {
 			user = u
 			break
 		}
@@ -241,20 +238,12 @@ func (m Model) handleMessageDeletion(msg MessageDeletionConfrimResponseMsg) (tea
 	}
 	peer, cType := m.getPeerInfoAndChatType()
 	selectedItemInChat := m.ChatUI.SelectedItem().(rpc.FormattedMessage)
-
-	response, err := rpc.RPCClient.DeleteMessage(peer, int(selectedItemInChat.ID), cType)
+	response, err := rpc.TGClient.DeleteMessage(peer, int(selectedItemInChat.ID), cType)
 	if err != nil {
 		m.IsModalVisible = true
 		m.ModalContent = GetModalContent(err.Error())
 		return m, nil
 	}
-
-	if response.Error != nil {
-		m.IsModalVisible = true
-		m.ModalContent = GetModalContent(response.Error.Message)
-		return m, nil
-	}
-
 	if response.Result.Status == "success" {
 		var updatedConversations [50]rpc.FormattedMessage
 		for i, v := range m.Conversations {
@@ -308,7 +297,7 @@ func (m Model) handleGetMessages(msg rpc.GetMessagesMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	messagesWeGot := len(filterEmptyMessages(msg.Messages.Result))
+	messagesWeGot := len(filterEmptyMessages(msg.Messages))
 	if messagesWeGot < 1 {
 		if selectedChat, ok := m.Users.SelectedItem().(rpc.UserInfo); ok && selectedChat.IsBot {
 			m.Input.SetValue("/start")
@@ -319,7 +308,7 @@ func (m Model) handleGetMessages(msg rpc.GetMessagesMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	m.Conversations = m.mergeConversations(msg.Messages.Result, messagesWeGot)
+	m.Conversations = m.mergeConversations(msg.Messages, messagesWeGot)
 	conversationLastIndex := len(m.Conversations) - 1
 	m.updateConverstaions()
 	m.ChatUI.Select(conversationLastIndex)
@@ -434,6 +423,7 @@ func (m Model) handleEditKey() (tea.Model, tea.Cmd) {
 			m.FocusedOn = Input
 			m.Input.SetValue(selectedItem.Content)
 			m.EditMessage = &selectedItem
+			m.SkipNextInput = true
 			return m, nil
 		}
 	}
@@ -478,6 +468,7 @@ func (m Model) handleReplyKey() (tea.Model, tea.Cmd) {
 			m.IsReply = true
 			if selectedMessage, ok := m.ChatUI.SelectedItem().(rpc.FormattedMessage); ok {
 				m.FocusedOn = Input
+				m.SkipNextInput = true
 				m.ReplyTo = &selectedMessage
 			}
 			return m, nil
@@ -536,7 +527,7 @@ func (m Model) handleUserChats(msg rpc.UserChatsMsg) (tea.Model, tea.Cmd) {
 	}
 
 	var users []list.Item
-	for _, du := range msg.Response.Result {
+	for _, du := range *msg.Response {
 		users = append(users, du)
 	}
 	m.Users.SetItems(users)
@@ -581,43 +572,41 @@ func (m Model) handleForwardMessage(msg ForwardMsg) (tea.Model, tea.Cmd) {
 	receiver := *msg.receiver
 	fromPeer := *msg.fromPeer
 
-	from, toPeer, cType := m.extractPeerInfo(fromPeer, receiver)
-	messageIDs := []int{int(messageToBeForwarded.ID)}
+	from, toPeer := m.extractPeerInfo(fromPeer, receiver)
 
-	response, err := rpc.RPCClient.ForwardMessages(from, messageIDs, toPeer, cType)
+	messageIDs := []int{int(messageToBeForwarded.ID)}
+	_, err := rpc.TGClient.ForwardMessages(from, messageIDs, toPeer, toPeer.ChatType, toPeer.ChatType)
 	if err != nil {
 		slog.Error("Failed to forward message", "error", err.Error())
 		return m, nil
 	}
 
-	if response.Error != nil {
-		slog.Error("Failed to forward message", "error", response.Error.Message)
-	}
-
 	return m, nil
 }
 
-func (m Model) extractPeerInfo(fromPeer, receiver any) (from, toPeer rpc.PeerInfo, cType rpc.ChatType) {
+func (m Model) extractPeerInfo(fromPeer, receiver any) (from, toPeer rpc.PeerInfo) {
 	if fromUser, ok := fromPeer.(rpc.UserInfo); ok {
 		from.PeerID = fromUser.PeerID
 		from.AccessHash = fromUser.AccessHash
-		cType = "user"
+		from.ChatType = rpc.UserChat
 	}
 
 	if fromChannelOrGroup, ok := fromPeer.(rpc.ChannelAndGroupInfo); ok {
 		from.PeerID = fromChannelOrGroup.ChannelID
 		from.AccessHash = fromChannelOrGroup.AccessHash
-		cType = "channel"
+		from.ChatType = rpc.ChannelChat
 	}
 
 	if userOrChannel, ok := receiver.(rpc.UserInfo); ok {
 		toPeer.PeerID = userOrChannel.PeerID
 		toPeer.AccessHash = userOrChannel.AccessHash
+		toPeer.ChatType = rpc.UserChat
 	}
 
 	if channelOrGroup, ok := receiver.(rpc.ChannelAndGroupInfo); ok {
 		toPeer.PeerID = channelOrGroup.ChannelID
 		toPeer.AccessHash = channelOrGroup.AccessHash
+		toPeer.ChatType = rpc.ChannelChat
 	}
 
 	return

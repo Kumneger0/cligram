@@ -1,16 +1,14 @@
 package rpc
 
 import (
-	"encoding/json"
-	"fmt"
+	"strconv"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/gotd/td/tg"
 )
 
 type UserChannelResponse struct {
-	JSONRPC string `json:"jsonrpc"`
-	ID      int    `json:"id"`
-	Error   *struct {
+	Error *struct {
 		Code    int    `json:"code"`
 		Message string `json:"message"`
 		Data    any    `json:"data,omitempty"`
@@ -23,19 +21,33 @@ type UserChannelMsg struct {
 	Response *UserChannelResponse
 }
 
-func (c *JSONRPCClient) GetUserChannel() tea.Cmd {
+func (c *TelegramClient) GetUserChannel() tea.Cmd {
 	return func() tea.Msg {
-		userChannelRPCResponse, err := c.Call("getUserChats", []string{"channel"})
+		dilaogsSlice, err := getAllDialogs(c)
+
 		if err != nil {
-			return UserChannelMsg{Err: err}
+			return UserChatsMsg{Err: err}
 		}
-		var response UserChannelResponse
-		if err := json.Unmarshal(userChannelRPCResponse, &response); err != nil {
-			return UserChannelMsg{Err: fmt.Errorf("failed to unmarshal response JSON '%s': %w", string(userChannelRPCResponse), err)}
+
+		var channel []ChannelAndGroupInfo
+
+		for _, dialogClass := range dilaogsSlice.Chats {
+			if peer, ok := dialogClass.(*tg.Channel); ok && peer.Broadcast {
+				channel = append(channel, ChannelAndGroupInfo{
+					ChannelTitle:      peer.Title,
+					Username:          &peer.Username,
+					ChannelID:         strconv.FormatInt(peer.ID, 10),
+					AccessHash:        strconv.FormatInt(peer.AccessHash, 10),
+					IsCreator:         peer.Creator,
+					IsBroadcast:       peer.Broadcast,
+					ParticipantsCount: &peer.ParticipantsCount,
+					UnreadCount:       0,
+				})
+			}
 		}
-		if response.Error != nil {
-			return UserChannelMsg{Err: fmt.Errorf("ERROR: %s", response.Error.Message)}
-		}
-		return UserChannelMsg{Err: nil, Response: &response}
+		return UserChannelMsg{Err: nil, Response: &UserChannelResponse{
+			Error:  nil,
+			Result: channel,
+		}}
 	}
 }

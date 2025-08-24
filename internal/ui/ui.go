@@ -163,7 +163,7 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 	}
 	replayToMessageID := strconv.FormatInt(messageToReply.ID, 10)
-	cmds = append(cmds, rpc.RPCClient.SendMessage(peerInfo, userMsg, m.IsReply && m.ReplyTo != nil, replayToMessageID, cType, isFile, filepath))
+	cmds = append(cmds, rpc.TGClient.SendMessage(peerInfo, userMsg, m.IsReply && m.ReplyTo != nil, replayToMessageID, cType, isFile, filepath))
 	if isFile {
 		m.SelectedFile = "uploading..."
 	}
@@ -189,7 +189,7 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 	copy(m.Conversations[:], firstOneRemoved)
 	var cmd tea.Cmd
 	if *cligramConfig.Chat.ReadReceiptMode == "default" {
-		cmd = rpc.RPCClient.MarkMessagesAsRead(rpc.PeerInfo{
+		cmd = rpc.TGClient.MarkMessagesAsRead(rpc.PeerInfo{
 			AccessHash: peerInfo.AccessHash,
 			PeerID:     peerInfo.PeerID,
 		}, cType)
@@ -203,7 +203,7 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 }
 
 func (m *Model) editMessage(peerInfo rpc.PeerInfo, cType rpc.ChatType, userMsg string) (Model, tea.Cmd) {
-	cmd := rpc.RPCClient.EditMessage(rpc.PeerInfo{
+	cmd := rpc.TGClient.EditMessage(rpc.PeerInfo{
 		AccessHash: peerInfo.AccessHash,
 		PeerID:     peerInfo.PeerID,
 	}, cType, int(m.EditMessage.ID), userMsg)
@@ -221,11 +221,14 @@ func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (M
 		m.SelectedFile = path
 		m.IsFilepickerVisible = false
 	}
+
 	switch m.FocusedOn {
 	case Input:
 		m.Input.Focus()
-		m.Input, cmd = m.Input.Update(msg)
-		cmds = append(cmds, cmd)
+		if !m.SkipNextInput {
+			m.Input, cmd = m.Input.Update(msg)
+			cmds = append(cmds, cmd)
+		}
 	case SideBar:
 		m.Input.Blur()
 		switch m.Mode {
@@ -243,15 +246,16 @@ func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (M
 		m.ChatUI, cmd = m.ChatUI.Update(msg)
 		cmds = append(cmds, cmd)
 	}
+	m.SkipNextInput = false
 	return *m, tea.Batch(cmds...)
 }
 
 func handleUserChange(m *Model) (Model, tea.Cmd) {
 	pInfo, cType := getMessageParams(m)
-	cmd := rpc.RPCClient.GetAllMessages(pInfo, cType, 50, nil, nil, nil)
+	cmd := rpc.TGClient.GetAllMessages(pInfo, cType, 50, nil, nil, nil)
 	cligramConfig := config.GetConfig()
 	if *cligramConfig.Chat.ReadReceiptMode == "instant" {
-		cmd = tea.Batch(cmd, rpc.RPCClient.MarkMessagesAsRead(rpc.PeerInfo{
+		cmd = tea.Batch(cmd, rpc.TGClient.MarkMessagesAsRead(rpc.PeerInfo{
 			AccessHash: pInfo.AccessHash,
 			PeerID:     pInfo.PeerID,
 		}, cType))
@@ -325,7 +329,7 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 			} else {
 				m.Input.Reset()
 			}
-			return *m, rpc.RPCClient.GetUserChannel()
+			return *m, rpc.TGClient.GetUserChannel()
 		case "u":
 			m.Mode = ModeUsers
 			clearSidebarLists(false, true, true)
@@ -350,22 +354,22 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 						m.Users.Select(foundIndex)
 					}
 					m.ChatUI.SetItems(nil)
-					return *m, rpc.RPCClient.GetAllMessages(rpc.PeerInfoParams{
+					return *m, rpc.TGClient.GetAllMessages(rpc.PeerInfoParams{
 						AccessHash: m.SelectedUser.AccessHash,
 						PeerID:     m.SelectedUser.PeerID,
 					}, rpc.UserChat, 50, nil, nil, nil)
 				}
 			}
-			return *m, rpc.RPCClient.GetUserChatsCmd(rpc.ModeUser)
+			return *m, rpc.TGClient.GetUserChatsCmd(rpc.ModeUser)
 		case "g":
 			m.Mode = ModeGroups
 			clearSidebarLists(true, true, false)
-			return *m, rpc.RPCClient.GetUserGroups()
+			return *m, rpc.TGClient.GetUserGroups()
 		case "b":
 			m.Mode = ModeBots
 			clearSidebarLists(false, true, true)
 			m.Users.ResetSelected()
-			return *m, rpc.RPCClient.GetUserChatsCmd(rpc.ModeBot)
+			return *m, rpc.TGClient.GetUserChatsCmd(rpc.ModeBot)
 		}
 		return *m, nil
 	}

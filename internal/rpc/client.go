@@ -1,52 +1,157 @@
 package rpc
 
 import (
-	"bufio"
-	"bytes"
-	"encoding/json"
+	"context"
 	"errors"
 	"fmt"
-	"io"
+	"log"
 	"log/slog"
 	"os"
-	"os/exec"
+	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/gotd/td/telegram"
+	"github.com/gotd/td/telegram/updates"
+	"github.com/gotd/td/tg"
 )
 
-var (
-	JsProcess *os.Process
-	RPCClient *JSONRPCClient
-)
-
-type JSONRPCClient struct {
-	Stdin  io.WriteCloser
-	Stdout io.ReadCloser
-	Cmd    *exec.Cmd
-	NextID int
-	Mu     sync.Mutex
+type TelegramClient struct {
+	*telegram.Client
+	ctx context.Context
 }
 
-type JSONRPCRequest struct {
-	JSONRPC string `json:"jsonrpc"`
-	ID      int    `json:"id"`
-	Method  string `json:"method"`
-	Params  any    `json:"params"`
+var TGClient *TelegramClient
+
+var once sync.Once
+
+func mustGetenv(key string) string {
+	v, ok := os.LookupEnv(key)
+	if !ok || v == "" {
+		log.Fatalf("%s is missing in env", key)
+	}
+	return v
 }
 
-type BaseJSONRPCResponse struct {
-	JSONRPC string `json:"jsonrpc"`
-	ID      int    `json:"id"`
-	Result  []any  `json:"result,omitempty"`
-	Error   *struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
-		Data    any    `json:"data,omitempty"`
-	} `json:"error,omitempty"`
+func ensureDir(dir string) error {
+	if _, err := os.Stat(dir); err != nil {
+		if os.IsNotExist(err) {
+			return os.MkdirAll(dir, 0o700)
+		}
+		return err
+	}
+	return nil
+}
+
+func GetSessionStorage() *telegram.FileSessionStorage {
+	userHomeDir, err := os.UserHomeDir()
+	if err != nil {
+		slog.Error(err.Error())
+		log.Fatal(err.Error())
+		return nil
+	}
+	sessionStoragePath := filepath.Join(userHomeDir, ".cligram")
+	if err := ensureDir(sessionStoragePath); err != nil {
+		slog.Error(err.Error())
+		log.Fatal(err.Error())
+		return nil
+	}
+	return &telegram.FileSessionStorage{
+		Path: filepath.Join(sessionStoragePath, "session.json"),
+	}
+}
+
+func defaultUserInfoForID(userID int64) *UserInfo {
+	pid := strconv.FormatInt(userID, 10)
+	return &UserInfo{
+		FirstName:   "",
+		IsBot:       false,
+		PeerID:      pid,
+		IsTyping:    false,
+		AccessHash:  "",
+		UnreadCount: 10,
+		IsOnline:    true,
+	}
+}
+
+func channelAndGroupInfoFromTG(peer *tg.Channel) *ChannelAndGroupInfo {
+	return &ChannelAndGroupInfo{
+		ChannelTitle:      peer.Title,
+		Username:          &peer.Username,
+		ChannelID:         strconv.FormatInt(peer.ID, 10),
+		AccessHash:        strconv.FormatInt(peer.AccessHash, 10),
+		IsCreator:         peer.Creator,
+		IsBroadcast:       peer.Broadcast,
+		ParticipantsCount: &peer.ParticipantsCount,
+		UnreadCount:       0,
+	}
+}
+
+func getFormattedMessage(msg *tg.Message, user *UserInfo) *FormattedMessage {
+	return &FormattedMessage{
+		ID:                   int64(msg.ID),
+		Sender:               user.FirstName,
+		Content:              msg.Message,
+		IsFromMe:             msg.Out,
+		Media:                nil,
+		Date:                 time.Unix(int64(msg.Date), 0),
+		IsUnsupportedMessage: false,
+		WebPage:              nil,
+		Document:             nil,
+		FromID:               &user.PeerID,
+		SenderUserInfo:       user,
+	}
+}
+
+func ensureUserInfo(userInfo *UserInfo, userID int64) *UserInfo {
+	if userInfo == nil {
+		return defaultUserInfoForID(userID)
+	}
+	return userInfo
+}
+
+func userInfoFromTG(tgUser *tg.User, userID int64) *UserInfo {
+	if tgUser == nil {
+		return defaultUserInfoForID(userID)
+	}
+	return &UserInfo{
+		FirstName:   tgUser.FirstName,
+		IsBot:       tgUser.Bot,
+		PeerID:      strconv.FormatInt(userID, 10),
+		IsTyping:    false,
+		AccessHash:  strconv.FormatInt(tgUser.AccessHash, 10),
+		UnreadCount: 10,
+		LastSeen:    nil,
+		IsOnline:    false,
+	}
+}
+
+func GetTelegramClient(ctx context.Context, updateChannel chan Notification) *TelegramClient {
+	once.Do(func() {
+		appID := mustGetenv("TELEGRAM_API_ID")
+		appIDInt, err := strconv.Atoi(appID)
+		if err != nil {
+			slog.Error(err.Error())
+			log.Fatal("Invalid TELEGRAM_API_ID")
+		}
+		appHash := mustGetenv("TELEGRAM_API_HASH")
+
+		updateHandler := getUpdateHandler(updateChannel)
+		TGClient = &TelegramClient{
+			Client: telegram.NewClient(appIDInt, appHash, telegram.Options{
+				SessionStorage: GetSessionStorage(),
+				UpdateHandler:  updateHandler,
+				NoUpdates:      false,
+				OnDead: func() {
+					fmt.Fprintln(os.Stderr, "connection is dead")
+				},
+			}),
+		}
+		TGClient.ctx = ctx
+	})
+	return TGClient
 }
 
 type UserGroupsMsg struct {
@@ -55,126 +160,164 @@ type UserGroupsMsg struct {
 	Response *UserChannelResponse
 }
 
-func (c *JSONRPCClient) GetUserGroups() tea.Cmd {
+func (c *TelegramClient) GetUserGroups() tea.Cmd {
 	return func() tea.Msg {
-		userGroupsRPCResponse, err := c.Call("getUserChats", []string{"group"})
+		dilaogsSlice, err := getAllDialogs(c)
 		if err != nil {
-			return UserGroupsMsg{Err: err}
+			return UserChatsMsg{Err: err}
 		}
-		var response UserChannelResponse
-		if err := json.Unmarshal(userGroupsRPCResponse, &response); err != nil {
-			return UserGroupsMsg{Err: fmt.Errorf("failed to unmarshal response JSON '%s': %w", string(userGroupsRPCResponse), err)}
+		var channel []ChannelAndGroupInfo
+		for _, dialogClass := range dilaogsSlice.Chats {
+			if peer, ok := dialogClass.(*tg.Channel); ok && !peer.Broadcast {
+				channel = append(channel, *channelAndGroupInfoFromTG(peer))
+			}
 		}
-		if response.Error != nil {
-			return UserGroupsMsg{Err: fmt.Errorf("ERROR: %s", response.Error.Message)}
-		}
-		return UserGroupsMsg{Err: nil, Response: &response}
+		return UserGroupsMsg{Err: nil, Response: &UserChannelResponse{
+			Error:  nil,
+			Result: channel,
+		}}
 	}
+}
+
+func getUserOnlineOffline(userInfo UserInfo) UserOnlineOffline {
+	return UserOnlineOffline{
+		AccessHash: userInfo.AccessHash,
+		FirstName:  userInfo.FirstName,
+		Status:     "",
+		PeerID:     userInfo.PeerID,
+	}
+}
+
+func getUpdateHandler(updateChannel chan Notification) telegram.UpdateHandler {
+	disp := tg.NewUpdateDispatcher()
+	disp.OnNewChannelMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateNewChannelMessage) error {
+		msg := update.Message.(*tg.Message)
+		if peerClass, ok := msg.GetFromID(); ok {
+			fmt.Println("channel", peerClass)
+			return nil
+		}
+		return nil
+	})
+
+	disp.OnNewMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateNewMessage) error {
+		msg := update.Message.(*tg.Message)
+		if peerClass, ok := msg.GetFromID(); ok && TGClient != nil {
+			peer, ok := peerClass.(*tg.PeerUser)
+			if !ok {
+				return nil
+			}
+			userInfo, err := TGClient.getUserInfo(peer.UserID)
+			if err != nil || userInfo == nil {
+				if err != nil {
+					slog.Error(err.Error())
+				}
+			}
+			user := ensureUserInfo(userInfo, peer.UserID)
+			var newMessageMSG = NewMessageMsg{
+				ChannelOrGroup: nil,
+				User:           user,
+				Message:        *getFormattedMessage(msg, user),
+			}
+			updateChannel <- Notification{
+				NewMessageMsg:        newMessageMSG,
+				UserOnlineOfflineMsg: UserOnlineOffline{},
+				UserTyping:           UserTyping{},
+				RPCError:             Error{},
+			}
+		}
+		return nil
+	})
+
+	disp.OnUserTyping(func(ctx context.Context, e tg.Entities, update *tg.UpdateUserTyping) error {
+		userInfo, err := TGClient.getUserInfo(update.UserID)
+		if err != nil || userInfo == nil {
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+			}
+		}
+		user := ensureUserInfo(userInfo, update.UserID)
+		updateChannel <- Notification{
+			NewMessageMsg:        NewMessageMsg{},
+			UserOnlineOfflineMsg: UserOnlineOffline{},
+			UserTyping: UserTyping{
+				User: *user,
+			},
+		}
+		return nil
+	})
+
+	disp.OnUserStatus(func(ctx context.Context, e tg.Entities, update *tg.UpdateUserStatus) error {
+		userInfo, err := TGClient.getUserInfo(update.UserID)
+		if err != nil || userInfo == nil {
+			return nil
+		}
+		if status, ok := update.Status.(*tg.UserStatusOffline); ok {
+			lastSeenTime := time.Unix(int64(status.WasOnline), 0)
+			userOnlineOfflineMSG := getUserOnlineOffline(*ensureUserInfo(userInfo, update.UserID))
+			userOnlineOfflineMSG.LastSeen = lastSeenTime
+			updateChannel <- Notification{
+				NewMessageMsg:        NewMessageMsg{},
+				UserOnlineOfflineMsg: userOnlineOfflineMSG,
+				UserTyping:           UserTyping{},
+				RPCError: Error{
+					Error: nil,
+				},
+			}
+		}
+
+		if _, ok := update.Status.(*tg.UserStatusOnline); ok {
+			now := time.Now()
+			userOnlineOfflineMSG := getUserOnlineOffline(*ensureUserInfo(userInfo, update.UserID))
+			userOnlineOfflineMSG.LastSeen = now
+			updateChannel <- Notification{
+				NewMessageMsg:        NewMessageMsg{},
+				UserOnlineOfflineMsg: userOnlineOfflineMSG,
+				UserTyping:           UserTyping{},
+				RPCError: Error{
+					Error: nil,
+				},
+			}
+		}
+		return nil
+	})
+
+	return updates.New(updates.Config{
+		Handler: disp,
+	})
+}
+
+func (c *TelegramClient) getUserInfo(userID int64) (*UserInfo, error) {
+	inputUserClass := &tg.InputUser{
+		UserID: userID,
+	}
+	userClasses, err := c.Client.API().UsersGetUsers(c.ctx, []tg.InputUserClass{inputUserClass})
+	if err != nil {
+		return nil, err
+	}
+	if len(userClasses) == 0 {
+		return nil, errors.New("no users found with the provided user id and accessHash")
+	}
+	if tgUser, ok := userClasses[0].(*tg.User); ok {
+		var user = UserInfo{
+			FirstName:   tgUser.FirstName,
+			IsBot:       tgUser.Bot,
+			PeerID:      strconv.FormatInt(userID, 10),
+			IsTyping:    false,
+			AccessHash:  strconv.FormatInt(tgUser.AccessHash, 10),
+			UnreadCount: 10,
+			LastSeen:    nil,
+			IsOnline:    false,
+		}
+		return &user, nil
+	}
+	return nil, nil
 }
 
 type PeerInfo struct {
 	AccessHash string `json:"accessHash"`
 	PeerID     string `json:"peerId"`
+	ChatType   ChatType
 }
-
-var (
-	JSONPayloadBytesChan = make(chan struct {
-		Data  []byte
-		Error error
-	}, 1)
-	ProducerWg sync.WaitGroup
-)
-
-func (c *JSONRPCClient) Call(method string, params any) ([]byte, error) {
-	c.Mu.Lock()
-	id := c.NextID
-	c.NextID++
-	c.Mu.Unlock()
-
-	request := JSONRPCRequest{
-		JSONRPC: "2.0",
-		ID:      id,
-		Method:  method,
-		Params:  params,
-	}
-
-	requestPayloadBytes, err := json.Marshal(request)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	var requestBuffer bytes.Buffer
-	requestBuffer.WriteString(fmt.Sprintf("Content-Length: %d\r\n", len(requestPayloadBytes)))
-	requestBuffer.WriteString("\r\n")
-	requestBuffer.Write(requestPayloadBytes)
-	ProducerWg.Add(1)
-	_, err = c.Stdin.Write(requestBuffer.Bytes())
-	if err != nil {
-		return nil, fmt.Errorf("failed to write request to stdin: %w", err)
-	}
-	jsonPayloadBytes := <-JSONPayloadBytesChan
-	ProducerWg.Wait()
-
-	if jsonPayloadBytes.Error != nil {
-		return nil, fmt.Errorf("failed to read response: %w", jsonPayloadBytes.Error)
-	}
-
-	return jsonPayloadBytes.Data, nil
-}
-
-func ReadStdOut(rpcClient *JSONRPCClient) ([]byte, error) {
-	reader := bufio.NewReader((rpcClient.Stdout))
-	var contentLength int = -1
-	for {
-		lineBytes, _, err := reader.ReadLine()
-		if err != nil {
-			if errors.Is(err, io.EOF) && contentLength != -1 {
-				return nil, err
-			}
-			slog.Error(err.Error())
-			// return nil, fmt.Errorf("error reading from stdout: %w", err)
-			break
-		}
-		line := string(lineBytes)
-		if line == "" {
-			break
-		}
-
-		parts := strings.SplitN(line, ":", 2)
-		if len(parts) == 2 {
-			headerName := strings.TrimSpace(parts[0])
-			headerValue := strings.TrimSpace(parts[1])
-			if strings.EqualFold(headerName, "Content-Length") {
-				cl, err := strconv.Atoi(headerValue)
-				if err != nil {
-					return nil, fmt.Errorf("invalid Content-Length value '%s': %w", headerValue, err)
-				}
-				contentLength = cl
-			}
-		}
-	}
-
-	if contentLength == -1 {
-		return nil, fmt.Errorf("missing Content-Length header")
-	}
-	if contentLength == 0 {
-		return nil, fmt.Errorf("Content-Length is 0, no JSON payload expected/read")
-	}
-
-	jsonPayloadBytes := make([]byte, contentLength)
-	n, err := io.ReadFull(reader, jsonPayloadBytes)
-	if err != nil {
-		if err == io.EOF {
-			return nil, fmt.Errorf("EOF while reading JSON payload: expected %d bytes, got %d", contentLength, n)
-		}
-		return nil, fmt.Errorf("failed to read JSON payload (expected %d bytes, read %d): %w", contentLength, n, err)
-	}
-	if n != contentLength {
-		return nil, fmt.Errorf("short read for JSON payload: expected %d bytes, got %d", contentLength, n)
-	}
-	return jsonPayloadBytes, nil
-}
-
 type UserInfo struct {
 	FirstName   string  `json:"firstName"`
 	IsBot       bool    `json:"isBot"`
@@ -224,6 +367,7 @@ type UserOnlineOffline struct {
 	FirstName  string    `json:"firstName,omitempty"`
 	Status     string    `json:"status,omitempty"`
 	LastSeen   time.Time `json:"lastSeen,omitempty"`
+	PeerID     string    `json:"peerId"`
 }
 
 type TelegramNotification struct {
@@ -245,88 +389,4 @@ type Notification struct {
 	UserOnlineOfflineMsg UserOnlineOffline
 	UserTyping           UserTyping
 	RPCError             Error
-}
-
-func ProcessIncomingNotifications(p chan Notification) {
-	for {
-		time.Sleep(1 * time.Second)
-		jsonPayload, err := ReadStdOut(RPCClient)
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				slog.Info("EOF reached while reading from RpcClient, continuing to next iteration")
-				continue
-			}
-			p <- Notification{
-				RPCError: Error{
-					Error: fmt.Errorf("AN error occurred while reading from RpcClient. Please check your connection or try restarting the application"),
-				},
-			}
-			slog.Error("Error reading from RpcClient", "error", err.Error())
-			continue
-		}
-		var notification TelegramNotification
-		if err := json.Unmarshal(jsonPayload, &notification); err != nil {
-			slog.Error("Failed to parse JSON payload", "error", err.Error())
-			continue
-		}
-		if notification.Method == "newMessage" || notification.Method == "userOnlineOffline" || notification.Method == "userTyping" {
-			if notification.Method == "newMessage" {
-				paramsBytes, err := json.Marshal(notification.Params)
-				if err != nil {
-					slog.Error("Failed to marshal params", "error", err.Error())
-					continue
-				}
-				var newMessage NewMessageMsg
-				if err := json.Unmarshal(paramsBytes, &newMessage); err != nil {
-					slog.Error("Failed to unmarshal params", "error", err.Error())
-					continue
-				}
-				if p != nil {
-					p <- Notification{NewMessageMsg: newMessage}
-				} else {
-					slog.Error("bubble tea event loop is not initialized")
-				}
-			}
-			if notification.Method == "userOnlineOffline" {
-				paramsBytes, err := json.Marshal(notification.Params)
-				if err != nil {
-					slog.Error("Failed to marshal params", "error", err.Error())
-					continue
-				}
-				var userOnlineOffline UserOnlineOffline
-				if err := json.Unmarshal(paramsBytes, &userOnlineOffline); err != nil {
-					slog.Error("Failed to unmarshal params", "error", err.Error())
-					continue
-				}
-				if p != nil {
-					p <- Notification{UserOnlineOfflineMsg: userOnlineOffline}
-				}
-			}
-			if notification.Method == "userTyping" {
-				paramsBytes, err := json.Marshal(notification.Params)
-				if err != nil {
-					slog.Error("Failed to marshal params", "error", err.Error())
-					continue
-				}
-				var userTyping UserTyping
-				if err := json.Unmarshal(paramsBytes, &userTyping); err != nil {
-					slog.Error("Failed to unmarshal params", "error", err.Error())
-					continue
-				}
-				if p != nil {
-					p <- Notification{UserTyping: userTyping}
-				}
-			}
-		} else {
-			JSONPayloadBytesChan <- struct {
-				Data  []byte
-				Error error
-			}{
-				Data:  jsonPayload,
-				Error: err,
-			}
-
-			ProducerWg.Done()
-		}
-	}
 }

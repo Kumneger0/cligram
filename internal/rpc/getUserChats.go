@@ -1,45 +1,53 @@
 package rpc
 
 import (
-	"encoding/json"
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/gotd/td/tg"
 )
 
 type UserChatsMsg struct {
-	Response *UserChatsJSONRPCResponse
+	Response *[]UserInfo
 	Err      error
 }
 
-type UserChatsJSONRPCResponse struct {
-	JSONRPC string `json:"jsonrpc"`
-	ID      int    `json:"id"`
-	Error   *struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
-		Data    any    `json:"data,omitempty"`
-	} `json:"error,omitempty"`
-	Result []UserInfo `json:"result,omitempty"`
+func (c *TelegramClient) GetUserChats(isBot bool) (UserChatsMsg, error) {
+	dilaogsSlice, err := getAllDialogs(c)
+	if err != nil {
+		return UserChatsMsg{Response: &[]UserInfo{}, Err: err}, err
+	}
+
+	if dilaogsSlice != nil {
+		var users []UserInfo
+		for _, userClass := range dilaogsSlice.Users {
+			if user, ok := userClass.(*tg.User); ok && user.Bot == isBot {
+				users = append(users, *userInfoFromTG(user, user.ID))
+			}
+		}
+
+		return UserChatsMsg{
+			Response: &users,
+			Err:      nil,
+		}, nil
+	}
+	return UserChatsMsg{Response: &[]UserInfo{}, Err: err}, err
 }
 
-func (c *JSONRPCClient) GetUserChats() UserChatsMsg {
-	if c == nil {
-		return UserChatsMsg{Err: fmt.Errorf("js backend is not running try restarting the app, please open an issue on github if the problem persists")}
-	}
-	userChatRPCResponse, err := c.Call("getUserChats", []string{"user"})
+func getAllDialogs(c *TelegramClient) (*tg.MessagesDialogsSlice, error) {
+	dialogs, err := c.Client.API().MessagesGetDialogs(c.ctx, &tg.MessagesGetDialogsRequest{
+		Limit:      50,
+		OffsetPeer: &tg.InputPeerSelf{},
+	})
 
 	if err != nil {
-		return UserChatsMsg{Err: err}
+		return nil, err
 	}
-	var response UserChatsJSONRPCResponse
-	if err := json.Unmarshal(userChatRPCResponse, &response); err != nil {
-		return UserChatsMsg{Err: fmt.Errorf("failed to unmarshal response JSON '%s': %w", string(userChatRPCResponse), err)}
+
+	if dilaogsSlice, ok := dialogs.(*tg.MessagesDialogsSlice); ok {
+		return dilaogsSlice, nil
 	}
-	if response.Error != nil {
-		return UserChatsMsg{Err: fmt.Errorf("ERROR: %s", response.Error.Message)}
-	}
-	return UserChatsMsg{Err: nil, Response: &response}
+	return nil, fmt.Errorf("opps there was an eror while getting dilos")
 }
 
 type Chat string
@@ -49,19 +57,9 @@ const (
 	ModeBot  Chat = "bot"
 )
 
-func (c *JSONRPCClient) GetUserChatsCmd(chatType Chat) tea.Cmd {
+func (c *TelegramClient) GetUserChatsCmd(chatType Chat) tea.Cmd {
 	return func() tea.Msg {
-		userChatRPCResponse, err := c.Call("getUserChats", []string{string(chatType)})
-		if err != nil {
-			return UserChatsMsg{Err: err}
-		}
-		var response UserChatsJSONRPCResponse
-		if err := json.Unmarshal(userChatRPCResponse, &response); err != nil {
-			return UserChatsMsg{Err: fmt.Errorf("failed to unmarshal response JSON '%s': %w", string(userChatRPCResponse), err)}
-		}
-		if response.Error != nil {
-			return UserChatsMsg{Err: fmt.Errorf("ERROR: %s", response.Error.Message)}
-		}
-		return UserChatsMsg{Err: nil, Response: &response}
+		userBotChats, err := c.GetUserChats(true)
+		return UserChatsMsg{Response: userBotChats.Response, Err: err}
 	}
 }

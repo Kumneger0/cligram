@@ -1,11 +1,7 @@
 package ui
 
 import (
-	"log/slog"
-	"os"
-
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/kumneger0/cligram/internal/rpc"
 )
 
 type SessionState int
@@ -31,6 +27,8 @@ type Manager struct {
 	OverlayMode  OverlayMode
 }
 
+var TUIManager Manager
+
 func (m Manager) Init() tea.Cmd {
 	return tea.Batch(
 		m.Foreground.Init(),
@@ -53,10 +51,6 @@ func (m Manager) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", "ctrl+c", "esc":
 			if m.State == MainView {
-				err := rpc.JsProcess.Signal(os.Interrupt)
-				if err != nil {
-					slog.Error("Failed to send interrupt signal to JS process", "error", err.Error())
-				}
 				return m, tea.Quit
 			}
 			m.State = MainView

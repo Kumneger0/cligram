@@ -1,41 +1,50 @@
 package rpc
 
 import (
-	"encoding/json"
 	"fmt"
+	"strconv"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/gotd/td/tg"
 )
 
-type MarkMessagesAsReadJSONRPCResponse struct {
-	JSONRPC string `json:"jsonrpc"`
-	ID      int    `json:"id"`
-	Error   *struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
-		Data    any    `json:"data,omitempty"`
-	} `json:"error,omitempty"`
-	Result bool `json:"result,omitempty"`
-}
-
 type MarkMessagesAsReadMsg struct {
-	Response MarkMessagesAsReadJSONRPCResponse
+	Response bool
 	Err      error
 }
 
-func (c *JSONRPCClient) MarkMessagesAsRead(userPeer PeerInfo, chatType ChatType) tea.Cmd {
+func (c *TelegramClient) MarkMessagesAsRead(userPeer PeerInfo, chatType ChatType) tea.Cmd {
 	return func() tea.Msg {
-		rpcResponse, err := c.Call("markUnRead", []any{userPeer, chatType})
+		var peer tg.InputPeerClass
+		peerID, err := strconv.ParseInt(userPeer.PeerID, 10, 64)
 		if err != nil {
-			return MarkMessagesAsReadMsg{Err: err}
+			return MarkMessagesAsReadMsg{Response: false, Err: err}
 		}
-		var response MarkMessagesAsReadJSONRPCResponse
-		if err := json.Unmarshal(rpcResponse, &response); err != nil {
-			return MarkMessagesAsReadMsg{Err: fmt.Errorf("failed to unmarshal response JSON '%s': %w", string(rpcResponse), err)}
+		accessHash, err := strconv.ParseInt(userPeer.PeerID, 10, 64)
+		if err != nil {
+			return MarkMessagesAsReadMsg{Response: false, Err: err}
 		}
-		if response.Error != nil {
-			return MarkMessagesAsReadMsg{Err: fmt.Errorf("ERROR: %s", response.Error.Message)}
+		switch chatType {
+		case UserChat, ChatType(Bot):
+			peer = &tg.InputPeerUser{
+				UserID:     peerID,
+				AccessHash: accessHash,
+			}
+		case ChannelChat, GroupChat:
+			peer = &tg.InputPeerChannel{
+				ChannelID:  peerID,
+				AccessHash: accessHash,
+			}
 		}
-		return MarkMessagesAsReadMsg{Response: response}
+		markHistoryASReadReqeust := &tg.MessagesReadHistoryRequest{
+			Peer: peer,
+		}
+		_, err = c.Client.API().MessagesReadHistory(c.ctx, markHistoryASReadReqeust)
+
+		if err != nil {
+			fmt.Println(err)
+			return MarkMessagesAsReadMsg{Response: false, Err: err}
+		}
+		return MarkMessagesAsReadMsg{Response: true, Err: nil}
 	}
 }

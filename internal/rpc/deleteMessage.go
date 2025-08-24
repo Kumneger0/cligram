@@ -1,37 +1,27 @@
 package rpc
 
-import "encoding/json"
+import "github.com/gotd/td/tg"
 
 type SuccessDeleteMessageResult struct {
 	Status string `json:"status"`
 }
 
 type DeleteMessageResultResponse struct {
-	JSONRPC string `json:"jsonrpc"`
-	ID      int    `json:"id"`
-	Error   *struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
-		Data    any    `json:"data,omitempty"`
-	} `json:"error,omitempty"`
 	Result *SuccessDeleteMessageResult `json:"result,omitempty"`
 }
 
-func (c *JSONRPCClient) DeleteMessage(peerInfo PeerInfo, messageID int, chatType ChatType) (DeleteMessageResultResponse, error) {
-	rpcCallParams := []any{}
-	rpcCallParams = append(rpcCallParams, peerInfo)
-	rpcCallParams = append(rpcCallParams, messageID)
-	rpcCallParams = append(rpcCallParams, chatType)
-
-	responseBytes, err := c.Call("deleteMessage", rpcCallParams)
+func (c *TelegramClient) DeleteMessage(peerInfo PeerInfo, messageID int, chatType ChatType) (DeleteMessageResultResponse, error) {
+	deleteMessageRequest := &tg.MessagesDeleteMessagesRequest{
+		Revoke: true,
+		ID:     []int{messageID},
+	}
+	_, err := c.Client.API().MessagesDeleteMessages(c.ctx, deleteMessageRequest)
 	if err != nil {
-		return DeleteMessageResultResponse{}, err
+		return DeleteMessageResultResponse{Result: &SuccessDeleteMessageResult{
+			Status: "failed",
+		}}, err
 	}
-
-	var rpcResponse DeleteMessageResultResponse
-	if err := json.Unmarshal(responseBytes, &rpcResponse); err != nil {
-		return DeleteMessageResultResponse{}, err
-	}
-
-	return rpcResponse, nil
+	return DeleteMessageResultResponse{Result: &SuccessDeleteMessageResult{
+		Status: "success",
+	}}, nil
 }

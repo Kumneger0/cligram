@@ -113,6 +113,7 @@ type Model struct {
 	IsReply             bool
 	ReplyTo             *rpc.FormattedMessage
 	EditMessage         *rpc.FormattedMessage
+	SkipNextInput       bool
 }
 
 func filterEmptyMessages(msgs [50]rpc.FormattedMessage) []rpc.FormattedMessage {
@@ -381,7 +382,7 @@ func Debounce(fn func(args ...any) tea.Msg, delay time.Duration) func(args ...an
 // 					}
 // 					AddToCache(cacheKey, string(messages))
 // 				}
-// 				cmd = rpc.RPCClient.GetMessages(pInfo, cType, &offsetID, nil, nil)
+// 				cmd = rpc.GetTelegramClient().GetMessages(pInfo, cType, &offsetID, nil, nil)
 // 				conversationLastIndex := len(m.Conversations) - 1
 // 				m.ChatUI.Select(conversationLastIndex)
 // 			}
@@ -504,7 +505,7 @@ func SendUserIsTyping(m *Model) tea.Cmd {
 				AccessHash: m.SelectedGroup.AccessHash,
 			}
 		}
-		go rpc.RPCClient.SetUserTyping(pInfo, "user")
+		go rpc.TGClient.SetUserTyping(pInfo, "user")
 	}
 	return nil
 }

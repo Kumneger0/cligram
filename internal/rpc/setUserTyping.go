@@ -1,33 +1,42 @@
 package rpc
 
 import (
-	"encoding/json"
 	"log/slog"
-	"time"
+	"strconv"
+
+	"github.com/gotd/td/tg"
 )
 
 type SetUserTypingJSONRPCResponse struct {
-	JSONRPC string `json:"jsonrpc"`
-	ID      int    `json:"id"`
-	Error   *struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
-		Data    any    `json:"data,omitempty"`
-	} `json:"error,omitempty"`
 	Result bool `json:"result,omitempty"`
 }
 
-func (c *JSONRPCClient) SetUserTyping(userPeer PeerInfo, chatType ChatType) {
-	time.Sleep(1000 * time.Millisecond)
-	rpcResponse, err := c.Call("setUserTyping", []any{userPeer, chatType})
+func (c *TelegramClient) SetUserTyping(userPeer PeerInfo, chatType ChatType) {
+	var peer tg.InputPeerClass
+	switch chatType {
+	case UserChat, ChatType(Bot):
+		userID, err := strconv.ParseInt(userPeer.PeerID, 10, 64)
+		if err != nil {
+			slog.Error(err.Error())
+		}
+		peer = &tg.InputPeerUser{
+			UserID: userID,
+		}
+	case ChannelChat, GroupChat:
+		channelID, err := strconv.ParseInt(userPeer.PeerID, 10, 64)
+		if err != nil {
+			slog.Error(err.Error())
+		}
+		peer = &tg.InputPeerChannel{
+			ChannelID: channelID,
+		}
+	}
+	request := &tg.MessagesSetTypingRequest{
+		Peer:   peer,
+		Action: &tg.SendMessageTypingAction{},
+	}
+	_, err := c.Client.API().MessagesSetTyping(c.ctx, request)
 	if err != nil {
-		slog.Error(err.Error())
-	}
-	var response SetUserTypingJSONRPCResponse
-	if err := json.Unmarshal(rpcResponse, &response); err != nil {
-		slog.Error(err.Error())
-	}
-	if response.Error != nil {
 		slog.Error(err.Error())
 	}
 }

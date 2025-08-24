@@ -92,21 +92,3 @@ func readConfig() CliGramConfig {
 
 	return config
 }
-
-func getUserSessionPath() (string, error) {
-	userHomeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	sessionPath := filepath.Join(userHomeDir, ".cligram", "config.txt")
-	return sessionPath, nil
-}
-
-func IsUserSessionAvaialable() bool {
-	userSessionPath, err := getUserSessionPath()
-	if err != nil {
-		return false
-	}
-	_, err = os.Stat(userSessionPath)
-	return err == nil
-}

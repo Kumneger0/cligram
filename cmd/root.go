@@ -2,20 +2,16 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"log"
 	"log/slog"
 	"os"
-	"os/exec"
-	"sync"
 
 	"github.com/charmbracelet/bubbles/filepicker"
 	list "github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/kumneger0/cligram/internal/config"
 	"github.com/kumneger0/cligram/internal/rpc"
-	"github.com/kumneger0/cligram/internal/runner"
 	ui "github.com/kumneger0/cligram/internal/ui"
 	overlay "github.com/rmhubbert/bubbletea-overlay"
 	"github.com/spf13/cobra"
@@ -26,232 +22,147 @@ var (
 	Program *tea.Program
 )
 
-func exitWithJsError() {
-	fmt.Println("\nThe backend process failed to start. This is unexpected.")
-	fmt.Println("Please open an issue on GitHub and include the output of 'cligram log'.")
-	fmt.Println("You can create an issue here: https://github.com/kumneger0/cligram/issues/new")
-	os.Exit(1)
-}
-
-func startSeparateJsProces(ctx context.Context) {
-	jsExcutable, err := runner.GetJSExcutable()
-
-	if err != nil {
-		slog.Error("Failed to get JS executable", "Error", err.Error())
-		// wg.Done()
-		exitWithJsError()
-		return
-	}
-
-	jsExcute := exec.CommandContext(ctx, *jsExcutable)
-	jsExcute.Env = os.Environ()
-	stdin, err := jsExcute.StdinPipe()
-	if err != nil {
-		slog.Error("Failed to create stdin pipe", "Error", err.Error())
-		// wg.Done()
-		exitWithJsError()
-		return
-	}
-	stdout, err := jsExcute.StdoutPipe()
-	if err != nil {
-		slog.Error("Failed to create stdout pipe", "error", err.Error())
-		stdin.Close()
-		// wg.Done()
-		exitWithJsError()
-		return
-	}
-
-	jsLogFile, err := os.Create("/tmp/cligram-js.log")
-	if err != nil {
-		slog.Error("Failed to create JavaScript log file", "error", err.Error())
-		jsExcute.Stderr = nil
-	} else {
-		jsExcute.Stderr = jsLogFile
-		defer func() {
-			jsLogFile.Close()
-		}()
-	}
-
-	if err := jsExcute.Start(); err != nil {
-		slog.Error("Failed to start JavaScript process", "error", err.Error())
-		stdin.Close()
-		if jsLogFile != nil {
-			jsLogFile.Close()
-		}
-		// wg.Done()
-		exitWithJsError()
-		return
-	}
-
-	rpc.JsProcess = jsExcute.Process
-
-	rpc.RPCClient = &rpc.JSONRPCClient{
-		Stdin:  stdin,
-		Stdout: stdout,
-		Cmd:    jsExcute,
-		NextID: 1,
-	}
-
-	go func() {
-		if err := jsExcute.Wait(); err != nil {
-			if errors.Is(err, context.Canceled) {
-				os.Exit(0)
-			}
-			slog.Error("JavaScript process exited with error", "error", err.Error())
-			exitWithJsError()
-		}
-	}()
-
-	// wg.Done()
-}
-
 func newRootCmd(version string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cligram",
 		Short: "cligram a cli based telegram client",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			isUserSessionAvaialbe := config.IsUserSessionAvaialable()
-
-			if !isUserSessionAvaialbe {
-				fmt.Println("Are u logged in ?")
-				fmt.Println("run cligram login to login")
-				return nil
-			}
-
 			ctx, cancel := context.WithCancel(context.Background())
-			var wg sync.WaitGroup
-			wg.Go(func() {
-				startSeparateJsProces(ctx)
+			updateChannel := make(chan rpc.Notification)
+			rpc.TGClient = rpc.GetTelegramClient(ctx, updateChannel)
+			err := rpc.TGClient.Run(ctx, func(ctx context.Context) error {
+				err := rpc.TGClient.Auth(ctx)
+				if err != nil {
+					slog.Error(err.Error())
+					fmt.Println(err.Error())
+					os.Exit(1)
+				}
+				msg, err := rpc.TGClient.GetUserChats(false)
+				if err != nil {
+					slog.Error(err.Error())
+					log.Fatal("Failed to get user chats")
+				}
+
+				modalContent := ""
+				isModalVisible := false
+
+				var result []rpc.UserInfo = []rpc.UserInfo{}
+
+				if msg.Err != nil {
+					modalContent = msg.Err.Error()
+					isModalVisible = true
+				} else {
+					if msg.Response != nil {
+						result = *msg.Response
+					}
+				}
+
+				var users []list.Item = []list.Item{}
+				for _, du := range result {
+					users = append(users, rpc.UserInfo{
+						UnreadCount: du.UnreadCount,
+						FirstName:   du.FirstName,
+						IsBot:       du.IsBot,
+						PeerID:      du.PeerID,
+						AccessHash:  du.PeerID,
+						LastSeen:    du.LastSeen,
+						IsOnline:    du.IsOnline,
+					})
+				}
+				model := ui.Model{}
+				userList := list.New(users, ui.CustomDelegate{Model: &model}, 10, 20)
+				userList.SetShowPagination(false)
+				channels := []list.Item{}
+				channelList := (list.New(channels, ui.CustomDelegate{Model: &model}, 10, 20))
+				channelList.SetShowPagination(false)
+				groups := []list.Item{}
+				groupList := (list.New(groups, ui.CustomDelegate{Model: &model}, 10, 20))
+				groupList.SetShowPagination(false)
+
+				userList.SetShowHelp(false)
+				channelList.SetShowHelp(false)
+				groupList.SetShowHelp(false)
+
+				input := textinput.New()
+				input.Placeholder = "Type a message..."
+				input.Prompt = "> "
+				input.CharLimit = 256
+
+				fd := int(os.Stdout.Fd())
+				width, height, _ := term.GetSize(fd)
+
+				chatList := list.New([]list.Item{}, ui.MessagesDelegate{Model: &model}, 10, 20)
+				chatList.SetShowPagination(false)
+				chatList.SetShowHelp(false)
+				chatList.SetShowFilter(false)
+				chatList.SetShowTitle(false)
+				chatList.SetShowStatusBar(false)
+
+				fp := filepicker.New()
+				fp.AllowedTypes = []string{}
+				fp.DirAllowed = false
+				fp.CurrentDirectory, _ = os.UserHomeDir()
+
+				model.AreWeSwitchingModes = false
+				model.Filepicker = fp
+				model.Input = input
+				model.Users = userList
+				model.Groups = groupList
+				model.ModalContent = modalContent
+				model.Height = height - 4
+				model.Width = width - 4
+				model.Channels = channelList
+				model.IsModalVisible = isModalVisible
+				model.Mode = ui.ModeUsers
+				model.FocusedOn = ui.SideBar
+				model.ChatUI = chatList
+				model.SelectedFile = ""
+
+				background := model
+				forground := &ui.Foreground{}
+
+				ui.TUIManager = ui.Manager{
+					Foreground: forground,
+					Background: background,
+					State:      ui.MainView,
+					Overlay: overlay.New(
+						forground,
+						background,
+						overlay.Center,
+						overlay.Top,
+						0,
+						0,
+					),
+				}
+
+				Program = tea.NewProgram(ui.TUIManager, tea.WithAltScreen())
+
+				go func() {
+					for msg := range updateChannel {
+						if msg.NewMessageMsg != (rpc.NewMessageMsg{}) {
+							Program.Send(msg.NewMessageMsg)
+						}
+					}
+				}()
+				_, err = Program.Run()
+
+				cancel()
+				if err != nil {
+					return fmt.Errorf("failed to start TUI: %w", err)
+				}
+
+				return nil
 			})
-			wg.Wait()
-			notificationChannel := make(chan rpc.Notification)
-			go rpc.ProcessIncomingNotifications(notificationChannel)
-			msg := rpc.RPCClient.GetUserChats()
-
-			modalContent := ""
-			isModalVisible := false
-
-			var result []rpc.UserInfo = []rpc.UserInfo{}
-
-			if msg.Err != nil {
-				modalContent = msg.Err.Error()
-				isModalVisible = true
-			} else {
-				if msg.Response.Result != nil {
-					result = msg.Response.Result
-				}
-			}
-
-			var users []list.Item = []list.Item{}
-			for _, du := range result {
-				users = append(users, rpc.UserInfo{
-					UnreadCount: du.UnreadCount,
-					FirstName:   du.FirstName,
-					IsBot:       du.IsBot,
-					PeerID:      du.PeerID,
-					AccessHash:  du.PeerID,
-					LastSeen:    du.LastSeen,
-					IsOnline:    du.IsOnline,
-				})
-			}
-			model := ui.Model{}
-			userList := list.New(users, ui.CustomDelegate{Model: &model}, 10, 20)
-			userList.SetShowPagination(false)
-			channels := []list.Item{}
-			channelList := (list.New(channels, ui.CustomDelegate{Model: &model}, 10, 20))
-			channelList.SetShowPagination(false)
-			groups := []list.Item{}
-			groupList := (list.New(groups, ui.CustomDelegate{Model: &model}, 10, 20))
-			groupList.SetShowPagination(false)
-
-			userList.SetShowHelp(false)
-			channelList.SetShowHelp(false)
-			groupList.SetShowHelp(false)
-
-			input := textinput.New()
-			input.Placeholder = "Type a message..."
-			input.Prompt = "> "
-			input.CharLimit = 256
-
-			fd := int(os.Stdout.Fd())
-			width, height, _ := term.GetSize(fd)
-
-			chatList := list.New([]list.Item{}, ui.MessagesDelegate{Model: &model}, 10, 20)
-			chatList.SetShowPagination(false)
-			chatList.SetShowHelp(false)
-			chatList.SetShowFilter(false)
-			chatList.SetShowTitle(false)
-			chatList.SetShowStatusBar(false)
-
-			fp := filepicker.New()
-			fp.AllowedTypes = []string{}
-			fp.DirAllowed = false
-			fp.CurrentDirectory, _ = os.UserHomeDir()
-
-			model.AreWeSwitchingModes = false
-			model.Filepicker = fp
-			model.Input = input
-			model.Users = userList
-			model.Groups = groupList
-			model.ModalContent = modalContent
-			model.Height = height - 4
-			model.Width = width - 4
-			model.Channels = channelList
-			model.IsModalVisible = isModalVisible
-			model.Mode = ui.ModeUsers
-			model.FocusedOn = ui.SideBar
-			model.ChatUI = chatList
-			model.SelectedFile = ""
-
-			background := model
-			forground := &ui.Foreground{}
-
-			manager := ui.Manager{
-				Foreground: forground,
-				Background: background,
-				State:      ui.MainView,
-				Overlay: overlay.New(
-					forground,
-					background,
-					overlay.Center,
-					overlay.Top,
-					0,
-					0,
-				),
-			}
-
-			Program = tea.NewProgram(manager, tea.WithAltScreen())
-
-			go func() {
-				for msg := range notificationChannel {
-					if msg.NewMessageMsg != (rpc.NewMessageMsg{}) {
-						Program.Send(msg.NewMessageMsg)
-					}
-					if msg.UserOnlineOfflineMsg != (rpc.UserOnlineOffline{}) {
-						Program.Send(msg.UserOnlineOfflineMsg)
-					}
-					if msg.UserTyping != (rpc.UserTyping{}) {
-						Program.Send(msg.UserTyping)
-					}
-					if msg.RPCError != (rpc.Error{}) {
-						Program.Send(msg.RPCError)
-					}
-				}
-			}()
-			_, err := Program.Run()
-			cancel()
 			if err != nil {
-				return fmt.Errorf("failed to start TUI: %w", err)
+				fmt.Println(err)
+				slog.Error(err.Error())
 			}
-
 			return nil
 		},
 	}
 
 	cmd.AddCommand(newVersionCmd(version))
 	cmd.AddCommand(upgradeCligram(version))
-	cmd.AddCommand(login())
-	cmd.AddCommand(logout())
 	cmd.AddCommand(cligramLog())
 	cmd.AddCommand(ManCmd(cmd))
 	return cmd

@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"time"
 
@@ -131,7 +132,8 @@ type MessageDeletionConfrimResponseMsg struct {
 
 var debouncedSearch = Debounce(func(args ...any) tea.Msg {
 	query := args[0].(string)
-	return rpc.RPCClient.SearchUsers(query)
+	result := rpc.TGClient.SearchUsers(query)
+	return result
 }, 300*time.Millisecond)
 
 func setTotalSearchResultUsers(searchMsg rpc.SearchUserMsg, m *Foreground) {
@@ -211,4 +213,14 @@ func getSearchView(m Foreground) string {
 	}
 	textViewString := lipgloss.NewStyle().Width(m.windowWidth/3).Height(5).Padding(0, 1).Border(border).Render(m.input.View())
 	return textViewString
+}
+
+func (m Model) GetUserAccessHashFromModel(userID int64) (rpc.UserInfo, error) {
+	var userInfo rpc.UserInfo
+	for _, value := range m.Users.Items() {
+		if user, ok := value.(rpc.UserInfo); ok && user.PeerID == strconv.FormatInt(userID, 10) {
+			userInfo = user
+		}
+	}
+	return userInfo, nil
 }

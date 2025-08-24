@@ -1,18 +1,12 @@
 package rpc
 
 import (
-	"encoding/json"
-	"fmt"
+	"strconv"
+
+	"github.com/gotd/td/tg"
 )
 
-type UserSearchRPCResponse struct {
-	JSONRPC string `json:"jsonrpc"`
-	ID      int    `json:"id"`
-	Error   *struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
-		Data    any    `json:"data,omitempty"`
-	} `json:"error,omitempty"`
+type UserSearchResult struct {
 	Result *struct {
 		Users    []UserInfo            `json:"users"`
 		Channels []ChannelAndGroupInfo `json:"channels"`
@@ -20,21 +14,61 @@ type UserSearchRPCResponse struct {
 }
 
 type SearchUserMsg struct {
-	Response *UserSearchRPCResponse
+	Response *UserSearchResult
 	Err      error
 }
 
-func (c *JSONRPCClient) SearchUsers(query string) SearchUserMsg {
-	userChatRPCResponse, err := c.Call("searchUsers", []string{query})
+func (c *TelegramClient) SearchUsers(query string) SearchUserMsg {
+	request := &tg.ContactsSearchRequest{
+		Q:     query,
+		Limit: 10,
+	}
+	contactsFound, err := c.Client.API().ContactsSearch(c.ctx, request)
 	if err != nil {
-		return SearchUserMsg{Err: err}
+		return SearchUserMsg{Response: nil, Err: err}
 	}
-	var response UserSearchRPCResponse
-	if err := json.Unmarshal(userChatRPCResponse, &response); err != nil {
-		return SearchUserMsg{Err: fmt.Errorf("failed to unmarshal response JSON '%s': %w", string(userChatRPCResponse), err)}
+
+	var users []UserInfo
+	for _, user := range contactsFound.Users {
+		u := user.(*tg.User)
+		users = append(users, UserInfo{
+			FirstName:   u.FirstName,
+			IsBot:       u.Bot,
+			PeerID:      strconv.FormatInt(u.ID, 10),
+			IsTyping:    false,
+			AccessHash:  strconv.FormatInt(u.AccessHash, 10),
+			UnreadCount: 10,
+			LastSeen:    nil,
+			IsOnline:    false,
+		})
 	}
-	if response.Error != nil {
-		return SearchUserMsg{Err: fmt.Errorf("ERROR: %s", response.Error.Message)}
+
+	var channels []ChannelAndGroupInfo
+
+	for _, chatClass := range contactsFound.Chats {
+		chat := chatClass.(*tg.Channel)
+		userName := ""
+		channels = append(channels, ChannelAndGroupInfo{
+			ChannelTitle:      chat.Title,
+			Username:          &userName,
+			ChannelID:         strconv.FormatInt(chat.ID, 10),
+			AccessHash:        strconv.FormatInt(chat.AccessHash, 10),
+			IsCreator:         chat.Creator,
+			IsBroadcast:       chat.Broadcast,
+			ParticipantsCount: &chat.ParticipantsCount,
+			UnreadCount:       10,
+		})
 	}
-	return SearchUserMsg{Err: nil, Response: &response}
+
+	searchResult := UserSearchResult{
+		Result: &struct {
+			Users    []UserInfo            "json:\"users\""
+			Channels []ChannelAndGroupInfo "json:\"channels\""
+		}{
+			Users:    users,
+			Channels: channels,
+		},
+	}
+
+	return SearchUserMsg{Response: &searchResult, Err: nil}
 }
