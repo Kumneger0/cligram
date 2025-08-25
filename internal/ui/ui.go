@@ -12,7 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kumneger0/cligram/internal/config"
-	"github.com/kumneger0/cligram/internal/rpc"
+	"github.com/kumneger0/cligram/internal/telegram"
 )
 
 type CustomDelegate struct {
@@ -36,7 +36,7 @@ func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 	var prefix string
 
 	switch item := item.(type) {
-	case rpc.UserInfo:
+	case telegram.UserInfo:
 		entry := item
 		title = entry.Title()
 		if entry.IsOnline {
@@ -49,7 +49,7 @@ func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 		} else {
 			title = prefix + title
 		}
-	case rpc.ChannelAndGroupInfo:
+	case telegram.ChannelAndGroupInfo:
 		entry := item
 		title = entry.Title()
 		if entry.IsBroadcast {
@@ -79,7 +79,7 @@ func (m Model) Init() tea.Cmd {
 	return m.Filepicker.Init()
 }
 
-func getChannelIndex(m Model, channel rpc.ChannelAndGroupInfo) int {
+func getChannelIndex(m Model, channel telegram.ChannelAndGroupInfo) int {
 	var index int = -1
 	for i, v := range m.Channels.Items() {
 		if v.FilterValue() == channel.ChannelTitle {
@@ -89,7 +89,7 @@ func getChannelIndex(m Model, channel rpc.ChannelAndGroupInfo) int {
 	return index
 }
 
-func getGroupIndex(m Model, group rpc.ChannelAndGroupInfo) int {
+func getGroupIndex(m Model, group telegram.ChannelAndGroupInfo) int {
 	var index int = -1
 	for i, v := range m.Groups.Items() {
 		if v.FilterValue() == group.ChannelTitle {
@@ -99,7 +99,7 @@ func getGroupIndex(m Model, group rpc.ChannelAndGroupInfo) int {
 	return index
 }
 
-func getUserIndex(m Model, user rpc.UserInfo) int {
+func getUserIndex(m Model, user telegram.UserInfo) int {
 	var index int = -1
 	for i, v := range m.Users.Items() {
 		if v.FilterValue() == user.FilterValue() {
@@ -112,35 +112,35 @@ func getUserIndex(m Model, user rpc.UserInfo) int {
 func sendMessage(m *Model) (Model, tea.Cmd) {
 	userMsg := m.Input.Value()
 	m.Input.Reset()
-	var cType rpc.ChatType
-	var peerInfo rpc.PeerInfo
+	var cType telegram.ChatType
+	var peerInfo telegram.PeerInfo
 	if m.Mode == ModeUsers || m.Mode == ModeBots {
 		if m.Mode == ModeUsers {
-			cType = rpc.ChatType(rpc.UserChat)
+			cType = telegram.ChatType(telegram.UserChat)
 		}
 		if m.Mode == ModeBots {
-			cType = rpc.ChatType(rpc.Bot)
+			cType = telegram.ChatType(telegram.Bot)
 		}
-		peerInfo = rpc.PeerInfo{
+		peerInfo = telegram.PeerInfo{
 			AccessHash: m.SelectedUser.AccessHash,
 			PeerID:     m.SelectedUser.PeerID,
 		}
 	}
 	if m.Mode == ModeChannels {
-		cType = rpc.ChatType(rpc.ChannelChat)
-		peerInfo = rpc.PeerInfo{
+		cType = telegram.ChatType(telegram.ChannelChat)
+		peerInfo = telegram.PeerInfo{
 			AccessHash: m.SelectedChannel.AccessHash,
 			PeerID:     m.SelectedChannel.ChannelID,
 		}
 	}
 	if m.Mode == ModeGroups {
-		cType = rpc.ChatType(rpc.GroupChat)
-		peerInfo = rpc.PeerInfo{
+		cType = telegram.ChatType(telegram.GroupChat)
+		peerInfo = telegram.PeerInfo{
 			AccessHash: m.SelectedGroup.AccessHash,
 			PeerID:     m.SelectedGroup.ChannelID,
 		}
 	}
-	var messageToReply rpc.FormattedMessage
+	var messageToReply telegram.FormattedMessage
 	if m.ReplyTo != nil {
 		messageToReply = *m.ReplyTo
 	}
@@ -163,7 +163,7 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 	}
 	replayToMessageID := strconv.FormatInt(messageToReply.ID, 10)
-	cmds = append(cmds, rpc.TGClient.SendMessage(peerInfo, userMsg, m.IsReply && m.ReplyTo != nil, replayToMessageID, cType, isFile, filepath))
+	cmds = append(cmds, telegram.Cligram.SendMessage(peerInfo, userMsg, m.IsReply && m.ReplyTo != nil, replayToMessageID, cType, isFile, filepath))
 	if isFile {
 		m.SelectedFile = "uploading..."
 	}
@@ -172,7 +172,7 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 		content = "This Message is not supported by this Telegram client."
 	}
 	cligramConfig := config.GetConfig()
-	newMessage := rpc.FormattedMessage{
+	newMessage := telegram.FormattedMessage{
 		ID:                   int64(rand.Int()),
 		Sender:               "you",
 		IsFromMe:             true,
@@ -189,7 +189,7 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 	copy(m.Conversations[:], firstOneRemoved)
 	var cmd tea.Cmd
 	if *cligramConfig.Chat.ReadReceiptMode == "default" {
-		cmd = rpc.TGClient.MarkMessagesAsRead(rpc.PeerInfo{
+		cmd = telegram.Cligram.MarkMessagesAsRead(telegram.PeerInfo{
 			AccessHash: peerInfo.AccessHash,
 			PeerID:     peerInfo.PeerID,
 		}, cType)
@@ -202,8 +202,8 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 	return *m, tea.Batch(cmds...)
 }
 
-func (m *Model) editMessage(peerInfo rpc.PeerInfo, cType rpc.ChatType, userMsg string) (Model, tea.Cmd) {
-	cmd := rpc.TGClient.EditMessage(rpc.PeerInfo{
+func (m *Model) editMessage(peerInfo telegram.PeerInfo, cType telegram.ChatType, userMsg string) (Model, tea.Cmd) {
+	cmd := telegram.Cligram.EditMessage(telegram.PeerInfo{
 		AccessHash: peerInfo.AccessHash,
 		PeerID:     peerInfo.PeerID,
 	}, cType, int(m.EditMessage.ID), userMsg)
@@ -252,15 +252,15 @@ func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (M
 
 func handleUserChange(m *Model) (Model, tea.Cmd) {
 	pInfo, cType := getMessageParams(m)
-	cmd := rpc.TGClient.GetAllMessages(pInfo, cType, 50, nil, nil, nil)
+	cmd := telegram.Cligram.GetAllMessages(pInfo, cType, 50, nil, nil, nil)
 	cligramConfig := config.GetConfig()
 	if *cligramConfig.Chat.ReadReceiptMode == "instant" {
-		cmd = tea.Batch(cmd, rpc.TGClient.MarkMessagesAsRead(rpc.PeerInfo{
+		cmd = tea.Batch(cmd, telegram.Cligram.MarkMessagesAsRead(telegram.PeerInfo{
 			AccessHash: pInfo.AccessHash,
 			PeerID:     pInfo.PeerID,
 		}, cType))
 	}
-	m.Conversations = [50]rpc.FormattedMessage{}
+	m.Conversations = [50]telegram.FormattedMessage{}
 	m.MainViewLoading = true
 	m.ChatUI.ResetSelected()
 	m.ChatUI.SetItems([]list.Item{})
@@ -329,7 +329,7 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 			} else {
 				m.Input.Reset()
 			}
-			return *m, rpc.TGClient.GetUserChannel()
+			return *m, telegram.Cligram.GetUserChannel(true)
 		case "u":
 			m.Mode = ModeUsers
 			clearSidebarLists(false, true, true)
@@ -354,30 +354,30 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 						m.Users.Select(foundIndex)
 					}
 					m.ChatUI.SetItems(nil)
-					return *m, rpc.TGClient.GetAllMessages(rpc.PeerInfoParams{
+					return *m, telegram.Cligram.GetAllMessages(telegram.PeerInfoParams{
 						AccessHash: m.SelectedUser.AccessHash,
 						PeerID:     m.SelectedUser.PeerID,
-					}, rpc.UserChat, 50, nil, nil, nil)
+					}, telegram.UserChat, 50, nil, nil, nil)
 				}
 			}
-			return *m, rpc.TGClient.GetUserChatsCmd(rpc.ModeUser)
+			return *m, telegram.Cligram.GetUserChatsCmd(telegram.ModeUser)
 		case "g":
 			m.Mode = ModeGroups
 			clearSidebarLists(true, true, false)
-			return *m, rpc.TGClient.GetUserGroups()
+			return *m, telegram.Cligram.GetUserChannel(false)
 		case "b":
 			m.Mode = ModeBots
 			clearSidebarLists(false, true, true)
 			m.Users.ResetSelected()
-			return *m, rpc.TGClient.GetUserChatsCmd(rpc.ModeBot)
+			return *m, telegram.Cligram.GetUserChatsCmd(telegram.ModeBot)
 		}
 		return *m, nil
 	}
 	return *m, nil
 }
 
-func (m *Model) getMessageSenderUserInfo() *rpc.UserInfo {
-	if selectedItem, ok := m.ChatUI.SelectedItem().(rpc.FormattedMessage); ok {
+func (m *Model) getMessageSenderUserInfo() *telegram.UserInfo {
+	if selectedItem, ok := m.ChatUI.SelectedItem().(telegram.FormattedMessage); ok {
 		return selectedItem.SenderUserInfo
 	}
 	return nil

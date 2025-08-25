@@ -1,4 +1,4 @@
-package rpc
+package telegram
 
 import (
 	"errors"
@@ -26,7 +26,7 @@ type SendMessageMsg struct {
 	Err      error
 }
 
-func (c *TelegramClient) SendMessage(pInfo PeerInfo,
+func (c *CligramClient) SendMessage(pInfo PeerInfo,
 	msg string,
 	isReplay bool,
 	replyToMessageID string,
@@ -64,6 +64,8 @@ func (c *TelegramClient) SendMessage(pInfo PeerInfo,
 				ChannelID:  PeerID,
 				AccessHash: accessHash,
 			}
+		default:
+			return SendMessageMsg{Response: nil, Err: errors.New("unsupported chat type")}
 		}
 
 		var replyTo tg.InputReplyToClass
@@ -102,7 +104,7 @@ func (c *TelegramClient) SendMessage(pInfo PeerInfo,
 	}
 }
 
-func (c *TelegramClient) sendMedia(path string, caption string, peer tg.InputPeerClass, replyToMessageID string) (*int, error) {
+func (c *CligramClient) sendMedia(path string, caption string, peer tg.InputPeerClass, replyToMessageID string) (*int, error) {
 	_, err := detectFileType(path)
 
 	if err != nil {

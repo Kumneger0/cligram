@@ -1,4 +1,4 @@
-package rpc
+package telegram
 
 import (
 	"encoding/json"
@@ -8,19 +8,11 @@ import (
 	"github.com/gotd/td/tg"
 )
 
-type chatType string
-
-const (
-	ChatTypeUser    chatType = "user"
-	ChatTypeGroup   chatType = "group"
-	ChatTypeChannel chatType = "channel"
-)
-
 type ForwardMessagesRPCResponse struct {
 	Result *json.RawMessage `json:"result,omitempty"`
 }
 
-func (c *TelegramClient) ForwardMessages(
+func (c *CligramClient) ForwardMessages(
 	fromPeer PeerInfo,
 	messageIDs []int,
 	toPeer PeerInfo,

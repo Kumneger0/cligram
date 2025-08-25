@@ -1,4 +1,4 @@
-package rpc
+package telegram
 
 import (
 	"strconv"
@@ -18,7 +18,7 @@ type SearchUserMsg struct {
 	Err      error
 }
 
-func (c *TelegramClient) SearchUsers(query string) SearchUserMsg {
+func (c *CligramClient) SearchUsers(query string) SearchUserMsg {
 	request := &tg.ContactsSearchRequest{
 		Q:     query,
 		Limit: 10,
@@ -32,14 +32,13 @@ func (c *TelegramClient) SearchUsers(query string) SearchUserMsg {
 	for _, user := range contactsFound.Users {
 		u := user.(*tg.User)
 		users = append(users, UserInfo{
-			FirstName:   u.FirstName,
-			IsBot:       u.Bot,
-			PeerID:      strconv.FormatInt(u.ID, 10),
-			IsTyping:    false,
-			AccessHash:  strconv.FormatInt(u.AccessHash, 10),
-			UnreadCount: 10,
-			LastSeen:    nil,
-			IsOnline:    false,
+			FirstName:  u.FirstName,
+			IsBot:      u.Bot,
+			PeerID:     strconv.FormatInt(u.ID, 10),
+			IsTyping:   false,
+			AccessHash: strconv.FormatInt(u.AccessHash, 10),
+			LastSeen:   nil,
+			IsOnline:   false,
 		})
 	}
 
@@ -56,7 +55,6 @@ func (c *TelegramClient) SearchUsers(query string) SearchUserMsg {
 			IsCreator:         chat.Creator,
 			IsBroadcast:       chat.Broadcast,
 			ParticipantsCount: &chat.ParticipantsCount,
-			UnreadCount:       10,
 		})
 	}
 

@@ -1,4 +1,4 @@
-package rpc
+package telegram
 
 import "github.com/gotd/td/tg"
 
@@ -10,7 +10,7 @@ type DeleteMessageResultResponse struct {
 	Result *SuccessDeleteMessageResult `json:"result,omitempty"`
 }
 
-func (c *TelegramClient) DeleteMessage(peerInfo PeerInfo, messageID int, chatType ChatType) (DeleteMessageResultResponse, error) {
+func (c *CligramClient) DeleteMessage(peerInfo PeerInfo, messageID int, chatType ChatType) (DeleteMessageResultResponse, error) {
 	deleteMessageRequest := &tg.MessagesDeleteMessagesRequest{
 		Revoke: true,
 		ID:     []int{messageID},

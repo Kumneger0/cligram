@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/kumneger0/cligram/internal/rpc"
+	"github.com/kumneger0/cligram/internal/telegram"
 )
 
 func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
@@ -32,7 +32,7 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd := m.handleKeyPress(msg, &cmds)
 		m = model.(*Foreground)
 		cmds = append(cmds, cmd)
-	case rpc.SearchUserMsg:
+	case telegram.SearchUserMsg:
 		model, cmd := m.handleSearch(msg, &cmds)
 		m = model.(*Foreground)
 		return m, cmd
@@ -65,7 +65,7 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-func (m *Foreground) handleSearch(msg rpc.SearchUserMsg, cmds *[]tea.Cmd) (tea.Model, tea.Cmd) {
+func (m *Foreground) handleSearch(msg telegram.SearchUserMsg, cmds *[]tea.Cmd) (tea.Model, tea.Cmd) {
 	if msg.Err != nil {
 		fmt.Println(msg.Err.Error())
 		slog.Error("Failed to search user", "error", msg.Err.Error())
@@ -220,7 +220,7 @@ func handleListSelection(m *Foreground) (tea.Model, tea.Cmd) {
 	)
 }
 
-func findChannel(peerID string, channels []rpc.ChannelAndGroupInfo) *rpc.ChannelAndGroupInfo {
+func findChannel(peerID string, channels []telegram.ChannelAndGroupInfo) *telegram.ChannelAndGroupInfo {
 	for _, v := range channels {
 		if v.ChannelID == peerID {
 			return &v
@@ -229,7 +229,7 @@ func findChannel(peerID string, channels []rpc.ChannelAndGroupInfo) *rpc.Channel
 	return nil
 }
 
-func findUser(peerID string, users []rpc.UserInfo) *rpc.UserInfo {
+func findUser(peerID string, users []telegram.UserInfo) *telegram.UserInfo {
 	for _, v := range users {
 		if v.PeerID == peerID {
 			return &v

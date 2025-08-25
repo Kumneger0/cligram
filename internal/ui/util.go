@@ -14,7 +14,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kumneger0/cligram/internal/config"
-	"github.com/kumneger0/cligram/internal/rpc"
+	"github.com/kumneger0/cligram/internal/telegram"
 	"github.com/muesli/reflow/wordwrap"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
@@ -43,7 +43,7 @@ func (d MessagesDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd { return ni
 func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	var title string
 
-	if entry, ok := item.(rpc.FormattedMessage); ok {
+	if entry, ok := item.(telegram.FormattedMessage); ok {
 		title = wordwrap.String(entry.Title(), m.Width())
 		if entry.IsFromMe {
 			title = "You: " + title
@@ -92,14 +92,14 @@ type Model struct {
 	IsFilepickerVisible bool
 	SelectedFile        string
 	Users               list.Model
-	SelectedUser        rpc.UserInfo
+	SelectedUser        telegram.UserInfo
 	Channels            list.Model
 	AreWeSwitchingModes bool
 	IsModalVisible      bool
 	ModalContent        string
-	SelectedChannel     rpc.ChannelAndGroupInfo
+	SelectedChannel     telegram.ChannelAndGroupInfo
 	Groups              list.Model
-	SelectedGroup       rpc.ChannelAndGroupInfo
+	SelectedGroup       telegram.ChannelAndGroupInfo
 	Height              int
 	Width               int
 	MainViewLoading     bool
@@ -109,15 +109,15 @@ type Model struct {
 	viewport            viewport.Model
 	FocusedOn           FocusedOn
 	ChatUI              list.Model
-	Conversations       [50]rpc.FormattedMessage
+	Conversations       [50]telegram.FormattedMessage
 	IsReply             bool
-	ReplyTo             *rpc.FormattedMessage
-	EditMessage         *rpc.FormattedMessage
+	ReplyTo             *telegram.FormattedMessage
+	EditMessage         *telegram.FormattedMessage
 	SkipNextInput       bool
 }
 
-func filterEmptyMessages(msgs [50]rpc.FormattedMessage) []rpc.FormattedMessage {
-	var filteredMsgs []rpc.FormattedMessage
+func filterEmptyMessages(msgs [50]telegram.FormattedMessage) []telegram.FormattedMessage {
+	var filteredMsgs []telegram.FormattedMessage
 	for _, m := range msgs {
 		if m.ID != 0 {
 			filteredMsgs = append(filteredMsgs, m)
@@ -126,7 +126,7 @@ func filterEmptyMessages(msgs [50]rpc.FormattedMessage) []rpc.FormattedMessage {
 	return filteredMsgs
 }
 
-func formatMessages(msgs [50]rpc.FormattedMessage) []list.Item {
+func formatMessages(msgs [50]telegram.FormattedMessage) []list.Item {
 	filteredMsgs := filterEmptyMessages(msgs)
 	var lines []list.Item
 	for _, m := range filteredMsgs {
@@ -217,7 +217,7 @@ func getUserOrChannelName(m *Model) string {
 	}
 }
 
-func formatUserName(user rpc.UserInfo) string {
+func formatUserName(user telegram.UserInfo) string {
 	name := user.Title()
 	if user.IsTyping {
 		return name + " Typing..."
@@ -238,11 +238,11 @@ func formatChannelOrGroupName(name string, count *int) string {
 	return fmt.Sprintf("%s %d Members", name, *count)
 }
 
-func formatChannelName(channel rpc.ChannelAndGroupInfo) string {
+func formatChannelName(channel telegram.ChannelAndGroupInfo) string {
 	return formatChannelOrGroupName(channel.FilterValue(), channel.ParticipantsCount)
 }
 
-func formatGroupName(group rpc.ChannelAndGroupInfo) string {
+func formatGroupName(group telegram.ChannelAndGroupInfo) string {
 	return formatChannelOrGroupName(group.FilterValue(), group.ParticipantsCount)
 }
 
@@ -372,7 +372,7 @@ func Debounce(fn func(args ...any) tea.Msg, delay time.Duration) func(args ...an
 // 		globalIndex := m.ChatUI.GlobalIndex()
 // 		pInfo, cType := getMessageParams(m)
 // 		if isUp && globalIndex == 0 {
-// 			if selectedConversation, ok := m.ChatUI.SelectedItem().(rpc.FormattedMessage); ok {
+// 			if selectedConversation, ok := m.ChatUI.SelectedItem().(telegram.FormattedMessage); ok {
 // 				offsetID := int(selectedConversation.ID)
 // 				cacheKey := pInfo.AccessHash + pInfo.PeerID
 // 				if len(m.Conversations) > 1 {
@@ -382,7 +382,7 @@ func Debounce(fn func(args ...any) tea.Msg, delay time.Duration) func(args ...an
 // 					}
 // 					AddToCache(cacheKey, string(messages))
 // 				}
-// 				cmd = rpc.GetTelegramClient().GetMessages(pInfo, cType, &offsetID, nil, nil)
+// 				cmd = telegram.GetTelegramClient().GetMessages(pInfo, cType, &offsetID, nil, nil)
 // 				conversationLastIndex := len(m.Conversations) - 1
 // 				m.ChatUI.Select(conversationLastIndex)
 // 			}
@@ -395,7 +395,7 @@ func Debounce(fn func(args ...any) tea.Msg, delay time.Duration) func(args ...an
 // 			if messages == nil {
 // 				return *m, nil
 // 			}
-// 			var formattedMessages []rpc.FormattedMessage
+// 			var formattedMessages []telegram.FormattedMessage
 // 			err = json.Unmarshal([]byte(*messages), &formattedMessages)
 
 // 			if err != nil {
@@ -405,13 +405,13 @@ func Debounce(fn func(args ...any) tea.Msg, delay time.Duration) func(args ...an
 // 			if len(formattedMessages) == 0 {
 // 				return *m, cmd
 // 			}
-// 			userConversation := rpc.UserConversationResponse{
+// 			userConversation := telegram.UserConversationResponse{
 // 				JSONRPC: "2.0",
 // 				ID:      rand.Int(),
 // 				Error:   nil,
-// 				Result:  [50]rpc.FormattedMessage(formattedMessages),
+// 				Result:  [50]telegram.FormattedMessage(formattedMessages),
 // 			}
-// 			messagesMsg := rpc.GetMessagesMsg{
+// 			messagesMsg := telegram.GetMessagesMsg{
 // 				Messages: userConversation,
 // 				Err:      nil,
 // 			}
@@ -423,27 +423,27 @@ func Debounce(fn func(args ...any) tea.Msg, delay time.Duration) func(args ...an
 // 	return *m, cmd
 // }
 
-func getMessageParams(m *Model) (rpc.PeerInfoParams, rpc.ChatType) {
-	var cType rpc.ChatType
-	var pInfo rpc.PeerInfoParams
+func getMessageParams(m *Model) (telegram.PeerInfoParams, telegram.ChatType) {
+	var cType telegram.ChatType
+	var pInfo telegram.PeerInfoParams
 	if m.Mode == ModeUsers || m.Mode == ModeBots {
-		m.SelectedUser = m.Users.SelectedItem().(rpc.UserInfo)
+		m.SelectedUser = m.Users.SelectedItem().(telegram.UserInfo)
 		if m.Mode == ModeUsers {
-			cType = rpc.ChatType(rpc.UserChat)
+			cType = telegram.ChatType(telegram.UserChat)
 		}
 		if m.Mode == ModeBots {
-			cType = rpc.ChatType(rpc.Bot)
+			cType = telegram.ChatType(telegram.Bot)
 		}
-		pInfo = rpc.PeerInfoParams{
+		pInfo = telegram.PeerInfoParams{
 			AccessHash:                  m.SelectedUser.AccessHash,
 			PeerID:                      m.SelectedUser.PeerID,
 			UserFirstNameOrChannelTitle: m.SelectedUser.FirstName,
 		}
 	}
 	if m.Mode == ModeChannels {
-		m.SelectedChannel = m.Channels.SelectedItem().(rpc.ChannelAndGroupInfo)
-		cType = rpc.ChatType(rpc.ChannelChat)
-		pInfo = rpc.PeerInfoParams{
+		m.SelectedChannel = m.Channels.SelectedItem().(telegram.ChannelAndGroupInfo)
+		cType = telegram.ChatType(telegram.ChannelChat)
+		pInfo = telegram.PeerInfoParams{
 			AccessHash:                  m.SelectedChannel.AccessHash,
 			PeerID:                      m.SelectedChannel.ChannelID,
 			UserFirstNameOrChannelTitle: m.SelectedChannel.ChannelTitle,
@@ -453,9 +453,9 @@ func getMessageParams(m *Model) (rpc.PeerInfoParams, rpc.ChatType) {
 		}
 	}
 	if m.Mode == ModeGroups {
-		m.SelectedGroup = m.Groups.SelectedItem().(rpc.ChannelAndGroupInfo)
-		cType = rpc.ChatType(rpc.GroupChat)
-		pInfo = rpc.PeerInfoParams{
+		m.SelectedGroup = m.Groups.SelectedItem().(telegram.ChannelAndGroupInfo)
+		cType = telegram.ChatType(telegram.GroupChat)
+		pInfo = telegram.PeerInfoParams{
 			AccessHash:                  m.SelectedGroup.AccessHash,
 			PeerID:                      m.SelectedGroup.ChannelID,
 			UserFirstNameOrChannelTitle: m.SelectedGroup.ChannelTitle,
@@ -492,20 +492,20 @@ func SendUserIsTyping(m *Model) tea.Cmd {
 	}
 
 	if (m.Mode == ModeUsers || m.Mode == ModeGroups) && m.FocusedOn == Input {
-		var pInfo rpc.PeerInfo
+		var pInfo telegram.PeerInfo
 		if m.Mode == ModeUsers {
-			pInfo = rpc.PeerInfo{
+			pInfo = telegram.PeerInfo{
 				PeerID:     m.SelectedUser.PeerID,
 				AccessHash: m.SelectedUser.AccessHash,
 			}
 		}
 		if m.Mode == ModeGroups {
-			pInfo = rpc.PeerInfo{
+			pInfo = telegram.PeerInfo{
 				PeerID:     m.SelectedGroup.ChannelID,
 				AccessHash: m.SelectedGroup.AccessHash,
 			}
 		}
-		go rpc.TGClient.SetUserTyping(pInfo, "user")
+		go telegram.Cligram.SetUserTyping(pInfo, "user")
 	}
 	return nil
 }

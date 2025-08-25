@@ -11,7 +11,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/kumneger0/cligram/internal/rpc"
+	"github.com/kumneger0/cligram/internal/telegram"
 )
 
 type focusState string
@@ -80,9 +80,9 @@ func (s SearchResult) FilterValue() string {
 }
 
 type SelectSearchedUserResult struct {
-	user    *rpc.UserInfo
-	channel *rpc.ChannelAndGroupInfo
-	group   *rpc.ChannelAndGroupInfo
+	user    *telegram.UserInfo
+	channel *telegram.ChannelAndGroupInfo
+	group   *telegram.ChannelAndGroupInfo
 }
 
 type CloseOverlay struct{}
@@ -98,12 +98,12 @@ const (
 type OpenModalMsg struct {
 	ModalMode ModalMode
 	FromPeer  *list.Item
-	Message   *rpc.FormattedMessage
+	Message   *telegram.FormattedMessage
 	UsersList *list.Model
 }
 
 type ForwardMsg struct {
-	msg      *rpc.FormattedMessage
+	msg      *telegram.FormattedMessage
 	receiver *list.Item
 	fromPeer *list.Item
 }
@@ -114,11 +114,11 @@ type Foreground struct {
 	input                textinput.Model
 	searchResultCombined list.Model
 	focusedOn            focusState
-	searchResultUsers    []rpc.UserInfo
-	SearchResultChannels []rpc.ChannelAndGroupInfo
+	searchResultUsers    []telegram.UserInfo
+	SearchResultChannels []telegram.ChannelAndGroupInfo
 	ModalMode            ModalMode
 	UsersList            *list.Model
-	Message              *rpc.FormattedMessage
+	Message              *telegram.FormattedMessage
 	fromPeer             *list.Item
 }
 
@@ -132,11 +132,11 @@ type MessageDeletionConfrimResponseMsg struct {
 
 var debouncedSearch = Debounce(func(args ...any) tea.Msg {
 	query := args[0].(string)
-	result := rpc.TGClient.SearchUsers(query)
+	result := telegram.Cligram.SearchUsers(query)
 	return result
 }, 300*time.Millisecond)
 
-func setTotalSearchResultUsers(searchMsg rpc.SearchUserMsg, m *Foreground) {
+func setTotalSearchResultUsers(searchMsg telegram.SearchUserMsg, m *Foreground) {
 	m.searchResultUsers = searchMsg.Response.Result.Users
 	m.SearchResultChannels = searchMsg.Response.Result.Channels
 }
@@ -215,10 +215,10 @@ func getSearchView(m Foreground) string {
 	return textViewString
 }
 
-func (m Model) GetUserAccessHashFromModel(userID int64) (rpc.UserInfo, error) {
-	var userInfo rpc.UserInfo
+func (m Model) GetUserAccessHashFromModel(userID int64) (telegram.UserInfo, error) {
+	var userInfo telegram.UserInfo
 	for _, value := range m.Users.Items() {
-		if user, ok := value.(rpc.UserInfo); ok && user.PeerID == strconv.FormatInt(userID, 10) {
+		if user, ok := value.(telegram.UserInfo); ok && user.PeerID == strconv.FormatInt(userID, 10) {
 			userInfo = user
 		}
 	}

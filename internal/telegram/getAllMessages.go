@@ -1,4 +1,4 @@
-package rpc
+package telegram
 
 import (
 	"fmt"
@@ -54,12 +54,12 @@ const (
 	UserChat    ChatType = "user"
 	GroupChat   ChatType = "group"
 	ChannelChat ChatType = "channel"
-	Bot         chatType = "bot"
+	Bot         ChatType = "bot"
 )
 
 type IterParams map[string]any
 
-func (c *TelegramClient) GetAllMessages(
+func (c *CligramClient) GetAllMessages(
 	peerInfo PeerInfoParams,
 	chatType ChatType,
 	limit int,
@@ -137,7 +137,7 @@ func (c *TelegramClient) GetAllMessages(
 			} else {
 				peerUser := getPeerID(msg.PeerID)
 				if peerUser != nil {
-					if string(peerUser.chatType) == "user" {
+					if string(peerUser.ChatType) == "user" {
 						inputUser := &tg.InputUser{UserID: peerUser.peerID}
 						if users, err := c.Client.API().UsersGetUsers(c.ctx, []tg.InputUserClass{inputUser}); err == nil && len(users) > 0 {
 							if u, ok := users[0].(*tg.User); ok {
@@ -183,18 +183,18 @@ func (c *TelegramClient) GetAllMessages(
 }
 
 type PeerType struct {
-	chatType
+	ChatType
 	peerID int64
 }
 
 func getPeerID(peerClass tg.PeerClass) *PeerType {
 	switch peer := peerClass.(type) {
 	case *tg.PeerUser:
-		return &PeerType{chatType: ChatTypeUser, peerID: peer.UserID}
+		return &PeerType{ChatType: UserChat, peerID: peer.UserID}
 	case *tg.PeerChannel:
-		return &PeerType{chatType: ChatTypeChannel, peerID: peer.ChannelID}
+		return &PeerType{ChatType: ChannelChat, peerID: peer.ChannelID}
 	case *tg.PeerChat:
-		return &PeerType{chatType: ChatTypeGroup, peerID: peer.ChatID}
+		return &PeerType{ChatType: GroupChat, peerID: peer.ChatID}
 	default:
 		break
 	}

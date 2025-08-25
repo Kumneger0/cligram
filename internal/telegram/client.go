@@ -1,4 +1,4 @@
-package rpc
+package telegram
 
 import (
 	"context"
@@ -9,21 +9,21 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/updates"
 	"github.com/gotd/td/tg"
 )
 
-type TelegramClient struct {
+type CligramClient struct {
 	*telegram.Client
 	ctx context.Context
 }
 
-var TGClient *TelegramClient
+var Cligram *CligramClient
 
 var once sync.Once
 
@@ -63,16 +63,85 @@ func GetSessionStorage() *telegram.FileSessionStorage {
 	}
 }
 
+type UserOnlineOfflineStatus struct {
+	IsOnline bool
+	LastSeen *string
+}
+
+func calculateLastSeenHumanReadable(wasOnline int) string {
+	var s strings.Builder
+	lastSeenTime := time.Unix(int64(wasOnline), 0)
+	currentTime := time.Now()
+	dif := currentTime.Sub(lastSeenTime)
+	lastSeenFormattedOnlyTime := lastSeenTime.Format("03:04 PM")
+	if dif.Seconds() < float64(60) {
+		return "last seen just now"
+	}
+	if dif.Hours() < float64(24) {
+		s.WriteString("last seen at")
+		s.WriteString(" ")
+		s.WriteString(lastSeenFormattedOnlyTime)
+		return s.String()
+	}
+	if dif.Hours() < float64(48) {
+		s.WriteString("last seen yesterday at")
+		s.WriteString(" ")
+		s.WriteString(lastSeenFormattedOnlyTime)
+		return s.String()
+	}
+
+	lastSeenFormattedWithDate := lastSeenTime.Format("02/01/2006 03:04 PM")
+	s.WriteString("last seen on")
+	s.WriteString(" ")
+	s.WriteString(lastSeenFormattedWithDate)
+	return s.String()
+}
+
+func getUserOnlineStatus(status tg.UserStatusClass) UserOnlineOfflineStatus {
+	var lastSeen string
+	switch s := status.(type) {
+	case *tg.UserStatusOnline:
+		lastSeen = "online"
+		return UserOnlineOfflineStatus{
+			IsOnline: true,
+			LastSeen: &lastSeen,
+		}
+	case *tg.UserStatusLastMonth:
+		lastSeen = "last seen with in a month"
+		return UserOnlineOfflineStatus{
+			IsOnline: false,
+			LastSeen: &lastSeen,
+		}
+	case *tg.UserStatusRecently:
+		lastSeen = "last seen recently"
+		return UserOnlineOfflineStatus{
+			IsOnline: false,
+			LastSeen: &lastSeen,
+		}
+	case *tg.UserStatusOffline:
+		lastSeen = calculateLastSeenHumanReadable(s.WasOnline)
+		return UserOnlineOfflineStatus{
+			IsOnline: false,
+			LastSeen: &lastSeen,
+		}
+	default:
+		lastSeen = "Last seen long time ago "
+		return UserOnlineOfflineStatus{
+			IsOnline: false,
+			LastSeen: &lastSeen,
+		}
+	}
+}
+
 func defaultUserInfoForID(userID int64) *UserInfo {
 	pid := strconv.FormatInt(userID, 10)
 	return &UserInfo{
-		FirstName:   "",
-		IsBot:       false,
-		PeerID:      pid,
-		IsTyping:    false,
-		AccessHash:  "",
-		UnreadCount: 10,
-		IsOnline:    true,
+		FirstName:  "",
+		IsBot:      false,
+		PeerID:     pid,
+		IsTyping:   false,
+		AccessHash: "",
+		IsOnline:   true,
 	}
 }
 
@@ -85,7 +154,6 @@ func channelAndGroupInfoFromTG(peer *tg.Channel) *ChannelAndGroupInfo {
 		IsCreator:         peer.Creator,
 		IsBroadcast:       peer.Broadcast,
 		ParticipantsCount: &peer.ParticipantsCount,
-		UnreadCount:       0,
 	}
 }
 
@@ -117,18 +185,17 @@ func userInfoFromTG(tgUser *tg.User, userID int64) *UserInfo {
 		return defaultUserInfoForID(userID)
 	}
 	return &UserInfo{
-		FirstName:   tgUser.FirstName,
-		IsBot:       tgUser.Bot,
-		PeerID:      strconv.FormatInt(userID, 10),
-		IsTyping:    false,
-		AccessHash:  strconv.FormatInt(tgUser.AccessHash, 10),
-		UnreadCount: 10,
-		LastSeen:    nil,
-		IsOnline:    false,
+		FirstName:  tgUser.FirstName,
+		IsBot:      tgUser.Bot,
+		PeerID:     strconv.FormatInt(userID, 10),
+		IsTyping:   false,
+		AccessHash: strconv.FormatInt(tgUser.AccessHash, 10),
+		LastSeen:   nil,
+		IsOnline:   false,
 	}
 }
 
-func GetTelegramClient(ctx context.Context, updateChannel chan Notification) *TelegramClient {
+func GetTelegramClient(ctx context.Context, updateChannel chan Notification) *CligramClient {
 	once.Do(func() {
 		appID := mustGetenv("TELEGRAM_API_ID")
 		appIDInt, err := strconv.Atoi(appID)
@@ -139,7 +206,7 @@ func GetTelegramClient(ctx context.Context, updateChannel chan Notification) *Te
 		appHash := mustGetenv("TELEGRAM_API_HASH")
 
 		updateHandler := getUpdateHandler(updateChannel)
-		TGClient = &TelegramClient{
+		Cligram = &CligramClient{
 			Client: telegram.NewClient(appIDInt, appHash, telegram.Options{
 				SessionStorage: GetSessionStorage(),
 				UpdateHandler:  updateHandler,
@@ -149,34 +216,9 @@ func GetTelegramClient(ctx context.Context, updateChannel chan Notification) *Te
 				},
 			}),
 		}
-		TGClient.ctx = ctx
+		Cligram.ctx = ctx
 	})
-	return TGClient
-}
-
-type UserGroupsMsg struct {
-	Err error
-	//groupds and channels share same propertiy so we don't have to redefine its types use this instead
-	Response *UserChannelResponse
-}
-
-func (c *TelegramClient) GetUserGroups() tea.Cmd {
-	return func() tea.Msg {
-		dilaogsSlice, err := getAllDialogs(c)
-		if err != nil {
-			return UserChatsMsg{Err: err}
-		}
-		var channel []ChannelAndGroupInfo
-		for _, dialogClass := range dilaogsSlice.Chats {
-			if peer, ok := dialogClass.(*tg.Channel); ok && !peer.Broadcast {
-				channel = append(channel, *channelAndGroupInfoFromTG(peer))
-			}
-		}
-		return UserGroupsMsg{Err: nil, Response: &UserChannelResponse{
-			Error:  nil,
-			Result: channel,
-		}}
-	}
+	return Cligram
 }
 
 func getUserOnlineOffline(userInfo UserInfo) UserOnlineOffline {
@@ -194,6 +236,7 @@ func getUpdateHandler(updateChannel chan Notification) telegram.UpdateHandler {
 		msg := update.Message.(*tg.Message)
 		if peerClass, ok := msg.GetFromID(); ok {
 			fmt.Println("channel", peerClass)
+			//TODO:will get back to it later
 			return nil
 		}
 		return nil
@@ -201,12 +244,12 @@ func getUpdateHandler(updateChannel chan Notification) telegram.UpdateHandler {
 
 	disp.OnNewMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateNewMessage) error {
 		msg := update.Message.(*tg.Message)
-		if peerClass, ok := msg.GetFromID(); ok && TGClient != nil {
+		if peerClass, ok := msg.GetFromID(); ok && Cligram != nil {
 			peer, ok := peerClass.(*tg.PeerUser)
 			if !ok {
 				return nil
 			}
-			userInfo, err := TGClient.getUserInfo(peer.UserID)
+			userInfo, err := Cligram.getUserInfo(peer.UserID)
 			if err != nil || userInfo == nil {
 				if err != nil {
 					slog.Error(err.Error())
@@ -229,10 +272,11 @@ func getUpdateHandler(updateChannel chan Notification) telegram.UpdateHandler {
 	})
 
 	disp.OnUserTyping(func(ctx context.Context, e tg.Entities, update *tg.UpdateUserTyping) error {
-		userInfo, err := TGClient.getUserInfo(update.UserID)
+		userInfo, err := Cligram.getUserInfo(update.UserID)
 		if err != nil || userInfo == nil {
 			if err != nil {
-				fmt.Fprintln(os.Stderr, err)
+				slog.Error(err.Error())
+				return nil
 			}
 		}
 		user := ensureUserInfo(userInfo, update.UserID)
@@ -247,7 +291,7 @@ func getUpdateHandler(updateChannel chan Notification) telegram.UpdateHandler {
 	})
 
 	disp.OnUserStatus(func(ctx context.Context, e tg.Entities, update *tg.UpdateUserStatus) error {
-		userInfo, err := TGClient.getUserInfo(update.UserID)
+		userInfo, err := Cligram.getUserInfo(update.UserID)
 		if err != nil || userInfo == nil {
 			return nil
 		}
@@ -286,7 +330,7 @@ func getUpdateHandler(updateChannel chan Notification) telegram.UpdateHandler {
 	})
 }
 
-func (c *TelegramClient) getUserInfo(userID int64) (*UserInfo, error) {
+func (c *CligramClient) getUserInfo(userID int64) (*UserInfo, error) {
 	inputUserClass := &tg.InputUser{
 		UserID: userID,
 	}
@@ -299,14 +343,13 @@ func (c *TelegramClient) getUserInfo(userID int64) (*UserInfo, error) {
 	}
 	if tgUser, ok := userClasses[0].(*tg.User); ok {
 		var user = UserInfo{
-			FirstName:   tgUser.FirstName,
-			IsBot:       tgUser.Bot,
-			PeerID:      strconv.FormatInt(userID, 10),
-			IsTyping:    false,
-			AccessHash:  strconv.FormatInt(tgUser.AccessHash, 10),
-			UnreadCount: 10,
-			LastSeen:    nil,
-			IsOnline:    false,
+			FirstName:  tgUser.FirstName,
+			IsBot:      tgUser.Bot,
+			PeerID:     strconv.FormatInt(userID, 10),
+			IsTyping:   false,
+			AccessHash: strconv.FormatInt(tgUser.AccessHash, 10),
+			LastSeen:   nil,
+			IsOnline:   false,
 		}
 		return &user, nil
 	}
@@ -368,12 +411,6 @@ type UserOnlineOffline struct {
 	Status     string    `json:"status,omitempty"`
 	LastSeen   time.Time `json:"lastSeen,omitempty"`
 	PeerID     string    `json:"peerId"`
-}
-
-type TelegramNotification struct {
-	JSONRPC string `json:"jsonrpc"`
-	Method  string `json:"method"`
-	Params  any    `json:"params"`
 }
 
 type UserTyping struct {

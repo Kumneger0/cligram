@@ -1,7 +1,6 @@
-package rpc
+package telegram
 
 import (
-	"fmt"
 	"strconv"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -13,7 +12,7 @@ type MarkMessagesAsReadMsg struct {
 	Err      error
 }
 
-func (c *TelegramClient) MarkMessagesAsRead(userPeer PeerInfo, chatType ChatType) tea.Cmd {
+func (c *CligramClient) MarkMessagesAsRead(userPeer PeerInfo, chatType ChatType) tea.Cmd {
 	return func() tea.Msg {
 		var peer tg.InputPeerClass
 		peerID, err := strconv.ParseInt(userPeer.PeerID, 10, 64)
@@ -42,7 +41,6 @@ func (c *TelegramClient) MarkMessagesAsRead(userPeer PeerInfo, chatType ChatType
 		_, err = c.Client.API().MessagesReadHistory(c.ctx, markHistoryASReadReqeust)
 
 		if err != nil {
-			fmt.Println(err)
 			return MarkMessagesAsReadMsg{Response: false, Err: err}
 		}
 		return MarkMessagesAsReadMsg{Response: true, Err: nil}

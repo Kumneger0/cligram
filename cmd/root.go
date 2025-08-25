@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"log"
 	"log/slog"
 	"os"
 
@@ -11,7 +10,7 @@ import (
 	list "github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/kumneger0/cligram/internal/rpc"
+	"github.com/kumneger0/cligram/internal/telegram"
 	ui "github.com/kumneger0/cligram/internal/ui"
 	overlay "github.com/rmhubbert/bubbletea-overlay"
 	"github.com/spf13/cobra"
@@ -28,25 +27,24 @@ func newRootCmd(version string) *cobra.Command {
 		Short: "cligram a cli based telegram client",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithCancel(context.Background())
-			updateChannel := make(chan rpc.Notification)
-			rpc.TGClient = rpc.GetTelegramClient(ctx, updateChannel)
-			err := rpc.TGClient.Run(ctx, func(ctx context.Context) error {
-				err := rpc.TGClient.Auth(ctx)
+			updateChannel := make(chan telegram.Notification)
+			telegram.Cligram = telegram.GetTelegramClient(ctx, updateChannel)
+			err := telegram.Cligram.Run(ctx, func(ctx context.Context) error {
+				err := telegram.Cligram.Auth(ctx)
 				if err != nil {
 					slog.Error(err.Error())
-					fmt.Println(err.Error())
-					os.Exit(1)
+					return nil
 				}
-				msg, err := rpc.TGClient.GetUserChats(false)
+				msg, err := telegram.Cligram.GetUserChats(false)
 				if err != nil {
 					slog.Error(err.Error())
-					log.Fatal("Failed to get user chats")
+					return nil
 				}
 
 				modalContent := ""
 				isModalVisible := false
 
-				var result []rpc.UserInfo = []rpc.UserInfo{}
+				var result []telegram.UserInfo = []telegram.UserInfo{}
 
 				if msg.Err != nil {
 					modalContent = msg.Err.Error()
@@ -59,7 +57,7 @@ func newRootCmd(version string) *cobra.Command {
 
 				var users []list.Item = []list.Item{}
 				for _, du := range result {
-					users = append(users, rpc.UserInfo{
+					users = append(users, telegram.UserInfo{
 						UnreadCount: du.UnreadCount,
 						FirstName:   du.FirstName,
 						IsBot:       du.IsBot,
@@ -139,7 +137,7 @@ func newRootCmd(version string) *cobra.Command {
 
 				go func() {
 					for msg := range updateChannel {
-						if msg.NewMessageMsg != (rpc.NewMessageMsg{}) {
+						if msg.NewMessageMsg != (telegram.NewMessageMsg{}) {
 							Program.Send(msg.NewMessageMsg)
 						}
 					}

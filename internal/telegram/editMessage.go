@@ -1,4 +1,4 @@
-package rpc
+package telegram
 
 import (
 	"log/slog"
@@ -18,7 +18,7 @@ type EditMessageMsg struct {
 	UpdatedMessage string
 }
 
-func (c *TelegramClient) EditMessage(userPeer PeerInfo, chatType ChatType, messageID int, newMessage string) tea.Cmd {
+func (c *CligramClient) EditMessage(userPeer PeerInfo, chatType ChatType, messageID int, newMessage string) tea.Cmd {
 	return func() tea.Msg {
 		var peer tg.InputPeerClass
 

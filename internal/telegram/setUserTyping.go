@@ -1,4 +1,4 @@
-package rpc
+package telegram
 
 import (
 	"log/slog"
@@ -11,7 +11,7 @@ type SetUserTypingJSONRPCResponse struct {
 	Result bool `json:"result,omitempty"`
 }
 
-func (c *TelegramClient) SetUserTyping(userPeer PeerInfo, chatType ChatType) {
+func (c *CligramClient) SetUserTyping(userPeer PeerInfo, chatType ChatType) {
 	var peer tg.InputPeerClass
 	switch chatType {
 	case UserChat, ChatType(Bot):
