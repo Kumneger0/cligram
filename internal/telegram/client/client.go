@@ -230,7 +230,6 @@ func (c *Client) MarkMessagesAsRead(ctx context.Context, req types.MarkAsReadReq
 			Err:      nil,
 		}
 	}
-
 }
 
 func (c *Client) SetUserTyping(ctx context.Context, req types.SetTypingRequest) error {

@@ -62,14 +62,14 @@ func FormatMessage[T ChannelOrUser](msg *tg.Message, userOrChannel *T, allMessag
 	}
 }
 
-func getRelyMessage(allMessages []tg.MessageClass, messageId int) *tg.Message {
+func getRelyMessage(allMessages []tg.MessageClass, messageID int) *tg.Message {
 	var message *tg.Message
 	for _, msg := range allMessages {
 		msg, ok := msg.(*tg.Message)
 		if !ok {
 			continue
 		}
-		if msg.ID == messageId {
+		if msg.ID == messageID {
 			message = msg
 			break
 		}

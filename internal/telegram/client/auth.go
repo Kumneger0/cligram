@@ -27,7 +27,7 @@ func (c *Client) Auth(ctx context.Context) error {
 	if err != nil {
 		return types.NewAuthError(fmt.Errorf("failed to check auth status: %w", err))
 	}
-	
+
 	if authStatus.Authorized {
 		fmt.Println("✅ Already logged in.")
 		return nil

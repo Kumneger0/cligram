@@ -27,7 +27,6 @@ func newRootCmd(version string) *cobra.Command {
 		Use:   "cligram",
 		Short: "cligram a cli based telegram client",
 		RunE: func(cmd *cobra.Command, args []string) error {
-
 			ctx, cancel := context.WithCancel(context.Background())
 			updateChannel := make(chan types.Notification, 128)
 

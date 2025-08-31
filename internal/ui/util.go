@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -460,9 +461,14 @@ func SendUserIsTyping(m *Model) tea.Cmd {
 				AccessHash: m.SelectedGroup.AccessHash,
 			}
 		}
-		go telegram.Cligram.SetUserTyping(telegram.Cligram.Context(), types.SetTypingRequest{
-			Peer: pInfo,
-		})
+		go func() {
+			err := telegram.Cligram.SetUserTyping(telegram.Cligram.Context(), types.SetTypingRequest{
+				Peer: pInfo,
+			})
+			if err != nil {
+				slog.Error(err.Error())
+			}
+		}()
 	}
 	return nil
 }

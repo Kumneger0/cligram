@@ -232,9 +232,7 @@ func (m *Manager) UserInfoFromPeerClass(ctx context.Context, peerClass *tg.PeerU
 
 	if user, ok := userClasses[0].(*tg.User); !ok {
 		return convertTGUserToUserInfo(user)
-
 	}
-
 	return nil
 }
 

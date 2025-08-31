@@ -13,7 +13,6 @@ import (
 )
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-
 	var cmds []tea.Cmd
 	switch msg := msg.(type) {
 	case types.SendMessageMsg:

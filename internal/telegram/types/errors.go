@@ -20,16 +20,16 @@ func (e *TelegramError) Unwrap() error {
 }
 
 const (
-	ErrorCodeAuthFailed      = 1001
-	ErrorCodeSendFailed      = 1002
+	ErrorCodeAuthFailed        = 1001
+	ErrorCodeSendFailed        = 1002
 	ErrorCodeGetMessagesFailed = 1003
-	ErrorCodeDeleteFailed    = 1004
-	ErrorCodeEditFailed      = 1005
-	ErrorCodeForwardFailed   = 1006
-	ErrorCodeUserNotFound    = 1007
-	ErrorCodeInvalidPeer     = 1008
-	ErrorCodeSessionFailed   = 1009
-	ErrorCodeUploadFailed    = 1010
+	ErrorCodeDeleteFailed      = 1004
+	ErrorCodeEditFailed        = 1005
+	ErrorCodeForwardFailed     = 1006
+	ErrorCodeUserNotFound      = 1007
+	ErrorCodeInvalidPeer       = 1008
+	ErrorCodeSessionFailed     = 1009
+	ErrorCodeUploadFailed      = 1010
 )
 
 func NewTelegramError(code int, message string, cause error) *TelegramError {

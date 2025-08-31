@@ -16,7 +16,6 @@ import (
 
 func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHandler {
 	dispatcher := tg.NewUpdateDispatcher()
-
 	dispatcher.OnNewChannelMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateNewChannelMessage) error {
 		msg := update.Message.(*tg.Message)
 		if peerClass, ok := msg.GetFromID(); ok {
@@ -96,7 +95,6 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 			slog.Warn("update channel is full, dropping typing notification")
 		}
 		return nil
-
 	})
 
 	dispatcher.OnUserStatus(func(ctx context.Context, e tg.Entities, update *tg.UpdateUserStatus) error {
