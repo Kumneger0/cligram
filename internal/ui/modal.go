@@ -27,8 +27,6 @@ type Manager struct {
 	OverlayMode  OverlayMode
 }
 
-var TUIManager Manager
-
 func (m Manager) Init() tea.Cmd {
 	return tea.Batch(
 		m.Foreground.Init(),
@@ -78,9 +76,7 @@ func (m Manager) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	m.Foreground = fg
 	bg, bgCmd := m.Background.Update(message)
 	m.Background = bg
-	cmds := []tea.Cmd{}
-	cmds = append(cmds, fgCmd, bgCmd)
-	return m, tea.Batch(cmds...)
+	return m, tea.Batch(fgCmd, bgCmd)
 }
 func (m Manager) View() string {
 	if m.State == ModalView {

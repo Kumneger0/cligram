@@ -12,6 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kumneger0/cligram/internal/telegram"
+	"github.com/kumneger0/cligram/internal/telegram/types"
 )
 
 type focusState string
@@ -80,9 +81,9 @@ func (s SearchResult) FilterValue() string {
 }
 
 type SelectSearchedUserResult struct {
-	user    *telegram.UserInfo
-	channel *telegram.ChannelAndGroupInfo
-	group   *telegram.ChannelAndGroupInfo
+	user    *types.UserInfo
+	channel *types.ChannelInfo
+	group   *types.ChannelInfo
 }
 
 type CloseOverlay struct{}
@@ -98,12 +99,12 @@ const (
 type OpenModalMsg struct {
 	ModalMode ModalMode
 	FromPeer  *list.Item
-	Message   *telegram.FormattedMessage
+	Message   *types.FormattedMessage
 	UsersList *list.Model
 }
 
 type ForwardMsg struct {
-	msg      *telegram.FormattedMessage
+	msg      *types.FormattedMessage
 	receiver *list.Item
 	fromPeer *list.Item
 }
@@ -114,11 +115,11 @@ type Foreground struct {
 	input                textinput.Model
 	searchResultCombined list.Model
 	focusedOn            focusState
-	searchResultUsers    []telegram.UserInfo
-	SearchResultChannels []telegram.ChannelAndGroupInfo
+	searchResultUsers    []types.UserInfo
+	SearchResultChannels []types.ChannelInfo
 	ModalMode            ModalMode
 	UsersList            *list.Model
-	Message              *telegram.FormattedMessage
+	Message              *types.FormattedMessage
 	fromPeer             *list.Item
 }
 
@@ -132,13 +133,12 @@ type MessageDeletionConfrimResponseMsg struct {
 
 var debouncedSearch = Debounce(func(args ...any) tea.Msg {
 	query := args[0].(string)
-	result := telegram.Cligram.SearchUsers(query)
-	return result
+	go telegram.Cligram.SearchUsers(telegram.Cligram.Context(), query)
+	return nil
 }, 300*time.Millisecond)
 
-func setTotalSearchResultUsers(searchMsg telegram.SearchUserMsg, m *Foreground) {
-	m.searchResultUsers = searchMsg.Response.Result.Users
-	m.SearchResultChannels = searchMsg.Response.Result.Channels
+func setTotalSearchResultUsers(searchMsg types.SearchUsersMsg, m *Foreground) {
+	m.searchResultUsers = *searchMsg.Response
 }
 func (f Foreground) View() string {
 	foreStyle := lipgloss.NewStyle().
@@ -215,10 +215,10 @@ func getSearchView(m Foreground) string {
 	return textViewString
 }
 
-func (m Model) GetUserAccessHashFromModel(userID int64) (telegram.UserInfo, error) {
-	var userInfo telegram.UserInfo
+func (m Model) GetUserAccessHashFromModel(userID int64) (types.UserInfo, error) {
+	var userInfo types.UserInfo
 	for _, value := range m.Users.Items() {
-		if user, ok := value.(telegram.UserInfo); ok && user.PeerID == strconv.FormatInt(userID, 10) {
+		if user, ok := value.(types.UserInfo); ok && user.PeerID == strconv.FormatInt(userID, 10) {
 			userInfo = user
 		}
 	}

@@ -1,4 +1,4 @@
-package telegram
+package client
 
 import (
 	"bufio"
@@ -10,20 +10,24 @@ import (
 
 	"github.com/gotd/td/telegram/auth"
 	"github.com/gotd/td/tg"
+
+	"github.com/kumneger0/cligram/internal/telegram/types"
 )
 
-func (c *CligramClient) Auth(ctx context.Context) error {
-	authfs := &authCode{}
+// Auth authenticates the client with Telegram
+func (c *Client) Auth(ctx context.Context) error {
+	authFlow := &authFlow{}
 
 	flow := auth.NewFlow(
-		authfs,
+		authFlow,
 		auth.SendCodeOptions{},
 	)
 
 	authStatus, err := c.Client.Auth().Status(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to check auth status: %w", err)
+		return types.NewAuthError(fmt.Errorf("failed to check auth status: %w", err))
 	}
+	
 	if authStatus.Authorized {
 		fmt.Println("✅ Already logged in.")
 		return nil
@@ -32,6 +36,7 @@ func (c *CligramClient) Auth(ctx context.Context) error {
 	var phoneNumber string
 	var authSentCode *tg.AuthSentCode
 
+	// Phone number and code sending loop
 	for {
 		phoneNumber, err = flow.Auth.Phone(ctx)
 		if err != nil {
@@ -45,16 +50,17 @@ func (c *CligramClient) Auth(ctx context.Context) error {
 			continue
 		}
 
-		authC, ok := authSentCodeClass.(*tg.AuthSentCode)
+		authCode, ok := authSentCodeClass.(*tg.AuthSentCode)
 		if !ok {
-			return fmt.Errorf("unexpected response from Telegram while sending code")
+			return types.NewAuthError(fmt.Errorf("unexpected response from Telegram while sending code"))
 		}
 
-		authSentCode = authC
+		authSentCode = authCode
 		fmt.Println("📲 A login code has been sent to your Telegram app.")
 		break
 	}
 
+	// Code verification loop
 	for {
 		code, err := flow.Auth.Code(ctx, authSentCode)
 		if err != nil {
@@ -78,6 +84,7 @@ func (c *CligramClient) Auth(ctx context.Context) error {
 		}
 	}
 
+	// Password verification loop (for 2FA)
 	for {
 		password, err := flow.Auth.Password(ctx)
 		if err != nil {
@@ -85,7 +92,7 @@ func (c *CligramClient) Auth(ctx context.Context) error {
 			continue
 		}
 
-		authrozation, err := c.Client.Auth().Password(ctx, password)
+		authorization, err := c.Client.Auth().Password(ctx, password)
 		if err != nil {
 			if errors.Is(err, auth.ErrPasswordInvalid) {
 				fmt.Println("❌ Wrong password. Please try again carefully.")
@@ -95,37 +102,38 @@ func (c *CligramClient) Auth(ctx context.Context) error {
 				fmt.Println("⚠️  Password required. Please enter your Telegram 2FA password.")
 				continue
 			}
-			return fmt.Errorf("failed to authenticate with password: %w", err)
+			return types.NewAuthError(fmt.Errorf("failed to authenticate with password: %w", err))
 		}
 
-		if authrozation != nil {
+		if authorization != nil {
 			fmt.Println("✅ Successfully logged in with password!")
 			return nil
 		}
 	}
 }
 
-type authCode struct{}
+// authFlow implements the auth.UserAuthenticator interface
+type authFlow struct{}
 
-func (a *authCode) Phone(_ context.Context) (string, error) {
+func (a *authFlow) Phone(_ context.Context) (string, error) {
 	fmt.Print("Enter your phone number: ")
 	phoneInput, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 	return strings.TrimSpace(phoneInput), nil
 }
 
-func (a *authCode) Code(_ context.Context, sentCode *tg.AuthSentCode) (string, error) {
+func (a *authFlow) Code(_ context.Context, sentCode *tg.AuthSentCode) (string, error) {
 	fmt.Print("Enter the code you received: ")
 	code, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 	return strings.TrimSpace(code), nil
 }
 
-func (a *authCode) Password(_ context.Context) (string, error) {
+func (a *authFlow) Password(_ context.Context) (string, error) {
 	fmt.Print("Enter 2FA password: ")
 	pwd, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 	return strings.TrimSpace(pwd), nil
 }
 
-func (a *authCode) SignUp(_ context.Context) (auth.UserInfo, error) {
+func (a *authFlow) SignUp(_ context.Context) (auth.UserInfo, error) {
 	fmt.Print("Enter first name: ")
 	first, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 	fmt.Print("Enter last name: ")
@@ -137,6 +145,6 @@ func (a *authCode) SignUp(_ context.Context) (auth.UserInfo, error) {
 	}, nil
 }
 
-func (a *authCode) AcceptTermsOfService(context.Context, tg.HelpTermsOfService) error {
+func (a *authFlow) AcceptTermsOfService(context.Context, tg.HelpTermsOfService) error {
 	return nil
 }

@@ -7,14 +7,15 @@ import (
 	"os"
 
 	"github.com/charmbracelet/bubbles/filepicker"
-	list "github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/term"
 	"github.com/kumneger0/cligram/internal/telegram"
-	ui "github.com/kumneger0/cligram/internal/ui"
+	"github.com/kumneger0/cligram/internal/telegram/types"
+	"github.com/kumneger0/cligram/internal/ui"
 	overlay "github.com/rmhubbert/bubbletea-overlay"
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 )
 
 var (
@@ -26,43 +27,48 @@ func newRootCmd(version string) *cobra.Command {
 		Use:   "cligram",
 		Short: "cligram a cli based telegram client",
 		RunE: func(cmd *cobra.Command, args []string) error {
+
 			ctx, cancel := context.WithCancel(context.Background())
-			updateChannel := make(chan telegram.Notification)
-			telegram.Cligram = telegram.GetTelegramClient(ctx, updateChannel)
-			err := telegram.Cligram.Run(ctx, func(ctx context.Context) error {
-				err := telegram.Cligram.Auth(ctx)
+			updateChannel := make(chan types.Notification, 128)
+
+			cligram, err := telegram.NewClient(ctx, updateChannel)
+			if err != nil {
+				slog.Error(err.Error())
+				cancel()
+				return nil
+			}
+			telegram.Cligram = cligram
+			err = telegram.Cligram.Run(ctx, func(ctx context.Context) error {
+				err := cligram.Auth(ctx)
 				if err != nil {
-					slog.Error(err.Error())
-					return nil
-				}
-				msg, err := telegram.Cligram.GetUserChats(false)
-				if err != nil {
+					cancel()
 					slog.Error(err.Error())
 					return nil
 				}
 
+				userChats, err := telegram.Cligram.GetChatManager().GetUserChats(ctx, false)
 				modalContent := ""
 				isModalVisible := false
 
-				var result []telegram.UserInfo = []telegram.UserInfo{}
+				var result []types.UserInfo = []types.UserInfo{}
 
-				if msg.Err != nil {
-					modalContent = msg.Err.Error()
+				if err != nil {
+					modalContent = err.Error()
 					isModalVisible = true
 				} else {
-					if msg.Response != nil {
-						result = *msg.Response
+					if userChats != nil {
+						result = userChats
 					}
 				}
 
 				var users []list.Item = []list.Item{}
 				for _, du := range result {
-					users = append(users, telegram.UserInfo{
+					users = append(users, types.UserInfo{
 						UnreadCount: du.UnreadCount,
 						FirstName:   du.FirstName,
 						IsBot:       du.IsBot,
 						PeerID:      du.PeerID,
-						AccessHash:  du.PeerID,
+						AccessHash:  du.AccessHash,
 						LastSeen:    du.LastSeen,
 						IsOnline:    du.IsOnline,
 					})
@@ -86,8 +92,7 @@ func newRootCmd(version string) *cobra.Command {
 				input.Prompt = "> "
 				input.CharLimit = 256
 
-				fd := int(os.Stdout.Fd())
-				width, height, _ := term.GetSize(fd)
+				width, height, _ := term.GetSize(os.Stdout.Fd())
 
 				chatList := list.New([]list.Item{}, ui.MessagesDelegate{Model: &model}, 10, 20)
 				chatList.SetShowPagination(false)
@@ -119,7 +124,7 @@ func newRootCmd(version string) *cobra.Command {
 				background := model
 				forground := &ui.Foreground{}
 
-				ui.TUIManager = ui.Manager{
+				manager := ui.Manager{
 					Foreground: forground,
 					Background: background,
 					State:      ui.MainView,
@@ -133,12 +138,24 @@ func newRootCmd(version string) *cobra.Command {
 					),
 				}
 
-				Program = tea.NewProgram(ui.TUIManager, tea.WithAltScreen())
+				Program = tea.NewProgram(manager, tea.WithAltScreen())
 
 				go func() {
 					for msg := range updateChannel {
-						if msg.NewMessageMsg != (telegram.NewMessageMsg{}) {
-							Program.Send(msg.NewMessageMsg)
+						if msg.NewMessage != nil {
+							Program.Send(*msg.NewMessage)
+						}
+						if msg.UserStatus != nil {
+							Program.Send(*msg.UserStatus)
+						}
+						if msg.Error != nil {
+							Program.Send(*msg.Error)
+						}
+						if msg.UserTyping != nil {
+							Program.Send(*msg.UserTyping)
+						}
+						if msg.SearchResult != nil {
+							Program.Send(*msg.SearchResult)
 						}
 					}
 				}()
@@ -146,6 +163,7 @@ func newRootCmd(version string) *cobra.Command {
 
 				cancel()
 				if err != nil {
+					cancel()
 					return fmt.Errorf("failed to start TUI: %w", err)
 				}
 

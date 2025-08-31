@@ -9,12 +9,14 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kumneger0/cligram/internal/telegram"
+	"github.com/kumneger0/cligram/internal/telegram/types"
 )
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+
 	var cmds []tea.Cmd
 	switch msg := msg.(type) {
-	case telegram.SendMessageMsg:
+	case types.SendMessageMsg:
 		if msg.Err != nil {
 			slog.Error("Failed to send message", "error", msg.Err.Error())
 			m.IsModalVisible = true
@@ -25,7 +27,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.SelectedFile = ""
 		}
 		return m, nil
-	case telegram.EditMessageMsg:
+	case types.EditMessageMsg:
 		if msg.Err != nil {
 			slog.Error("Failed to edit message", "error", msg.Err.Error())
 			m.IsModalVisible = true
@@ -33,8 +35,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		response := msg.Response
-		if response.Result {
-			if selectedMessage, ok := m.ChatUI.SelectedItem().(telegram.FormattedMessage); ok {
+		if response {
+			if selectedMessage, ok := m.ChatUI.SelectedItem().(types.FormattedMessage); ok {
 				selectedMessage.Content = msg.UpdatedMessage
 				items := m.ChatUI.Items()
 				items[m.ChatUI.GlobalIndex()] = selectedMessage
@@ -43,7 +45,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.EditMessage = nil
 		}
 
-	case telegram.UserTyping:
+	case types.UserTypingNotification:
 		user := msg.User
 		if m.SelectedUser.PeerID == user.PeerID {
 			m.SelectedUser = user
@@ -59,23 +61,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			rcmd := tea.Tick(time.Second*3, func(t time.Time) tea.Msg {
 				user.IsOnline = false
 				user.IsTyping = false
-				return telegram.UserTyping{User: user}
+				return types.UserTypingNotification{User: user}
 			})
 			cmds = append(cmds, rcmd)
 		}
-	case telegram.Error:
+	case types.ErrorNotification:
 		m.ModalContent = GetModalContent(msg.Error.Error())
 		m.IsModalVisible = true
-	case telegram.MarkMessagesAsReadMsg:
+	case types.MarkMessagesAsReadMsg:
 		model, cmd := m.handleMarkMessagesAsRead(msg)
 		m = model.(Model)
 		cmds = append(cmds, cmd)
-	case telegram.NewMessageMsg:
+	case types.NewMessageNotification:
 		model, cmd := m.handleNewMessage(msg)
 		m = model.(Model)
 		cmds = append(cmds, cmd)
 		return m, cmd
-	case telegram.UserOnlineOffline:
+	case types.UserStatusNotification:
 		model, cmd := m.handleUserOnlineOffline(msg)
 		m = model.(Model)
 		cmds = append(cmds, cmd)
@@ -83,7 +85,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd := m.handleMessageDeletion(msg)
 		m = model.(Model)
 		cmds = append(cmds, cmd)
-	case telegram.GetMessagesMsg:
+	case types.GetMessagesMsg:
 		model, cmd := m.handleGetMessages(msg)
 		m = model.(Model)
 		cmds = append(cmds, cmd)
@@ -91,15 +93,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd := m.handleKeyPress(msg)
 		m = model.(Model)
 		cmds = append(cmds, cmd)
-	case telegram.UserChatsMsg:
+	case types.UserChatsMsg:
 		model, cmd := m.handleUserChats(msg)
 		m = model.(Model)
 		cmds = append(cmds, cmd)
-	case telegram.UserChannelMsg:
+	case types.ChannelsMsg:
 		model, cmd := m.handleUserChannels(msg)
 		m = model.(Model)
 		cmds = append(cmds, cmd)
-	case telegram.UserGroupsMsg:
+	case types.GroupsMsg:
 		model, cmd := m.handleUserGroups(msg)
 		m = model.(Model)
 		cmds = append(cmds, cmd)
@@ -121,7 +123,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return updateFocusedComponent(&m, msg, &cmds)
 }
 
-func (m Model) handleMarkMessagesAsRead(msg telegram.MarkMessagesAsReadMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleMarkMessagesAsRead(msg types.MarkMessagesAsReadMsg) (tea.Model, tea.Cmd) {
 	if msg.Err != nil {
 		slog.Error("Failed to mark messages as read", "error", msg.Err.Error())
 		return m, nil
@@ -132,14 +134,14 @@ func (m Model) handleMarkMessagesAsRead(msg telegram.MarkMessagesAsReadMsg) (tea
 	userIndex := getUserIndex(m, m.SelectedUser)
 	if userIndex != -1 {
 		items := m.Users.Items()
-		user := items[userIndex].(telegram.UserInfo)
+		user := items[userIndex].(types.UserInfo)
 		user.UnreadCount = 0
 		m.Users.SetItem(userIndex, user)
 	}
 	return m, nil
 }
 
-func (m Model) handleNewMessage(msg telegram.NewMessageMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, tea.Cmd) {
 	areInGroupOrChannelMode := m.Mode == ModeGroups || m.Mode == ModeChannels
 	if msg.ChannelOrGroup != nil {
 		if !areInGroupOrChannelMode {
@@ -155,7 +157,7 @@ func (m Model) handleNewMessage(msg telegram.NewMessageMsg) (tea.Model, tea.Cmd)
 		groupIndex := getGroupIndex(m, *msg.ChannelOrGroup)
 		if groupIndex != -1 {
 			items := m.Groups.Items()
-			group := items[groupIndex].(telegram.ChannelAndGroupInfo)
+			group := items[groupIndex].(types.ChannelInfo)
 			group.UnreadCount++
 			m.Groups.SetItem(groupIndex, group)
 		}
@@ -175,7 +177,7 @@ func (m Model) handleNewMessage(msg telegram.NewMessageMsg) (tea.Model, tea.Cmd)
 		userIndex := getUserIndex(m, *msg.User)
 		if userIndex != -1 {
 			items := m.Users.Items()
-			user := items[userIndex].(telegram.UserInfo)
+			user := items[userIndex].(types.UserInfo)
 			user.UnreadCount++
 			m.Users.SetItem(userIndex, user)
 		}
@@ -185,33 +187,35 @@ func (m Model) handleNewMessage(msg telegram.NewMessageMsg) (tea.Model, tea.Cmd)
 	m.SelectedUser.UnreadCount++
 	var shouldWeUpdateCurrentActiveConversation bool = false
 	for _, v := range m.Conversations {
-		if v.Sender == m.SelectedUser.FirstName {
+		if v.FromID != nil && *v.FromID == m.SelectedUser.PeerID {
 			shouldWeUpdateCurrentActiveConversation = true
 			break
 		}
 	}
 	if shouldWeUpdateCurrentActiveConversation {
 		copy(m.Conversations[:], m.Conversations[1:])
-		m.Conversations[len(m.Conversations)-1] = msg.Message
+		var formattedMessage = msg.Message
+		formattedMessage.Sender = m.SelectedUser.FirstName
+		m.Conversations[len(m.Conversations)-1] = formattedMessage
 		m.updateConverstaions()
 	}
 	return m, nil
 }
 
-func isChannelOrGroupSelected(m *Model, msg *telegram.NewMessageMsg) bool {
-	return m.SelectedChannel.ChannelID == msg.ChannelOrGroup.ChannelID ||
-		m.SelectedGroup.ChannelID == msg.ChannelOrGroup.ChannelID
+func isChannelOrGroupSelected(m *Model, msg *types.NewMessageNotification) bool {
+	return m.SelectedChannel.ID == msg.ChannelOrGroup.ID ||
+		m.SelectedGroup.ID == msg.ChannelOrGroup.ID
 }
 
-func isUserSelected(m *Model, msg *telegram.NewMessageMsg) bool {
+func isUserSelected(m *Model, msg *types.NewMessageNotification) bool {
 	return m.SelectedUser.PeerID == msg.User.PeerID
 }
 
-func (m Model) handleUserOnlineOffline(msg telegram.UserOnlineOffline) (tea.Model, tea.Cmd) {
-	var user telegram.UserInfo
+func (m Model) handleUserOnlineOffline(msg types.UserStatusNotification) (tea.Model, tea.Cmd) {
+	var user types.UserInfo
 	for _, v := range m.Users.Items() {
-		u, ok := v.(telegram.UserInfo)
-		if ok && u.PeerID == msg.PeerID {
+		u, ok := v.(types.UserInfo)
+		if ok && u.PeerID == msg.UserInfo.PeerID {
 			user = u
 			break
 		}
@@ -220,8 +224,8 @@ func (m Model) handleUserOnlineOffline(msg telegram.UserOnlineOffline) (tea.Mode
 	userIndex := getUserIndex(m, user)
 	if userIndex != -1 {
 		items := m.Users.Items()
-		user := items[userIndex].(telegram.UserInfo)
-		user.IsOnline = msg.Status == "online"
+		user := items[userIndex].(types.UserInfo)
+		user.IsOnline = msg.Status.IsOnline
 		items[userIndex] = user
 		m.Users.SetItems(items)
 	}
@@ -232,16 +236,19 @@ func (m Model) handleMessageDeletion(msg MessageDeletionConfrimResponseMsg) (tea
 	if !msg.yes {
 		return m, nil
 	}
-	peer, cType := m.getPeerInfoAndChatType()
-	selectedItemInChat := m.ChatUI.SelectedItem().(telegram.FormattedMessage)
-	response, err := telegram.Cligram.DeleteMessage(peer, int(selectedItemInChat.ID), cType)
+	peer := m.getPeerInfo()
+	selectedItemInChat := m.ChatUI.SelectedItem().(types.FormattedMessage)
+	response, err := telegram.Cligram.DeleteMessage(telegram.Cligram.Context(), types.DeleteMessageRequest{
+		Peer:      peer,
+		MessageID: int(selectedItemInChat.ID),
+	})
 	if err != nil {
 		m.IsModalVisible = true
 		m.ModalContent = GetModalContent(err.Error())
 		return m, nil
 	}
-	if response.Result.Status == "success" {
-		var updatedConversations [50]telegram.FormattedMessage
+	if response.Status == "success" {
+		var updatedConversations [50]types.FormattedMessage
 		for i, v := range m.Conversations {
 			if v.ID != selectedItemInChat.ID {
 				updatedConversations[i] = v
@@ -255,35 +262,40 @@ func (m Model) handleMessageDeletion(msg MessageDeletionConfrimResponseMsg) (tea
 	return m, nil
 }
 
-func (m Model) getPeerInfoAndChatType() (telegram.PeerInfo, telegram.ChatType) {
-	var peer telegram.PeerInfo
-	var cType telegram.ChatType
+func (m Model) getPeerInfo() types.Peer {
+	var peer types.Peer
 
 	switch m.Mode {
 	case ModeUsers:
-		peer = telegram.PeerInfo{
-			PeerID:     m.SelectedUser.PeerID,
+		peer = types.Peer{
+			ID:         m.SelectedUser.PeerID,
 			AccessHash: m.SelectedUser.AccessHash,
+			ChatType:   types.UserChat,
 		}
-		cType = telegram.UserChat
+	case ModeBots:
+		peer = types.Peer{
+			ID:         m.SelectedUser.PeerID,
+			AccessHash: m.SelectedUser.AccessHash,
+			ChatType:   types.BotChat,
+		}
 	case ModeChannels:
-		peer = telegram.PeerInfo{
-			PeerID:     m.SelectedChannel.ChannelID,
-			AccessHash: m.SelectedChannel.AccessHash,
+		peer = types.Peer{
+			ID:         m.SelectedUser.PeerID,
+			AccessHash: m.SelectedUser.AccessHash,
+			ChatType:   types.ChannelChat,
 		}
-		cType = telegram.ChannelChat
 	case ModeGroups:
-		peer = telegram.PeerInfo{
-			PeerID:     m.SelectedGroup.ChannelID,
-			AccessHash: m.SelectedGroup.AccessHash,
+		peer = types.Peer{
+			ID:         m.SelectedUser.PeerID,
+			AccessHash: m.SelectedUser.AccessHash,
+			ChatType:   types.GroupChat,
 		}
-		cType = telegram.GroupChat
 	}
 
-	return peer, cType
+	return peer
 }
 
-func (m Model) handleGetMessages(msg telegram.GetMessagesMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleGetMessages(msg types.GetMessagesMsg) (tea.Model, tea.Cmd) {
 	m.AreWeSwitchingModes = false
 	m.MainViewLoading = false
 	if msg.Err != nil {
@@ -295,7 +307,7 @@ func (m Model) handleGetMessages(msg telegram.GetMessagesMsg) (tea.Model, tea.Cm
 
 	messagesWeGot := len(filterEmptyMessages(msg.Messages))
 	if messagesWeGot < 1 {
-		if selectedChat, ok := m.Users.SelectedItem().(telegram.UserInfo); ok && selectedChat.IsBot {
+		if selectedChat, ok := m.Users.SelectedItem().(types.UserInfo); ok && selectedChat.IsBot {
 			m.Input.SetValue("/start")
 		}
 	}
@@ -311,15 +323,15 @@ func (m Model) handleGetMessages(msg telegram.GetMessagesMsg) (tea.Model, tea.Cm
 	return m, nil
 }
 
-func (m Model) mergeConversations(newMessages [50]telegram.FormattedMessage, messagesWeGot int) [50]telegram.FormattedMessage {
-	var updatedConversations [50]telegram.FormattedMessage
+func (m Model) mergeConversations(newMessages [50]types.FormattedMessage, messagesWeGot int) [50]types.FormattedMessage {
+	var updatedConversations [50]types.FormattedMessage
 	if messagesWeGot >= 50 {
 		return newMessages
 	}
 
-	var oldMessages []telegram.FormattedMessage
+	var oldMessages []types.FormattedMessage
 	for _, v := range m.ChatUI.Items() {
-		if msg, ok := v.(telegram.FormattedMessage); ok && msg.ID != 0 {
+		if msg, ok := v.(types.FormattedMessage); ok && msg.ID != 0 {
 			oldMessages = append(oldMessages, msg)
 		}
 	}
@@ -415,7 +427,7 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleEditKey() (tea.Model, tea.Cmd) {
 	if m.FocusedOn == Mainview {
-		if selectedItem, ok := m.ChatUI.SelectedItem().(telegram.FormattedMessage); ok && strings.ToLower(selectedItem.Sender) == "you" {
+		if selectedItem, ok := m.ChatUI.SelectedItem().(types.FormattedMessage); ok && strings.ToLower(selectedItem.Sender) == "you" {
 			m.FocusedOn = Input
 			m.Input.SetValue(selectedItem.Content)
 			m.EditMessage = &selectedItem
@@ -462,7 +474,7 @@ func (m Model) handleReplyKey() (tea.Model, tea.Cmd) {
 		canWrite := (m.Mode == ModeUsers || m.Mode == ModeGroups) || (m.Mode == ModeChannels && m.SelectedChannel.IsCreator)
 		if canWrite {
 			m.IsReply = true
-			if selectedMessage, ok := m.ChatUI.SelectedItem().(telegram.FormattedMessage); ok {
+			if selectedMessage, ok := m.ChatUI.SelectedItem().(types.FormattedMessage); ok {
 				m.FocusedOn = Input
 				m.SkipNextInput = true
 				m.ReplyTo = &selectedMessage
@@ -475,7 +487,7 @@ func (m Model) handleReplyKey() (tea.Model, tea.Cmd) {
 
 func (m Model) handleDeleteKey() (tea.Model, tea.Cmd) {
 	if m.FocusedOn == Mainview {
-		selectedItem := m.ChatUI.SelectedItem().(telegram.FormattedMessage)
+		selectedItem := m.ChatUI.SelectedItem().(types.FormattedMessage)
 		return m, func() tea.Msg {
 			return OpenModalMsg{
 				ModalMode: ModalModeDeleteMessage,
@@ -488,7 +500,7 @@ func (m Model) handleDeleteKey() (tea.Model, tea.Cmd) {
 
 func (m Model) handleForwardKey() (tea.Model, tea.Cmd) {
 	if m.FocusedOn == Mainview {
-		selectedMessage, ok := m.ChatUI.SelectedItem().(telegram.FormattedMessage)
+		selectedMessage, ok := m.ChatUI.SelectedItem().(types.FormattedMessage)
 		if !ok {
 			return m, nil
 		}
@@ -515,7 +527,7 @@ func (m Model) handleForwardKey() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) handleUserChats(msg telegram.UserChatsMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleUserChats(msg types.UserChatsMsg) (tea.Model, tea.Cmd) {
 	if msg.Err != nil {
 		m.IsModalVisible = true
 		m.ModalContent = GetModalContent(msg.Err.Error())
@@ -531,7 +543,7 @@ func (m Model) handleUserChats(msg telegram.UserChatsMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) handleUserChannels(msg telegram.UserChannelMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleUserChannels(msg types.ChannelsMsg) (tea.Model, tea.Cmd) {
 	if msg.Err != nil {
 		m.IsModalVisible = true
 		m.ModalContent = GetModalContent(msg.Err.Error())
@@ -539,7 +551,7 @@ func (m Model) handleUserChannels(msg telegram.UserChannelMsg) (tea.Model, tea.C
 	}
 
 	var channels []list.Item
-	for _, du := range msg.Response.Result {
+	for _, du := range *msg.Response {
 		channels = append(channels, du)
 	}
 	m.Channels.SetItems(channels)
@@ -547,7 +559,7 @@ func (m Model) handleUserChannels(msg telegram.UserChannelMsg) (tea.Model, tea.C
 	return m, nil
 }
 
-func (m Model) handleUserGroups(msg telegram.UserGroupsMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleUserGroups(msg types.GroupsMsg) (tea.Model, tea.Cmd) {
 	if msg.Err != nil {
 		m.IsModalVisible = true
 		m.ModalContent = GetModalContent(msg.Err.Error())
@@ -555,7 +567,7 @@ func (m Model) handleUserGroups(msg telegram.UserGroupsMsg) (tea.Model, tea.Cmd)
 	}
 
 	var groups []list.Item
-	for _, du := range msg.Response.Result {
+	for _, du := range *msg.Response {
 		groups = append(groups, du)
 	}
 	m.Groups.SetItems(groups)
@@ -569,9 +581,13 @@ func (m Model) handleForwardMessage(msg ForwardMsg) (tea.Model, tea.Cmd) {
 	fromPeer := *msg.fromPeer
 
 	from, toPeer := m.extractPeerInfo(fromPeer, receiver)
-
 	messageIDs := []int{int(messageToBeForwarded.ID)}
-	_, err := telegram.Cligram.ForwardMessages(from, messageIDs, toPeer, toPeer.ChatType, toPeer.ChatType)
+
+	err := telegram.Cligram.ForwardMessages(telegram.Cligram.Context(), types.ForwardMessagesRequest{
+		FromPeer:   from,
+		ToPeer:     toPeer,
+		MessageIDs: messageIDs,
+	})
 	if err != nil {
 		slog.Error("Failed to forward message", "error", err.Error())
 		return m, nil
@@ -580,29 +596,29 @@ func (m Model) handleForwardMessage(msg ForwardMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) extractPeerInfo(fromPeer, receiver any) (from, toPeer telegram.PeerInfo) {
-	if fromUser, ok := fromPeer.(telegram.UserInfo); ok {
-		from.PeerID = fromUser.PeerID
+func (m Model) extractPeerInfo(fromPeer, receiver list.Item) (from, toPeer types.Peer) {
+	if fromUser, ok := fromPeer.(types.UserInfo); ok {
+		from.ID = fromUser.PeerID
 		from.AccessHash = fromUser.AccessHash
-		from.ChatType = telegram.UserChat
+		from.ChatType = types.UserChat
 	}
 
-	if fromChannelOrGroup, ok := fromPeer.(telegram.ChannelAndGroupInfo); ok {
-		from.PeerID = fromChannelOrGroup.ChannelID
+	if fromChannelOrGroup, ok := fromPeer.(types.ChannelInfo); ok {
+		from.ID = fromChannelOrGroup.ID
 		from.AccessHash = fromChannelOrGroup.AccessHash
-		from.ChatType = telegram.ChannelChat
+		from.ChatType = types.ChannelChat
 	}
 
-	if userOrChannel, ok := receiver.(telegram.UserInfo); ok {
-		toPeer.PeerID = userOrChannel.PeerID
+	if userOrChannel, ok := receiver.(types.UserInfo); ok {
+		toPeer.ID = userOrChannel.PeerID
 		toPeer.AccessHash = userOrChannel.AccessHash
-		toPeer.ChatType = telegram.UserChat
+		toPeer.ChatType = types.UserChat
 	}
 
-	if channelOrGroup, ok := receiver.(telegram.ChannelAndGroupInfo); ok {
-		toPeer.PeerID = channelOrGroup.ChannelID
+	if channelOrGroup, ok := receiver.(types.ChannelInfo); ok {
+		toPeer.ID = channelOrGroup.ID
 		toPeer.AccessHash = channelOrGroup.AccessHash
-		toPeer.ChatType = telegram.ChannelChat
+		toPeer.ChatType = types.ChannelChat
 	}
 
 	return
@@ -633,7 +649,7 @@ func (m Model) handleSearchedUserResult(msg SelectSearchedUserResult) (tea.Model
 	return m, nil
 }
 
-func (m Model) handleSearchedUser(user telegram.UserInfo) (tea.Model, tea.Cmd) {
+func (m Model) handleSearchedUser(user types.UserInfo) (tea.Model, tea.Cmd) {
 	m.SelectedUser = user
 	index := getUserIndex(m, user)
 	if index != -1 {
@@ -658,7 +674,7 @@ func (m Model) handleSearchedUser(user telegram.UserInfo) (tea.Model, tea.Cmd) {
 	return m, updateUserCmd
 }
 
-func (m Model) handleSearchedChannel(channel telegram.ChannelAndGroupInfo) (tea.Model, tea.Cmd) {
+func (m Model) handleSearchedChannel(channel types.ChannelInfo) (tea.Model, tea.Cmd) {
 	m.SelectedChannel = channel
 	index := getChannelIndex(m, channel)
 
@@ -683,7 +699,7 @@ func (m Model) handleSearchedChannel(channel telegram.ChannelAndGroupInfo) (tea.
 	return m, setItemsCmd
 }
 
-func (m Model) handleSearchedGroup(group telegram.ChannelAndGroupInfo) (tea.Model, tea.Cmd) {
+func (m Model) handleSearchedGroup(group types.ChannelInfo) (tea.Model, tea.Cmd) {
 	m.SelectedGroup = group
 	index := getGroupIndex(m, group)
 

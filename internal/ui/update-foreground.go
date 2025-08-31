@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/kumneger0/cligram/internal/telegram"
+	"github.com/kumneger0/cligram/internal/telegram/types"
 )
 
 func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
@@ -32,7 +32,7 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd := m.handleKeyPress(msg, &cmds)
 		m = model.(*Foreground)
 		cmds = append(cmds, cmd)
-	case telegram.SearchUserMsg:
+	case types.SearchUsersMsg:
 		model, cmd := m.handleSearch(msg, &cmds)
 		m = model.(*Foreground)
 		return m, cmd
@@ -65,15 +65,14 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-func (m *Foreground) handleSearch(msg telegram.SearchUserMsg, cmds *[]tea.Cmd) (tea.Model, tea.Cmd) {
+func (m *Foreground) handleSearch(msg types.SearchUsersMsg, cmds *[]tea.Cmd) (tea.Model, tea.Cmd) {
 	if msg.Err != nil {
 		fmt.Println(msg.Err.Error())
 		slog.Error("Failed to search user", "error", msg.Err.Error())
 	} else {
-		// Wait for the message and return it
-		result := msg.Response.Result
+		result := msg.Response
 		var users []list.Item
-		for _, v := range result.Users {
+		for _, v := range *result {
 			var channelOrUserType ChannelOrUserType = USER
 			if v.IsBot {
 				channelOrUserType = BOT
@@ -87,22 +86,22 @@ func (m *Foreground) handleSearch(msg telegram.SearchUserMsg, cmds *[]tea.Cmd) (
 				ChannelOrUserType: channelOrUserType,
 			})
 		}
-		for _, v := range result.Channels {
-			var channelOrGroup ChannelOrUserType
-			if v.IsBroadcast {
-				channelOrGroup = CHANNEL
-			} else {
-				channelOrGroup = GROUP
-			}
-			users = append(users, SearchResult{
-				Name:              v.ChannelTitle,
-				IsBot:             false,
-				PeerID:            v.ChannelID,
-				AccessHash:        v.AccessHash,
-				UnreadCount:       v.UnreadCount,
-				ChannelOrUserType: channelOrGroup,
-			})
-		}
+		// for _, v := range result.Channels {
+		// 	var channelOrGroup ChannelOrUserType
+		// 	if v.IsBroadcast {
+		// 		channelOrGroup = CHANNEL
+		// 	} else {
+		// 		channelOrGroup = GROUP
+		// 	}
+		// 	users = append(users, SearchResult{
+		// 		Name:              v.ChannelTitle,
+		// 		IsBot:             false,
+		// 		PeerID:            v.ID,
+		// 		AccessHash:        v.AccessHash,
+		// 		UnreadCount:       v.UnreadCount,
+		// 		ChannelOrUserType: channelOrGroup,
+		// 	})
+		// }
 		setTotalSearchResultUsers(msg, m)
 		cmd := m.searchResultCombined.SetItems(users)
 		*cmds = append(*cmds, cmd)
@@ -147,7 +146,7 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 		searchValue := m.input.Value()
 		if len(searchValue) >= 3 {
 			searchCmd := debouncedSearch(searchValue)
-			cmds = append(cmds, searchCmd)
+			*cmdsFromParent = append(*cmdsFromParent, searchCmd)
 		}
 	}
 	return m, tea.Batch(cmds...)
@@ -220,16 +219,16 @@ func handleListSelection(m *Foreground) (tea.Model, tea.Cmd) {
 	)
 }
 
-func findChannel(peerID string, channels []telegram.ChannelAndGroupInfo) *telegram.ChannelAndGroupInfo {
+func findChannel(peerID string, channels []types.ChannelInfo) *types.ChannelInfo {
 	for _, v := range channels {
-		if v.ChannelID == peerID {
+		if v.ID == peerID {
 			return &v
 		}
 	}
 	return nil
 }
 
-func findUser(peerID string, users []telegram.UserInfo) *telegram.UserInfo {
+func findUser(peerID string, users []types.UserInfo) *types.UserInfo {
 	for _, v := range users {
 		if v.PeerID == peerID {
 			return &v
