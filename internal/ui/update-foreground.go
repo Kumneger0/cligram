@@ -205,7 +205,8 @@ func handleListSelection(m *Foreground) (tea.Model, tea.Cmd) {
 func findChannel(peerID string, channels []types.ChannelInfo) *types.ChannelInfo {
 	for _, v := range channels {
 		if v.ID == peerID {
-			return &v
+			c := v
+			return &c
 		}
 	}
 	return nil
@@ -214,7 +215,8 @@ func findChannel(peerID string, channels []types.ChannelInfo) *types.ChannelInfo
 func findUser(peerID string, users []types.UserInfo) *types.UserInfo {
 	for _, v := range users {
 		if v.PeerID == peerID {
-			return &v
+			u := v
+			return &u
 		}
 	}
 	return nil

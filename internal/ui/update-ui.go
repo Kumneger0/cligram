@@ -596,28 +596,66 @@ func (m Model) handleForwardMessage(msg ForwardMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) extractPeerInfo(fromPeer, receiver list.Item) (from, toPeer types.Peer) {
-	if fromUser, ok := fromPeer.(types.UserInfo); ok {
-		from.ID = fromUser.PeerID
-		from.AccessHash = fromUser.AccessHash
+	switch p := fromPeer.(type) {
+	case types.UserInfo:
+		from.ID = p.PeerID
+		from.AccessHash = p.AccessHash
 		from.ChatType = types.UserChat
+	case *types.UserInfo:
+		if p != nil {
+			from.ID = p.PeerID
+			from.AccessHash = p.AccessHash
+			from.ChatType = types.UserChat
+		}
+	case types.ChannelInfo:
+		from.ID = p.ID
+		from.AccessHash = p.AccessHash
+		if p.IsBroadcast {
+			from.ChatType = types.ChannelChat
+		} else {
+			from.ChatType = types.GroupChat
+		}
+	case *types.ChannelInfo:
+		if p != nil {
+			from.ID = p.ID
+			from.AccessHash = p.AccessHash
+			if p.IsBroadcast {
+				from.ChatType = types.ChannelChat
+			} else {
+				from.ChatType = types.GroupChat
+			}
+		}
 	}
 
-	if fromChannelOrGroup, ok := fromPeer.(types.ChannelInfo); ok {
-		from.ID = fromChannelOrGroup.ID
-		from.AccessHash = fromChannelOrGroup.AccessHash
-		from.ChatType = types.ChannelChat
-	}
-
-	if userOrChannel, ok := receiver.(types.UserInfo); ok {
-		toPeer.ID = userOrChannel.PeerID
-		toPeer.AccessHash = userOrChannel.AccessHash
+	switch r := receiver.(type) {
+	case types.UserInfo:
+		toPeer.ID = r.PeerID
+		toPeer.AccessHash = r.AccessHash
 		toPeer.ChatType = types.UserChat
-	}
-
-	if channelOrGroup, ok := receiver.(types.ChannelInfo); ok {
-		toPeer.ID = channelOrGroup.ID
-		toPeer.AccessHash = channelOrGroup.AccessHash
-		toPeer.ChatType = types.ChannelChat
+	case *types.UserInfo:
+		if r != nil {
+			toPeer.ID = r.PeerID
+			toPeer.AccessHash = r.AccessHash
+			toPeer.ChatType = types.UserChat
+		}
+	case types.ChannelInfo:
+		toPeer.ID = r.ID
+		toPeer.AccessHash = r.AccessHash
+		if r.IsBroadcast {
+			toPeer.ChatType = types.ChannelChat
+		} else {
+			toPeer.ChatType = types.GroupChat
+		}
+	case *types.ChannelInfo:
+		if r != nil {
+			toPeer.ID = r.ID
+			toPeer.AccessHash = r.AccessHash
+			if r.IsBroadcast {
+				toPeer.ChatType = types.ChannelChat
+			} else {
+				toPeer.ChatType = types.GroupChat
+			}
+		}
 	}
 
 	return

@@ -191,19 +191,21 @@ func convertPeerToInputPeer(peer types.Peer) (tg.InputPeerClass, error) {
 	if err != nil {
 		return nil, types.NewInvalidPeerError(peer.ID)
 	}
-
-	accessHash, err := strconv.ParseInt(peer.AccessHash, 10, 64)
-	if err != nil {
-		return nil, types.NewInvalidPeerError(peer.AccessHash)
-	}
-
 	switch peer.ChatType {
 	case types.UserChat, types.BotChat:
+		accessHash, err := strconv.ParseInt(peer.AccessHash, 10, 64)
+		if err != nil {
+			return nil, types.NewInvalidPeerError(peer.AccessHash)
+		}
 		return &tg.InputPeerUser{
 			UserID:     peerID,
 			AccessHash: accessHash,
 		}, nil
 	case types.ChannelChat:
+		accessHash, err := strconv.ParseInt(peer.AccessHash, 10, 64)
+		if err != nil {
+			return nil, types.NewInvalidPeerError(peer.AccessHash)
+		}
 		return &tg.InputPeerChannel{
 			ChannelID:  peerID,
 			AccessHash: accessHash,
