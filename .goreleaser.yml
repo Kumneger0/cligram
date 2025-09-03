@@ -5,9 +5,6 @@ env:
   - CGO_ENABLED=0
 before:
   hooks:
-    - /bin/bash -c 'curl -fsSL https://bun.sh/install | bash && export BUN_INSTALL="$HOME/.bun" && export PATH="$BUN_INSTALL/bin:$PATH" && cd js && bun install && bun run build'
-    - mkdir -p internal/assets/resources
-    - cp js/bin/cligram-js internal/assets/resources/cligram-js-backend
     - ./scripts/manpages.sh
     - ./scripts/completions.sh
 builds:

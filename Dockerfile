@@ -22,9 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/cligram /usr/bin/cligram
-COPY --from=builder /app/internal/assets/resources/cligram-js-backend /root/.cache/cligram/cligram-js-backend
 
-RUN mkdir -p /root/.cache/cligram /root/.cligram \
- && chmod +x /root/.cache/cligram/cligram-js-backend
+RUN mkdir -p /root/.cache/cligram /root/.cligram 
 
 ENTRYPOINT ["/usr/bin/cligram"]
