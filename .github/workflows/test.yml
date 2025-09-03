@@ -21,9 +21,6 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v1
-
       - name: Build application and assets
         env:
           TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}

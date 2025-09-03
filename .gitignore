@@ -12,5 +12,4 @@ dist/
 logs.json
 todo.md
 channels.json
-internal/assets/resources/cligram-js-backend
 incoming-notifications.log

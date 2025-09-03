@@ -1,11 +1,7 @@
 package ui
 
 import (
-	"log/slog"
-	"os"
-
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/kumneger0/cligram/internal/rpc"
 )
 
 type SessionState int
@@ -53,10 +49,6 @@ func (m Manager) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", "ctrl+c", "esc":
 			if m.State == MainView {
-				err := rpc.JsProcess.Signal(os.Interrupt)
-				if err != nil {
-					slog.Error("Failed to send interrupt signal to JS process", "error", err.Error())
-				}
 				return m, tea.Quit
 			}
 			m.State = MainView
@@ -84,9 +76,7 @@ func (m Manager) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	m.Foreground = fg
 	bg, bgCmd := m.Background.Update(message)
 	m.Background = bg
-	cmds := []tea.Cmd{}
-	cmds = append(cmds, fgCmd, bgCmd)
-	return m, tea.Batch(cmds...)
+	return m, tea.Batch(fgCmd, bgCmd)
 }
 func (m Manager) View() string {
 	if m.State == ModalView {

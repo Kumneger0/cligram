@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -14,7 +15,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kumneger0/cligram/internal/config"
-	"github.com/kumneger0/cligram/internal/rpc"
+	"github.com/kumneger0/cligram/internal/telegram"
+	"github.com/kumneger0/cligram/internal/telegram/types"
 	"github.com/muesli/reflow/wordwrap"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
@@ -43,8 +45,19 @@ func (d MessagesDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd { return ni
 func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	var title string
 
-	if entry, ok := item.(rpc.FormattedMessage); ok {
-		title = wordwrap.String(entry.Title(), m.Width())
+	if entry, ok := item.(types.FormattedMessage); ok {
+		if entry.ReplyTo != nil {
+			var strBuilder strings.Builder
+			messageReplayedTo := entry.ReplyTo.Content
+			strBuilder.WriteString("> ")
+			strBuilder.WriteString(replyMessageStyle.Render(messageReplayedTo))
+			strBuilder.WriteString("\n")
+			strBuilder.WriteString(wordwrap.String(entry.Title(), m.Width()))
+			title = strBuilder.String()
+		} else {
+			title = wordwrap.String(entry.Title(), m.Width())
+		}
+
 		if entry.IsFromMe {
 			title = "You: " + title
 		} else {
@@ -92,14 +105,14 @@ type Model struct {
 	IsFilepickerVisible bool
 	SelectedFile        string
 	Users               list.Model
-	SelectedUser        rpc.UserInfo
+	SelectedUser        types.UserInfo
 	Channels            list.Model
 	AreWeSwitchingModes bool
 	IsModalVisible      bool
 	ModalContent        string
-	SelectedChannel     rpc.ChannelAndGroupInfo
+	SelectedChannel     types.ChannelInfo
 	Groups              list.Model
-	SelectedGroup       rpc.ChannelAndGroupInfo
+	SelectedGroup       types.ChannelInfo
 	Height              int
 	Width               int
 	MainViewLoading     bool
@@ -109,14 +122,15 @@ type Model struct {
 	viewport            viewport.Model
 	FocusedOn           FocusedOn
 	ChatUI              list.Model
-	Conversations       [50]rpc.FormattedMessage
+	Conversations       [50]types.FormattedMessage
 	IsReply             bool
-	ReplyTo             *rpc.FormattedMessage
-	EditMessage         *rpc.FormattedMessage
+	ReplyTo             *types.FormattedMessage
+	EditMessage         *types.FormattedMessage
+	SkipNextInput       bool
 }
 
-func filterEmptyMessages(msgs [50]rpc.FormattedMessage) []rpc.FormattedMessage {
-	var filteredMsgs []rpc.FormattedMessage
+func filterEmptyMessages(msgs [50]types.FormattedMessage) []types.FormattedMessage {
+	var filteredMsgs []types.FormattedMessage
 	for _, m := range msgs {
 		if m.ID != 0 {
 			filteredMsgs = append(filteredMsgs, m)
@@ -125,7 +139,7 @@ func filterEmptyMessages(msgs [50]rpc.FormattedMessage) []rpc.FormattedMessage {
 	return filteredMsgs
 }
 
-func formatMessages(msgs [50]rpc.FormattedMessage) []list.Item {
+func formatMessages(msgs [50]types.FormattedMessage) []list.Item {
 	filteredMsgs := filterEmptyMessages(msgs)
 	var lines []list.Item
 	for _, m := range filteredMsgs {
@@ -216,7 +230,7 @@ func getUserOrChannelName(m *Model) string {
 	}
 }
 
-func formatUserName(user rpc.UserInfo) string {
+func formatUserName(user types.UserInfo) string {
 	name := user.Title()
 	if user.IsTyping {
 		return name + " Typing..."
@@ -237,11 +251,11 @@ func formatChannelOrGroupName(name string, count *int) string {
 	return fmt.Sprintf("%s %d Members", name, *count)
 }
 
-func formatChannelName(channel rpc.ChannelAndGroupInfo) string {
+func formatChannelName(channel types.ChannelInfo) string {
 	return formatChannelOrGroupName(channel.FilterValue(), channel.ParticipantsCount)
 }
 
-func formatGroupName(group rpc.ChannelAndGroupInfo) string {
+func formatGroupName(group types.ChannelInfo) string {
 	return formatChannelOrGroupName(group.FilterValue(), group.ParticipantsCount)
 }
 
@@ -364,103 +378,45 @@ func Debounce(fn func(args ...any) tea.Msg, delay time.Duration) func(args ...an
 	}
 }
 
-// func handleUpDownArrowKeys(m *Model, isUp bool) (Model, tea.Cmd) {
-// 	var cmd tea.Cmd
-// 	if m.FocusedOn == Mainview {
-// 		totalItems := len(m.ChatUI.Items())
-// 		globalIndex := m.ChatUI.GlobalIndex()
-// 		pInfo, cType := getMessageParams(m)
-// 		if isUp && globalIndex == 0 {
-// 			if selectedConversation, ok := m.ChatUI.SelectedItem().(rpc.FormattedMessage); ok {
-// 				offsetID := int(selectedConversation.ID)
-// 				cacheKey := pInfo.AccessHash + pInfo.PeerID
-// 				if len(m.Conversations) > 1 {
-// 					messages, err := json.Marshal(m.Conversations[:])
-// 					if err != nil {
-// 						slog.Error("Failed to marshal messages", "error", err.Error())
-// 					}
-// 					AddToCache(cacheKey, string(messages))
-// 				}
-// 				cmd = rpc.RPCClient.GetMessages(pInfo, cType, &offsetID, nil, nil)
-// 				conversationLastIndex := len(m.Conversations) - 1
-// 				m.ChatUI.Select(conversationLastIndex)
-// 			}
-// 		} else if globalIndex == totalItems-1 && !isUp {
-// 			cacheKey := pInfo.AccessHash + pInfo.PeerID
-// 			messages, err := GetFromCache(cacheKey)
-// 			if err != nil {
-// 				slog.Error("Failed to get messages from cache", "error", err.Error())
-// 			}
-// 			if messages == nil {
-// 				return *m, nil
-// 			}
-// 			var formattedMessages []rpc.FormattedMessage
-// 			err = json.Unmarshal([]byte(*messages), &formattedMessages)
-
-// 			if err != nil {
-// 				slog.Error("Failed to unmarshal messages", "error", err.Error())
-// 			}
-
-// 			if len(formattedMessages) == 0 {
-// 				return *m, cmd
-// 			}
-// 			userConversation := rpc.UserConversationResponse{
-// 				JSONRPC: "2.0",
-// 				ID:      rand.Int(),
-// 				Error:   nil,
-// 				Result:  [50]rpc.FormattedMessage(formattedMessages),
-// 			}
-// 			messagesMsg := rpc.GetMessagesMsg{
-// 				Messages: userConversation,
-// 				Err:      nil,
-// 			}
-// 			cmd = func() tea.Msg {
-// 				return messagesMsg
-// 			}
-// 		}
-// 	}
-// 	return *m, cmd
-// }
-
-func getMessageParams(m *Model) (rpc.PeerInfoParams, rpc.ChatType) {
-	var cType rpc.ChatType
-	var pInfo rpc.PeerInfoParams
+func getMessageParams(m *Model) types.Peer {
+	var cType types.ChatType
+	var pInfo types.Peer
 	if m.Mode == ModeUsers || m.Mode == ModeBots {
-		m.SelectedUser = m.Users.SelectedItem().(rpc.UserInfo)
+		m.SelectedUser = m.Users.SelectedItem().(types.UserInfo)
 		if m.Mode == ModeUsers {
-			cType = rpc.ChatType(rpc.UserChat)
+			cType = types.UserChat
 		}
 		if m.Mode == ModeBots {
-			cType = rpc.ChatType(rpc.Bot)
+			cType = types.BotChat
 		}
-		pInfo = rpc.PeerInfoParams{
-			AccessHash:                  m.SelectedUser.AccessHash,
-			PeerID:                      m.SelectedUser.PeerID,
-			UserFirstNameOrChannelTitle: m.SelectedUser.FirstName,
+		pInfo = types.Peer{
+			AccessHash: m.SelectedUser.AccessHash,
+			ID:         m.SelectedUser.PeerID,
+			ChatType:   cType,
 		}
 	}
 	if m.Mode == ModeChannels {
-		m.SelectedChannel = m.Channels.SelectedItem().(rpc.ChannelAndGroupInfo)
-		cType = rpc.ChatType(rpc.ChannelChat)
-		pInfo = rpc.PeerInfoParams{
-			AccessHash:                  m.SelectedChannel.AccessHash,
-			PeerID:                      m.SelectedChannel.ChannelID,
-			UserFirstNameOrChannelTitle: m.SelectedChannel.ChannelTitle,
+		m.SelectedChannel = m.Channels.SelectedItem().(types.ChannelInfo)
+		cType = types.ChannelChat
+		pInfo = types.Peer{
+			AccessHash: m.SelectedChannel.AccessHash,
+			ID:         m.SelectedChannel.ID,
+			ChatType:   cType,
 		}
 		if m.SelectedChannel.IsCreator {
 			m.Input.Reset()
 		}
 	}
 	if m.Mode == ModeGroups {
-		m.SelectedGroup = m.Groups.SelectedItem().(rpc.ChannelAndGroupInfo)
-		cType = rpc.ChatType(rpc.GroupChat)
-		pInfo = rpc.PeerInfoParams{
-			AccessHash:                  m.SelectedGroup.AccessHash,
-			PeerID:                      m.SelectedGroup.ChannelID,
-			UserFirstNameOrChannelTitle: m.SelectedGroup.ChannelTitle,
+		m.SelectedGroup = m.Groups.SelectedItem().(types.ChannelInfo)
+		cType = types.ChatType(types.GroupChat)
+		pInfo = types.Peer{
+			AccessHash: m.SelectedGroup.AccessHash,
+			ID:         m.SelectedGroup.ID,
+			ChatType:   cType,
 		}
 	}
-	return pInfo, cType
+	return pInfo
 }
 
 var oldMessagesCache *expirable.LRU[string, string]
@@ -491,20 +447,29 @@ func SendUserIsTyping(m *Model) tea.Cmd {
 	}
 
 	if (m.Mode == ModeUsers || m.Mode == ModeGroups) && m.FocusedOn == Input {
-		var pInfo rpc.PeerInfo
+		var pInfo types.Peer
 		if m.Mode == ModeUsers {
-			pInfo = rpc.PeerInfo{
-				PeerID:     m.SelectedUser.PeerID,
+			pInfo = types.Peer{
+				ID:         m.SelectedUser.PeerID,
 				AccessHash: m.SelectedUser.AccessHash,
+				ChatType:   types.UserChat,
 			}
 		}
 		if m.Mode == ModeGroups {
-			pInfo = rpc.PeerInfo{
-				PeerID:     m.SelectedGroup.ChannelID,
+			pInfo = types.Peer{
+				ID:         m.SelectedGroup.ID,
 				AccessHash: m.SelectedGroup.AccessHash,
+				ChatType:   types.GroupChat,
 			}
 		}
-		go rpc.RPCClient.SetUserTyping(pInfo, "user")
+		go func() {
+			err := telegram.Cligram.SetUserTyping(telegram.Cligram.Context(), types.SetTypingRequest{
+				Peer: pInfo,
+			})
+			if err != nil {
+				slog.Error(err.Error())
+			}
+		}()
 	}
 	return nil
 }

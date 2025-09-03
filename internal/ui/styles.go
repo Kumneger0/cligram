@@ -24,7 +24,11 @@ var (
 
 	messageStyle = lipgloss.NewStyle().
 			PaddingTop(1).
-			PaddingBottom(1)
+			PaddingBottom(1).
+			Foreground(lipgloss.Color("#FFFFFF"))
+
+	replyMessageStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#AAAAAA"))
 )
 
 func getSideBarStyles(sidebarWidth int, contentHeight int, m *Model) lipgloss.Style {
