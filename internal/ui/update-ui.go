@@ -279,14 +279,14 @@ func (m Model) getPeerInfo() types.Peer {
 		}
 	case ModeChannels:
 		peer = types.Peer{
-			ID:         m.SelectedUser.PeerID,
-			AccessHash: m.SelectedUser.AccessHash,
+			ID:         m.SelectedChannel.ID,
+			AccessHash: m.SelectedChannel.AccessHash,
 			ChatType:   types.ChannelChat,
 		}
 	case ModeGroups:
 		peer = types.Peer{
-			ID:         m.SelectedUser.PeerID,
-			AccessHash: m.SelectedUser.AccessHash,
+			ID:         m.SelectedChannel.ID,
+			AccessHash: m.SelectedChannel.AccessHash,
 			ChatType:   types.GroupChat,
 		}
 	}

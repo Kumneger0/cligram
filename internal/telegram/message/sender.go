@@ -6,8 +6,8 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
-	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gotd/td/telegram/uploader"
@@ -112,8 +112,7 @@ func (s *Sender) sendMediaFile(ctx context.Context, path string, caption string,
 	}
 	defer file.Close()
 
-	pathParts := strings.Split(path, "/")
-	filename := pathParts[len(pathParts)-1]
+	filename := filepath.Base(path)
 
 	fileInfo, err := file.Stat()
 	if err != nil {
@@ -153,10 +152,38 @@ func (s *Sender) sendMediaFile(ctx context.Context, path string, caption string,
 		return nil, err
 	}
 
-	updates := sendMediaUpdateClass.(*tg.Updates).Updates[0]
-	updateMessage := updates.(*tg.UpdateMessageID)
-
-	return &updateMessage.ID, nil
+	var id *int
+	switch u := sendMediaUpdateClass.(type) {
+	case *tg.Updates:
+		for _, up := range u.Updates {
+			switch x := up.(type) {
+			case *tg.UpdateMessageID:
+				i := x.ID
+				id = &i
+			case *tg.UpdateNewMessage:
+				if m, ok := x.Message.(*tg.Message); ok {
+					i := m.ID
+					id = &i
+				}
+			case *tg.UpdateNewChannelMessage:
+				if m, ok := x.Message.(*tg.Message); ok {
+					i := m.ID
+					id = &i
+				}
+			}
+		}
+	case *tg.UpdatesCombined:
+		for _, up := range u.Updates {
+			if x, ok := up.(*tg.UpdateMessageID); ok {
+				i := x.ID
+				id = &i
+			}
+		}
+	case *tg.UpdateShortSentMessage:
+		i := u.ID
+		id = &i
+	}
+	return id, nil
 }
 
 func convertPeerToInputPeer(peer types.Peer) (tg.InputPeerClass, error) {
@@ -176,10 +203,14 @@ func convertPeerToInputPeer(peer types.Peer) (tg.InputPeerClass, error) {
 			UserID:     peerID,
 			AccessHash: accessHash,
 		}, nil
-	case types.ChannelChat, types.GroupChat:
+	case types.ChannelChat:
 		return &tg.InputPeerChannel{
 			ChannelID:  peerID,
 			AccessHash: accessHash,
+		}, nil
+	case types.GroupChat:
+		return &tg.InputPeerChat{
+			ChatID: peerID,
 		}, nil
 	default:
 		return nil, types.NewTelegramError(types.ErrorCodeInvalidPeer, "unsupported chat type", nil)

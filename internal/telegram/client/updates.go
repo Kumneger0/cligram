@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/gotd/td/telegram"
@@ -17,7 +18,11 @@ import (
 func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHandler {
 	dispatcher := tg.NewUpdateDispatcher()
 	dispatcher.OnNewChannelMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateNewChannelMessage) error {
-		msg := update.Message.(*tg.Message)
+		msg, ok := update.Message.(*tg.Message)
+		if !ok {
+			return nil
+		}
+
 		if peerClass, ok := msg.GetFromID(); ok {
 			slog.Debug("received channel message", "peer", peerClass)
 			return nil
@@ -26,7 +31,10 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 	})
 
 	dispatcher.OnNewMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateNewMessage) error {
-		msg := update.Message.(*tg.Message)
+		msg, ok := update.Message.(*tg.Message)
+		if !ok {
+			return nil
+		}
 		if peerClass, ok := msg.GetFromID(); ok {
 			peer, ok := peerClass.(*tg.PeerUser)
 			if !ok {
@@ -37,9 +45,16 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 				return types.NewTelegramError(types.ErrorCodeUserNotFound, err.Error(), nil)
 			}
 
+			accessHash, err := strconv.ParseInt(userInfo.AccessHash, 10, 64)
+
+			if err != nil {
+				return nil
+			}
+
 			req := &tg.MessagesGetHistoryRequest{
 				Peer: &tg.InputPeerUser{
-					UserID: peer.UserID,
+					UserID:     peer.UserID,
+					AccessHash: accessHash,
 				},
 				Limit: 50,
 			}

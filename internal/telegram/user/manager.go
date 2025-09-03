@@ -49,14 +49,41 @@ func (m *Manager) GetUserInfo(ctx context.Context, userID int64) (*types.UserInf
 }
 
 func (m *Manager) GetUserStatus(ctx context.Context, userID int64) (*types.UserStatus, error) {
-	userInfo, err := m.GetUserInfo(ctx, userID)
+	inputUser := &tg.InputUser{
+		UserID: userID,
+	}
+	userClasses, err := m.client.GetAPI().UsersGetUsers(ctx, []tg.InputUserClass{inputUser})
 	if err != nil {
-		return nil, err
+		return nil, types.NewUserNotFoundError(userID)
+	}
+	if len(userClasses) == 0 {
+		return nil, types.NewUserNotFoundError(userID)
+	}
+	tgUser, ok := userClasses[0].(*tg.User)
+	if !ok {
+		return nil, types.NewUserNotFoundError(userID)
+	}
+
+	var lastSeen time.Time
+	isOnline := false
+
+	if tgUser.Status != nil {
+		switch s := tgUser.Status.(type) {
+		case *tg.UserStatusOnline:
+			isOnline = true
+			lastSeen = time.Time{}
+		case *tg.UserStatusOffline:
+			isOnline = false
+			lastSeen = time.Unix(int64(s.WasOnline), 0)
+		case *tg.UserStatusRecently, *tg.UserStatusLastWeek, *tg.UserStatusLastMonth:
+			isOnline = false
+			lastSeen = time.Time{}
+		}
 	}
 
 	return &types.UserStatus{
-		IsOnline: userInfo.IsOnline,
-		LastSeen: time.Now(),
+		IsOnline: isOnline,
+		LastSeen: lastSeen,
 	}, nil
 }
 

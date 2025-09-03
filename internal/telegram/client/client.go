@@ -33,7 +33,6 @@ type Config struct {
 	UpdateChannel chan types.Notification
 }
 
-// will need to remove this
 var Cligram *telegram.Client
 
 func NewClient(ctx context.Context, config Config) (*Client, error) {

@@ -8,17 +8,14 @@ import (
 	"github.com/kumneger0/cligram/internal/telegram/types"
 )
 
-// SessionManager implements the SessionManager interface
 type SessionManager struct {
 	storage *FileSessionStorage
 }
 
-// FileSessionStorage implements the SessionStorage interface
 type FileSessionStorage struct {
 	path string
 }
 
-// NewSessionManager creates a new session manager
 func NewSessionManager() (types.SessionManager, error) {
 	userHomeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -39,28 +36,44 @@ func NewSessionManager() (types.SessionManager, error) {
 	}, nil
 }
 
-// GetSessionStorage returns the session storage
 func (sm *SessionManager) GetSessionStorage() types.SessionStorage {
 	return sm.storage
 }
 
-// EnsureSessionDir ensures the session directory exists
 func (sm *SessionManager) EnsureSessionDir() error {
 	dir := filepath.Dir(sm.storage.path)
 	return ensureSessionDir(dir)
 }
 
-// Load loads session data from file
 func (fs *FileSessionStorage) Load() ([]byte, error) {
 	return os.ReadFile(fs.path)
 }
 
-// Store saves session data to file
 func (fs *FileSessionStorage) Store(data []byte) error {
-	return os.WriteFile(fs.path, data, 0o600)
+	dir := filepath.Dir(fs.path)
+	tmp, err := os.CreateTemp(dir, "session.*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), fs.path)
 }
 
-// GetTelegramFileSessionStorage returns a telegram.FileSessionStorage for compatibility
 func (sm *SessionManager) GetTelegramFileSessionStorage() *telegram.FileSessionStorage {
 	return &telegram.FileSessionStorage{
 		Path: sm.storage.path,

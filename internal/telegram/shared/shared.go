@@ -27,14 +27,28 @@ func FormatMessage[T ChannelOrUser](msg *tg.Message, userOrChannel *T, allMessag
 	if msg.Out {
 		sender = "you"
 	} else {
-		switch v := any(userOrChannel).(type) {
-		case *types.ChannelInfo:
-			sender = v.ChannelTitle
-			FromID = &v.ID
-		case *types.UserInfo:
-			sender = v.FirstName
-			FromID = &v.PeerID
-			SenderUserInfo = v
+		if userOrChannel == nil {
+			sender = "unknown"
+		} else {
+			switch v := any(userOrChannel).(type) {
+			case *types.ChannelInfo:
+				if v != nil {
+					sender = v.ChannelTitle
+					FromID = &v.ID
+				} else {
+					sender = "unknown channel"
+				}
+			case *types.UserInfo:
+				if v != nil {
+					sender = v.FirstName
+					FromID = &v.PeerID
+					SenderUserInfo = v
+				} else {
+					sender = "unknown user"
+				}
+			default:
+				sender = "unknown"
+			}
 		}
 	}
 
@@ -84,7 +98,7 @@ func GetUserInfo(ctx context.Context, client tg.Client, userID int64) (*types.Us
 
 	userClasses, err := client.UsersGetUsers(ctx, []tg.InputUserClass{inputUser})
 	if err != nil {
-		return nil, types.NewUserNotFoundError(userID)
+		return nil, types.NewTelegramError(types.ErrorCodeGetMessagesFailed, "users.getUsers failed", err)
 	}
 
 	if len(userClasses) == 0 {
@@ -93,7 +107,7 @@ func GetUserInfo(ctx context.Context, client tg.Client, userID int64) (*types.Us
 
 	tgUser, ok := userClasses[0].(*tg.User)
 	if !ok {
-		return nil, types.NewUserNotFoundError(userID)
+		return nil, types.NewTelegramError(types.ErrorCodeGetMessagesFailed, "users.getUsers: unexpected type", nil)
 	}
 
 	return ConvertTGUserToUserInfo(tgUser), nil

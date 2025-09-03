@@ -459,6 +459,7 @@ func SendUserIsTyping(m *Model) tea.Cmd {
 			pInfo = types.Peer{
 				ID:         m.SelectedGroup.ID,
 				AccessHash: m.SelectedGroup.AccessHash,
+				ChatType:   types.GroupChat,
 			}
 		}
 		go func() {

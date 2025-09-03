@@ -138,8 +138,13 @@ var debouncedSearch = Debounce(func(args ...any) tea.Msg {
 }, 300*time.Millisecond)
 
 func setTotalSearchResultUsers(searchMsg types.SearchUsersMsg, m *Foreground) {
+	if searchMsg.Response == nil {
+		m.searchResultUsers = nil
+		return
+	}
 	m.searchResultUsers = *searchMsg.Response
 }
+
 func (f Foreground) View() string {
 	foreStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder(), true).

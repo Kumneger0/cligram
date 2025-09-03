@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"log/slog"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -67,7 +66,6 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *Foreground) handleSearch(msg types.SearchUsersMsg, cmds *[]tea.Cmd) (tea.Model, tea.Cmd) {
 	if msg.Err != nil {
-		fmt.Println(msg.Err.Error())
 		slog.Error("Failed to search user", "error", msg.Err.Error())
 	} else {
 		result := msg.Response
@@ -85,23 +83,8 @@ func (m *Foreground) handleSearch(msg types.SearchUsersMsg, cmds *[]tea.Cmd) (te
 				UnreadCount:       v.UnreadCount,
 				ChannelOrUserType: channelOrUserType,
 			})
+			//TODO:list out channels too
 		}
-		// for _, v := range result.Channels {
-		// 	var channelOrGroup ChannelOrUserType
-		// 	if v.IsBroadcast {
-		// 		channelOrGroup = CHANNEL
-		// 	} else {
-		// 		channelOrGroup = GROUP
-		// 	}
-		// 	users = append(users, SearchResult{
-		// 		Name:              v.ChannelTitle,
-		// 		IsBot:             false,
-		// 		PeerID:            v.ID,
-		// 		AccessHash:        v.AccessHash,
-		// 		UnreadCount:       v.UnreadCount,
-		// 		ChannelOrUserType: channelOrGroup,
-		// 	})
-		// }
 		setTotalSearchResultUsers(msg, m)
 		cmd := m.searchResultCombined.SetItems(users)
 		*cmds = append(*cmds, cmd)

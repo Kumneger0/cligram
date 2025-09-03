@@ -34,15 +34,14 @@ func newRootCmd(version string) *cobra.Command {
 			if err != nil {
 				slog.Error(err.Error())
 				cancel()
-				return nil
+				return fmt.Errorf("failed to initialize telegram client: %w", err)
 			}
 			telegram.Cligram = cligram
 			err = telegram.Cligram.Run(ctx, func(ctx context.Context) error {
-				err := cligram.Auth(ctx)
-				if err != nil {
+				if err := cligram.Auth(ctx); err != nil {
 					cancel()
 					slog.Error(err.Error())
-					return nil
+					return fmt.Errorf("authentication failed: %w", err)
 				}
 
 				userChats, err := telegram.Cligram.GetChatManager().GetUserChats(ctx, false)
@@ -72,14 +71,14 @@ func newRootCmd(version string) *cobra.Command {
 						IsOnline:    du.IsOnline,
 					})
 				}
-				model := ui.Model{}
-				userList := list.New(users, ui.CustomDelegate{Model: &model}, 10, 20)
+				model := &ui.Model{}
+				userList := list.New(users, ui.CustomDelegate{Model: model}, 10, 20)
 				userList.SetShowPagination(false)
 				channels := []list.Item{}
-				channelList := (list.New(channels, ui.CustomDelegate{Model: &model}, 10, 20))
+				channelList := (list.New(channels, ui.CustomDelegate{Model: model}, 10, 20))
 				channelList.SetShowPagination(false)
 				groups := []list.Item{}
-				groupList := (list.New(groups, ui.CustomDelegate{Model: &model}, 10, 20))
+				groupList := (list.New(groups, ui.CustomDelegate{Model: model}, 10, 20))
 				groupList.SetShowPagination(false)
 
 				userList.SetShowHelp(false)
@@ -93,7 +92,7 @@ func newRootCmd(version string) *cobra.Command {
 
 				width, height, _ := term.GetSize(os.Stdout.Fd())
 
-				chatList := list.New([]list.Item{}, ui.MessagesDelegate{Model: &model}, 10, 20)
+				chatList := list.New([]list.Item{}, ui.MessagesDelegate{Model: model}, 10, 20)
 				chatList.SetShowPagination(false)
 				chatList.SetShowHelp(false)
 				chatList.SetShowFilter(false)
@@ -121,14 +120,14 @@ func newRootCmd(version string) *cobra.Command {
 				model.SelectedFile = ""
 
 				background := model
-				forground := &ui.Foreground{}
+				foreground := &ui.Foreground{}
 
 				manager := ui.Manager{
-					Foreground: forground,
+					Foreground: foreground,
 					Background: background,
 					State:      ui.MainView,
 					Overlay: overlay.New(
-						forground,
+						foreground,
 						background,
 						overlay.Center,
 						overlay.Top,
@@ -138,23 +137,30 @@ func newRootCmd(version string) *cobra.Command {
 				}
 
 				Program = tea.NewProgram(manager, tea.WithAltScreen())
-
 				go func() {
-					for msg := range updateChannel {
-						if msg.NewMessage != nil {
-							Program.Send(*msg.NewMessage)
-						}
-						if msg.UserStatus != nil {
-							Program.Send(*msg.UserStatus)
-						}
-						if msg.Error != nil {
-							Program.Send(*msg.Error)
-						}
-						if msg.UserTyping != nil {
-							Program.Send(*msg.UserTyping)
-						}
-						if msg.SearchResult != nil {
-							Program.Send(*msg.SearchResult)
+					for {
+						select {
+						case <-ctx.Done():
+							return
+						case msg, ok := <-updateChannel:
+							if !ok {
+								return
+							}
+							if msg.NewMessage != nil {
+								Program.Send(*msg.NewMessage)
+							}
+							if msg.UserStatus != nil {
+								Program.Send(*msg.UserStatus)
+							}
+							if msg.Error != nil {
+								Program.Send(*msg.Error)
+							}
+							if msg.UserTyping != nil {
+								Program.Send(*msg.UserTyping)
+							}
+							if msg.SearchResult != nil {
+								Program.Send(*msg.SearchResult)
+							}
 						}
 					}
 				}()

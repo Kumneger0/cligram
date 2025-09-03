@@ -8,13 +8,16 @@ import (
 	"os"
 	"strings"
 
+	"syscall"
+
+	"golang.org/x/term"
+
 	"github.com/gotd/td/telegram/auth"
 	"github.com/gotd/td/tg"
 
 	"github.com/kumneger0/cligram/internal/telegram/types"
 )
 
-// Auth authenticates the client with Telegram
 func (c *Client) Auth(ctx context.Context) error {
 	authFlow := &authFlow{}
 
@@ -36,7 +39,6 @@ func (c *Client) Auth(ctx context.Context) error {
 	var phoneNumber string
 	var authSentCode *tg.AuthSentCode
 
-	// Phone number and code sending loop
 	for {
 		phoneNumber, err = flow.Auth.Phone(ctx)
 		if err != nil {
@@ -60,7 +62,6 @@ func (c *Client) Auth(ctx context.Context) error {
 		break
 	}
 
-	// Code verification loop
 	for {
 		code, err := flow.Auth.Code(ctx, authSentCode)
 		if err != nil {
@@ -84,7 +85,6 @@ func (c *Client) Auth(ctx context.Context) error {
 		}
 	}
 
-	// Password verification loop (for 2FA)
 	for {
 		password, err := flow.Auth.Password(ctx)
 		if err != nil {
@@ -112,7 +112,6 @@ func (c *Client) Auth(ctx context.Context) error {
 	}
 }
 
-// authFlow implements the auth.UserAuthenticator interface
 type authFlow struct{}
 
 func (a *authFlow) Phone(_ context.Context) (string, error) {
@@ -129,8 +128,12 @@ func (a *authFlow) Code(_ context.Context, sentCode *tg.AuthSentCode) (string, e
 
 func (a *authFlow) Password(_ context.Context) (string, error) {
 	fmt.Print("Enter 2FA password: ")
-	pwd, _ := bufio.NewReader(os.Stdin).ReadString('\n')
-	return strings.TrimSpace(pwd), nil
+	b, err := term.ReadPassword(int(syscall.Stdin))
+	fmt.Println()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(b)), nil
 }
 
 func (a *authFlow) SignUp(_ context.Context) (auth.UserInfo, error) {

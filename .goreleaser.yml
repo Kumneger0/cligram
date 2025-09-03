@@ -5,11 +5,9 @@ env:
   - CGO_ENABLED=0
 before:
   hooks:
-    # Install and setup bun, then build JS backend in a single shell command
     - /bin/bash -c 'curl -fsSL https://bun.sh/install | bash && export BUN_INSTALL="$HOME/.bun" && export PATH="$BUN_INSTALL/bin:$PATH" && cd js && bun install && bun run build'
     - mkdir -p internal/assets/resources
     - cp js/bin/cligram-js internal/assets/resources/cligram-js-backend
-    # Then run the completion and manpage scripts
     - ./scripts/manpages.sh
     - ./scripts/completions.sh
 builds:

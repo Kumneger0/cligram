@@ -136,13 +136,17 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 		return m, tea.Batch(cmds...)
 	}
-	replayToMessageID := string(messageToReply.ID)
+
+	replyToMessageID := ""
+	if m.IsReply && m.ReplyTo != nil {
+		replyToMessageID = strconv.Itoa(messageToReply.ID)
+	}
 	cmds = append(cmds, telegram.Cligram.SendMessage(telegram.Cligram.Context(),
 		types.SendMessageRequest{
 			Peer:             peerInfo,
 			Message:          userMsg,
 			IsReply:          m.IsReply && m.ReplyTo != nil,
-			ReplyToMessageID: replayToMessageID,
+			ReplyToMessageID: replyToMessageID,
 			IsFile:           isFile,
 			FilePath:         filepath,
 		}))

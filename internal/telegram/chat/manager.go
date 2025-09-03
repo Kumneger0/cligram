@@ -129,9 +129,9 @@ func (m *Manager) GetChannelInfo(ctx context.Context, peer types.Peer) (*types.C
 
 	return &types.ChannelInfo{
 		ChannelTitle:      chat.Title,
-		Username:          nil,
+		Username:          &chat.Username,
 		ID:                peer.ID,
-		AccessHash:        "",
+		AccessHash:        strconv.FormatInt(chat.AccessHash, 10),
 		IsCreator:         chat.Creator,
 		IsBroadcast:       chat.Broadcast,
 		ParticipantsCount: &chat.ParticipantsCount,
@@ -156,7 +156,7 @@ func (m *Manager) GetChatHistory(ctx context.Context, peer types.Peer, limit int
 	history, err := m.client.GetAPI().MessagesGetHistory(ctx, req)
 	if err != nil {
 		slog.Error(err.Error())
-		return nil, types.NewGetMessagesError(errors.New(inputPeer.String()))
+		return nil, types.NewGetMessagesError(err)
 	}
 
 	msgs, users, err := shared.GetMessageAndUserClasses(history)
@@ -170,12 +170,10 @@ func (m *Manager) GetChatHistory(ctx context.Context, peer types.Peer, limit int
 	areWeInUserModeOrBotMode := peer.ChatType == types.BotChat || peer.ChatType == types.UserChat
 
 	if areWeInUserModeOrBotMode {
-		ID, _ := strconv.ParseInt(peer.ID, 10, 64)
-		userInfo = getUser(users, ID)
-	} else {
-		channel, err = m.GetChannelInfo(ctx, peer)
-		if err != nil {
-			slog.Error(err.Error())
+		if id, err := strconv.ParseInt(peer.ID, 10, 64); err == nil {
+			userInfo = getUser(users, id)
+		} else {
+			slog.Error("invalid peer.ID", "peerID", peer.ID, "err", err)
 		}
 	}
 
@@ -218,10 +216,7 @@ func getUser(users []tg.UserClass, peerID int64) *types.UserInfo {
 
 func (m *Manager) UserInfoFromPeerClass(ctx context.Context, peerClass *tg.PeerUser) *types.UserInfo {
 	userClasses, err := m.client.GetAPI().UsersGetUsers(ctx, []tg.InputUserClass{
-		&tg.InputUser{
-			UserID:     peerClass.UserID,
-			AccessHash: peerClass.UserID,
-		},
+		&tg.InputUser{UserID: peerClass.UserID},
 	})
 	if err != nil {
 		return nil
