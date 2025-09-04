@@ -24,7 +24,6 @@ func NewClient(ctx context.Context, updateChannel chan types.Notification) (*cli
 	return Cligram, err
 }
 
-// Legacy structs with old field names for backward compatibility
 type PeerInfo struct {
 	PeerID     string         `json:"peerId"`
 	AccessHash string         `json:"accessHash"`
