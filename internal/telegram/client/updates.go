@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strconv"
 	"time"
@@ -10,8 +11,10 @@ import (
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/updates"
 	"github.com/gotd/td/tg"
-
+	"github.com/kumneger0/cligram/internal/config"
 	"github.com/kumneger0/cligram/internal/telegram/shared"
+
+	cligramNotification "github.com/kumneger0/cligram/internal/notification"
 	"github.com/kumneger0/cligram/internal/telegram/types"
 )
 
@@ -80,6 +83,7 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 				},
 			}
 
+			sendNewMessageNotification(userInfo.FirstName, " Sent You New Message", formattedMessage.Content)
 			select {
 			case updateChannel <- notification:
 			default:
@@ -157,4 +161,28 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 	return updates.New(updates.Config{
 		Handler: dispatcher,
 	})
+}
+
+func sendNewMessageNotification(sender string, titleSuffix string, message string) {
+	cfg := config.GetConfig().Notifications
+	enabled := true
+	if cfg.Enabled != nil {
+		enabled = *cfg.Enabled
+	}
+	if !enabled {
+		return
+	}
+	showPreview := true
+	if cfg.ShowMessagePreview != nil {
+		showPreview = *cfg.ShowMessagePreview
+	}
+	var notificationTitle, notificationMessage string
+	if showPreview {
+		notificationTitle = fmt.Sprintf("%s %s", sender, titleSuffix)
+		notificationMessage = message
+	} else {
+		notificationTitle = sender
+		notificationMessage = titleSuffix
+	}
+	cligramNotification.Notify(notificationTitle, notificationMessage)
 }
