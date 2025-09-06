@@ -12,9 +12,9 @@ import (
 	"github.com/gotd/td/telegram/updates"
 	"github.com/gotd/td/tg"
 	"github.com/kumneger0/cligram/internal/config"
-	cligramNotifation "github.com/kumneger0/cligram/internal/notification"
 	"github.com/kumneger0/cligram/internal/telegram/shared"
 
+	cligramNotification "github.com/kumneger0/cligram/internal/notification"
 	"github.com/kumneger0/cligram/internal/telegram/types"
 )
 
@@ -163,18 +163,26 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 	})
 }
 
-func sendNewMessageNotification(sender string, title string, message string) {
-	var notificationTitle string
-	var notificationMessage string
-	userNotificationConfig := config.GetConfig().Notifications
-	if *userNotificationConfig.Enabled {
-		if *userNotificationConfig.ShowMessagePreview {
-			notificationTitle = fmt.Sprint(sender, title)
-			notificationMessage = message
-		} else {
-			notificationTitle = sender
-			notificationMessage = title
-		}
-		cligramNotifation.Notify(notificationTitle, notificationMessage)
+func sendNewMessageNotification(sender string, titleSuffix string, message string) {
+	cfg := config.GetConfig().Notifications
+	enabled := true
+	if cfg.Enabled != nil {
+		enabled = *cfg.Enabled
 	}
+	if !enabled {
+		return
+	}
+	showPreview := true
+	if cfg.ShowMessagePreview != nil {
+		showPreview = *cfg.ShowMessagePreview
+	}
+	var notificationTitle, notificationMessage string
+	if showPreview {
+		notificationTitle = fmt.Sprintf("%s %s", sender, titleSuffix)
+		notificationMessage = message
+	} else {
+		notificationTitle = sender
+		notificationMessage = titleSuffix
+	}
+	cligramNotification.Notify(notificationTitle, notificationMessage)
 }
