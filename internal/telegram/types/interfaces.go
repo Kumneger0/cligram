@@ -11,8 +11,8 @@ type TelegramClient interface {
 	Auth(ctx context.Context) error
 	SendMessage(ctx context.Context, req SendMessageRequest) tea.Cmd
 	GetMessages(ctx context.Context, req GetMessagesRequest) tea.Cmd
-	GetUserChats(ctx context.Context, chatType ChatType) tea.Cmd
-	GetUserChannels(ctx context.Context) tea.Cmd
+	GetUserChats(ctx context.Context, chatType ChatType, offsetDate, offsetID int) tea.Cmd
+	GetUserChannels(ctx context.Context, isBroadCast bool, offsetDate, offsetID int) tea.Cmd
 	DeleteMessage(ctx context.Context, req DeleteMessageRequest) (DeleteMessageResponse, error)
 	EditMessage(ctx context.Context, req EditMessageRequest) error
 	ForwardMessages(ctx context.Context, req ForwardMessagesRequest) error
