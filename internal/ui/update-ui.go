@@ -454,9 +454,10 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleListPagination() (Model, tea.Cmd) {
-	if m.Users.Index() != m.Users.Paginator.PerPage {
+	if m.Users.Index() < len(m.Users.VisibleItems())-6 {
 		return m, nil
 	}
+
 	if m.OffsetDate == -1 || m.OffsetID == -1 {
 		return m, nil
 	}
