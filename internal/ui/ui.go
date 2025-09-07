@@ -77,7 +77,9 @@ func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 }
 
 func (m Model) Init() tea.Cmd {
-	return m.Filepicker.Init()
+	filePickerInitCMD := m.Filepicker.Init()
+	storiesCMD := telegram.Cligram.GetAllStories(telegram.Cligram.Context())
+	return tea.Batch(filePickerInitCMD, storiesCMD)
 }
 
 func getChannelIndex(m Model, channel types.ChannelInfo) int {
@@ -322,10 +324,10 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 			} else {
 				m.Input.Reset()
 			}
-			return *m, telegram.Cligram.GetUserChannels(telegram.Cligram.Context(), true)
+			return *m, telegram.Cligram.GetUserChannels(telegram.Cligram.Context(), true, 0, 0)
 		case "u":
 			m.Mode = ModeUsers
-			clearSidebarLists(false, true, true)
+			clearSidebarLists(true, true, true)
 			if areWeInGroupMode {
 				selectedUser := m.getMessageSenderUserInfo()
 				if selectedUser != nil {
@@ -356,17 +358,17 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 					})
 				}
 			}
-			return *m, telegram.Cligram.GetUserChats(telegram.Cligram.Context(), types.UserChat)
+			return *m, telegram.Cligram.GetUserChats(telegram.Cligram.Context(), types.UserChat, 0, 0)
 
 		case "g":
 			m.Mode = ModeGroups
 			clearSidebarLists(true, true, false)
-			return *m, telegram.Cligram.GetUserChannels(telegram.Cligram.Context(), false)
+			return *m, telegram.Cligram.GetUserChannels(telegram.Cligram.Context(), false, 0, 0)
 		case "b":
 			m.Mode = ModeBots
-			clearSidebarLists(false, true, true)
+			clearSidebarLists(true, true, true)
 			m.Users.ResetSelected()
-			return *m, telegram.Cligram.GetUserChats(telegram.Cligram.Context(), types.BotChat)
+			return *m, telegram.Cligram.GetUserChats(telegram.Cligram.Context(), types.BotChat, 0, 0)
 		}
 		return *m, nil
 	}

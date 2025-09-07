@@ -31,14 +31,22 @@ func NewManager(client APIClient) types.ChatManager {
 	}
 }
 
-func (m *Manager) GetUserChats(ctx context.Context, isBot bool) ([]types.UserInfo, error) {
-	dialogsSlice, err := m.getAllDialogs(ctx)
+func (m *Manager) GetUserChats(ctx context.Context, isBot bool, offetDate, offsetID int) (types.GetUserChatsResult, error) {
+	dialogsSlice, err := m.getAllDialogs(ctx, offetDate, offsetID)
 	if err != nil {
-		return nil, types.NewTelegramError(types.ErrorCodeGetMessagesFailed, "failed to get dialogs", err)
+		return types.GetUserChatsResult{
+			Data:       nil,
+			OffsetDate: 0,
+			OffsetID:   0,
+		}, types.NewTelegramError(types.ErrorCodeGetMessagesFailed, "failed to get dialogs", err)
 	}
 
 	if dialogsSlice == nil {
-		return []types.UserInfo{}, nil
+		return types.GetUserChatsResult{
+			Data:       []types.UserInfo{},
+			OffsetDate: 0,
+			OffsetID:   0,
+		}, nil
 	}
 
 	var userPeerIDs []userPeerIDUnreadCount
@@ -52,7 +60,6 @@ func (m *Manager) GetUserChats(ctx context.Context, isBot bool) ([]types.UserInf
 			}
 		}
 	}
-
 	var users []types.UserInfo
 	for _, userClass := range dialogsSlice.Users {
 		if tgUser, ok := userClass.(*tg.User); ok && tgUser.Bot == isBot {
@@ -65,18 +72,29 @@ func (m *Manager) GetUserChats(ctx context.Context, isBot bool) ([]types.UserInf
 			users = append(users, *user)
 		}
 	}
-
-	return users, nil
+	return types.GetUserChatsResult{
+		Data:       users,
+		OffsetDate: dialogsSlice.OffsetDate,
+		OffsetID:   dialogsSlice.OffsetID,
+	}, nil
 }
 
-func (m *Manager) GetChannels(ctx context.Context, isBroadCast bool) ([]types.ChannelInfo, error) {
-	dialogsSlice, err := m.getAllDialogs(ctx)
+func (m *Manager) GetChannels(ctx context.Context, isBroadCast bool, offsetDate, offsetID int) (types.GetChannelsResult, error) {
+	dialogsSlice, err := m.getAllDialogs(ctx, offsetDate, offsetID)
 	if err != nil {
-		return nil, types.NewTelegramError(types.ErrorCodeGetMessagesFailed, "failed to get dialogs", err)
+		return types.GetChannelsResult{
+			Data:       nil,
+			OffsetDate: 0,
+			OffsetID:   0,
+		}, types.NewTelegramError(types.ErrorCodeGetMessagesFailed, "failed to get dialogs", err)
 	}
 
 	if dialogsSlice == nil {
-		return []types.ChannelInfo{}, nil
+		return types.GetChannelsResult{
+			Data:       []types.ChannelInfo{},
+			OffsetDate: 0,
+			OffsetID:   0,
+		}, nil
 	}
 
 	var channels []types.ChannelInfo
@@ -87,7 +105,11 @@ func (m *Manager) GetChannels(ctx context.Context, isBroadCast bool) ([]types.Ch
 		}
 	}
 
-	return channels, nil
+	return types.GetChannelsResult{
+		Data:       channels,
+		OffsetDate: dialogsSlice.OffsetDate,
+		OffsetID:   dialogsSlice.OffsetID,
+	}, nil
 }
 
 func (m *Manager) GetChannelInfo(ctx context.Context, peer types.Peer) (*types.ChannelInfo, error) {
@@ -221,6 +243,7 @@ func (m *Manager) UserInfoFromPeerClass(ctx context.Context, peerClass *tg.PeerU
 	if err != nil {
 		return nil
 	}
+
 	if len(userClasses) == 0 {
 		return nil
 	}
@@ -231,9 +254,9 @@ func (m *Manager) UserInfoFromPeerClass(ctx context.Context, peerClass *tg.PeerU
 	return nil
 }
 
-func (m *Manager) GetUserChatsCmd(ctx context.Context, isBot bool) tea.Cmd {
+func (m *Manager) GetUserChatsCmd(ctx context.Context, isBot bool, offsetDate, offsetID int) tea.Cmd {
 	return func() tea.Msg {
-		users, err := m.GetUserChats(ctx, isBot)
+		users, err := m.GetUserChats(ctx, isBot, offsetDate, offsetID)
 		return types.UserChatsMsg{
 			Response: &users,
 			Err:      err,
@@ -241,9 +264,9 @@ func (m *Manager) GetUserChatsCmd(ctx context.Context, isBot bool) tea.Cmd {
 	}
 }
 
-func (m *Manager) GetChannelsCmd(ctx context.Context, isBroadCast bool) tea.Cmd {
+func (m *Manager) GetChannelsCmd(ctx context.Context, isBroadCast bool, offsetDate, offsetID int) tea.Cmd {
 	return func() tea.Msg {
-		channels, err := m.GetChannels(ctx, isBroadCast)
+		channels, err := m.GetChannels(ctx, isBroadCast, offsetDate, offsetID)
 		if isBroadCast {
 			return types.ChannelsMsg{
 				Response: &channels,
@@ -292,20 +315,83 @@ func getUnreadCount(u []userPeerIDUnreadCount, peerID int64) int {
 	return 0
 }
 
-func (m *Manager) getAllDialogs(ctx context.Context) (*tg.MessagesDialogsSlice, error) {
-	dialogs, err := m.client.GetAPI().MessagesGetDialogs(ctx, &tg.MessagesGetDialogsRequest{
-		Limit:      1000,
-		OffsetPeer: &tg.InputPeerSelf{},
-	})
+type CligramGetDialogsResponse struct {
+	Chats      []tg.ChatClass
+	Users      []tg.UserClass
+	Dialogs    []tg.DialogClass
+	OffsetDate int
+	OffsetID   int
+}
 
+func (m *Manager) getAllDialogs(ctx context.Context, offsetDate, offsetID int) (*CligramGetDialogsResponse, error) {
+	var allChats []tg.ChatClass
+	var allUsers []tg.UserClass
+	var allDialogs []tg.DialogClass
+	offsetPeer := &tg.InputPeerEmpty{}
+	dialogs, err := m.client.GetAPI().MessagesGetDialogs(ctx, &tg.MessagesGetDialogsRequest{
+		OffsetDate: offsetDate,
+		OffsetID:   offsetID,
+		OffsetPeer: offsetPeer,
+		Limit:      100,
+	})
 	if err != nil {
+		slog.Error(err.Error())
 		return nil, err
 	}
 
-	if dialogsSlice, ok := dialogs.(*tg.MessagesDialogsSlice); ok {
-		return dialogsSlice, nil
+	switch d := dialogs.(type) {
+	case *tg.MessagesDialogs:
+		allChats = append(allChats, d.Chats...)
+		allUsers = append(allUsers, d.Users...)
+		allDialogs = append(allDialogs, d.Dialogs...)
+		return &CligramGetDialogsResponse{
+			Chats:      allChats,
+			Users:      allUsers,
+			Dialogs:    allDialogs,
+			OffsetDate: -1,
+			OffsetID:   -1,
+		}, nil
+
+	case *tg.MessagesDialogsSlice:
+		allChats = append(allChats, d.Chats...)
+		allUsers = append(allUsers, d.Users...)
+		allDialogs = append(allDialogs, d.Dialogs...)
+		if len(d.Messages) == 0 {
+			return &CligramGetDialogsResponse{
+				Chats:      allChats,
+				Users:      allUsers,
+				Dialogs:    allDialogs,
+				OffsetDate: -1,
+				OffsetID:   -1,
+			}, nil
+		}
+		last := d.Messages[len(d.Messages)-1]
+		switch msg := last.(type) {
+		case *tg.Message:
+			return &CligramGetDialogsResponse{
+				Chats:      allChats,
+				Users:      allUsers,
+				Dialogs:    allDialogs,
+				OffsetDate: msg.Date,
+				OffsetID:   msg.ID,
+			}, nil
+		default:
+			return &CligramGetDialogsResponse{
+				Chats:   allChats,
+				Users:   allUsers,
+				Dialogs: allDialogs,
+			}, nil
+		}
+
+	default:
+		return &CligramGetDialogsResponse{
+			Chats:      allChats,
+			Users:      allUsers,
+			Dialogs:    allDialogs,
+			OffsetDate: -1,
+			OffsetID:   -1,
+		}, nil
 	}
-	return nil, fmt.Errorf("failed to get dialogs")
 }
 
 func convertTGUserToUserInfo(tgUser *tg.User) *types.UserInfo {
@@ -318,6 +404,7 @@ func convertTGUserToUserInfo(tgUser *tg.User) *types.UserInfo {
 		AccessHash: strconv.FormatInt(tgUser.AccessHash, 10),
 		IsTyping:   false,
 		IsOnline:   false,
+		HasStories: false,
 	}
 }
 
@@ -330,6 +417,7 @@ func convertTGChannelToChannelInfo(channel *tg.Channel) *types.ChannelInfo {
 		IsCreator:         channel.Creator,
 		IsBroadcast:       channel.Broadcast,
 		ParticipantsCount: &channel.ParticipantsCount,
+		HasStories:        false,
 	}
 }
 func convertPeerToInputPeer(peer types.Peer) (tg.InputPeerClass, error) {

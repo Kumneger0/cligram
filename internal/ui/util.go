@@ -101,32 +101,33 @@ const (
 )
 
 type Model struct {
-	Filepicker          filepicker.Model
-	IsFilepickerVisible bool
-	SelectedFile        string
-	Users               list.Model
-	SelectedUser        types.UserInfo
-	Channels            list.Model
-	AreWeSwitchingModes bool
-	IsModalVisible      bool
-	ModalContent        string
-	SelectedChannel     types.ChannelInfo
-	Groups              list.Model
-	SelectedGroup       types.ChannelInfo
-	Height              int
-	Width               int
-	MainViewLoading     bool
-	SideBarLoading      bool
-	Mode                Mode
-	Input               textinput.Model
-	viewport            viewport.Model
-	FocusedOn           FocusedOn
-	ChatUI              list.Model
-	Conversations       [50]types.FormattedMessage
-	IsReply             bool
-	ReplyTo             *types.FormattedMessage
-	EditMessage         *types.FormattedMessage
-	SkipNextInput       bool
+	Filepicker           filepicker.Model
+	IsFilepickerVisible  bool
+	SelectedFile         string
+	Users                list.Model
+	SelectedUser         types.UserInfo
+	Channels             list.Model
+	AreWeSwitchingModes  bool
+	IsModalVisible       bool
+	ModalContent         string
+	SelectedChannel      types.ChannelInfo
+	Groups               list.Model
+	SelectedGroup        types.ChannelInfo
+	Height               int
+	Width                int
+	MainViewLoading      bool
+	SideBarLoading       bool
+	Mode                 Mode
+	Input                textinput.Model
+	viewport             viewport.Model
+	FocusedOn            FocusedOn
+	ChatUI               list.Model
+	Conversations        [50]types.FormattedMessage
+	IsReply              bool
+	ReplyTo              *types.FormattedMessage
+	EditMessage          *types.FormattedMessage
+	SkipNextInput        bool
+	OffsetDate, OffsetID int
 }
 
 func filterEmptyMessages(msgs [50]types.FormattedMessage) []types.FormattedMessage {

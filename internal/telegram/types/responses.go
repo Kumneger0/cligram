@@ -39,17 +39,17 @@ type GetMessagesMsg struct {
 }
 
 type UserChatsMsg struct {
-	Response *[]UserInfo `json:"response,omitempty"`
-	Err      error       `json:"error,omitempty"`
+	Response *GetUserChatsResult `json:"response,omitempty"`
+	Err      error               `json:"error,omitempty"`
 }
 
 type ChannelsMsg struct {
-	Response *[]ChannelInfo `json:"response,omitempty"`
-	Err      error          `json:"error,omitempty"`
+	Response *GetChannelsResult `json:"response,omitempty"`
+	Err      error              `json:"error,omitempty"`
 }
 type GroupsMsg struct {
-	Response *[]ChannelInfo `json:"response,omitempty"`
-	Err      error          `json:"error,omitempty"`
+	Response *GetChannelsResult `json:"response,omitempty"`
+	Err      error              `json:"error,omitempty"`
 }
 
 type SearchUsersMsg struct {
@@ -61,4 +61,25 @@ type EditMessageMsg struct {
 	Response       bool
 	Err            error
 	UpdatedMessage string
+}
+
+type Stories struct {
+	PeerID int64
+	ID     int
+	Data   []byte
+}
+
+type GetAllStoriesMsg struct {
+	Stories []Stories
+	Err     error
+}
+
+type GetUserChatsResult struct {
+	Data                 []UserInfo
+	OffsetDate, OffsetID int
+}
+
+type GetChannelsResult struct {
+	Data                 []ChannelInfo
+	OffsetDate, OffsetID int
 }

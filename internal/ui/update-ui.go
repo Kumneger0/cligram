@@ -2,6 +2,7 @@ package ui
 
 import (
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -118,8 +119,37 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd := m.handleSearchedUserResult(msg)
 		m = model.(Model)
 		cmds = append(cmds, cmd)
+	case types.GetAllStoriesMsg:
+		model, cmd := m.updateUserStories(msg)
+		m = model.(Model)
+		cmds = append(cmds, cmd)
 	}
 	return updateFocusedComponent(&m, msg, &cmds)
+}
+
+func (m Model) updateUserStories(msg types.GetAllStoriesMsg) (tea.Model, tea.Cmd) {
+	var users []types.UserInfo
+	for _, u := range m.Users.Items() {
+		user := u.(types.UserInfo)
+		users = append(users, user)
+	}
+
+	for _, storie := range msg.Stories {
+		userID := strconv.FormatInt(storie.PeerID, 10)
+		user := findUser(userID, users)
+
+		if user == nil {
+			break
+		}
+		user.HasStories = true
+		userIndex := getUserIndex(m, *user)
+		if userIndex != -1 {
+			items := m.Users.Items()
+			user := items[userIndex].(types.UserInfo)
+			m.Users.SetItem(userIndex, user)
+		}
+	}
+	return m, nil
 }
 
 func (m Model) handleMarkMessagesAsRead(msg types.MarkMessagesAsReadMsg) (tea.Model, tea.Cmd) {
@@ -350,7 +380,6 @@ func (m Model) mergeConversations(newMessages [50]types.FormattedMessage, messag
 
 func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	cmds := []tea.Cmd{}
-
 	switch msg.String() {
 	case "shift+down":
 		if m.FocusedOn == Mainview {
@@ -358,10 +387,10 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			lastIndex := len(items) - 1
 			m.ChatUI.Select(lastIndex)
 		}
-	// case "up", "down":
-	/*
-	 TODO: consider implementing pagination and show all messages
-	*/
+	case "down":
+		m, cmd := m.handleListPagination()
+		cmds = append(cmds, cmd)
+		return m, tea.Batch(cmds...)
 	case "ctrl+a":
 		m, cmd := m.handleCtrlA()
 		cmds = append(cmds, cmd)
@@ -422,6 +451,20 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	cmds = append(cmds, SendUserIsTyping(&m))
 	return m, tea.Batch(cmds...)
+}
+
+func (m Model) handleListPagination() (Model, tea.Cmd) {
+	if m.Users.Index() < len(m.Users.VisibleItems())-6 {
+		return m, nil
+	}
+
+	if m.OffsetDate == -1 || m.OffsetID == -1 {
+		return m, nil
+	}
+	if m.Mode == ModeUsers || m.Mode == ModeBots {
+		return m, telegram.Cligram.GetUserChats(telegram.Cligram.Context(), types.ChatType(m.Mode), m.OffsetDate, m.OffsetID)
+	}
+	return m, telegram.Cligram.GetUserChannels(telegram.Cligram.Context(), m.Mode == ModeChannels, m.OffsetDate, m.OffsetID)
 }
 
 func (m Model) handleEditKey() (tea.Model, tea.Cmd) {
@@ -533,12 +576,21 @@ func (m Model) handleUserChats(msg types.UserChatsMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	var users []list.Item
-	for _, du := range *msg.Response {
-		users = append(users, du)
+	if msg.Response == nil {
+		return m, nil
 	}
+
+	users := m.Users.Items()
+	for _, du := range msg.Response.Data {
+		if du.FirstName != "" {
+			users = append(users, du)
+		}
+	}
+	//TODO: reminder to filter out if the chats gets duplicated
 	m.Users.SetItems(users)
 	m.AreWeSwitchingModes = false
+	m.OffsetDate = msg.Response.OffsetDate
+	m.OffsetID = msg.Response.OffsetID
 	return m, nil
 }
 
@@ -548,13 +600,20 @@ func (m Model) handleUserChannels(msg types.ChannelsMsg) (tea.Model, tea.Cmd) {
 		m.ModalContent = GetModalContent(msg.Err.Error())
 		return m, nil
 	}
+	if msg.Response == nil {
+		return m, nil
+	}
 
-	var channels []list.Item
-	for _, du := range *msg.Response {
-		channels = append(channels, du)
+	channels := m.Channels.Items()
+	for _, du := range msg.Response.Data {
+		if du.ChannelTitle != "" {
+			channels = append(channels, du)
+		}
 	}
 	m.Channels.SetItems(channels)
 	m.AreWeSwitchingModes = false
+	m.OffsetDate = msg.Response.OffsetDate
+	m.OffsetID = msg.Response.OffsetID
 	return m, nil
 }
 
@@ -565,12 +624,20 @@ func (m Model) handleUserGroups(msg types.GroupsMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	var groups []list.Item
-	for _, du := range *msg.Response {
-		groups = append(groups, du)
+	if msg.Response == nil {
+		return m, nil
+	}
+
+	groups := m.Groups.Items()
+	for _, du := range msg.Response.Data {
+		if du.ChannelTitle != "" {
+			groups = append(groups, du)
+		}
 	}
 	m.Groups.SetItems(groups)
 	m.AreWeSwitchingModes = false
+	m.OffsetDate = msg.Response.OffsetDate
+	m.OffsetID = msg.Response.OffsetID
 	return m, nil
 }
 
