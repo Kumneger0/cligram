@@ -19,6 +19,7 @@ type TelegramClient interface {
 	MarkMessagesAsRead(ctx context.Context, req MarkAsReadRequest) error
 	SetUserTyping(ctx context.Context, req SetTypingRequest) error
 	SearchUsers(ctx context.Context, query string) tea.Cmd
+	GetAllStories(ctx context.Context) tea.Cmd
 }
 
 type MessageSender interface {
@@ -32,12 +33,12 @@ type UserManager interface {
 }
 
 type ChatManager interface {
-	GetUserChats(ctx context.Context, isBot bool) ([]UserInfo, error)
-	GetChannels(ctx context.Context, isBroadCast bool) ([]ChannelInfo, error)
+	GetUserChats(ctx context.Context, isBot bool, offsetDate, offsetID int) (GetUserChatsResult, error)
+	GetChannels(ctx context.Context, isBroadCast bool, offsetDate, offsetID int) (GetChannelsResult, error)
 	GetChannelInfo(ctx context.Context, peer Peer) (*ChannelInfo, error)
 	GetChatHistory(ctx context.Context, peer Peer, limit int, offsetID *int) ([]FormattedMessage, error)
-	GetUserChatsCmd(ctx context.Context, isBot bool) tea.Cmd
-	GetChannelsCmd(ctx context.Context, isBroadCast bool) tea.Cmd
+	GetUserChatsCmd(ctx context.Context, isBot bool, offsetDate, offsetID int) tea.Cmd
+	GetChannelsCmd(ctx context.Context, isBroadCast bool, offsetDate, offsetID int) tea.Cmd
 	GetChatHistoryCmd(ctx context.Context, peer Peer, limit int, offsetID *int) tea.Cmd
 	UserInfoFromPeerClass(ctx context.Context, peer *tg.PeerUser) *UserInfo
 }

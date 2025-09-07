@@ -44,9 +44,10 @@ func newRootCmd(version string) *cobra.Command {
 					return fmt.Errorf("authentication failed: %w", err)
 				}
 
-				userChats, err := telegram.Cligram.GetChatManager().GetUserChats(ctx, false)
+				userChatsResult, err := telegram.Cligram.GetChatManager().GetUserChats(ctx, false, 0, 0)
 				modalContent := ""
 				isModalVisible := false
+				userChats := userChatsResult.Data
 
 				var result []types.UserInfo = []types.UserInfo{}
 
@@ -118,6 +119,8 @@ func newRootCmd(version string) *cobra.Command {
 				model.FocusedOn = ui.SideBar
 				model.ChatUI = chatList
 				model.SelectedFile = ""
+				model.OffsetDate = userChatsResult.OffsetDate
+				model.OffsetID = userChatsResult.OffsetID
 
 				background := model
 				foreground := &ui.Foreground{}

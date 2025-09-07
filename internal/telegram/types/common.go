@@ -30,6 +30,7 @@ type UserInfo struct {
 	LastSeen    *string `json:"lastSeen,omitempty"`
 	IsOnline    bool    `json:"isOnline"`
 	IsTyping    bool    `json:"isTyping"`
+	HasStories  bool    `json:"hasStories"`
 }
 
 type ChannelInfo struct {
@@ -41,6 +42,7 @@ type ChannelInfo struct {
 	IsBroadcast       bool    `json:"isBroadcast"`
 	ParticipantsCount *int    `json:"participantsCount,omitempty"`
 	UnreadCount       int     `json:"unreadCount"`
+	HasStories        bool    `json:"hasStories"`
 }
 
 type FormattedMessage struct {

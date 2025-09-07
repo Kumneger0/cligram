@@ -2,8 +2,9 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
-	"math/rand"
+	mathRand "math/rand"
 	"os"
 	"strconv"
 
@@ -125,12 +126,12 @@ func (c *Client) GetMessages(ctx context.Context, req types.GetMessagesRequest) 
 	return c.chatManager.GetChatHistoryCmd(ctx, req.Peer, req.Limit, req.OffsetID)
 }
 
-func (c *Client) GetUserChats(ctx context.Context, chatType types.ChatType) tea.Cmd {
-	return c.chatManager.GetUserChatsCmd(ctx, chatType == types.BotChat)
+func (c *Client) GetUserChats(ctx context.Context, chatType types.ChatType, offsetDate, offsetID int) tea.Cmd {
+	return c.chatManager.GetUserChatsCmd(ctx, chatType == types.BotChat, offsetDate, offsetID)
 }
 
-func (c *Client) GetUserChannels(ctx context.Context, isBroadCast bool) tea.Cmd {
-	return c.chatManager.GetChannelsCmd(ctx, isBroadCast)
+func (c *Client) GetUserChannels(ctx context.Context, isBroadCast bool, offsetDate, offsetID int) tea.Cmd {
+	return c.chatManager.GetChannelsCmd(ctx, isBroadCast, offsetDate, offsetID)
 }
 
 func (c *Client) GetAllMessages(ctx context.Context, req types.GetMessagesRequest) tea.Cmd {
@@ -192,7 +193,7 @@ func (c *Client) ForwardMessages(ctx context.Context, req types.ForwardMessagesR
 		FromPeer: fromPeer,
 		ToPeer:   toPeer,
 		ID:       req.MessageIDs,
-		RandomID: []int64{rand.Int63()},
+		RandomID: []int64{mathRand.Int63()},
 	}
 
 	_, err = c.Client.API().MessagesForwardMessages(ctx, forwardRequest)
@@ -249,6 +250,74 @@ func (c *Client) SetUserTyping(ctx context.Context, req types.SetTypingRequest) 
 	return nil
 }
 
+func (c *Client) GetAllStories(ctx context.Context) tea.Cmd {
+	return func() tea.Msg {
+		allUserStoriesClass, err := c.Client.API().StoriesGetAllStories(ctx, &tg.StoriesGetAllStoriesRequest{})
+
+		if err != nil {
+			slog.Error(context.Canceled.Error())
+			return nil
+		}
+		allUserStories, ok := allUserStoriesClass.(*tg.StoriesAllStories)
+		if !ok {
+			return nil
+		}
+
+		var AllStories []types.Stories
+		for _, peerStorie := range allUserStories.PeerStories {
+			peerUser, ok := peerStorie.Peer.(*tg.PeerUser)
+			if !ok {
+				fmt.Println("uff this doesn't stop fucking me")
+				continue
+			}
+
+			for _, storyItemClass := range peerStorie.Stories {
+				storyItem, ok := storyItemClass.(*tg.StoryItem)
+				if !ok {
+					fmt.Println("oops we fucked up hard")
+					continue
+				}
+				switch item := storyItem.Media.(type) {
+				case *tg.MessageMediaDocument:
+					documentClass, ok := item.GetDocument()
+					if !ok {
+						continue
+					}
+					document, ok := documentClass.(*tg.Document)
+					if !ok {
+						continue
+					}
+
+					AllStories = append(AllStories, types.Stories{
+						PeerID: peerUser.UserID,
+						ID:     storyItem.ID,
+						Data:   document.FileReference,
+					})
+				case *tg.MessageMediaPhoto:
+					photoClass, ok := item.GetPhoto()
+					if !ok {
+						continue
+					}
+					photo, ok := photoClass.(*tg.Photo)
+					if !ok {
+						continue
+					}
+
+					AllStories = append(AllStories, types.Stories{
+						PeerID: peerUser.UserID,
+						ID:     storyItem.ID,
+						Data:   photo.FileReference,
+					})
+				}
+			}
+		}
+
+		return types.GetAllStoriesMsg{
+			Stories: AllStories,
+			Err:     nil,
+		}
+	}
+}
 func (c *Client) SearchUsers(ctx context.Context, query string) {
 	users, err := c.userManager.SearchUsers(ctx, query)
 	c.updateChannel <- types.Notification{
