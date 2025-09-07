@@ -274,7 +274,6 @@ func (c *Client) GetAllStories(ctx context.Context) tea.Cmd {
 			for _, storyItemClass := range peerStorie.Stories {
 				storyItem, ok := storyItemClass.(*tg.StoryItem)
 				if !ok {
-					fmt.Println("oops we fucked up hard")
 					continue
 				}
 				switch item := storyItem.Media.(type) {
