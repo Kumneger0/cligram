@@ -136,6 +136,8 @@ func (a *authFlow) Password(_ context.Context) (string, error) {
 	return strings.TrimSpace(string(b)), nil
 }
 
+// we won't use this function telegram doesn't allow us to sign up from unnoficial clients but the gotd/td
+// but auth.NewFlow function requires to implent this method so let's keeps it
 func (a *authFlow) SignUp(_ context.Context) (auth.UserInfo, error) {
 	fmt.Print("Enter first name: ")
 	first, _ := bufio.NewReader(os.Stdin).ReadString('\n')

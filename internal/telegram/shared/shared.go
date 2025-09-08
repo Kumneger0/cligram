@@ -60,14 +60,22 @@ func FormatMessage[T ChannelOrUser](msg *tg.Message, userOrChannel *T, allMessag
 		}
 	}
 
+	isUnsupportedMessage := msg.Media != nil
+
+	var content = msg.Message
+
+	if isUnsupportedMessage {
+		content = "This Message is not supported by this Telegram client."
+	}
+
 	return &types.FormattedMessage{
 		ID:                   msg.ID,
 		Sender:               sender,
-		Content:              msg.Message,
+		Content:              content,
 		IsFromMe:             msg.Out,
 		Media:                nil,
 		Date:                 time.Unix(int64(msg.Date), 0),
-		IsUnsupportedMessage: false,
+		IsUnsupportedMessage: isUnsupportedMessage,
 		WebPage:              nil,
 		Document:             nil,
 		FromID:               FromID,
