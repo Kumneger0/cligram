@@ -457,7 +457,6 @@ func (m Model) handleListPagination() (Model, tea.Cmd) {
 	if m.Users.Index() < len(m.Users.VisibleItems())-6 {
 		return m, nil
 	}
-
 	if m.OffsetDate == -1 || m.OffsetID == -1 {
 		return m, nil
 	}

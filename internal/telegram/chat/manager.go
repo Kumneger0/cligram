@@ -366,6 +366,7 @@ func (m *Manager) getAllDialogs(ctx context.Context, offsetDate, offsetID int) (
 			}, nil
 		}
 		last := d.Messages[len(d.Messages)-1]
+
 		switch msg := last.(type) {
 		case *tg.Message:
 			return &CligramGetDialogsResponse{
