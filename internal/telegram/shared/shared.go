@@ -2,12 +2,21 @@ package shared
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
+	"os/exec"
+
+	"github.com/gotd/td/telegram/downloader"
+
+	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/tg"
 	"github.com/kumneger0/cligram/internal/telegram/types"
 )
@@ -232,4 +241,106 @@ func GetMessageAndUserClasses(history tg.MessagesMessagesClass) ([]tg.MessageCla
 		return nil, nil, types.NewTelegramError(types.ErrorCodeGetMessagesFailed, fmt.Sprintf("unsupported history type: %T", history), nil)
 	}
 	return msgs, users, nil
+}
+
+func DownloadStoryMedia(ctx context.Context, client *telegram.Client, story *tg.StoryItem, outDir string) (*int, error) {
+	var peerID string
+	peer, ok := story.GetFromID()
+
+	if ok {
+		switch p := peer.(type) {
+		case *tg.PeerUser:
+			peerID = strconv.FormatInt(p.UserID, 10)
+		case *tg.PeerChannel:
+			peerID = strconv.FormatInt(p.ChannelID, 10)
+		case *tg.PeerChat:
+			peerID = strconv.FormatInt(p.ChatID, 10)
+		default:
+			peerID = string(rune(time.Now().Day()))
+		}
+	}
+
+	switch media := story.Media.(type) {
+	case *tg.MessageMediaDocument:
+		if doc, ok := media.Document.AsNotEmpty(); ok {
+			ext := "bin"
+			switch doc.MimeType {
+			case "video/mp4":
+				ext = "mp4"
+			case "image/jpeg":
+				ext = "jpg"
+			}
+			filePath := filepath.Join(outDir, fmt.Sprintf("story_%d,%s.%s", story.ID, peerID, ext))
+			return &story.ID, saveMediaToFileSystem(ctx, client.API(), filePath, doc.AsInputDocumentFileLocation())
+		}
+
+	case *tg.MessageMediaPhoto:
+		if ph, ok := media.Photo.AsNotEmpty(); ok {
+			filePath := filepath.Join(outDir, fmt.Sprintf("story_%d,%s.%s", story.ID, peerID, "jpg"))
+			if fileInfo, err := os.Stat(filePath); err == nil {
+				if fileInfo.Size() > 0 {
+					err := OpenFileInDefaultApp(filePath)
+					if err != nil {
+						return nil, err
+					}
+					return &story.ID, nil
+				}
+			}
+
+			photoFileLocation := &tg.InputPhotoFileLocation{
+				ID:            ph.ID,
+				AccessHash:    ph.AccessHash,
+				FileReference: ph.FileReference,
+				ThumbSize:     "y",
+			}
+			return &story.ID, saveMediaToFileSystem(ctx, client.API(), filePath, photoFileLocation)
+		}
+
+	default:
+		return nil, errors.New("No downloadable media in this story")
+	}
+
+	return nil, errors.New("i have no idea for some fucking reason we are not able to get the type of story")
+}
+
+func saveMediaToFileSystem(ctx context.Context, client *tg.Client, filePath string, inputFileLocation tg.InputFileLocationClass) error {
+	dl := downloader.NewDownloader()
+	if fileInfo, err := os.Stat(filePath); err == nil {
+		if fileInfo.Size() > 0 {
+			err := OpenFileInDefaultApp(filePath)
+			if err != nil {
+				return err
+			}
+			return nil
+		}
+	}
+
+	dBuilder := dl.Download(client, inputFileLocation)
+	_, err := dBuilder.ToPath(ctx, filePath)
+	if err != nil {
+		return err
+	}
+
+	err = OpenFileInDefaultApp(filePath)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func OpenFileInDefaultApp(path string) error {
+	var cmd *exec.Cmd
+
+	switch runtime.GOOS {
+	case "linux":
+		cmd = exec.Command("xdg-open", path)
+	case "darwin":
+		cmd = exec.Command("open", path)
+	case "windows":
+		//fuck you windows 🖕 i hate you
+	default:
+		return fmt.Errorf("unsupported platform")
+	}
+
+	return cmd.Start()
 }

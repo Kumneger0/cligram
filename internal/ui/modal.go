@@ -59,6 +59,16 @@ func (m Manager) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				m.State = MainView
 			}
+		case "alt+s":
+			m.State = ModalView
+			bgModel, cmd := m.Background.Update(message)
+			openModalMsg := func() tea.Msg {
+				return OpenModalMsg{
+					ModalMode: ModalModeShowStories,
+				}
+			}
+			m.Background = bgModel
+			return m, tea.Batch(cmd, openModalMsg)
 		}
 		if m.State == ModalView {
 			fg, fgCmd := m.Foreground.Update(message)

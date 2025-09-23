@@ -184,7 +184,7 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 	m.Input.Reset()
 	m.IsReply = false
 	m.ReplyTo = nil
-	m.updateConverstaions()
+	m.updateConversations()
 	return *m, tea.Batch(cmds...)
 }
 
@@ -382,7 +382,7 @@ func (m *Model) getMessageSenderUserInfo() *types.UserInfo {
 	return nil
 }
 
-func (m *Model) updateConverstaions() {
+func (m *Model) updateConversations() {
 	m.ChatUI.SetItems(formatMessages(m.Conversations))
 	m.viewport.SetContent(m.ChatUI.View())
 	m.viewport.GotoBottom()
@@ -403,6 +403,12 @@ func max(a, b int) int {
 }
 
 func (m Model) View() string {
+	// m.Stories.SetShowFilter(false)
+	// m.Stories.SetShowPagination(false)
+	// m.Stories.SetShowTitle(false)
+	// m.Stories.SetShowHelp(false)
+	// m.Stories.SetShowStatusBar(false)
+
 	m.Users.Title = "Chats"
 	m.Channels.Title = "Channels"
 	m.Channels.SetShowStatusBar(false)
@@ -420,6 +426,8 @@ func (m *Model) updateDelegates() {
 	channelsDelegate := CustomDelegate{Model: m}
 	groupsDelegate := CustomDelegate{Model: m}
 	mainViewDelegate := MessagesDelegate{Model: m}
+	// storiesDelegate := StoriesDelegate{Model: m}
+	// m.Stories.SetDelegate(storiesDelegate)
 	m.Users.SetDelegate(usersDelegate)
 	m.Channels.SetDelegate(channelsDelegate)
 	m.Groups.SetDelegate(groupsDelegate)

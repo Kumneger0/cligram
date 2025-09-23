@@ -6,12 +6,50 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/kumneger0/cligram/internal/telegram"
 	"github.com/kumneger0/cligram/internal/telegram/types"
 )
 
 func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	switch msg := message.(type) {
+	case types.StoriesDownloadStatusMsg:
+		if msg.Err != nil {
+			//TODO: display error messages
+			return m, nil
+		}
+		var story types.Stories
+		var index = -1
+		if !msg.Done {
+			return m, nil
+		}
+		for i, v := range m.stories.Items() {
+			if s, ok := v.(types.Stories); ok && s.ID == msg.ID {
+				story = s
+				index = i
+				break
+			}
+		}
+
+		if index != -1 {
+			story.IsSelected = false
+			return m, m.stories.SetItem(index, story)
+		}
+
+	case []types.Stories:
+		if len(msg) == 0 {
+			return m, nil
+		}
+		var storiesToDisplay []list.Item
+		for _, v := range msg {
+			storiesToDisplay = append(storiesToDisplay, v)
+		}
+		m.stories = list.New(storiesToDisplay, StoriesDelegate{}, 10, 10)
+		m.stories.SetShowFilter(false)
+		m.stories.SetShowPagination(false)
+		m.stories.SetShowTitle(false)
+		m.stories.SetShowHelp(false)
+		m.stories.SetShowStatusBar(false)
 	case tea.WindowSizeMsg:
 		m.searchResultCombined = list.New([]list.Item{}, SearchDelegate{}, 10, 10)
 		m.searchResultCombined.Title = "Search User Result"
@@ -129,21 +167,35 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 		searchValue := m.input.Value()
 		if len(searchValue) >= 3 {
 			searchCmd := debouncedSearch(searchValue)
-			*cmdsFromParent = append(*cmdsFromParent, searchCmd)
+			cmds = append(cmds, searchCmd)
 		}
 	}
+	model, cmd := m.stories.Update(msg)
+	m.stories = model
+	cmds = append(cmds, cmd)
 	return m, tea.Batch(cmds...)
 }
 
 func handleEnterKey(m *Foreground) (tea.Model, tea.Cmd) {
+	if m.ModalMode == ModalModeShowStories {
+		story, ok := m.stories.SelectedItem().(types.Stories)
+		if !ok {
+			return m, nil
+		}
+		story.IsSelected = true
+		return m, tea.Batch(m.stories.SetItem(m.stories.GlobalIndex(), story), telegram.Cligram.GetPeerStories(telegram.Cligram.Context(), types.Peer{
+			ID:         story.UserInfo.PeerID,
+			AccessHash: story.UserInfo.AccessHash,
+			ChatType:   types.UserChat,
+		}),
+		)
+	}
 	if m.ModalMode == ModalModeForwardMessage {
 		return handleForwardMessage(m)
 	}
-
 	if m.focusedOn == LIST {
 		return handleListSelection(m)
 	}
-
 	return m, nil
 }
 

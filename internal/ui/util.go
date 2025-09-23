@@ -45,33 +45,34 @@ func (d MessagesDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd { return ni
 func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	var title string
 
-	if entry, ok := item.(types.FormattedMessage); ok {
-		if entry.ReplyTo != nil {
-			var strBuilder strings.Builder
-			messageReplayedTo := entry.ReplyTo.Content
-			strBuilder.WriteString("> ")
-			strBuilder.WriteString(replyMessageStyle.Render(messageReplayedTo))
-			strBuilder.WriteString("\n")
-			strBuilder.WriteString(wordwrap.String(entry.Title(), m.Width()))
-			title = strBuilder.String()
-		} else {
-			title = wordwrap.String(entry.Title(), m.Width())
-		}
+	entry, ok := item.(types.FormattedMessage)
 
-		if entry.IsFromMe {
-			title = "You: " + title
-		} else {
-			if entry.SenderUserInfo != nil {
-				title = entry.SenderUserInfo.FirstName + ": " + title
-			} else {
-				title = entry.Sender + ": " + title
-			}
-		}
-		date := timestampStyle.Render(entry.Date.Format("02/01/2006 03:04 PM"))
-		title = title + "\n" + date
-	} else {
+	if !ok {
 		return
 	}
+	if entry.ReplyTo != nil {
+		var strBuilder strings.Builder
+		messageReplayedTo := entry.ReplyTo.Content
+		strBuilder.WriteString("> ")
+		strBuilder.WriteString(replyMessageStyle.Render(messageReplayedTo))
+		strBuilder.WriteString("\n")
+		strBuilder.WriteString(wordwrap.String(entry.Title(), m.Width()))
+		title = strBuilder.String()
+	} else {
+		title = wordwrap.String(entry.Title(), m.Width())
+	}
+
+	if entry.IsFromMe {
+		title = "You: " + title
+	} else {
+		if entry.SenderUserInfo != nil {
+			title = entry.SenderUserInfo.FirstName + ": " + title
+		} else {
+			title = entry.Sender + ": " + title
+		}
+	}
+	date := timestampStyle.Render(entry.Date.Format("02/01/2006 03:04 PM"))
+	title = title + "\n" + date
 
 	isMainViewFocused := d.Model.FocusedOn == Mainview
 
@@ -128,6 +129,7 @@ type Model struct {
 	EditMessage          *types.FormattedMessage
 	SkipNextInput        bool
 	OffsetDate, OffsetID int
+	Stories              []types.Stories
 }
 
 func filterEmptyMessages(msgs [50]types.FormattedMessage) []types.FormattedMessage {
@@ -322,7 +324,10 @@ func prepareSidebarContent(m *Model, d layoutDimensions) string {
 	case ModeGroups:
 		content = m.Groups.View()
 	}
-	return getSideBarStyles(d.sidebarWidth, d.contentHeight, m).Render(content)
+
+	storiesIndicator := fmt.Sprintf("%v, stories \n", len(m.Stories))
+	joinedView := lipgloss.JoinVertical(lipgloss.Top, storiesIndicator, content)
+	return getSideBarStyles(d.sidebarWidth, d.contentHeight, m).Render(joinedView)
 }
 
 func prepareInputView(m *Model, d layoutDimensions) string {

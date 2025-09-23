@@ -2,7 +2,6 @@ package ui
 
 import (
 	"log/slog"
-	"strconv"
 	"strings"
 	"time"
 
@@ -128,27 +127,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) updateUserStories(msg types.GetAllStoriesMsg) (tea.Model, tea.Cmd) {
-	var users []types.UserInfo
-	for _, u := range m.Users.Items() {
-		user := u.(types.UserInfo)
-		users = append(users, user)
-	}
-
-	for _, storie := range msg.Stories {
-		userID := strconv.FormatInt(storie.PeerID, 10)
-		user := findUser(userID, users)
-
-		if user == nil {
-			break
-		}
-		user.HasStories = true
-		userIndex := getUserIndex(m, *user)
-		if userIndex != -1 {
-			items := m.Users.Items()
-			user := items[userIndex].(types.UserInfo)
-			m.Users.SetItem(userIndex, user)
-		}
-	}
+	m.Stories = msg.Stories
+	// for _, storie := range msg.Stories {
+	// stories = append(stories, &storie)
+	// telegram.Cligram.GetPeerStories(telegram.Cligram.Context(), types.Peer{
+	// 	ID:         storie.UserInfo.PeerID,
+	// 	AccessHash: storie.UserInfo.AccessHash,
+	// 	ChatType:   types.UserChat,
+	// })
+	// }
 	return m, nil
 }
 
@@ -180,7 +167,7 @@ func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, te
 		if isGroupOrChannelSelected {
 			copy(m.Conversations[:], m.Conversations[1:])
 			m.Conversations[len(m.Conversations)-1] = msg.Message
-			m.updateConverstaions()
+			m.updateConversations()
 			return m, nil
 		}
 		groupIndex := getGroupIndex(m, *msg.ChannelOrGroup)
@@ -226,7 +213,7 @@ func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, te
 		var formattedMessage = msg.Message
 		formattedMessage.Sender = m.SelectedUser.FirstName
 		m.Conversations[len(m.Conversations)-1] = formattedMessage
-		m.updateConverstaions()
+		m.updateConversations()
 	}
 	return m, nil
 }
@@ -347,7 +334,7 @@ func (m Model) handleGetMessages(msg types.GetMessagesMsg) (tea.Model, tea.Cmd) 
 
 	m.Conversations = m.mergeConversations(msg.Messages, messagesWeGot)
 	conversationLastIndex := len(m.Conversations) - 1
-	m.updateConverstaions()
+	m.updateConversations()
 	m.ChatUI.Select(conversationLastIndex)
 	return m, nil
 }
@@ -448,6 +435,10 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m, cmd := m.handleEditKey()
 		cmds = append(cmds, cmd)
 		return m, tea.Batch(cmds...)
+	case "alt+s":
+		return m, func() tea.Msg {
+			return m.Stories
+		}
 	}
 	cmds = append(cmds, SendUserIsTyping(&m))
 	return m, tea.Batch(cmds...)
@@ -735,7 +726,7 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	verticalMarginHeight := headerHeight + footerHeight
 	m.viewport = viewport.New(msg.Width, msg.Height-verticalMarginHeight)
 	m.viewport.YPosition = headerHeight
-	m.updateConverstaions()
+	m.updateConversations()
 	return m, nil
 }
 
