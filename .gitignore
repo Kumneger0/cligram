@@ -4,6 +4,7 @@ js/bin
 vendor/
 tmp/
 coverage.out
+.vscode
 /dist
 .env
 .envrc

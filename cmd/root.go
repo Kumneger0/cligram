@@ -93,7 +93,7 @@ func newRootCmd(version string) *cobra.Command {
 
 				width, height, _ := term.GetSize(os.Stdout.Fd())
 
-				chatList := list.New([]list.Item{}, ui.MessagesDelegate{Model: model}, 10, 20)
+				chatList := list.New([]list.Item{}, ui.MessagesDelegate{Model: model}, 5, 2)
 				chatList.SetShowPagination(false)
 				chatList.SetShowHelp(false)
 				chatList.SetShowFilter(false)
@@ -121,6 +121,7 @@ func newRootCmd(version string) *cobra.Command {
 				model.SelectedFile = ""
 				model.OffsetDate = userChatsResult.OffsetDate
 				model.OffsetID = userChatsResult.OffsetID
+				model.Stories = []types.Stories{}
 
 				background := model
 				foreground := &ui.Foreground{}

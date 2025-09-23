@@ -64,14 +64,31 @@ type EditMessageMsg struct {
 }
 
 type Stories struct {
-	PeerID int64
-	ID     int
-	Data   []byte
+	UserInfo   UserInfo
+	ID         int
+	Data       []byte
+	IsSelected bool
+}
+
+// will move it to better place in the future let's keep it here for now
+func (s Stories) FilterValue() string {
+	return s.UserInfo.FirstName
 }
 
 type GetAllStoriesMsg struct {
 	Stories []Stories
 	Err     error
+}
+
+type StoriesDownloadStatusMsg struct {
+	//the id of story -1 on error
+	ID int
+	// whether that the download is finished or not
+	// finished means the the story is written to fileSystem hidden folder
+	Done bool
+	//there was some error during downloading for saving to fileSystem
+	// so we should notify bubbletea to handle this accordingly
+	Err error
 }
 
 type GetUserChatsResult struct {

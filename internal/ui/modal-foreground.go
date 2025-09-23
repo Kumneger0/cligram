@@ -63,6 +63,49 @@ func (d SearchDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 	}
 }
 
+type StoriesDelegate struct {
+	list.DefaultDelegate
+	*Foreground
+}
+
+func (s StoriesDelegate) Height() int {
+	return 1
+}
+
+func (s StoriesDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd { return nil }
+
+func (s StoriesDelegate) Spacing() int {
+	return 0
+}
+
+func (s StoriesDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+	allStoryItems := m.Items()
+	if len(allStoryItems) == 0 {
+		return
+	}
+
+	currentItem, ok := allStoryItems[index].(types.Stories)
+	if !ok {
+		return
+	}
+
+	title := item.FilterValue()
+	loading := currentItem.IsSelected
+
+	var style lipgloss.Style
+	if index == m.Index() {
+		style = selectedStyle
+	} else {
+		style = normalStyle
+	}
+
+	if loading {
+		fmt.Fprint(w, style.Render(" "+title+" loading..."))
+	} else {
+		fmt.Fprint(w, style.Render(" "+title+""))
+	}
+}
+
 type SearchResult struct {
 	Name              string
 	IsBot             bool
@@ -94,6 +137,7 @@ const (
 	ModalModeSearch         ModalMode = "SEARCH"
 	ModalModeForwardMessage ModalMode = "FORWARD_MESSAGE"
 	ModalModeDeleteMessage  ModalMode = "DELETE_MESSAGE"
+	ModalModeShowStories    ModalMode = "SHOW_STORIES"
 )
 
 type OpenModalMsg struct {
@@ -121,6 +165,7 @@ type Foreground struct {
 	UsersList            *list.Model
 	Message              *types.FormattedMessage
 	fromPeer             *list.Item
+	stories              list.Model
 }
 
 func (f Foreground) Init() tea.Cmd {
@@ -150,6 +195,13 @@ func (f Foreground) View() string {
 		Border(lipgloss.RoundedBorder(), true).
 		BorderForeground(lipgloss.Color("6")).
 		Padding(0, 1)
+
+	if f.ModalMode == ModalModeShowStories {
+		title := "Stories"
+		content := lipgloss.NewStyle().Border(lipgloss.NormalBorder()).Render(f.stories.View())
+		layout := lipgloss.JoinVertical(lipgloss.Left, title, content)
+		return foreStyle.Render(layout)
+	}
 
 	if f.ModalMode == ModalModeForwardMessage {
 		title := "Forward Message"

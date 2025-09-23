@@ -30,7 +30,6 @@ func NewManager(client APIClient) types.ChatManager {
 		client: client,
 	}
 }
-
 func (m *Manager) GetUserChats(ctx context.Context, isBot bool, offetDate, offsetID int) (types.GetUserChatsResult, error) {
 	dialogsSlice, err := m.getAllDialogs(ctx, offetDate, offsetID)
 	if err != nil {
@@ -64,7 +63,7 @@ func (m *Manager) GetUserChats(ctx context.Context, isBot bool, offetDate, offse
 	for _, userClass := range dialogsSlice.Users {
 		if tgUser, ok := userClass.(*tg.User); ok && tgUser.Bot == isBot {
 			userLastSeenStatus := getUserOnlineStatus(tgUser.Status)
-			user := convertTGUserToUserInfo(tgUser)
+			user := shared.ConvertTGUserToUserInfo(tgUser)
 			unreadCount := getUnreadCount(userPeerIDs, tgUser.ID)
 			user.IsOnline = userLastSeenStatus.IsOnline
 			user.LastSeen = userLastSeenStatus.LastSeen
@@ -229,7 +228,7 @@ func getUser(users []tg.UserClass, peerID int64) *types.UserInfo {
 	for _, userClass := range users {
 		if user, ok := userClass.(*tg.User); ok {
 			if user.ID == peerID {
-				userInfo = convertTGUserToUserInfo(user)
+				userInfo = shared.ConvertTGUserToUserInfo(user)
 			}
 		}
 	}
@@ -249,7 +248,7 @@ func (m *Manager) UserInfoFromPeerClass(ctx context.Context, peerClass *tg.PeerU
 	}
 
 	if user, ok := userClasses[0].(*tg.User); !ok {
-		return convertTGUserToUserInfo(user)
+		return shared.ConvertTGUserToUserInfo(user)
 	}
 	return nil
 }
@@ -392,20 +391,6 @@ func (m *Manager) getAllDialogs(ctx context.Context, offsetDate, offsetID int) (
 			OffsetDate: -1,
 			OffsetID:   -1,
 		}, nil
-	}
-}
-
-func convertTGUserToUserInfo(tgUser *tg.User) *types.UserInfo {
-	return &types.UserInfo{
-		FirstName:  tgUser.FirstName,
-		LastName:   tgUser.LastName,
-		Username:   tgUser.Username,
-		IsBot:      tgUser.Bot,
-		PeerID:     strconv.FormatInt(tgUser.ID, 10),
-		AccessHash: strconv.FormatInt(tgUser.AccessHash, 10),
-		IsTyping:   false,
-		IsOnline:   false,
-		HasStories: false,
 	}
 }
 

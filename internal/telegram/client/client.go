@@ -2,10 +2,11 @@ package client
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"log/slog"
 	mathRand "math/rand"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/kumneger0/cligram/internal/telegram/chat"
 	"github.com/kumneger0/cligram/internal/telegram/message"
+	"github.com/kumneger0/cligram/internal/telegram/shared"
 	"github.com/kumneger0/cligram/internal/telegram/types"
 	"github.com/kumneger0/cligram/internal/telegram/user"
 )
@@ -267,9 +269,27 @@ func (c *Client) GetAllStories(ctx context.Context) tea.Cmd {
 		for _, peerStorie := range allUserStories.PeerStories {
 			peerUser, ok := peerStorie.Peer.(*tg.PeerUser)
 			if !ok {
-				fmt.Println("uff this doesn't stop fucking me")
 				continue
 			}
+
+			inputUser := tg.InputUser{UserID: peerUser.UserID}
+
+			userClass, err := c.Client.API().UsersGetUsers(ctx, []tg.InputUserClass{&inputUser})
+			if err != nil {
+				continue
+			}
+
+			if len(userClass) == 0 {
+				continue
+			}
+
+			tgUser, ok := userClass[0].(*tg.User)
+			if !ok {
+				continue
+			}
+
+			userInfo := shared.ConvertTGUserToUserInfo(tgUser)
+			userInfo.HasStories = true
 
 			for _, storyItemClass := range peerStorie.Stories {
 				storyItem, ok := storyItemClass.(*tg.StoryItem)
@@ -288,9 +308,10 @@ func (c *Client) GetAllStories(ctx context.Context) tea.Cmd {
 					}
 
 					AllStories = append(AllStories, types.Stories{
-						PeerID: peerUser.UserID,
-						ID:     storyItem.ID,
-						Data:   document.FileReference,
+						UserInfo:   *userInfo,
+						ID:         storyItem.ID,
+						Data:       document.FileReference,
+						IsSelected: false,
 					})
 				case *tg.MessageMediaPhoto:
 					photoClass, ok := item.GetPhoto()
@@ -303,14 +324,14 @@ func (c *Client) GetAllStories(ctx context.Context) tea.Cmd {
 					}
 
 					AllStories = append(AllStories, types.Stories{
-						PeerID: peerUser.UserID,
-						ID:     storyItem.ID,
-						Data:   photo.FileReference,
+						UserInfo:   *userInfo,
+						ID:         storyItem.ID,
+						Data:       photo.FileReference,
+						IsSelected: false,
 					})
 				}
 			}
 		}
-
 		return types.GetAllStoriesMsg{
 			Stories: AllStories,
 			Err:     nil,
@@ -324,6 +345,51 @@ func (c *Client) SearchUsers(ctx context.Context, query string) {
 			Response: &users,
 			Err:      err,
 		},
+	}
+}
+
+func (c *Client) GetPeerStories(ctx context.Context, peer types.Peer) tea.Cmd {
+	return func() tea.Msg {
+		inputPeer, err := convertPeerToInputPeer(peer)
+		if err != nil {
+			return types.StoriesDownloadStatusMsg{
+				ID:   -1,
+				Done: false,
+				Err:  err,
+			}
+		}
+		peerUserStories, err := c.Client.API().StoriesGetPeerStories(ctx, inputPeer)
+		if err != nil {
+			return types.StoriesDownloadStatusMsg{
+				ID:   -1,
+				Done: false,
+				Err:  err,
+			}
+		}
+		homeDir, _ := os.UserHomeDir()
+		cligramDir := filepath.Join(homeDir, ".cligram")
+		for _, v := range peerUserStories.Stories.Stories {
+			if storyItem, ok := v.(*tg.StoryItem); ok {
+				id, err := shared.DownloadStoryMedia(ctx, c.Client, storyItem, cligramDir)
+				if err != nil {
+					return types.StoriesDownloadStatusMsg{
+						ID:   -1,
+						Done: false,
+						Err:  err,
+					}
+				}
+				return types.StoriesDownloadStatusMsg{
+					ID:   *id,
+					Done: true,
+					Err:  nil,
+				}
+			}
+		}
+		return types.StoriesDownloadStatusMsg{
+			ID:   -1,
+			Done: false,
+			Err:  errors.New("we have failed to download the story for some fucking reason"),
+		}
 	}
 }
 

@@ -8,6 +8,14 @@ For full documentation, please visit: [kumneger0.github.io/cligram](https://kumn
 
 ![cligram demo](docs/demo.gif)
 
+## Features
+
+*   View user stories.
+*   Send and receive messages.
+*   Chat with users, groups, and channels.
+*   File attachments.
+*   Customizable notifications.
+
 ## Contributing
 
 We welcome contributions to cligram! For detailed guidelines, please refer to the [CONTRIBUTING.md](CONTRIBUTING.md) file.
