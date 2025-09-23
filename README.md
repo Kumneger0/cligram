@@ -10,7 +10,8 @@ For full documentation, please visit: [kumneger0.github.io/cligram](https://kumn
 
 ## Features
 
-*   View user stories.
+*   View user stories anonymously (the owner won't be notified).
+*   Read messages anonymously (the sender won’t know when you’ve read them).
 *   Send and receive messages.
 *   Chat with users, groups, and channels.
 *   File attachments.
