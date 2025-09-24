@@ -1,5 +1,4 @@
-// nolint:revive
-package types
+package types // nolint:revive
 
 type SendMessageResponse struct {
 	MessageID *int `json:"messageId,omitempty"`
