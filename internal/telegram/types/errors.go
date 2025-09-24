@@ -1,5 +1,4 @@
-// nolint:revive
-package types
+package types // nolint:revive
 
 import "fmt"
 
