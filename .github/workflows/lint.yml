@@ -19,7 +19,7 @@ jobs:
           go-version: '1.25.x'
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v8
         with:
           version: latest
-          args: -c .golang-ci.yml -v --timeout=5m
+          args: -c .golangci.yml -v --timeout=5m

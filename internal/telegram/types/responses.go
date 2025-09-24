@@ -1,3 +1,4 @@
+// nolint:revive
 package types
 
 type SendMessageResponse struct {
