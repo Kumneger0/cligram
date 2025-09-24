@@ -89,12 +89,12 @@ const (
 	LINUX   OsName = "linux"
 )
 
-type LinuxDisto string
+type LinuxDistro string
 
 const (
-	UBUNTU LinuxDisto = "ubuntu"
-	DEBIAN LinuxDisto = "debian"
-	ALPINE LinuxDisto = "alpine"
+	UBUNTU LinuxDistro = "ubuntu"
+	DEBIAN LinuxDistro = "debian"
+	ALPINE LinuxDistro = "alpine"
 )
 
 const (
@@ -102,7 +102,7 @@ const (
 )
 
 func upgradeCligram(currentVersion string) *cobra.Command {
-	fileExtensions := map[LinuxDisto]string{
+	fileExtensions := map[LinuxDistro]string{
 		UBUNTU: "deb",
 		DEBIAN: "deb",
 		ALPINE: "apk",
@@ -110,7 +110,7 @@ func upgradeCligram(currentVersion string) *cobra.Command {
 
 	return &cobra.Command{
 		Use:          "upgrade",
-		Short:        "up",
+		Short:        "upgrade to latest version",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		Run: func(cmd *cobra.Command, args []string) {
@@ -149,7 +149,7 @@ func upgradeCligram(currentVersion string) *cobra.Command {
 			latestRelease := newVersionInfo.LatestRelease
 
 			var assetURL string
-			format := fileExtensions[LinuxDisto(strings.ToLower(distroName))]
+			format := fileExtensions[LinuxDistro(strings.ToLower(distroName))]
 			for _, v := range latestRelease.Assets {
 				if strings.Contains(v.Name, runtime.GOARCH) && strings.Contains(v.Name, strings.ToLower(string(osName))) && strings.Contains(v.Name, format) {
 					assetURL = v.BrowserDownloadURL

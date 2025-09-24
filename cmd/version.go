@@ -9,7 +9,7 @@ import (
 func newVersionCmd(version string) *cobra.Command {
 	return &cobra.Command{
 		Use:          "version",
-		Short:        "cligram version",
+		Short:        "show the version of cligram",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		Run: func(cmd *cobra.Command, args []string) {
