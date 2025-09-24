@@ -10,7 +10,7 @@ import (
 func cligramLog() *cobra.Command {
 	return &cobra.Command{
 		Use:          "log",
-		Short:        "cligram log",
+		Short:        "show log files use it for error reporting",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		Run: func(cmd *cobra.Command, args []string) {

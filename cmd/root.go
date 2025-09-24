@@ -12,6 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/term"
 	"github.com/kumneger0/cligram/internal/telegram"
+	"github.com/kumneger0/cligram/internal/telegram/client"
 	"github.com/kumneger0/cligram/internal/telegram/types"
 	"github.com/kumneger0/cligram/internal/ui"
 	overlay "github.com/rmhubbert/bubbletea-overlay"
@@ -190,6 +191,7 @@ func newRootCmd(version string) *cobra.Command {
 	cmd.AddCommand(upgradeCligram(version))
 	cmd.AddCommand(cligramLog())
 	cmd.AddCommand(ManCmd(cmd))
+	cmd.AddCommand(client.Logout())
 	return cmd
 }
 

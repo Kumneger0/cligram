@@ -5,7 +5,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"syscall"
@@ -14,6 +17,7 @@ import (
 
 	"github.com/gotd/td/telegram/auth"
 	"github.com/gotd/td/tg"
+	"github.com/spf13/cobra"
 
 	"github.com/kumneger0/cligram/internal/telegram/types"
 )
@@ -152,4 +156,36 @@ func (a *authFlow) SignUp(_ context.Context) (auth.UserInfo, error) {
 
 func (a *authFlow) AcceptTermsOfService(context.Context, tg.HelpTermsOfService) error {
 	return nil
+}
+
+func Logout() *cobra.Command {
+	return &cobra.Command{
+		Use:          "logout",
+		Short:        "Log out from cligram",
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			userHomeDir, err := os.UserHomeDir()
+			if err != nil {
+				slog.Error(err.Error())
+				errorLink := fmt.Sprintf("https://github.com/kumneger0/cligram/issues/new?title=%s&body=%s",
+					url.QueryEscape("Logout Error"),
+					url.QueryEscape("Error detail:\n\n"+err.Error()))
+				fmt.Fprintf(cmd.OutOrStderr(), "We failed to log you out. Please report this error by clicking the following link:\n%s\n", errorLink)
+				return err
+			}
+			cligramWorkingDIR := filepath.Join(userHomeDir, ".cligram")
+			err = os.Remove(cligramWorkingDIR)
+			if err != nil {
+				slog.Error(err.Error())
+				errorLink := fmt.Sprintf("https://github.com/kumneger0/cligram/issues/new?title=%s&body=%s",
+					url.QueryEscape("Logout Error "),
+					url.QueryEscape("Error detail:\n\n"+err.Error()))
+				fmt.Fprintf(cmd.OutOrStderr(), "We failed to log you out. Please report this error by clicking the following link:\n%s\n", errorLink)
+				return err
+			}
+			fmt.Fprintln(os.Stdout, "You have successfully logged out")
+			return nil
+		},
+	}
 }
