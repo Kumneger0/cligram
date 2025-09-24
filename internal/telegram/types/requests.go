@@ -1,3 +1,4 @@
+// nolint:revive
 package types
 
 // SendMessageRequest represents a message sending request
