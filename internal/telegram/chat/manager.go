@@ -30,8 +30,8 @@ func NewManager(client APIClient) types.ChatManager {
 		client: client,
 	}
 }
-func (m *Manager) GetUserChats(ctx context.Context, isBot bool, offetDate, offsetID int) (types.GetUserChatsResult, error) {
-	dialogsSlice, err := m.getAllDialogs(ctx, offetDate, offsetID)
+func (m *Manager) GetUserChats(ctx context.Context, isBot bool, offsetDate, offsetID int) (types.GetUserChatsResult, error) {
+	dialogsSlice, err := m.getAllDialogs(ctx, offsetDate, offsetID)
 	if err != nil {
 		return types.GetUserChatsResult{
 			Data:       nil,
@@ -62,15 +62,13 @@ func (m *Manager) GetUserChats(ctx context.Context, isBot bool, offetDate, offse
 	var users []types.UserInfo
 	for _, userClass := range dialogsSlice.Users {
 		if tgUser, ok := userClass.(*tg.User); ok && tgUser.Bot == isBot {
-			userLastSeenStatus := getUserOnlineStatus(tgUser.Status)
 			user := shared.ConvertTGUserToUserInfo(tgUser)
 			unreadCount := getUnreadCount(userPeerIDs, tgUser.ID)
-			user.IsOnline = userLastSeenStatus.IsOnline
-			user.LastSeen = userLastSeenStatus.LastSeen
 			user.UnreadCount = unreadCount
 			users = append(users, *user)
 		}
 	}
+
 	return types.GetUserChatsResult{
 		Data:       users,
 		OffsetDate: dialogsSlice.OffsetDate,

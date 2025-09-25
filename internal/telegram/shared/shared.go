@@ -146,7 +146,6 @@ func ConvertTGUserToUserInfo(tgUser *tg.User) *types.UserInfo {
 		userInfo.IsOnline = status.IsOnline
 		userInfo.LastSeen = status.LastSeen
 	}
-
 	return userInfo
 }
 
@@ -179,6 +178,12 @@ func getUserOnlineStatus(status tg.UserStatusClass) *userOnlineStatus {
 		}
 	case *tg.UserStatusOffline:
 		lastSeen := calculateLastSeenHumanReadable(s.WasOnline)
+		return &userOnlineStatus{
+			IsOnline: false,
+			LastSeen: &lastSeen,
+		}
+	case *tg.UserStatusLastWeek:
+		lastSeen := "last seen within a week"
 		return &userOnlineStatus{
 			IsOnline: false,
 			LastSeen: &lastSeen,
