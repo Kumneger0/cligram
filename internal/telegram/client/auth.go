@@ -36,7 +36,6 @@ func (c *Client) Auth(ctx context.Context) error {
 	}
 
 	if authStatus.Authorized {
-		fmt.Println("✅ Already logged in.")
 		return nil
 	}
 
