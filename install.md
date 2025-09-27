@@ -4,8 +4,7 @@
 
 Before building cligram from source, ensure you have the following prerequisites installed:
 
-- [Go](https://go.dev/dl/) version 1.24 or higher
-- [Bun](https://bun.sh/) version 1.2 or higher
+- [Go](https://go.dev/dl/) version 1.25 or higher
 - Git
 
 ## Installation Steps
@@ -16,7 +15,7 @@ Before building cligram from source, ensure you have the following prerequisites
    cd cligram
    ```
 
-2. Build the project :
+2. Build the project:
    ```bash
    make build
    ```
@@ -33,5 +32,5 @@ After installation, you can verify that cligram is working correctly by running:
 cligram version
 ```
 
-If you encounter any issues during installation:
-For additional help, please [open an issue](https://github.com/kumneger/cligram/issues/new) on GitHub.
+If you encounter any issues during installation:  
+For additional help, please [open an issue](https://github.com/kumneger0/cligram/issues/new) on GitHub.
