@@ -35,6 +35,7 @@ func (m Manager) Init() tea.Cmd {
 }
 
 func (m Manager) Update(message tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
 	switch msg := message.(type) {
 	case tea.WindowSizeMsg:
 		m.WindowWidth = msg.Width
@@ -56,9 +57,15 @@ func (m Manager) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+k":
 			if m.State == MainView {
 				m.State = ModalView
-			} else {
-				m.State = MainView
+				openModalMsg := func() tea.Msg {
+					return OpenModalMsg{
+						ModalMode: ModalModeSearch,
+					}
+				}
+				cmds = append(cmds, openModalMsg)
+				return m, tea.Batch(cmds...)
 			}
+			m.State = MainView
 		case "alt+s":
 			m.State = ModalView
 			bgModel, cmd := m.Background.Update(message)
@@ -68,7 +75,8 @@ func (m Manager) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			m.Background = bgModel
-			return m, tea.Batch(cmd, openModalMsg)
+			cmds = append(cmds, cmd, openModalMsg)
+			return m, tea.Batch(cmds...)
 		}
 		if m.State == ModalView {
 			fg, fgCmd := m.Foreground.Update(message)
