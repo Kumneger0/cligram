@@ -296,6 +296,7 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 	if m.FocusedOn == SideBar {
 		m.ChatUI.ResetSelected()
 		m.AreWeSwitchingModes = true
+		m.OnPagination = false
 	}
 	areWeInGroupMode := m.Mode == ModeGroups && m.FocusedOn == Mainview
 	//i don't think 🤔 we should keep the list in memory
