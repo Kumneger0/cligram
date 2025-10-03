@@ -3,11 +3,9 @@ package chat
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"slices"
 	"strconv"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gotd/td/tg"
@@ -335,7 +333,6 @@ func (m *Manager) getAllDialogs(ctx context.Context, offsetDate, offsetID int) (
 		slog.Error(err.Error())
 		return nil, err
 	}
-
 	switch d := dialogs.(type) {
 	case *tg.MessagesDialogs:
 		allChats = append(allChats, d.Chats...)
@@ -363,7 +360,6 @@ func (m *Manager) getAllDialogs(ctx context.Context, offsetDate, offsetID int) (
 			}, nil
 		}
 		last := d.Messages[len(d.Messages)-1]
-
 		switch msg := last.(type) {
 		case *tg.Message:
 			return &CligramGetDialogsResponse{
@@ -375,12 +371,13 @@ func (m *Manager) getAllDialogs(ctx context.Context, offsetDate, offsetID int) (
 			}, nil
 		default:
 			return &CligramGetDialogsResponse{
-				Chats:   allChats,
-				Users:   allUsers,
-				Dialogs: allDialogs,
+				Chats:      allChats,
+				Users:      allUsers,
+				Dialogs:    allDialogs,
+				OffsetDate: -1,
+				OffsetID:   -1,
 			}, nil
 		}
-
 	default:
 		return &CligramGetDialogsResponse{
 			Chats:      allChats,
@@ -434,51 +431,4 @@ func convertPeerToInputPeer(peer types.Peer) (tg.InputPeerClass, error) {
 type userOnlineStatus struct {
 	IsOnline bool
 	LastSeen *string
-}
-
-func getUserOnlineStatus(status tg.UserStatusClass) *userOnlineStatus {
-	if status == nil {
-		return &userOnlineStatus{
-			IsOnline: false,
-			LastSeen: nil,
-		}
-	}
-	switch s := status.(type) {
-	case *tg.UserStatusOnline:
-		lastSeen := "online"
-		return &userOnlineStatus{
-			IsOnline: true,
-			LastSeen: &lastSeen,
-		}
-	case *tg.UserStatusOffline:
-		lastSeen := calculateLastSeenHumanReadable(s.WasOnline)
-		return &userOnlineStatus{
-			IsOnline: false,
-			LastSeen: &lastSeen,
-		}
-	default:
-		lastSeen := "last seen long time ago"
-		return &userOnlineStatus{
-			IsOnline: false,
-			LastSeen: &lastSeen,
-		}
-	}
-}
-
-func calculateLastSeenHumanReadable(wasOnline int) string {
-	lastSeenTime := time.Unix(int64(wasOnline), 0)
-	currentTime := time.Now()
-	diff := currentTime.Sub(lastSeenTime)
-
-	if diff.Seconds() < 60 {
-		return "last seen just now"
-	}
-	if diff.Hours() < 24 {
-		return fmt.Sprintf("last seen at %s", lastSeenTime.Format("03:04 PM"))
-	}
-	if diff.Hours() < 48 {
-		return fmt.Sprintf("last seen yesterday at %s", lastSeenTime.Format("03:04 PM"))
-	}
-
-	return fmt.Sprintf("last seen on %s", lastSeenTime.Format("02/01/2006 03:04 PM"))
 }
