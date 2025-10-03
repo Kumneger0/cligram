@@ -122,6 +122,8 @@ func newRootCmd(version string) *cobra.Command {
 				model.SelectedFile = ""
 				model.OffsetDate = userChatsResult.OffsetDate
 				model.OffsetID = userChatsResult.OffsetID
+				model.OnPagination = false
+
 				model.Stories = []types.Stories{}
 
 				background := model

@@ -129,7 +129,9 @@ type Model struct {
 	EditMessage          *types.FormattedMessage
 	SkipNextInput        bool
 	OffsetDate, OffsetID int
-	Stories              []types.Stories
+	//an indicator that tells there is already on going request kinda debouncing
+	OnPagination bool
+	Stories      []types.Stories
 }
 
 func filterEmptyMessages(msgs [50]types.FormattedMessage) []types.FormattedMessage {

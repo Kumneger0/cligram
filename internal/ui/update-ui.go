@@ -448,9 +448,17 @@ func (m Model) handleListPagination() (Model, tea.Cmd) {
 	if m.Users.Index() < len(m.Users.VisibleItems())-6 {
 		return m, nil
 	}
+
 	if m.OffsetDate == -1 || m.OffsetID == -1 {
 		return m, nil
 	}
+
+	if m.OnPagination {
+		return m, nil
+	}
+
+	m.OnPagination = true
+
 	if m.Mode == ModeUsers || m.Mode == ModeBots {
 		return m, telegram.Cligram.GetUserChats(telegram.Cligram.Context(), types.ChatType(m.Mode), m.OffsetDate, m.OffsetID)
 	}
@@ -578,9 +586,11 @@ func (m Model) handleUserChats(msg types.UserChatsMsg) (tea.Model, tea.Cmd) {
 	}
 	//TODO: reminder to filter out if the chats gets duplicated
 	m.Users.SetItems(users)
+
 	m.AreWeSwitchingModes = false
 	m.OffsetDate = msg.Response.OffsetDate
 	m.OffsetID = msg.Response.OffsetID
+	m.OnPagination = false
 	return m, nil
 }
 
@@ -604,6 +614,7 @@ func (m Model) handleUserChannels(msg types.ChannelsMsg) (tea.Model, tea.Cmd) {
 	m.AreWeSwitchingModes = false
 	m.OffsetDate = msg.Response.OffsetDate
 	m.OffsetID = msg.Response.OffsetID
+	m.OnPagination = false
 	return m, nil
 }
 
