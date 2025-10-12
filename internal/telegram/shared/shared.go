@@ -248,23 +248,24 @@ func GetMessageAndUserClasses(history tg.MessagesMessagesClass) ([]tg.MessageCla
 	return msgs, users, nil
 }
 
-func DownloadStoryMedia(ctx context.Context, client *telegram.Client, story *tg.StoryItem, outDir string) (*int, error) {
-	var peerID string
-	peer, ok := story.GetFromID()
-
-	if ok {
-		switch p := peer.(type) {
-		case *tg.PeerUser:
-			peerID = strconv.FormatInt(p.UserID, 10)
-		case *tg.PeerChannel:
-			peerID = strconv.FormatInt(p.ChannelID, 10)
-		case *tg.PeerChat:
-			peerID = strconv.FormatInt(p.ChatID, 10)
-		default:
-			peerID = string(rune(time.Now().Day()))
-		}
+func ReadStories(ctx context.Context, client *telegram.Client, peer types.Peer, maxID int) error {
+	inputPeer, err := ConvertPeerToInputPeer(peer)
+	if err != nil {
+		slog.Error(err.Error())
+		return err
 	}
+	request := &tg.StoriesReadStoriesRequest{
+		Peer:  inputPeer,
+		MaxID: maxID,
+	}
+	_, err = client.API().StoriesReadStories(ctx, request)
+	if err != nil {
+		slog.Error(err.Error())
+	}
+	return nil
+}
 
+func DownloadStoryMedia(ctx context.Context, client *telegram.Client, story *tg.StoryItem, outDir string, peerID string) (*int, error) {
 	switch media := story.Media.(type) {
 	case *tg.MessageMediaDocument:
 		if doc, ok := media.Document.AsNotEmpty(); ok {
@@ -275,6 +276,7 @@ func DownloadStoryMedia(ctx context.Context, client *telegram.Client, story *tg.
 			case "image/jpeg":
 				ext = "jpg"
 			}
+
 			filePath := filepath.Join(outDir, fmt.Sprintf("story_%d,%s.%s", story.ID, peerID, ext))
 			return &story.ID, saveMediaToFileSystem(ctx, client.API(), filePath, doc.AsInputDocumentFileLocation())
 		}
@@ -348,4 +350,35 @@ func OpenFileInDefaultApp(path string) error {
 	}
 
 	return cmd.Start()
+}
+
+func ConvertPeerToInputPeer(peer types.Peer) (tg.InputPeerClass, error) {
+	peerID, err := strconv.ParseInt(peer.ID, 10, 64)
+	if err != nil {
+		return nil, types.NewInvalidPeerError(peer.ID)
+	}
+
+	accessHash, err := strconv.ParseInt(peer.AccessHash, 10, 64)
+	if err != nil {
+		return nil, types.NewInvalidPeerError(peer.AccessHash)
+	}
+
+	switch peer.ChatType {
+	case types.UserChat, types.BotChat:
+		return &tg.InputPeerUser{
+			UserID:     peerID,
+			AccessHash: accessHash,
+		}, nil
+	case types.ChannelChat:
+		return &tg.InputPeerChannel{
+			ChannelID:  peerID,
+			AccessHash: accessHash,
+		}, nil
+	case types.GroupChat:
+		return &tg.InputPeerChat{
+			ChatID: peerID,
+		}, nil
+	default:
+		return nil, types.NewTelegramError(types.ErrorCodeInvalidPeer, "unsupported chat type", nil)
+	}
 }

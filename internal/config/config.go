@@ -13,7 +13,8 @@ type CliGramConfig struct {
 		SendTypingState *bool   `json:"sendTypingState,omitempty"`
 		ReadReceiptMode *string `json:"readReceiptMode,omitempty"`
 	} `json:"chat"`
-	Privacy struct {
+	ReadStories bool `json:"readStories"`
+	Privacy     struct {
 		LastSeenVisibility *string `json:"lastSeenVisibility,omitempty"`
 	} `json:"privacy"`
 	Notifications struct {
@@ -27,6 +28,7 @@ func defaultCliGramConfig() CliGramConfig {
 	readReceipt := "default"
 	enabled := true
 	showPreview := true
+	readStories := false
 
 	return CliGramConfig{
 		Chat: struct {
@@ -36,6 +38,7 @@ func defaultCliGramConfig() CliGramConfig {
 			SendTypingState: &sendTyping,
 			ReadReceiptMode: &readReceipt,
 		},
+		ReadStories: readStories,
 		Privacy: struct {
 			LastSeenVisibility *string `json:"lastSeenVisibility,omitempty"`
 		}{
