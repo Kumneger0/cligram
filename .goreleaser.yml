@@ -11,7 +11,10 @@ builds:
   - id: cligram
     binary: cligram
     main: .
-    ldflags: -s -w -X main.version={{ .Version }}
+    ldflags: 
+      - -s -w -X main.version={{ .Version }}
+      - -X main.telegramAPIID={{ .Env.TELEGRAM_API_ID }}
+      - -X main.telegramAPIHash={{ .Env.TELEGRAM_API_HASH }}
     goos:
       - linux
       - darwin

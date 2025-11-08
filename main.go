@@ -14,7 +14,11 @@ import (
 	"github.com/kumneger0/cligram/internal/logger"
 )
 
-var version = ""
+var (
+	version         = ""
+	telegramAPIID   = ""
+	telegramAPIHash = ""
+)
 
 func main() {
 	lockFilePath := filepath.Join(os.TempDir(), "cligram.lock")
@@ -43,7 +47,7 @@ func main() {
 	defer logRotator.Close()
 	slog.Info("Starting Application")
 
-	if err := cmd.Execute(version); err != nil {
+	if err := cmd.Execute(version, telegramAPIID, telegramAPIHash); err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)
 		os.Exit(1)
 	}
@@ -63,21 +67,27 @@ func isProcessRunning(pid int) bool {
 	err = process.Signal(syscall.Signal(0))
 	return err == nil
 }
+
 func showAnotherProcessIsRunning(lockFilePath string) {
 	pidBytes, readErr := os.ReadFile(lockFilePath)
-	if readErr == nil {
-		pid, parseErr := strconv.Atoi(string(pidBytes))
-		if parseErr == nil {
-			if !isProcessRunning(pid) {
-				fmt.Fprintf(os.Stderr, "Another instance of cligram is not running (stale lock file for PID %d).\n", pid)
-				fmt.Fprintf(os.Stderr, "Please try removing %s and running again if this persists.\n", lockFilePath)
-				os.Exit(1)
-			}
-			fmt.Fprintf(os.Stderr, "Another instance of cligram is already running (PID: %d).\n", pid)
-		} else {
-			fmt.Fprintf(os.Stderr, "Another instance of cligram is already running (lock file content unreadable).\n")
+	if readErr != nil {
+		if os.IsNotExist(readErr) {
+			return
 		}
-	} else {
-		fmt.Fprintf(os.Stderr, "Another instance of cligram is already running.\n")
+		fmt.Fprintf(os.Stderr, "Error reading lock file: %v\n", readErr)
+		os.Exit(1)
 	}
+	pid, parseErr := strconv.Atoi(string(pidBytes))
+
+	if parseErr != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing PID from lock file: %v\n", parseErr)
+		os.Exit(1)
+	}
+
+	if !isProcessRunning(pid) {
+		fmt.Fprintf(os.Stderr, "Another instance of cligram is not running (stale lock file for PID %d).\n", pid)
+		fmt.Fprintf(os.Stderr, "Please try removing %s and running again if this persists.\n", lockFilePath)
+		os.Exit(1)
+	}
+	fmt.Fprintf(os.Stderr, "Another instance of cligram is already running (PID: %d).\n", pid)
 }

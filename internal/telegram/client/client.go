@@ -72,27 +72,15 @@ func NewClient(ctx context.Context, config Config) (*Client, error) {
 	return client, nil
 }
 
-func mustGetenv(key string) string {
-	v, ok := os.LookupEnv(key)
-	if !ok || v == "" {
-		slog.Error("missing required environment variable", "key", key)
-		panic("missing required environment variable: " + key)
-	}
-	return v
-}
-
-func NewClientFromEnv(ctx context.Context, updateChannel chan types.Notification) (*Client, error) {
-	appIDStr := mustGetenv("TELEGRAM_API_ID")
-	appID, err := strconv.Atoi(appIDStr)
+func NewClientFromEnv(ctx context.Context, updateChannel chan types.Notification, telegramAPIID, telegramAPIHash string) (*Client, error) {
+	appID, err := strconv.Atoi(telegramAPIID)
 	if err != nil {
 		return nil, types.NewTelegramError(types.ErrorCodeAuthFailed, "invalid TELEGRAM_API_ID", err)
 	}
 
-	appHash := mustGetenv("TELEGRAM_API_HASH")
-
 	config := Config{
 		AppID:         appID,
-		AppHash:       appHash,
+		AppHash:       telegramAPIHash,
 		UpdateChannel: updateChannel,
 	}
 
