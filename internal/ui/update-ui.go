@@ -128,14 +128,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) updateUserStories(msg types.GetAllStoriesMsg) (tea.Model, tea.Cmd) {
 	m.Stories = msg.Stories
-	// for _, storie := range msg.Stories {
-	// stories = append(stories, &storie)
-	// telegram.Cligram.GetPeerStories(telegram.Cligram.Context(), types.Peer{
-	// 	ID:         storie.UserInfo.PeerID,
-	// 	AccessHash: storie.UserInfo.AccessHash,
-	// 	ChatType:   types.UserChat,
-	// })
-	// }
 	return m, nil
 }
 
@@ -344,14 +336,12 @@ func (m Model) mergeConversations(newMessages [50]types.FormattedMessage, messag
 	if messagesWeGot >= 50 {
 		return newMessages
 	}
-
 	var oldMessages []types.FormattedMessage
 	for _, v := range m.ChatUI.Items() {
 		if msg, ok := v.(types.FormattedMessage); ok && msg.ID != 0 {
 			oldMessages = append(oldMessages, msg)
 		}
 	}
-
 	oldMessagesLength := len(oldMessages)
 	if (messagesWeGot + oldMessagesLength) <= 50 {
 		updatedConversations = newMessages
