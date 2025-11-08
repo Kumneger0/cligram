@@ -18,22 +18,23 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			//TODO: display error messages
 			return m, nil
 		}
-		var story types.Stories
+
+		var storyToUpdate types.Stories
 		var index = -1
 		if !msg.Done {
 			return m, nil
 		}
-		for i, v := range m.stories.Items() {
-			if s, ok := v.(types.Stories); ok && s.ID == msg.ID {
-				story = s
-				index = i
+		for idx, value := range m.stories.Items() {
+			if story, ok := value.(types.Stories); ok && story.UserInfo.PeerID == msg.Peer.ID {
+				storyToUpdate = story
+				index = idx
 				break
 			}
 		}
 
 		if index != -1 {
-			story.IsSelected = false
-			return m, m.stories.SetItem(index, story)
+			storyToUpdate.IsSelected = false
+			return m, m.stories.SetItem(index, storyToUpdate)
 		}
 
 	case []types.Stories:

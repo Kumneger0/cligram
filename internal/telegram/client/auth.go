@@ -36,7 +36,6 @@ func (c *Client) Auth(ctx context.Context) error {
 	}
 
 	if authStatus.Authorized {
-		fmt.Println("✅ Already logged in.")
 		return nil
 	}
 
@@ -175,7 +174,7 @@ func Logout() *cobra.Command {
 				return err
 			}
 			cligramWorkingDIR := filepath.Join(userHomeDir, ".cligram")
-			err = os.Remove(cligramWorkingDIR)
+			err = os.RemoveAll(cligramWorkingDIR)
 			if err != nil {
 				slog.Error(err.Error())
 				errorLink := fmt.Sprintf("https://github.com/kumneger0/cligram/issues/new?title=%s&body=%s",

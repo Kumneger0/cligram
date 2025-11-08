@@ -1,6 +1,6 @@
 # cligram
 
-cligram is a Telegram client written with a Bun/JavaScript backend and a Go client.
+cligram is a Telegram client written in Go Programming language.
 
 For full documentation, please visit: [kumneger0.github.io/cligram](https://kumneger0.github.io/cligram)
 

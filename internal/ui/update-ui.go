@@ -128,14 +128,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) updateUserStories(msg types.GetAllStoriesMsg) (tea.Model, tea.Cmd) {
 	m.Stories = msg.Stories
-	// for _, storie := range msg.Stories {
-	// stories = append(stories, &storie)
-	// telegram.Cligram.GetPeerStories(telegram.Cligram.Context(), types.Peer{
-	// 	ID:         storie.UserInfo.PeerID,
-	// 	AccessHash: storie.UserInfo.AccessHash,
-	// 	ChatType:   types.UserChat,
-	// })
-	// }
 	return m, nil
 }
 
@@ -344,14 +336,12 @@ func (m Model) mergeConversations(newMessages [50]types.FormattedMessage, messag
 	if messagesWeGot >= 50 {
 		return newMessages
 	}
-
 	var oldMessages []types.FormattedMessage
 	for _, v := range m.ChatUI.Items() {
 		if msg, ok := v.(types.FormattedMessage); ok && msg.ID != 0 {
 			oldMessages = append(oldMessages, msg)
 		}
 	}
-
 	oldMessagesLength := len(oldMessages)
 	if (messagesWeGot + oldMessagesLength) <= 50 {
 		updatedConversations = newMessages
@@ -448,9 +438,17 @@ func (m Model) handleListPagination() (Model, tea.Cmd) {
 	if m.Users.Index() < len(m.Users.VisibleItems())-6 {
 		return m, nil
 	}
+
 	if m.OffsetDate == -1 || m.OffsetID == -1 {
 		return m, nil
 	}
+
+	if m.OnPagination {
+		return m, nil
+	}
+
+	m.OnPagination = true
+
 	if m.Mode == ModeUsers || m.Mode == ModeBots {
 		return m, telegram.Cligram.GetUserChats(telegram.Cligram.Context(), types.ChatType(m.Mode), m.OffsetDate, m.OffsetID)
 	}
@@ -578,9 +576,11 @@ func (m Model) handleUserChats(msg types.UserChatsMsg) (tea.Model, tea.Cmd) {
 	}
 	//TODO: reminder to filter out if the chats gets duplicated
 	m.Users.SetItems(users)
+
 	m.AreWeSwitchingModes = false
 	m.OffsetDate = msg.Response.OffsetDate
 	m.OffsetID = msg.Response.OffsetID
+	m.OnPagination = false
 	return m, nil
 }
 
@@ -604,6 +604,7 @@ func (m Model) handleUserChannels(msg types.ChannelsMsg) (tea.Model, tea.Cmd) {
 	m.AreWeSwitchingModes = false
 	m.OffsetDate = msg.Response.OffsetDate
 	m.OffsetID = msg.Response.OffsetID
+	m.OnPagination = false
 	return m, nil
 }
 
