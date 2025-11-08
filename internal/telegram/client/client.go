@@ -7,12 +7,14 @@ import (
 	mathRand "math/rand"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/tg"
 
+	configManager "github.com/kumneger0/cligram/internal/config"
 	"github.com/kumneger0/cligram/internal/telegram/chat"
 	"github.com/kumneger0/cligram/internal/telegram/message"
 	"github.com/kumneger0/cligram/internal/telegram/shared"
@@ -153,7 +155,7 @@ func (c *Client) DeleteMessage(ctx context.Context, req types.DeleteMessageReque
 }
 
 func (c *Client) EditMessage(ctx context.Context, req types.EditMessageRequest) types.EditMessageMsg {
-	inputPeer, err := convertPeerToInputPeer(req.Peer)
+	inputPeer, err := shared.ConvertPeerToInputPeer(req.Peer)
 	if err != nil {
 		return types.EditMessageMsg{
 			Response: false,
@@ -181,12 +183,12 @@ func (c *Client) EditMessage(ctx context.Context, req types.EditMessageRequest) 
 }
 
 func (c *Client) ForwardMessages(ctx context.Context, req types.ForwardMessagesRequest) error {
-	fromPeer, err := convertPeerToInputPeer(req.FromPeer)
+	fromPeer, err := shared.ConvertPeerToInputPeer(req.FromPeer)
 	if err != nil {
 		return types.NewForwardMessageError(err)
 	}
 
-	toPeer, err := convertPeerToInputPeer(req.ToPeer)
+	toPeer, err := shared.ConvertPeerToInputPeer(req.ToPeer)
 	if err != nil {
 		return types.NewForwardMessageError(err)
 	}
@@ -207,7 +209,7 @@ func (c *Client) ForwardMessages(ctx context.Context, req types.ForwardMessagesR
 
 func (c *Client) MarkMessagesAsRead(ctx context.Context, req types.MarkAsReadRequest) tea.Cmd {
 	return func() tea.Msg {
-		inputPeer, err := convertPeerToInputPeer(req.Peer)
+		inputPeer, err := shared.ConvertPeerToInputPeer(req.Peer)
 		if err != nil {
 			return types.MarkMessagesAsReadMsg{
 				Response: false,
@@ -235,7 +237,7 @@ func (c *Client) MarkMessagesAsRead(ctx context.Context, req types.MarkAsReadReq
 }
 
 func (c *Client) SetUserTyping(ctx context.Context, req types.SetTypingRequest) error {
-	inputPeer, err := convertPeerToInputPeer(req.Peer)
+	inputPeer, err := shared.ConvertPeerToInputPeer(req.Peer)
 	if err != nil {
 		return err
 	}
@@ -350,45 +352,57 @@ func (c *Client) SearchUsers(ctx context.Context, query string) {
 
 func (c *Client) GetPeerStories(ctx context.Context, peer types.Peer) tea.Cmd {
 	return func() tea.Msg {
-		inputPeer, err := convertPeerToInputPeer(peer)
+		inputPeer, err := shared.ConvertPeerToInputPeer(peer)
 		if err != nil {
 			return types.StoriesDownloadStatusMsg{
-				ID:   -1,
+				IDs:  []int{},
 				Done: false,
 				Err:  err,
+				Peer: peer,
 			}
 		}
 		peerUserStories, err := c.Client.API().StoriesGetPeerStories(ctx, inputPeer)
 		if err != nil {
 			return types.StoriesDownloadStatusMsg{
-				ID:   -1,
+				IDs:  []int{},
 				Done: false,
 				Err:  err,
+				Peer: peer,
 			}
 		}
 		homeDir, _ := os.UserHomeDir()
 		cligramDir := filepath.Join(homeDir, ".cligram")
+		var readStoriesIDs []int
 		for _, v := range peerUserStories.Stories.Stories {
 			if storyItem, ok := v.(*tg.StoryItem); ok {
-				id, err := shared.DownloadStoryMedia(ctx, c.Client, storyItem, cligramDir)
+				id, err := shared.DownloadStoryMedia(ctx, c.Client, storyItem, cligramDir, peer.ID)
 				if err != nil {
-					return types.StoriesDownloadStatusMsg{
-						ID:   -1,
-						Done: false,
-						Err:  err,
-					}
+					continue
 				}
-				return types.StoriesDownloadStatusMsg{
-					ID:   *id,
-					Done: true,
-					Err:  nil,
+				readStoriesIDs = append(readStoriesIDs, *id)
+			}
+		}
+
+		if len(readStoriesIDs) != 0 {
+			maxID := slices.Max(readStoriesIDs)
+			if configManager.GetConfig().ReadStories {
+				readErr := shared.ReadStories(ctx, c.Client, peer, maxID)
+				if readErr != nil {
+					slog.Error("failed to mark stories as read", "err", readErr)
 				}
+			}
+			return types.StoriesDownloadStatusMsg{
+				IDs:  readStoriesIDs,
+				Done: true,
+				Err:  nil,
+				Peer: peer,
 			}
 		}
 		return types.StoriesDownloadStatusMsg{
-			ID:   -1,
+			IDs:  []int{},
 			Done: false,
 			Err:  errors.New("we have failed to download the story for some fucking reason"),
+			Peer: peer,
 		}
 	}
 }
@@ -401,35 +415,4 @@ func parseReplyID(replyID string) *int {
 		return &id
 	}
 	return nil
-}
-
-func convertPeerToInputPeer(peer types.Peer) (tg.InputPeerClass, error) {
-	peerID, err := strconv.ParseInt(peer.ID, 10, 64)
-	if err != nil {
-		return nil, types.NewInvalidPeerError(peer.ID)
-	}
-
-	accessHash, err := strconv.ParseInt(peer.AccessHash, 10, 64)
-	if err != nil {
-		return nil, types.NewInvalidPeerError(peer.AccessHash)
-	}
-
-	switch peer.ChatType {
-	case types.UserChat, types.BotChat:
-		return &tg.InputPeerUser{
-			UserID:     peerID,
-			AccessHash: accessHash,
-		}, nil
-	case types.ChannelChat:
-		return &tg.InputPeerChannel{
-			ChannelID:  peerID,
-			AccessHash: accessHash,
-		}, nil
-	case types.GroupChat:
-		return &tg.InputPeerChat{
-			ChatID: peerID,
-		}, nil
-	default:
-		return nil, types.NewTelegramError(types.ErrorCodeInvalidPeer, "unsupported chat type", nil)
-	}
 }

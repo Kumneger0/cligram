@@ -427,8 +427,3 @@ func convertPeerToInputPeer(peer types.Peer) (tg.InputPeerClass, error) {
 		return nil, types.NewTelegramError(types.ErrorCodeInvalidPeer, "unsupported chat type", nil)
 	}
 }
-
-type userOnlineStatus struct {
-	IsOnline bool
-	LastSeen *string
-}

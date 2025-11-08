@@ -81,14 +81,16 @@ type GetAllStoriesMsg struct {
 }
 
 type StoriesDownloadStatusMsg struct {
-	//the id of story -1 on error
-	ID int
+	//the id stories empty array on error
+	IDs []int
 	// whether that the download is finished or not
 	// finished means the the story is written to fileSystem hidden folder
 	Done bool
 	//there was some error during downloading for saving to fileSystem
 	// so we should notify bubbletea to handle this accordingly
 	Err error
+	// a peer who posted the story
+	Peer Peer
 }
 
 type GetUserChatsResult struct {
