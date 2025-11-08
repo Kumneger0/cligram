@@ -68,7 +68,7 @@ func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 	}
 
 	isOnSideBar := d.Model.FocusedOn == SideBar
-	str := lipgloss.NewStyle().Width(50).Render(title)
+	str := lipgloss.NewStyle().Render(title)
 	if index == m.Index() && isOnSideBar {
 		fmt.Fprint(w, selectedStyle.Render(" "+str+" "))
 	} else {
