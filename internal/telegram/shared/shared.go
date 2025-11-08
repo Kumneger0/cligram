@@ -344,7 +344,6 @@ func OpenFileInDefaultApp(path string) error {
 	case "darwin":
 		cmd = exec.Command("open", path)
 	case "windows":
-		//fuck you windows 🖕 i hate you
 	default:
 		return fmt.Errorf("unsupported platform")
 	}

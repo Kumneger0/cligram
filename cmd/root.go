@@ -23,7 +23,7 @@ var (
 	Program *tea.Program
 )
 
-func newRootCmd(version string) *cobra.Command {
+func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cligram",
 		Short: "cligram a cli based telegram client",
@@ -31,7 +31,7 @@ func newRootCmd(version string) *cobra.Command {
 			ctx, cancel := context.WithCancel(context.Background())
 			updateChannel := make(chan types.Notification, 128)
 
-			cligram, err := telegram.NewClient(ctx, updateChannel)
+			cligram, err := telegram.NewClient(ctx, updateChannel, telegramAPIID, telegramAPIHash)
 			if err != nil {
 				slog.Error(err.Error())
 				cancel()
@@ -197,8 +197,8 @@ func newRootCmd(version string) *cobra.Command {
 	return cmd
 }
 
-func Execute(version string) error {
-	if err := newRootCmd(version).Execute(); err != nil {
+func Execute(version string, telegramAPIID, telegramAPIHash string) error {
+	if err := newRootCmd(version, telegramAPIID, telegramAPIHash).Execute(); err != nil {
 		return fmt.Errorf("error executing root command: %w", err)
 	}
 	return nil

@@ -574,7 +574,6 @@ func (m Model) handleUserChats(msg types.UserChatsMsg) (tea.Model, tea.Cmd) {
 			users = append(users, du)
 		}
 	}
-	//TODO: reminder to filter out if the chats gets duplicated
 	m.Users.SetItems(users)
 
 	m.AreWeSwitchingModes = false

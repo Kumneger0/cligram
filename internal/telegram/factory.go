@@ -14,10 +14,10 @@ var (
 
 var Cligram *client.Client
 
-func NewClient(ctx context.Context, updateChannel chan types.Notification) (*client.Client, error) {
+func NewClient(ctx context.Context, updateChannel chan types.Notification, telegramAPIID, telegramAPIHash string) (*client.Client, error) {
 	var err error
 	once.Do(func() {
-		c, e := client.NewClientFromEnv(ctx, updateChannel)
+		c, e := client.NewClientFromEnv(ctx, updateChannel, telegramAPIID, telegramAPIHash)
 		Cligram = c
 		err = e
 	})
