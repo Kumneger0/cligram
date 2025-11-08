@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"runtime/debug"
 	"slices"
 	"strconv"
 	"syscall"
@@ -43,13 +42,6 @@ func main() {
 	logRotator := logger.Init()
 	defer logRotator.Close()
 	slog.Info("Starting Application")
-
-	defer func() {
-		if r := recover(); r != nil {
-			slog.Error("unhandled panic", "error", r, "stack", string(debug.Stack()))
-			os.Exit(2)
-		}
-	}()
 
 	if err := cmd.Execute(version); err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)
