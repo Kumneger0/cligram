@@ -10,7 +10,7 @@ require (
 	github.com/daixiang0/gci v0.13.4
 	github.com/gen2brain/beeep v0.11.1
 	github.com/go-critic/go-critic v0.14.2
-	github.com/gofrs/flock v0.12.1
+	github.com/gofrs/flock v0.13.0
 	github.com/golangci/golangci-lint v1.59.1
 	github.com/gotd/td v0.133.0
 	github.com/gotesttools/gotestfmt/v2 v2.5.0
