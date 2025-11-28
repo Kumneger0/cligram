@@ -14,7 +14,7 @@ require (
 	github.com/golangci/golangci-lint v1.59.1
 	github.com/gotd/td v0.133.0
 	github.com/gotesttools/gotestfmt/v2 v2.5.0
-	github.com/hashicorp/go-version v1.7.0
+	github.com/hashicorp/go-version v1.8.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/muesli/mango-cobra v1.3.0
 	github.com/muesli/reflow v0.3.0
