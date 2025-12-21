@@ -2,6 +2,8 @@ package notification
 
 import (
 	"log/slog"
+	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/gen2brain/beeep"
@@ -14,22 +16,40 @@ var (
 
 func getAppLogo() *[]byte {
 	var appLogo *[]byte
+	logo, err := assets.Assets.ReadFile("logo.png")
+	if err != nil {
+		slog.Error(err.Error())
+		return nil
+	}
+	appLogo = &logo
+	return appLogo
+}
+
+func getAppIconPath() string {
+	var iconPath string
 	once.Do(func() {
-		logo, err := assets.Assets.ReadFile("logo.png")
-		if err != nil {
+		path := filepath.Join(os.TempDir(), "cligram-icon.png")
+		logoPNG := getAppLogo()
+
+		if logoPNG == nil {
+			slog.Error("logo.png not found")
+			return
+		}
+
+		if err := os.WriteFile(path, *logoPNG, 0o644); err != nil {
 			slog.Error(err.Error())
 			return
 		}
-		appLogo = &logo
+		iconPath = path
 	})
-	return appLogo
+	return iconPath
 }
 
 func Notify(title string, message string) {
 	beeep.AppName = "Cligram"
-	logo := getAppLogo
+	logo := getAppIconPath()
 
-	err := beeep.Alert(title, message, logo)
+	err := beeep.Notify(title, message, logo)
 	if err != nil {
 		slog.Error(err.Error())
 	}
