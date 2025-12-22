@@ -26,9 +26,8 @@ func getAppLogo() *[]byte {
 }
 
 func getAppIconPath() string {
-	var iconPath string
+	path := filepath.Join(os.TempDir(), "cligram-icon.png")
 	once.Do(func() {
-		path := filepath.Join(os.TempDir(), "cligram-icon.png")
 		logoPNG := getAppLogo()
 
 		if logoPNG == nil {
@@ -40,9 +39,8 @@ func getAppIconPath() string {
 			slog.Error(err.Error())
 			return
 		}
-		iconPath = path
 	})
-	return iconPath
+	return path
 }
 
 func Notify(title string, message string) {
