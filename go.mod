@@ -9,7 +9,7 @@ require (
 	github.com/charmbracelet/x/term v0.2.2
 	github.com/daixiang0/gci v0.13.4
 	github.com/gen2brain/beeep v0.11.2
-	github.com/go-critic/go-critic v0.14.2
+	github.com/go-critic/go-critic v0.14.3
 	github.com/gofrs/flock v0.13.0
 	github.com/golangci/golangci-lint v1.59.1
 	github.com/gotd/td v0.136.0
