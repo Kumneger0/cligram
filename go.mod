@@ -20,7 +20,7 @@ require (
 	github.com/muesli/reflow v0.3.0
 	github.com/muesli/roff v0.1.0
 	github.com/rmhubbert/bubbletea-overlay v0.6.1
-	github.com/schollz/progressbar/v3 v3.18.0
+	github.com/schollz/progressbar/v3 v3.19.0
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616
 	golang.org/x/term v0.38.0
