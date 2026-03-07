@@ -49,20 +49,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.SelectedUser.PeerID == user.PeerID {
 			m.SelectedUser = user
 		}
-		userIndex := getUserIndex(m, user)
+		var listToSearchFrom list.Model
+		if user.IsBot {
+			listToSearchFrom = m.Bots
+		} else {
+			listToSearchFrom = m.Users
+		}
+
+		userIndex := getUserIndex(listToSearchFrom, user)
 		if userIndex != -1 {
-			items := m.Users.Items()
+			items := listToSearchFrom.Items()
 			items[userIndex] = user
-			cmd := m.Users.SetItems(items)
+			var cmd tea.Cmd
+			if user.IsBot {
+				cmd = m.Bots.SetItems(items)
+			} else {
+				cmd = m.Users.SetItems(items)
+			}
 			cmds = append(cmds, cmd)
 		}
 		if user.IsTyping {
-			rcmd := tea.Tick(time.Second*3, func(t time.Time) tea.Msg {
+			cmd := tea.Tick(time.Second*3, func(t time.Time) tea.Msg {
 				user.IsOnline = false
 				user.IsTyping = false
 				return types.UserTypingNotification{User: user}
 			})
-			cmds = append(cmds, rcmd)
+			cmds = append(cmds, cmd)
 		}
 	case types.ErrorNotification:
 		m.ModalContent = GetModalContent(msg.Error.Error())
@@ -139,14 +151,26 @@ func (m Model) handleMarkMessagesAsRead(msg types.MarkMessagesAsReadMsg) (tea.Mo
 	if msg.Response {
 		m.SelectedUser.UnreadCount = 0
 	}
-	userIndex := getUserIndex(m, m.SelectedUser)
+	var listToSearchFrom list.Model
+	if m.SelectedUser.IsBot {
+		listToSearchFrom = m.Bots
+	} else {
+		listToSearchFrom = m.Users
+	}
+	userIndex := getUserIndex(listToSearchFrom, m.SelectedUser)
+	var cmd tea.Cmd
 	if userIndex != -1 {
-		items := m.Users.Items()
+		items := listToSearchFrom.Items()
 		user := items[userIndex].(types.UserInfo)
 		user.UnreadCount = 0
-		m.Users.SetItem(userIndex, user)
+
+		if m.SelectedUser.IsBot {
+			cmd = m.Bots.SetItem(userIndex, user)
+		} else {
+			cmd = m.Users.SetItem(userIndex, user)
+		}
 	}
-	return m, nil
+	return m, cmd
 }
 
 func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, tea.Cmd) {
@@ -182,14 +206,25 @@ func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, te
 	}
 
 	if !isSelected {
-		userIndex := getUserIndex(m, *msg.User)
+		var listToSearchFrom list.Model
+		if msg.User.IsBot {
+			listToSearchFrom = m.Bots
+		} else {
+			listToSearchFrom = m.Users
+		}
+		userIndex := getUserIndex(listToSearchFrom, *msg.User)
+		var cmd tea.Cmd
 		if userIndex != -1 {
-			items := m.Users.Items()
+			items := listToSearchFrom.Items()
 			user := items[userIndex].(types.UserInfo)
 			user.UnreadCount++
-			m.Users.SetItem(userIndex, user)
+			if msg.User.IsBot {
+				cmd = m.Bots.SetItem(userIndex, user)
+			} else {
+				cmd = m.Users.SetItem(userIndex, user)
+			}
 		}
-		return m, nil
+		return m, cmd
 	}
 
 	m.SelectedUser.UnreadCount++
@@ -229,15 +264,23 @@ func (m Model) handleUserOnlineOffline(msg types.UserStatusNotification) (tea.Mo
 		}
 	}
 
-	userIndex := getUserIndex(m, user)
+	var listToSearchFrom list.Model
+	if user.IsBot {
+		listToSearchFrom = m.Bots
+	} else {
+		listToSearchFrom = m.Users
+	}
+
+	userIndex := getUserIndex(listToSearchFrom, user)
+	var cmd tea.Cmd
 	if userIndex != -1 {
-		items := m.Users.Items()
+		items := listToSearchFrom.Items()
 		user := items[userIndex].(types.UserInfo)
 		user.IsOnline = msg.Status.IsOnline
 		items[userIndex] = user
-		m.Users.SetItems(items)
+		cmd = listToSearchFrom.SetItems(items)
 	}
-	return m, nil
+	return m, cmd
 }
 
 func (m Model) handleMessageDeletion(msg MessageDeletionConfrimResponseMsg) (tea.Model, tea.Cmd) {
@@ -272,7 +315,6 @@ func (m Model) handleMessageDeletion(msg MessageDeletionConfrimResponseMsg) (tea
 
 func (m Model) getPeerInfo() types.Peer {
 	var peer types.Peer
-
 	switch m.Mode {
 	case ModeUsers:
 		peer = types.Peer{
@@ -304,7 +346,6 @@ func (m Model) getPeerInfo() types.Peer {
 }
 
 func (m Model) handleGetMessages(msg types.GetMessagesMsg) (tea.Model, tea.Cmd) {
-	m.AreWeSwitchingModes = false
 	m.MainViewLoading = false
 	if msg.Err != nil {
 		slog.Error("Failed to get messages", "error", msg.Err.Error())
@@ -575,8 +616,6 @@ func (m Model) handleUserChats(msg types.UserChatsMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	m.Users.SetItems(users)
-
-	m.AreWeSwitchingModes = false
 	m.OffsetDate = msg.Response.OffsetDate
 	m.OffsetID = msg.Response.OffsetID
 	m.OnPagination = false
@@ -600,7 +639,6 @@ func (m Model) handleUserChannels(msg types.ChannelsMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	m.Channels.SetItems(channels)
-	m.AreWeSwitchingModes = false
 	m.OffsetDate = msg.Response.OffsetDate
 	m.OffsetID = msg.Response.OffsetID
 	m.OnPagination = false
@@ -625,7 +663,6 @@ func (m Model) handleUserGroups(msg types.GroupsMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	m.Groups.SetItems(groups)
-	m.AreWeSwitchingModes = false
 	m.OffsetDate = msg.Response.OffsetDate
 	m.OffsetID = msg.Response.OffsetID
 	return m, nil
@@ -731,8 +768,14 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleSearchedUserResult(msg SelectSearchedUserResult) (tea.Model, tea.Cmd) {
-	if msg.user != nil {
-		return m.handleSearchedUser(*msg.user)
+	if msg.user != nil || msg.Bot != nil {
+		var userInfo types.UserInfo
+		if msg.user != nil {
+			userInfo = *msg.user
+		} else if msg.Bot != nil {
+			userInfo = *msg.Bot
+		}
+		return m.handleSearchedUser(userInfo)
 	}
 	if msg.channel != nil {
 		return m.handleSearchedChannel(*msg.channel)
@@ -745,22 +788,51 @@ func (m Model) handleSearchedUserResult(msg SelectSearchedUserResult) (tea.Model
 
 func (m Model) handleSearchedUser(user types.UserInfo) (tea.Model, tea.Cmd) {
 	m.SelectedUser = user
-	index := getUserIndex(m, user)
+
+	var listToSearchFrom list.Model
+	var targetMode Mode
+
+	if user.IsBot {
+		listToSearchFrom = m.Bots
+		targetMode = ModeBots
+	} else {
+		listToSearchFrom = m.Users
+		targetMode = ModeUsers
+	}
+
+	index := getUserIndex(listToSearchFrom, user)
 	if index != -1 {
-		m.Users.Select(index)
+		if user.IsBot {
+			m.Bots.Select(index)
+		} else {
+			m.Users.Select(index)
+		}
 		m.FocusedOn = SideBar
-		m.Mode = ModeUsers
+		m.Mode = targetMode
 		return handleUserChange(&m)
 	}
 
-	newUpdatedUsers := append(m.Users.Items(), user)
-	updateUserCmd := m.Users.SetItems(newUpdatedUsers)
+	newUpdatedUsers := append(listToSearchFrom.Items(), user)
+	_ = listToSearchFrom.SetItems(newUpdatedUsers)
 
-	index = getUserIndex(m, user)
+	var updateUserCmd tea.Cmd
+	if user.IsBot {
+		updateUserCmd = m.Bots.SetItems(newUpdatedUsers)
+	} else {
+		updateUserCmd = m.Users.SetItems(newUpdatedUsers)
+	}
+
+	index = getUserIndex(listToSearchFrom, user)
+
 	if index != -1 {
-		m.Users.Select(index)
+		if user.IsBot {
+			m.Bots.Select(index)
+		} else {
+			m.Users.Select(index)
+		}
+
 		m.FocusedOn = SideBar
-		m.Mode = ModeUsers
+		m.Mode = targetMode
 		m, handleUserChangeCmd := handleUserChange(&m)
 		return m, tea.Batch(updateUserCmd, handleUserChangeCmd)
 	}
