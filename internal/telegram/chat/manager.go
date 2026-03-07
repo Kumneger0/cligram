@@ -356,6 +356,12 @@ func getUnreadCount(chatDialogs []*tg.Dialog, peerID int64) int {
 		if tgPeerUser, ok := p.Peer.(*tg.PeerUser); ok && tgPeerUser.UserID == peerID {
 			return p.UnreadCount
 		}
+		if tgPeerChannel, ok := p.Peer.(*tg.PeerChannel); ok && tgPeerChannel.ChannelID == peerID {
+			return p.UnreadCount
+		}
+		if tgPeerChat, ok := p.Peer.(*tg.PeerChat); ok && tgPeerChat.ChatID == peerID {
+			return p.UnreadCount
+		}
 	}
 	return 0
 }
