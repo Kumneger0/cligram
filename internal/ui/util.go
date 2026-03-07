@@ -106,9 +106,9 @@ type Model struct {
 	IsFilepickerVisible  bool
 	SelectedFile         string
 	Users                list.Model
+	Bots                 list.Model
 	SelectedUser         types.UserInfo
 	Channels             list.Model
-	AreWeSwitchingModes  bool
 	IsModalVisible       bool
 	ModalContent         string
 	SelectedChannel      types.ChannelInfo
@@ -315,11 +315,10 @@ func prepareFilepickerView(m *Model) string {
 
 func prepareSidebarContent(m *Model, d layoutDimensions) string {
 	var content string
-	if m.AreWeSwitchingModes {
-		return "Please Wait ......."
-	}
 	switch m.Mode {
-	case ModeUsers, ModeBots:
+	case ModeBots:
+		content = m.Bots.View()
+	case ModeUsers:
 		content = m.Users.View()
 	case ModeChannels:
 		content = m.Channels.View()
@@ -390,11 +389,12 @@ func getMessageParams(m *Model) types.Peer {
 	var cType types.ChatType
 	var pInfo types.Peer
 	if m.Mode == ModeUsers || m.Mode == ModeBots {
-		m.SelectedUser = m.Users.SelectedItem().(types.UserInfo)
 		if m.Mode == ModeUsers {
+			m.SelectedUser = m.Users.SelectedItem().(types.UserInfo)
 			cType = types.UserChat
 		}
 		if m.Mode == ModeBots {
+			m.SelectedUser = m.Bots.SelectedItem().(types.UserInfo)
 			cType = types.BotChat
 		}
 		pInfo = types.Peer{

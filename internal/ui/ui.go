@@ -102,11 +102,12 @@ func getGroupIndex(m Model, group types.ChannelInfo) int {
 	return index
 }
 
-func getUserIndex(m Model, user types.UserInfo) int {
+func getUserIndex(listToSearchFrom list.Model, user types.UserInfo) int {
 	var index int = -1
-	for i, v := range m.Users.Items() {
-		if v.FilterValue() == user.FilterValue() {
+	for i, v := range listToSearchFrom.Items() {
+		if v.(types.UserInfo).PeerID == user.PeerID {
 			index = i
+			break
 		}
 	}
 	return index
@@ -225,7 +226,10 @@ func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (M
 		case ModeChannels:
 			m.Channels, cmd = m.Channels.Update(msg)
 			cmds = append(cmds, cmd)
-		case ModeUsers, ModeBots:
+		case ModeBots:
+			m.Bots, cmd = m.Bots.Update(msg)
+			cmds = append(cmds, cmd)
+		case ModeUsers:
 			m.Users, cmd = m.Users.Update(msg)
 			cmds = append(cmds, cmd)
 		default:
@@ -295,40 +299,21 @@ func changeFocusMode(m *Model, msg string, shift bool) (Model, tea.Cmd) {
 func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 	if m.FocusedOn == SideBar {
 		m.ChatUI.ResetSelected()
-		m.AreWeSwitchingModes = true
 		m.OnPagination = false
 	}
 	areWeInGroupMode := m.Mode == ModeGroups && m.FocusedOn == Mainview
-	//i don't think 🤔 we should keep the list in memory
-	// if we keep this is in memory this will cause high memory usage especially for users
-	// who has many chats so for now le't clear this up
-	// TODO:🤔 can we do better
-	clearSidebarLists := func(clearUsers, clearChannels, clearGroups bool) {
-		if clearUsers {
-			m.Users.SetItems(nil)
-		}
-		if clearChannels {
-			m.Channels.SetItems(nil)
-		}
-		if clearGroups {
-			m.Groups.SetItems(nil)
-		}
-	}
-
 	if m.FocusedOn == SideBar || areWeInGroupMode {
 		switch msg {
 		case "c":
-			clearSidebarLists(true, false, true)
 			m.Mode = ModeChannels
 			if !m.SelectedChannel.IsCreator {
 				m.Input.SetValue("Not Allowed To Type")
 			} else {
 				m.Input.Reset()
 			}
-			return *m, telegram.Cligram.GetUserChannels(telegram.Cligram.Context(), true, 0, 0)
+			return *m, nil
 		case "u":
 			m.Mode = ModeUsers
-			clearSidebarLists(true, true, true)
 			if areWeInGroupMode {
 				selectedUser := m.getMessageSenderUserInfo()
 				if selectedUser != nil {
@@ -352,24 +337,31 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 					m.ChatUI.SetItems(nil)
 					return *m, telegram.Cligram.GetAllMessages(telegram.Cligram.Context(), types.GetMessagesRequest{
 						Peer: m.getPeerInfo(),
-						//TODO:  i might need to revist this one
+						//TODO:  i might need to revisit this one
 						Limit:         50,
 						OffsetID:      nil,
 						ChatAreaWidth: nil,
 					})
 				}
 			}
-			return *m, telegram.Cligram.GetUserChats(telegram.Cligram.Context(), types.UserChat, 0, 0)
+			return *m, nil
 
 		case "g":
 			m.Mode = ModeGroups
-			clearSidebarLists(true, true, false)
-			return *m, telegram.Cligram.GetUserChannels(telegram.Cligram.Context(), false, 0, 0)
+			return *m, nil
 		case "b":
 			m.Mode = ModeBots
-			clearSidebarLists(true, true, true)
+			items := m.Users.Items()
+			var bots []list.Item
+			for _, item := range items {
+				if userInfo, ok := item.(types.UserInfo); ok && userInfo.IsBot {
+					bots = append(bots, item)
+				}
+			}
+			m.Users.SetItems(bots)
+			m.Users.Select(0)
 			m.Users.ResetSelected()
-			return *m, telegram.Cligram.GetUserChats(telegram.Cligram.Context(), types.BotChat, 0, 0)
+			return *m, nil
 		}
 		return *m, nil
 	}
