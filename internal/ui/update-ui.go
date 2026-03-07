@@ -825,7 +825,11 @@ func (m Model) handleSearchedUser(user types.UserInfo) (tea.Model, tea.Cmd) {
 		updateUserCmd = m.Users.SetItems(newUpdatedUsers)
 	}
 
-	index = getUserIndex(listToSearchFrom, user)
+	if user.IsBot {
+		index = getUserIndex(m.Bots, user)
+	} else {
+		index = getUserIndex(m.Users, user)
+	}
 
 	if index != -1 {
 		if user.IsBot {

@@ -383,7 +383,7 @@ func (m *Manager) getAllDialogs(ctx context.Context, offsetDate, offsetID int) (
 	var chatDialogs []*tg.Dialog
 
 	var nextOffsetDate int = -1
-	var nextOffsetID int = 1
+	var nextOffsetID int = -1
 
 	for it.Next(ctx) {
 		value := it.Value()
