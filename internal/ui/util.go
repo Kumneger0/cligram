@@ -203,6 +203,8 @@ func updateListDimensions(m *Model, d layoutDimensions) {
 	listHeight := d.contentHeight - 4
 	m.Users.SetHeight(listHeight)
 	m.Users.SetWidth(d.sidebarWidth)
+	m.Bots.SetHeight(listHeight)
+	m.Bots.SetWidth(d.sidebarWidth)
 	m.Channels.SetWidth(d.sidebarWidth)
 	m.Channels.SetHeight(listHeight)
 	m.Groups.SetWidth(d.sidebarWidth)
