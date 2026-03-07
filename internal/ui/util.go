@@ -18,8 +18,6 @@ import (
 	"github.com/kumneger0/cligram/internal/telegram"
 	"github.com/kumneger0/cligram/internal/telegram/types"
 	"github.com/muesli/reflow/wordwrap"
-
-	"github.com/hashicorp/golang-lru/v2/expirable"
 )
 
 var (
@@ -424,27 +422,6 @@ func getMessageParams(m *Model) types.Peer {
 		}
 	}
 	return pInfo
-}
-
-var oldMessagesCache *expirable.LRU[string, string]
-
-func AddToCache(key string, value string) bool {
-	if oldMessagesCache == nil {
-		oldMessagesCache = expirable.NewLRU[string, string](5, nil, time.Minute*10)
-	}
-	added := oldMessagesCache.Add(key, value)
-	return added
-}
-
-func GetFromCache(key string) (*string, error) {
-	if oldMessagesCache == nil {
-		return nil, nil
-	}
-	oldMessages, ok := oldMessagesCache.Get(key)
-	if !ok {
-		return nil, fmt.Errorf("failed to find value for key %s", key)
-	}
-	return &oldMessages, nil
 }
 
 func SendUserIsTyping(m *Model) tea.Cmd {
