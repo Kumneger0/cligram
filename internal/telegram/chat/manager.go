@@ -53,24 +53,12 @@ func (m *Manager) GetAllChats(ctx context.Context, offsetDate int, offsetID int)
 		}, nil
 	}
 
-	var userPeerIDs []userPeerIDUnreadCount
-	for _, userClass := range dialogsSlice.Users {
-		if peer, ok := userClass.(*tg.User); ok {
-			userPeerIDs = append(userPeerIDs, userPeerIDUnreadCount{
-				unreadCount: 0,
-				peerID:      peer.ID,
-			})
-		}
-	}
-
 	var users []types.UserInfo
-	for _, userClass := range dialogsSlice.Users {
-		if tgUser, ok := userClass.(*tg.User); ok {
-			user := shared.ConvertTGUserToUserInfo(tgUser)
-			unreadCount := getUnreadCount(userPeerIDs, tgUser.ID)
-			user.UnreadCount = unreadCount
-			users = append(users, *user)
-		}
+	for _, tgUser := range dialogsSlice.Users {
+		user := shared.ConvertTGUserToUserInfo(tgUser)
+		unreadCount := getUnreadCount(dialogsSlice.Dialogs, tgUser.ID)
+		user.UnreadCount = unreadCount
+		users = append(users, *user)
 	}
 
 	var channels []types.ChannelInfo
@@ -112,20 +100,11 @@ func (m *Manager) GetUserChats(ctx context.Context, isBot bool, offsetDate, offs
 		}, nil
 	}
 
-	var userPeerIDs []userPeerIDUnreadCount
-	for _, userClass := range dialogsSlice.Users {
-		if peer, ok := userClass.(*tg.User); ok {
-			userPeerIDs = append(userPeerIDs, userPeerIDUnreadCount{
-				unreadCount: 0,
-				peerID:      peer.ID,
-			})
-		}
-	}
 	var users []types.UserInfo
-	for _, userClass := range dialogsSlice.Users {
-		if tgUser, ok := userClass.(*tg.User); ok && tgUser.Bot == isBot {
+	for _, tgUser := range dialogsSlice.Users {
+		if tgUser.Bot == isBot {
 			user := shared.ConvertTGUserToUserInfo(tgUser)
-			unreadCount := getUnreadCount(userPeerIDs, tgUser.ID)
+			unreadCount := getUnreadCount(dialogsSlice.Dialogs, int64(tgUser.ID))
 			user.UnreadCount = unreadCount
 			users = append(users, *user)
 		}
@@ -358,15 +337,10 @@ func (m *Manager) GetChatHistoryCmd(ctx context.Context, peer types.Peer, limit 
 	}
 }
 
-type userPeerIDUnreadCount struct {
-	unreadCount int
-	peerID      int64
-}
-
-func getUnreadCount(u []userPeerIDUnreadCount, peerID int64) int {
-	for _, p := range u {
-		if p.peerID == peerID {
-			return p.unreadCount
+func getUnreadCount(chatDialogs []*tg.Dialog, peerID int64) int {
+	for _, p := range chatDialogs {
+		if tgPeerUser, ok := p.Peer.(*tg.PeerUser); ok && tgPeerUser.UserID == peerID {
+			return p.UnreadCount
 		}
 	}
 	return 0
@@ -374,8 +348,8 @@ func getUnreadCount(u []userPeerIDUnreadCount, peerID int64) int {
 
 type CligramGetDialogsResponse struct {
 	Chats      []tg.ChatClass
-	Users      []tg.UserClass
-	Dialogs    []tg.DialogClass
+	Users      []*tg.User
+	Dialogs    []*tg.Dialog
 	OffsetDate int
 	OffsetID   int
 }
@@ -384,8 +358,9 @@ func (m *Manager) getAllDialogs(ctx context.Context, offsetDate, offsetID int) (
 	q := query.NewQuery(m.client.GetAPI())
 	it := dialogs.NewIterator(q.GetDialogs().OffsetID(offsetID).OffsetDate(offsetDate).BatchSize(20), 50)
 
-	var allUsers []tg.UserClass
+	var allUsers []*tg.User
 	var allChats []tg.ChatClass
+	var chatDialogs []*tg.Dialog
 
 	var nextOffsetDate int
 	var nextOffsetID int
@@ -393,6 +368,10 @@ func (m *Manager) getAllDialogs(ctx context.Context, offsetDate, offsetID int) (
 	for it.Next(ctx) {
 		value := it.Value()
 		peer := value.Peer
+
+		if dialog, ok := value.Dialog.(*tg.Dialog); ok {
+			chatDialogs = append(chatDialogs, dialog)
+		}
 
 		if user, ok := peer.(*tg.InputPeerUser); ok {
 			for _, u := range value.Entities.Users() {
@@ -421,7 +400,7 @@ func (m *Manager) getAllDialogs(ctx context.Context, offsetDate, offsetID int) (
 	return &CligramGetDialogsResponse{
 		Users:      allUsers,
 		Chats:      allChats,
-		Dialogs:    []tg.DialogClass{},
+		Dialogs:    chatDialogs,
 		OffsetDate: nextOffsetDate,
 		OffsetID:   nextOffsetID,
 	}, nil
