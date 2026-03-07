@@ -21,9 +21,10 @@ import (
 )
 
 var (
-	Program *tea.Program
-	memFile string
-	cpuFile string
+	Program        *tea.Program
+	memFile        string
+	cpuFile        string
+	cpuProfileFile *os.File
 )
 
 func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Command {
@@ -216,6 +217,9 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 			if cpuFile != "" {
 				pprof.StopCPUProfile()
 			}
+			if cpuProfileFile != nil {
+				cpuProfileFile.Close()
+			}
 			if memFile != "" {
 				f, err := os.Create(memFile)
 				if err != nil {
@@ -253,6 +257,7 @@ func Execute(version string, telegramAPIID, telegramAPIHash string) error {
 				f.Close()
 				return fmt.Errorf("could not start CPU profile: %w", err)
 			}
+			cpuProfileFile = f
 		}
 		return nil
 	}

@@ -66,11 +66,25 @@ func (m *Manager) GetAllChats(ctx context.Context, offsetDate int, offsetID int)
 	for _, chatClass := range dialogsSlice.Chats {
 		if channel, ok := chatClass.(*tg.Channel); ok {
 			channelInfo := convertTGChannelToChannelInfo(channel)
+			channelInfo.UnreadCount = getUnreadCount(dialogsSlice.Dialogs, channel.ID)
 			if channel.Broadcast {
 				channels = append(channels, *channelInfo)
 			} else {
+				channelInfo.UnreadCount = getUnreadCount(dialogsSlice.Dialogs, channel.ID)
 				groups = append(groups, *channelInfo)
 			}
+		}
+		if chat, ok := chatClass.(*tg.Chat); ok {
+			channelInfo := &types.ChannelInfo{
+				ChannelTitle:      chat.Title,
+				ID:                strconv.FormatInt(chat.ID, 10),
+				IsCreator:         chat.Creator,
+				IsBroadcast:       false,
+				ParticipantsCount: &chat.ParticipantsCount,
+				HasStories:        false,
+				UnreadCount:       getUnreadCount(dialogsSlice.Dialogs, chat.ID),
+			}
+			groups = append(groups, *channelInfo)
 		}
 	}
 
@@ -362,8 +376,8 @@ func (m *Manager) getAllDialogs(ctx context.Context, offsetDate, offsetID int) (
 	var allChats []tg.ChatClass
 	var chatDialogs []*tg.Dialog
 
-	var nextOffsetDate int
-	var nextOffsetID int
+	var nextOffsetDate int = -1
+	var nextOffsetID int = 1
 
 	for it.Next(ctx) {
 		value := it.Value()
@@ -395,6 +409,10 @@ func (m *Manager) getAllDialogs(ctx context.Context, offsetDate, offsetID int) (
 		}
 		nextOffsetDate = value.Last.GetDate()
 		nextOffsetID = value.Last.GetID()
+	}
+
+	if err := it.Err(); err != nil {
+		return nil, err
 	}
 
 	return &CligramGetDialogsResponse{

@@ -278,7 +278,11 @@ func (m Model) handleUserOnlineOffline(msg types.UserStatusNotification) (tea.Mo
 		user := items[userIndex].(types.UserInfo)
 		user.IsOnline = msg.Status.IsOnline
 		items[userIndex] = user
-		cmd = listToSearchFrom.SetItems(items)
+		if user.IsBot {
+			cmd = m.Bots.SetItems(items)
+		} else {
+			cmd = m.Users.SetItems(items)
+		}
 	}
 	return m, cmd
 }
@@ -665,6 +669,7 @@ func (m Model) handleUserGroups(msg types.GroupsMsg) (tea.Model, tea.Cmd) {
 	m.Groups.SetItems(groups)
 	m.OffsetDate = msg.Response.OffsetDate
 	m.OffsetID = msg.Response.OffsetID
+	m.OnPagination = false
 	return m, nil
 }
 
@@ -813,8 +818,6 @@ func (m Model) handleSearchedUser(user types.UserInfo) (tea.Model, tea.Cmd) {
 	}
 
 	newUpdatedUsers := append(listToSearchFrom.Items(), user)
-	_ = listToSearchFrom.SetItems(newUpdatedUsers)
-
 	var updateUserCmd tea.Cmd
 	if user.IsBot {
 		updateUserCmd = m.Bots.SetItems(newUpdatedUsers)

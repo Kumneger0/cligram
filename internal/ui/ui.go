@@ -351,16 +351,8 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 			return *m, nil
 		case "b":
 			m.Mode = ModeBots
-			items := m.Users.Items()
-			var bots []list.Item
-			for _, item := range items {
-				if userInfo, ok := item.(types.UserInfo); ok && userInfo.IsBot {
-					bots = append(bots, item)
-				}
-			}
-			m.Users.SetItems(bots)
-			m.Users.Select(0)
-			m.Users.ResetSelected()
+			m.Bots.Select(0)
+			m.Bots.ResetSelected()
 			return *m, nil
 		}
 		return *m, nil
