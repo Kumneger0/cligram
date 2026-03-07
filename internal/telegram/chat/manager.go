@@ -443,7 +443,7 @@ func convertPeerToInputPeer(peer types.Peer) (tg.InputPeerClass, error) {
 	}
 
 	accessHash, err := strconv.ParseInt(peer.AccessHash, 10, 64)
-	if err != nil {
+	if err != nil && peer.ChatType != types.GroupChat {
 		return nil, types.NewInvalidPeerError(peer.AccessHash)
 	}
 
@@ -453,11 +453,22 @@ func convertPeerToInputPeer(peer types.Peer) (tg.InputPeerClass, error) {
 			UserID:     peerID,
 			AccessHash: accessHash,
 		}, nil
-	case types.ChannelChat, types.GroupChat:
+	case types.ChannelChat:
 		return &tg.InputPeerChannel{
 			ChannelID:  peerID,
 			AccessHash: accessHash,
 		}, nil
+	case types.GroupChat:
+		if peer.AccessHash == "" {
+			return &tg.InputPeerChat{
+				ChatID: peerID,
+			}, nil
+		}
+		return &tg.InputPeerChannel{
+			ChannelID:  peerID,
+			AccessHash: accessHash,
+		}, nil
+
 	default:
 		return nil, types.NewTelegramError(types.ErrorCodeInvalidPeer, "unsupported chat type", nil)
 	}
