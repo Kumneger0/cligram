@@ -124,6 +124,7 @@ func (s SearchResult) FilterValue() string {
 }
 
 type SelectSearchedUserResult struct {
+	Bot     *types.UserInfo
 	user    *types.UserInfo
 	channel *types.ChannelInfo
 	group   *types.ChannelInfo
@@ -165,7 +166,7 @@ type Foreground struct {
 	UsersList            *list.Model
 	Message              *types.FormattedMessage
 	fromPeer             *list.Item
-	stories              list.Model
+	stories              *list.Model
 }
 
 func (f Foreground) Init() tea.Cmd {
@@ -196,9 +197,10 @@ func (f Foreground) View() string {
 		BorderForeground(lipgloss.Color("6")).
 		Padding(0, 1)
 
-	if f.ModalMode == ModalModeShowStories {
+	if f.ModalMode == ModalModeShowStories && f.stories != nil {
 		title := "Stories"
-		content := lipgloss.NewStyle().Border(lipgloss.NormalBorder()).Render(f.stories.View())
+		var content string
+		content = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).Render(f.stories.View())
 		layout := lipgloss.JoinVertical(lipgloss.Left, title, content)
 		return foreStyle.Render(layout)
 	}

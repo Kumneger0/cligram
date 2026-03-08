@@ -18,8 +18,6 @@ import (
 	"github.com/kumneger0/cligram/internal/telegram"
 	"github.com/kumneger0/cligram/internal/telegram/types"
 	"github.com/muesli/reflow/wordwrap"
-
-	"github.com/hashicorp/golang-lru/v2/expirable"
 )
 
 var (
@@ -106,9 +104,9 @@ type Model struct {
 	IsFilepickerVisible  bool
 	SelectedFile         string
 	Users                list.Model
+	Bots                 list.Model
 	SelectedUser         types.UserInfo
 	Channels             list.Model
-	AreWeSwitchingModes  bool
 	IsModalVisible       bool
 	ModalContent         string
 	SelectedChannel      types.ChannelInfo
@@ -129,9 +127,8 @@ type Model struct {
 	EditMessage          *types.FormattedMessage
 	SkipNextInput        bool
 	OffsetDate, OffsetID int
-	//an indicator that tells there is already on going request kinda debouncing
-	OnPagination bool
-	Stories      []types.Stories
+	OnPagination         bool
+	Stories              []types.Stories
 }
 
 func filterEmptyMessages(msgs [50]types.FormattedMessage) []types.FormattedMessage {
@@ -206,6 +203,8 @@ func updateListDimensions(m *Model, d layoutDimensions) {
 	listHeight := d.contentHeight - 4
 	m.Users.SetHeight(listHeight)
 	m.Users.SetWidth(d.sidebarWidth)
+	m.Bots.SetHeight(listHeight)
+	m.Bots.SetWidth(d.sidebarWidth)
 	m.Channels.SetWidth(d.sidebarWidth)
 	m.Channels.SetHeight(listHeight)
 	m.Groups.SetWidth(d.sidebarWidth)
@@ -315,11 +314,10 @@ func prepareFilepickerView(m *Model) string {
 
 func prepareSidebarContent(m *Model, d layoutDimensions) string {
 	var content string
-	if m.AreWeSwitchingModes {
-		return "Please Wait ......."
-	}
 	switch m.Mode {
-	case ModeUsers, ModeBots:
+	case ModeBots:
+		content = m.Bots.View()
+	case ModeUsers:
 		content = m.Users.View()
 	case ModeChannels:
 		content = m.Channels.View()
@@ -390,11 +388,12 @@ func getMessageParams(m *Model) types.Peer {
 	var cType types.ChatType
 	var pInfo types.Peer
 	if m.Mode == ModeUsers || m.Mode == ModeBots {
-		m.SelectedUser = m.Users.SelectedItem().(types.UserInfo)
 		if m.Mode == ModeUsers {
+			m.SelectedUser = m.Users.SelectedItem().(types.UserInfo)
 			cType = types.UserChat
 		}
 		if m.Mode == ModeBots {
+			m.SelectedUser = m.Bots.SelectedItem().(types.UserInfo)
 			cType = types.BotChat
 		}
 		pInfo = types.Peer{
@@ -425,27 +424,6 @@ func getMessageParams(m *Model) types.Peer {
 		}
 	}
 	return pInfo
-}
-
-var oldMessagesCache *expirable.LRU[string, string]
-
-func AddToCache(key string, value string) bool {
-	if oldMessagesCache == nil {
-		oldMessagesCache = expirable.NewLRU[string, string](5, nil, time.Minute*10)
-	}
-	added := oldMessagesCache.Add(key, value)
-	return added
-}
-
-func GetFromCache(key string) (*string, error) {
-	if oldMessagesCache == nil {
-		return nil, nil
-	}
-	oldMessages, ok := oldMessagesCache.Get(key)
-	if !ok {
-		return nil, fmt.Errorf("failed to find value for key %s", key)
-	}
-	return &oldMessages, nil
 }
 
 func SendUserIsTyping(m *Model) tea.Cmd {
