@@ -45,7 +45,8 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		for _, v := range msg {
 			storiesToDisplay = append(storiesToDisplay, v)
 		}
-		m.stories = list.New(storiesToDisplay, StoriesDelegate{}, 10, 10)
+		stories := list.New(storiesToDisplay, StoriesDelegate{}, 10, 10)
+		m.stories = &stories
 		m.stories.SetShowFilter(false)
 		m.stories.SetShowPagination(false)
 		m.stories.SetShowTitle(false)
@@ -171,9 +172,11 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 			cmds = append(cmds, searchCmd)
 		}
 	}
-	model, cmd := m.stories.Update(msg)
-	m.stories = model
-	cmds = append(cmds, cmd)
+	if m.stories != nil {
+		model, cmd := m.stories.Update(msg)
+		m.stories = &model
+		cmds = append(cmds, cmd)
+	}
 	return m, tea.Batch(cmds...)
 }
 
@@ -243,7 +246,9 @@ func handleListSelection(m *Foreground) (tea.Model, tea.Cmd) {
 	switch user.ChannelOrUserType {
 	case CHANNEL:
 		result.channel = findChannel(user.PeerID, m.SearchResultChannels)
-	case USER, BOT:
+	case BOT:
+		result.Bot = findUser(user.PeerID, m.searchResultUsers)
+	case USER:
 		result.user = findUser(user.PeerID, m.searchResultUsers)
 	case GROUP:
 		result.group = findChannel(user.PeerID, m.SearchResultChannels)

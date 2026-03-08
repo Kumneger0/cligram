@@ -34,6 +34,7 @@ type UserManager interface {
 
 type ChatManager interface {
 	GetUserChats(ctx context.Context, isBot bool, offsetDate, offsetID int) (GetUserChatsResult, error)
+	GetAllChats(ctx context.Context, offsetDate int, offsetID int) (GetAllChatsResponse, error)
 	GetChannels(ctx context.Context, isBroadCast bool, offsetDate, offsetID int) (GetChannelsResult, error)
 	GetChannelInfo(ctx context.Context, peer Peer) (*ChannelInfo, error)
 	GetChatHistory(ctx context.Context, peer Peer, limit int, offsetID *int) ([]FormattedMessage, error)
