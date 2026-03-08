@@ -1,5 +1,12 @@
 package types // nolint:revive
 
+type GetAllChatsResponse struct {
+	PrivateChats         []UserInfo    `json:"chats"`
+	Channels             []ChannelInfo `json:"channels"`
+	Groups               []ChannelInfo `json:"groups"`
+	OffsetDate, OffsetID int
+}
+
 type SendMessageResponse struct {
 	MessageID *int `json:"messageId,omitempty"`
 }

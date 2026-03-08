@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"runtime/pprof"
 
 	"github.com/charmbracelet/bubbles/filepicker"
 	"github.com/charmbracelet/bubbles/list"
@@ -20,7 +21,10 @@ import (
 )
 
 var (
-	Program *tea.Program
+	Program        *tea.Program
+	memFile        string
+	cpuFile        string
+	cpuProfileFile *os.File
 )
 
 func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Command {
@@ -45,10 +49,12 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 					return fmt.Errorf("authentication failed: %w", err)
 				}
 
-				userChatsResult, err := telegram.Cligram.GetChatManager().GetUserChats(ctx, false, 0, 0)
+				userChatsResult, err := telegram.Cligram.GetChatManager().GetAllChats(ctx, 0, 0)
 				modalContent := ""
 				isModalVisible := false
-				userChats := userChatsResult.Data
+				userChats := userChatsResult.PrivateChats
+				groupsChat := userChatsResult.Groups
+				channelsChat := userChatsResult.Channels
 
 				var result []types.UserInfo = []types.UserInfo{}
 
@@ -62,7 +68,12 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 				}
 
 				var users []list.Item = []list.Item{}
+				var bots []list.Item = []list.Item{}
 				for _, du := range result {
+					if du.IsBot {
+						bots = append(bots, du)
+						continue
+					}
 					users = append(users, types.UserInfo{
 						UnreadCount: du.UnreadCount,
 						FirstName:   du.FirstName,
@@ -73,20 +84,35 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 						IsOnline:    du.IsOnline,
 					})
 				}
+
+				channelsList := []list.Item{}
+				for _, channel := range channelsChat {
+					channelsList = append(channelsList, channel)
+				}
+
+				groupsList := []list.Item{}
+				for _, group := range groupsChat {
+					groupsList = append(groupsList, group)
+				}
+
 				model := &ui.Model{}
 				userList := list.New(users, ui.CustomDelegate{Model: model}, 10, 20)
 				userList.SetShowPagination(false)
-				channels := []list.Item{}
-				channelList := (list.New(channels, ui.CustomDelegate{Model: model}, 10, 20))
-				channelList.SetShowPagination(false)
-				groups := []list.Item{}
-				groupList := (list.New(groups, ui.CustomDelegate{Model: model}, 10, 20))
-				groupList.SetShowPagination(false)
+				channels := list.New(channelsList, ui.CustomDelegate{Model: model}, 10, 20)
+				groups := (list.New(groupsList, ui.CustomDelegate{Model: model}, 10, 20))
+				botsList := list.New(bots, ui.CustomDelegate{Model: model}, 10, 20)
+				channels.SetShowPagination(false)
+				groups.SetShowPagination(false)
 
 				userList.SetShowHelp(false)
-				channelList.SetShowHelp(false)
-				groupList.SetShowHelp(false)
+				channels.SetShowHelp(false)
+				groups.SetShowHelp(false)
+				botsList.SetShowHelp(false)
 
+				userList.SetShowTitle(false)
+				channels.SetShowTitle(false)
+				groups.SetShowTitle(false)
+				botsList.SetShowTitle(false)
 				input := textinput.New()
 				input.Placeholder = "Type a message..."
 				input.Prompt = "> "
@@ -106,15 +132,14 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 				fp.DirAllowed = false
 				fp.CurrentDirectory, _ = os.UserHomeDir()
 
-				model.AreWeSwitchingModes = false
 				model.Filepicker = fp
 				model.Input = input
 				model.Users = userList
-				model.Groups = groupList
+				model.Groups = groups
 				model.ModalContent = modalContent
 				model.Height = height - 4
 				model.Width = width - 4
-				model.Channels = channelList
+				model.Channels = channels
 				model.IsModalVisible = isModalVisible
 				model.Mode = ui.ModeUsers
 				model.FocusedOn = ui.SideBar
@@ -123,6 +148,7 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 				model.OffsetDate = userChatsResult.OffsetDate
 				model.OffsetID = userChatsResult.OffsetID
 				model.OnPagination = false
+				model.Bots = botsList
 
 				model.Stories = []types.Stories{}
 
@@ -187,6 +213,24 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 			}
 			return nil
 		},
+		PersistentPostRun: func(cmd *cobra.Command, args []string) {
+			if cpuFile != "" {
+				pprof.StopCPUProfile()
+			}
+			if cpuProfileFile != nil {
+				cpuProfileFile.Close()
+			}
+			if memFile != "" {
+				f, err := os.Create(memFile)
+				if err != nil {
+					slog.Error(err.Error())
+				}
+				defer f.Close()
+				if err := pprof.WriteHeapProfile(f); err != nil {
+					slog.Error(err.Error())
+				}
+			}
+		},
 	}
 
 	cmd.AddCommand(newVersionCmd(version))
@@ -198,7 +242,27 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 }
 
 func Execute(version string, telegramAPIID, telegramAPIHash string) error {
-	if err := newRootCmd(version, telegramAPIID, telegramAPIHash).Execute(); err != nil {
+	cmd := newRootCmd(version, telegramAPIID, telegramAPIHash)
+
+	cmd.PersistentFlags().StringVar(&cpuFile, "cpuprofile", "", "write cpu profile to `file`")
+	cmd.PersistentFlags().StringVar(&memFile, "memprofile", "", "write memory profile to `file`")
+
+	cmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		if cpuFile != "" {
+			f, err := os.Create(cpuFile)
+			if err != nil {
+				return fmt.Errorf("could not create CPU profile: %w", err)
+			}
+			if err := pprof.StartCPUProfile(f); err != nil {
+				f.Close()
+				return fmt.Errorf("could not start CPU profile: %w", err)
+			}
+			cpuProfileFile = f
+		}
+		return nil
+	}
+
+	if err := cmd.Execute(); err != nil {
 		return fmt.Errorf("error executing root command: %w", err)
 	}
 	return nil
