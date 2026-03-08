@@ -35,6 +35,7 @@ func (d CustomDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd {
 func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	var title string
 	var prefix string
+	var unreadCountStr string
 
 	switch item := item.(type) {
 	case types.UserInfo:
@@ -46,7 +47,8 @@ func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 			prefix = "👤 "
 		}
 		if entry.UnreadCount > 0 {
-			title = prefix + title + " 🔴(" + strconv.Itoa(entry.UnreadCount) + ")"
+			unreadCountStr = unreadCountStyle.Render(strconv.Itoa(entry.UnreadCount))
+			title = fmt.Sprintf("%s%s %s", prefix, title, unreadCountStr)
 		} else {
 			title = prefix + title
 		}
@@ -59,7 +61,8 @@ func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 			prefix = "👥 "
 		}
 		if entry.UnreadCount > 0 {
-			title = prefix + title + " 🔴(" + strconv.Itoa(entry.UnreadCount) + ")"
+			unreadCountStr = unreadCountStyle.Render(strconv.Itoa(entry.UnreadCount))
+			title = fmt.Sprintf("%s%s %s", prefix, title, unreadCountStr)
 		} else {
 			title = prefix + title
 		}
@@ -371,13 +374,6 @@ func (m *Model) updateConversations() {
 	m.ChatUI.SetItems(formatMessages(m.Conversations))
 	m.viewport.SetContent(m.ChatUI.View())
 	m.viewport.GotoBottom()
-}
-
-func getItemBorder(isSelected bool) lipgloss.Border {
-	if isSelected {
-		return lipgloss.DoubleBorder()
-	}
-	return lipgloss.NormalBorder()
 }
 
 func max(a, b int) int {
