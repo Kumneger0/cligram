@@ -23,40 +23,41 @@ type Theme struct {
 }
 
 var DefaultTheme = Theme{
-	PrimaryText:    lipgloss.Color("#E0E0E0"),
-	SecondaryText:  lipgloss.Color("#A0A0A0"),
-	AccentColor:    lipgloss.Color("#8A68F8"),
-	BorderColor:    lipgloss.Color("#606060"),
-	SelectedBg:     lipgloss.Color("#8A68F8"),
-	SelectedFg:     lipgloss.Color("#FFFFFF"),
-	SubtleBg:       lipgloss.Color("#303030"),
-	WarningColor:   lipgloss.Color("#FFD700"),
-	ErrorColor:     lipgloss.Color("#FF6347"),
-	OnlineStatus:   lipgloss.Color("#00FF00"),
-	OfflineStatus:  lipgloss.Color("#FFA500"),
-	UnreadCountBg:  lipgloss.Color("#FF6347"),
+	PrimaryText:    lipgloss.Color("#E2E8F0"),
+	SecondaryText:  lipgloss.Color("#94A3B8"),
+	AccentColor:    lipgloss.Color("#818CF8"),
+	BorderColor:    lipgloss.Color("#334155"),
+	SelectedBg:     lipgloss.Color("#1E293B"),
+	SelectedFg:     lipgloss.Color("#F8FAFC"),
+	SubtleBg:       lipgloss.Color("#0F172A"),
+	WarningColor:   lipgloss.Color("#F59E0B"),
+	ErrorColor:     lipgloss.Color("#EF4444"),
+	OnlineStatus:   lipgloss.Color("#10B981"),
+	OfflineStatus:  lipgloss.Color("#F97316"),
+	UnreadCountBg:  lipgloss.Color("#EF4444"),
 	UnreadCountFg:  lipgloss.Color("#FFFFFF"),
-	InputBg:        lipgloss.Color("#252525"),
-	TimestampColor: lipgloss.Color("#707070"),
+	InputBg:        lipgloss.Color("#1E293B"),
+	TimestampColor: lipgloss.Color("#CBD5E1"),
 }
 
 var (
 	normalStyle = lipgloss.NewStyle().
-			Foreground(DefaultTheme.PrimaryText)
+			Foreground(DefaultTheme.PrimaryText).
+			PaddingLeft(1)
 
 	selectedStyle = lipgloss.NewStyle().
 			Foreground(DefaultTheme.SelectedFg).
 			Background(DefaultTheme.SelectedBg).
+			PaddingLeft(1).
 			Bold(true)
 
 	titleStyle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(DefaultTheme.AccentColor).Padding(0, 1)
 
-	timestampStyle = lipgloss.NewStyle().Height(1).
+	timestampStyle = lipgloss.NewStyle().
 			Foreground(DefaultTheme.TimestampColor).
-			Italic(true).
-			PaddingRight(1).PaddingLeft(4)
+			Italic(true)
 
 	messageStyle = lipgloss.NewStyle().
 			PaddingTop(1).
