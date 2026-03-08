@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"strconv"
@@ -39,51 +38,35 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 			return nil
 		}
 		if peerClass, ok := msg.GetFromID(); ok {
-			peer, ok := peerClass.(*tg.PeerUser)
-			if !ok {
-				return nil
-			}
-			userInfo, err := shared.GetUserInfo(ctx, *Cligram.API(), peer.UserID)
-			if err != nil {
-				return types.NewTelegramError(types.ErrorCodeUserNotFound, err.Error(), nil)
-			}
+			var fromID string
+			notificationContent := "You have Received New Message"
 
-			accessHash, err := strconv.ParseInt(userInfo.AccessHash, 10, 64)
-
-			if err != nil {
-				return nil
-			}
-
-			req := &tg.MessagesGetHistoryRequest{
-				Peer: &tg.InputPeerUser{
-					UserID:     peer.UserID,
-					AccessHash: accessHash,
-				},
-				Limit: 50,
-			}
-
-			history, err := Cligram.API().MessagesGetHistory(ctx, req)
-			if err != nil {
-				slog.Error(err.Error())
-				return types.NewGetMessagesError(errors.New(peerClass.String()))
-			}
-
-			entities, err := shared.GetMessageAndUserClasses(history)
-
-			if err != nil {
-				slog.Error(err.Error())
+			switch peer := peerClass.(type) {
+			case *tg.PeerUser:
+				fromID = strconv.FormatInt(peer.UserID, 10)
+				userInfo, err := shared.GetUserInfo(ctx, *Cligram.API(), peer.UserID)
+				if err != nil {
+					slog.Error(err.Error())
+				} else if userInfo != nil {
+					notificationContent = fmt.Sprintf("%s Sent You New Message", userInfo.FirstName)
+				}
+			case *tg.PeerChannel:
+				fromID = strconv.FormatInt(peer.ChannelID, 10)
+			case *tg.PeerChat:
+				fromID = strconv.FormatInt(peer.ChatID, 10)
+			default:
 				return nil
 			}
 
-			formattedMessage := shared.FormatMessage(msg, userInfo, entities.Messages)
 			notification := types.Notification{
 				NewMessage: &types.NewMessageNotification{
-					Message: *formattedMessage,
-					User:    userInfo,
+					ID:      msg.GetID(),
+					FromID:  fromID,
+					Message: msg,
 				},
 			}
 
-			sendNewMessageNotification(userInfo.FirstName, " Sent You New Message", formattedMessage.Content)
+			sendNewMessageNotification(" ", notificationContent, msg.Message)
 			select {
 			case updateChannel <- notification:
 			default:
@@ -121,6 +104,10 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 		userInfo, err := shared.GetUserInfo(ctx, *Cligram.API(), userID)
 		if err != nil {
 			return types.NewTelegramError(types.ErrorCodeUserNotFound, err.Error(), nil)
+		}
+
+		if userInfo == nil {
+			return types.NewUserNotFoundError(userID)
 		}
 
 		var lastSeen time.Time

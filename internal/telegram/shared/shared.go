@@ -122,12 +122,12 @@ func GetUserInfo(ctx context.Context, client tg.Client, userID int64) (*types.Us
 		return nil, types.NewUserNotFoundError(userID)
 	}
 
-	tgUser, ok := userClasses[0].(*tg.User)
-	if !ok {
-		return nil, types.NewTelegramError(types.ErrorCodeGetMessagesFailed, "users.getUsers: unexpected type", nil)
-	}
+	user, ok := userClasses[0].(*tg.User)
 
-	return ConvertTGUserToUserInfo(tgUser), nil
+	if !ok {
+		return nil, types.NewUserNotFoundError(userID)
+	}
+	return ConvertTGUserToUserInfo(user), nil
 }
 
 func ConvertTGUserToUserInfo(tgUser *tg.User) *types.UserInfo {

@@ -2,6 +2,8 @@ package types // nolint:revive
 
 import (
 	"time"
+
+	"github.com/gotd/td/tg"
 )
 
 type ChatType string
@@ -83,9 +85,9 @@ type Notification struct {
 }
 
 type NewMessageNotification struct {
-	Message        FormattedMessage `json:"message"`
-	User           *UserInfo        `json:"user,omitempty"`
-	ChannelOrGroup *ChannelInfo     `json:"channelOrGroup,omitempty"`
+	ID      int         `json:"id"`
+	FromID  string      `json:"fromId"`
+	Message *tg.Message `json:"message"`
 }
 
 type UserStatusNotification struct {
