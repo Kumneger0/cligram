@@ -1,13 +1,16 @@
 package ui
 
 import (
+	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/gotd/td/tg"
 	"github.com/kumneger0/cligram/internal/telegram"
 	"github.com/kumneger0/cligram/internal/telegram/types"
 )
@@ -149,51 +152,82 @@ func (m Model) handleMarkMessagesAsRead(msg types.MarkMessagesAsReadMsg) (tea.Mo
 }
 
 func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, tea.Cmd) {
-	areInGroupOrChannelMode := m.Mode == ModeGroups || m.Mode == ModeChannels
-	if msg.ChannelOrGroup != nil {
-		if !areInGroupOrChannelMode {
+	var userInfo *types.UserInfo
+	for _, v := range slices.Concat(m.Users.Items(), m.Bots.Items()) {
+		if user, ok := v.(types.UserInfo); ok && user.PeerID == msg.FromID {
+			userInfo = &user
+			break
+		}
+	}
+
+	var channelOrGroupInfo *types.ChannelInfo
+	if userInfo == nil {
+		for _, v := range slices.Concat(m.Channels.Items(), m.Groups.Items()) {
+			if cg, ok := v.(types.ChannelInfo); ok && cg.ID == msg.FromID {
+				channelOrGroupInfo = &cg
+				break
+			}
+		}
+	}
+
+	if channelOrGroupInfo != nil {
+		if m.Mode != ModeGroups && m.Mode != ModeChannels {
 			return m, nil
 		}
-		if m.SelectedChannel.ID == msg.ChannelOrGroup.ID || m.SelectedGroup.ID == msg.ChannelOrGroup.ID {
+
+		chatType := types.GroupChat
+		if m.Mode == ModeChannels {
+			chatType = types.ChannelChat
+		}
+
+		if m.SelectedChannel.ID == channelOrGroupInfo.ID || m.SelectedGroup.ID == channelOrGroupInfo.ID {
 			copy(m.Conversations[:], m.Conversations[1:])
-			m.Conversations[len(m.Conversations)-1] = msg.Message
+			m.Conversations[len(m.Conversations)-1] = getFormattedMessageFunc(GetFormattedMessageArg{
+				ChatType:           chatType,
+				ChannelOrGroupInfo: channelOrGroupInfo,
+				Message:            msg.Message,
+			})
 			m.updateConversations()
 			return m, nil
 		}
-		groupIndex := getGroupIndex(m, *msg.ChannelOrGroup)
-		if groupIndex != -1 {
-			items := m.Groups.Items()
-			group := items[groupIndex].(types.ChannelInfo)
+
+		if groupIndex := getGroupIndex(m, *channelOrGroupInfo); groupIndex != -1 {
+			group := m.Groups.Items()[groupIndex].(types.ChannelInfo)
 			group.UnreadCount++
 			m.Groups.SetItem(groupIndex, group)
 		}
-	}
-
-	if msg.User == nil {
-		return m, nil
-	}
-	areWeInBotOrUserMode := m.Mode == ModeUsers || m.Mode == ModeBots
-	if !areWeInBotOrUserMode {
 		return m, nil
 	}
 
-	if m.SelectedUser.PeerID != msg.User.PeerID {
-		l := listForUser(&m, *msg.User)
-		userIndex := getUserIndex(*l, *msg.User)
-		if userIndex != -1 {
-			items := l.Items()
-			user := items[userIndex].(types.UserInfo)
+	if userInfo == nil || (m.Mode != ModeUsers && m.Mode != ModeBots) {
+		return m, nil
+	}
+
+	if m.SelectedUser.PeerID != userInfo.PeerID {
+		l := listForUser(&m, *userInfo)
+		if userIndex := getUserIndex(*l, *userInfo); userIndex != -1 {
+			user := l.Items()[userIndex].(types.UserInfo)
 			user.UnreadCount++
 			return m, l.SetItem(userIndex, user)
 		}
 		return m, nil
 	}
 
+	chatType := types.UserChat
+	if userInfo.IsBot {
+		chatType = types.BotChat
+	}
+
 	m.SelectedUser.UnreadCount++
+
 	for _, v := range m.Conversations {
 		if v.FromID != nil && *v.FromID == m.SelectedUser.PeerID {
 			copy(m.Conversations[:], m.Conversations[1:])
-			formattedMessage := msg.Message
+			formattedMessage := getFormattedMessageFunc(GetFormattedMessageArg{
+				ChatType: chatType,
+				UserInfo: userInfo,
+				Message:  msg.Message,
+			})
 			formattedMessage.Sender = m.SelectedUser.FirstName
 			m.Conversations[len(m.Conversations)-1] = formattedMessage
 			m.updateConversations()
@@ -201,6 +235,44 @@ func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, te
 		}
 	}
 	return m, nil
+}
+
+type GetFormattedMessageArg struct {
+	ChatType           types.ChatType
+	ChannelOrGroupInfo *types.ChannelInfo
+	UserInfo           *types.UserInfo
+	Message            *tg.Message
+}
+
+func getFormattedMessageFunc(arg GetFormattedMessageArg) types.FormattedMessage {
+	var sender string
+	if (arg.ChatType == types.UserChat || arg.ChatType == types.BotChat) && arg.UserInfo != nil {
+		sender = arg.UserInfo.FirstName
+	}
+	var media *string
+	if arg.Message.Media != nil {
+		mediaStr := fmt.Sprintf("%T", arg.Message.Media)
+		media = &mediaStr
+	}
+
+	var fromID *string
+
+	if arg.UserInfo != nil {
+		fromID = &arg.UserInfo.PeerID
+	}
+
+	return types.FormattedMessage{
+		ID:                   arg.Message.ID,
+		Sender:               sender,
+		Content:              arg.Message.Message,
+		IsFromMe:             arg.Message.GetOut(),
+		Media:                media,
+		IsUnsupportedMessage: media != nil,
+		Date:                 time.Unix(int64(arg.Message.Date), 0),
+		FromID:               fromID,
+		ReplyTo:              nil,
+		SenderUserInfo:       arg.UserInfo,
+	}
 }
 
 func (m Model) handleUserOnlineOffline(msg types.UserStatusNotification) (tea.Model, tea.Cmd) {
@@ -674,7 +746,6 @@ func (m Model) handleSearchedGroup(group types.ChannelInfo) (tea.Model, tea.Cmd)
 	return m, setItemsCmd
 }
 
-// listForUser returns a pointer to the correct list (Bots or Users) based on the user's IsBot flag.
 func listForUser(m *Model, user types.UserInfo) *list.Model {
 	if user.IsBot {
 		return &m.Bots
