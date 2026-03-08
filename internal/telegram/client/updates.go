@@ -68,14 +68,14 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 				return types.NewGetMessagesError(errors.New(peerClass.String()))
 			}
 
-			msgs, _, err := shared.GetMessageAndUserClasses(history)
+			entities, err := shared.GetMessageAndUserClasses(history)
 
 			if err != nil {
 				slog.Error(err.Error())
 				return nil
 			}
 
-			formattedMessage := shared.FormatMessage(msg, userInfo, msgs)
+			formattedMessage := shared.FormatMessage(msg, userInfo, entities.Messages)
 			notification := types.Notification{
 				NewMessage: &types.NewMessageNotification{
 					Message: *formattedMessage,

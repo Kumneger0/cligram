@@ -256,7 +256,7 @@ func (c *Client) GetChatHistory(ctx context.Context, peer types.Peer, limit int,
 		return nil, types.NewGetMessagesError(err)
 	}
 
-	msgs, users, err := shared.GetMessageAndUserClasses(history)
+	entities, err := shared.GetMessageAndUserClasses(history)
 	if err != nil {
 		return nil, err
 	}
@@ -268,28 +268,32 @@ func (c *Client) GetChatHistory(ctx context.Context, peer types.Peer, limit int,
 
 	if areWeInUserModeOrBotMode {
 		if id, err := strconv.ParseInt(peer.ID, 10, 64); err == nil {
-			userInfo = getUserFromClasses(users, id)
+			userInfo = getUserFromClasses(entities.Users, id)
+		}
+	} else {
+		if id, err := strconv.ParseInt(peer.ID, 10, 64); err == nil {
+			channel = getChannelFromClasses(entities.Chats, id)
 		}
 	}
 
 	var formattedMessages []types.FormattedMessage
-	for _, msgClass := range msgs {
+	for _, msgClass := range entities.Messages {
 		msg, ok := msgClass.(*tg.Message)
 		if !ok {
 			continue
 		}
 		if areWeInUserModeOrBotMode {
-			formattedMessages = append(formattedMessages, *shared.FormatMessage(msg, userInfo, msgs))
+			formattedMessages = append(formattedMessages, *shared.FormatMessage(msg, userInfo, entities.Messages))
 		} else if peer.ChatType == types.GroupChat {
 			fromID, ok := msg.FromID.(*tg.PeerUser)
 			if ok {
-				ui := getUserFromClasses(users, fromID.UserID)
-				formattedMessages = append(formattedMessages, *shared.FormatMessage(msg, ui, msgs))
+				ui := getUserFromClasses(entities.Users, fromID.UserID)
+				formattedMessages = append(formattedMessages, *shared.FormatMessage(msg, ui, entities.Messages))
 			} else {
-				formattedMessages = append(formattedMessages, *shared.FormatMessage(msg, channel, msgs))
+				formattedMessages = append(formattedMessages, *shared.FormatMessage(msg, channel, entities.Messages))
 			}
 		} else {
-			formattedMessages = append(formattedMessages, *shared.FormatMessage(msg, channel, msgs))
+			formattedMessages = append(formattedMessages, *shared.FormatMessage(msg, channel, entities.Messages))
 		}
 	}
 
@@ -758,6 +762,24 @@ func getUserFromClasses(users []tg.UserClass, peerID int64) *types.UserInfo {
 	for _, userClass := range users {
 		if user, ok := userClass.(*tg.User); ok && user.ID == peerID {
 			return shared.ConvertTGUserToUserInfo(user)
+		}
+	}
+	return nil
+}
+
+func getChannelFromClasses(chats []tg.ChatClass, peerID int64) *types.ChannelInfo {
+	for _, chatClass := range chats {
+		if channel, ok := chatClass.(*tg.Channel); ok && channel.ID == peerID {
+			return convertTGChannelToChannelInfo(channel)
+		}
+		if chat, ok := chatClass.(*tg.Chat); ok && chat.ID == peerID {
+			return &types.ChannelInfo{
+				ChannelTitle:      chat.Title,
+				ID:                strconv.Itoa(int(chat.ID)),
+				IsCreator:         chat.Creator,
+				IsBroadcast:       false,
+				ParticipantsCount: &chat.ParticipantsCount,
+			}
 		}
 	}
 	return nil
