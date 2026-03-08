@@ -69,38 +69,32 @@ func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list
 			title = entry.Sender + ": " + title
 		}
 	}
-	date := timestampStyle.Render(entry.Date.Format("02/01/2006 03:04 PM"))
+	date := strings.Repeat(" ", 4) + timestampStyle.Render(entry.Date.Format("02/01/2006 03:04 PM"))
 
 	isMainViewFocused := d.Model.FocusedOn == Mainview
-
-	fullWidth := max(0, m.Width()-2)
-
 	if index == m.Index() && isMainViewFocused {
-		str := title
+		str := title + "\n" + date
 
 		lines := strings.Split(str, "\n")
 		var styledLines []string
 
-		lineStyle := selectedStyle.Copy().Width(fullWidth)
+		lineStyle := selectedStyle.Width(m.Width())
 
 		for i, line := range lines {
-			style := lineStyle.Copy()
+			style := lineStyle
 			if i == 0 {
 				style = style.PaddingTop(1)
 			}
 			if i == len(lines)-1 {
 				style = style.PaddingBottom(1)
 			}
-			styledLines = append(styledLines, style.Render(" "+line))
+			styledLines = append(styledLines, style.Render(line))
 		}
 
-		messageBlock := strings.Join(styledLines, "\n")
-		dateBlock := normalStyle.Copy().Width(fullWidth).PaddingBottom(1).Render(" " + date)
-
-		fmt.Fprint(w, messageBlock+"\n"+dateBlock)
+		fmt.Fprint(w, strings.Join(styledLines, "\n"))
 	} else {
 		str := messageStyle.Render(title + "\n" + date)
-		fmt.Fprint(w, normalStyle.Copy().Width(fullWidth).Render(" "+str))
+		fmt.Fprint(w, normalStyle.Width(m.Width()).Render(str))
 	}
 }
 
