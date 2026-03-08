@@ -410,9 +410,10 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.ChatUI.Select(lastIndex)
 		}
 	case "down":
-		m, cmd := m.handleListPagination()
-		cmds = append(cmds, cmd)
-		return m, tea.Batch(cmds...)
+		//disable pagination for now since we are fetching all of them at once
+		// m, cmd := m.handleListPagination()
+		// cmds = append(cmds, cmd)
+		// return m, tea.Batch(cmds...)
 	case "ctrl+a":
 		m, cmd := m.handleCtrlA()
 		cmds = append(cmds, cmd)

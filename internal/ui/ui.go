@@ -246,7 +246,7 @@ func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (M
 
 func handleUserChange(m *Model) (Model, tea.Cmd) {
 	pInfo := getMessageParams(m)
-	cmd := telegram.Cligram.GetAllMessages(telegram.Cligram.Context(), types.GetMessagesRequest{
+	cmd := telegram.Cligram.GetMessages(telegram.Cligram.Context(), types.GetMessagesRequest{
 		Peer:          pInfo,
 		Limit:         50,
 		OffsetID:      nil,
@@ -335,7 +335,7 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 						m.Users.Select(foundIndex)
 					}
 					m.ChatUI.SetItems(nil)
-					return *m, telegram.Cligram.GetAllMessages(telegram.Cligram.Context(), types.GetMessagesRequest{
+					return *m, telegram.Cligram.GetMessages(telegram.Cligram.Context(), types.GetMessagesRequest{
 						Peer: m.getPeerInfo(),
 						//TODO:  i might need to revisit this one
 						Limit:         50,

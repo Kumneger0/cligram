@@ -9,10 +9,9 @@ import (
 )
 
 var (
-	once sync.Once
+	once    sync.Once
+	Cligram *client.Client
 )
-
-var Cligram *client.Client
 
 func NewClient(ctx context.Context, updateChannel chan types.Notification, telegramAPIID, telegramAPIHash string) (*client.Client, error) {
 	var err error
@@ -22,23 +21,4 @@ func NewClient(ctx context.Context, updateChannel chan types.Notification, teleg
 		err = e
 	})
 	return Cligram, err
-}
-
-type PeerInfo struct {
-	PeerID     string         `json:"peerId"`
-	AccessHash string         `json:"accessHash"`
-	ChatType   types.ChatType `json:"chatType"`
-}
-
-type PeerInfoParams struct {
-	PeerID                      string         `json:"peerId"`
-	AccessHash                  string         `json:"accessHash"`
-	UserFirstNameOrChannelTitle string         `json:"title"`
-	ChatType                    types.ChatType `json:"chatType"`
-}
-
-type ChannelAndGroupInfo = types.ChannelInfo
-
-func GetChannelID(c ChannelAndGroupInfo) string {
-	return c.ID
 }

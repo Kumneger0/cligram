@@ -8,7 +8,8 @@ import (
 	"runtime/pprof"
 
 	"github.com/charmbracelet/bubbles/filepicker"
-	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/list" // Legacy groups have no access hash; supergroups (migrated) do.
+
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/term"
@@ -49,7 +50,7 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 					return fmt.Errorf("authentication failed: %w", err)
 				}
 
-				userChatsResult, err := telegram.Cligram.GetChatManager().GetAllChats(ctx, 0, 0)
+				userChatsResult, err := telegram.Cligram.GetAllChats(ctx, 0, 0)
 				modalContent := ""
 				isModalVisible := false
 				userChats := userChatsResult.PrivateChats

@@ -357,26 +357,28 @@ func ConvertPeerToInputPeer(peer types.Peer) (tg.InputPeerClass, error) {
 		return nil, types.NewInvalidPeerError(peer.ID)
 	}
 
-	accessHash, err := strconv.ParseInt(peer.AccessHash, 10, 64)
-	if err != nil {
-		return nil, types.NewInvalidPeerError(peer.AccessHash)
-	}
-
 	switch peer.ChatType {
 	case types.UserChat, types.BotChat:
-		return &tg.InputPeerUser{
-			UserID:     peerID,
-			AccessHash: accessHash,
-		}, nil
+		accessHash, err := strconv.ParseInt(peer.AccessHash, 10, 64)
+		if err != nil {
+			return nil, types.NewInvalidPeerError(peer.AccessHash)
+		}
+		return &tg.InputPeerUser{UserID: peerID, AccessHash: accessHash}, nil
 	case types.ChannelChat:
-		return &tg.InputPeerChannel{
-			ChannelID:  peerID,
-			AccessHash: accessHash,
-		}, nil
+		accessHash, err := strconv.ParseInt(peer.AccessHash, 10, 64)
+		if err != nil {
+			return nil, types.NewInvalidPeerError(peer.AccessHash)
+		}
+		return &tg.InputPeerChannel{ChannelID: peerID, AccessHash: accessHash}, nil
 	case types.GroupChat:
-		return &tg.InputPeerChat{
-			ChatID: peerID,
-		}, nil
+		if peer.AccessHash == "" {
+			return &tg.InputPeerChat{ChatID: peerID}, nil
+		}
+		accessHash, err := strconv.ParseInt(peer.AccessHash, 10, 64)
+		if err != nil {
+			return nil, types.NewInvalidPeerError(peer.AccessHash)
+		}
+		return &tg.InputPeerChannel{ChannelID: peerID, AccessHash: accessHash}, nil
 	default:
 		return nil, types.NewTelegramError(types.ErrorCodeInvalidPeer, "unsupported chat type", nil)
 	}
