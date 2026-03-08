@@ -26,17 +26,17 @@ var DefaultTheme = Theme{
 	PrimaryText:    lipgloss.Color("#E2E8F0"),
 	SecondaryText:  lipgloss.Color("#94A3B8"),
 	AccentColor:    lipgloss.Color("#818CF8"),
-	BorderColor:    lipgloss.Color("#334155"),
+	BorderColor:    lipgloss.Color("#1E293B"),
 	SelectedBg:     lipgloss.Color("#1E293B"),
 	SelectedFg:     lipgloss.Color("#F8FAFC"),
-	SubtleBg:       lipgloss.Color("#0F172A"),
+	SubtleBg:       lipgloss.Color("#0A0F1D"),
 	WarningColor:   lipgloss.Color("#F59E0B"),
 	ErrorColor:     lipgloss.Color("#EF4444"),
 	OnlineStatus:   lipgloss.Color("#10B981"),
-	OfflineStatus:  lipgloss.Color("#F97316"),
-	UnreadCountBg:  lipgloss.Color("#EF4444"),
-	UnreadCountFg:  lipgloss.Color("#FFFFFF"),
-	InputBg:        lipgloss.Color("#1E293B"),
+	OfflineStatus:  lipgloss.Color("#F1F5F9"),
+	UnreadCountBg:  lipgloss.Color("#1E293B"),
+	UnreadCountFg:  lipgloss.Color("#818CF8"),
+	InputBg:        lipgloss.Color("#0F172A"),
 	TimestampColor: lipgloss.Color("#CBD5E1"),
 }
 
@@ -55,6 +55,11 @@ var (
 			Bold(true).
 			Foreground(DefaultTheme.AccentColor).Padding(0, 1)
 
+	sidebarHeaderStyle = lipgloss.NewStyle().
+				Foreground(DefaultTheme.SecondaryText).
+				Bold(true).
+				Padding(0, 1)
+
 	timestampStyle = lipgloss.NewStyle().
 			Foreground(DefaultTheme.TimestampColor).
 			Italic(true)
@@ -71,7 +76,14 @@ var (
 				Background(DefaultTheme.UnreadCountBg).
 				Foreground(DefaultTheme.UnreadCountFg).
 				Padding(0, 1).
-				SetString(" ")
+				Bold(true)
+
+	badgeStyle = lipgloss.NewStyle().
+			Background(lipgloss.Color("#1E293B")).
+			Foreground(lipgloss.Color("#818CF8")).
+			Padding(0, 1).
+			Bold(true).
+			MarginLeft(1)
 )
 
 func getSideBarStyles(sidebarWidth int, contentHeight int, m *Model) lipgloss.Style {

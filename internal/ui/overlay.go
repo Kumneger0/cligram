@@ -60,8 +60,10 @@ func (d SearchDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 		return
 	}
 
-	// Use the windowWidth from the Foreground model for responsive sizing
-	width := d.Foreground.windowWidth / 3
+	width := 20
+	if d.Foreground != nil {
+		width = d.Foreground.windowWidth / 3
+	}
 	str := lipgloss.NewStyle().Width(width).Render(title)
 	if index == m.Index() {
 		fmt.Fprint(w, selectedStyle.Render(" "+str+" "))
@@ -258,9 +260,9 @@ func (f Foreground) View() string {
 	content := getSearchView(f)
 	var searchResultBorderStyle lipgloss.Style
 	if f.focusedOn == SEARCH {
-		searchResultBorderStyle = lipgloss.NewStyle().Border(lipgloss.DoubleBorder()).BorderForeground(DefaultTheme.AccentColor)
-	} else {
 		searchResultBorderStyle = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(DefaultTheme.BorderColor)
+	} else {
+		searchResultBorderStyle = lipgloss.NewStyle().Border(lipgloss.DoubleBorder()).BorderForeground(DefaultTheme.AccentColor)
 	}
 
 	searchResult := searchResultBorderStyle.Render(f.searchResultCombined.View())
@@ -271,9 +273,9 @@ func (f Foreground) View() string {
 func getSearchView(m Foreground) string {
 	var inputBorderStyle lipgloss.Style
 	if m.focusedOn == LIST {
-		inputBorderStyle = lipgloss.NewStyle().Border(lipgloss.DoubleBorder()).BorderForeground(DefaultTheme.AccentColor)
-	} else {
 		inputBorderStyle = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(DefaultTheme.BorderColor)
+	} else {
+		inputBorderStyle = lipgloss.NewStyle().Border(lipgloss.DoubleBorder()).BorderForeground(DefaultTheme.AccentColor)
 	}
 	textViewString := lipgloss.NewStyle().Width(m.windowWidth/3).Height(5).Padding(0, 1).Inherit(inputBorderStyle).Background(DefaultTheme.InputBg).Render(m.input.View())
 	return textViewString

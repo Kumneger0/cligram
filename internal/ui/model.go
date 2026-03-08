@@ -287,25 +287,21 @@ func prepareMainContent(m *Model, d layoutDimensions) string {
 	//the terminal height is determined by charater
 	// one list items takes one 1 charater space since we are showing extra info on chats like times
 	// using the d.contentHeight will make the content out of view
-	// TODO: can we do better ? this feels like a hack
 	m.ChatUI.SetHeight(int(d.contentHeight / 5))
 
 	userNameOrChannelName := getUserOrChannelName(m)
 	title := lipgloss.NewStyle().
 		Foreground(DefaultTheme.PrimaryText).
-		Background(DefaultTheme.SubtleBg).
 		Bold(true).
-		Align(lipgloss.Center).
-		Width(max(0, d.mainWidth-4)). // This should be the usable width within mainStyle's padding
+		Padding(0, 1).
 		Render(userNameOrChannelName)
 
-	// Create a full-width separator line
 	separatorLine := lipgloss.NewStyle().
 		Foreground(DefaultTheme.BorderColor).
-		SetString(strings.Repeat("─", max(0, d.mainWidth-4))). // Full width line
+		SetString(strings.Repeat("─", max(0, d.mainWidth-2))). // Full width line
 		String()
 
-	headerView := lipgloss.JoinVertical(lipgloss.Left, title, separatorLine)
+	headerView := lipgloss.JoinVertical(lipgloss.Left, title, "", separatorLine)
 
 	chatsView := m.ChatUI.View()
 
@@ -351,8 +347,18 @@ func prepareSidebarContent(m *Model, d layoutDimensions) string {
 		content = m.Groups.View()
 	}
 
-	storiesIndicator := fmt.Sprintf("%v, stories \n", len(m.Stories))
-	joinedView := lipgloss.JoinVertical(lipgloss.Top, storiesIndicator, content)
+	storiesIndicator := sidebarHeaderStyle.Render(fmt.Sprintf("📖 Stories (%d)", len(m.Stories)))
+	itemsCount := sidebarHeaderStyle.Render(fmt.Sprintf("💬 Chats (%d)", len(m.Users.Items())))
+	if m.Mode == ModeChannels {
+		itemsCount = sidebarHeaderStyle.Render(fmt.Sprintf("📢 Channels (%d)", len(m.Channels.Items())))
+	} else if m.Mode == ModeGroups {
+		itemsCount = sidebarHeaderStyle.Render(fmt.Sprintf("👥 Groups (%d)", len(m.Groups.Items())))
+	} else if m.Mode == ModeBots {
+		itemsCount = sidebarHeaderStyle.Render(fmt.Sprintf("🤖 Bots (%d)", len(m.Bots.Items())))
+	}
+
+	header := lipgloss.JoinVertical(lipgloss.Left, storiesIndicator, "", itemsCount)
+	joinedView := lipgloss.JoinVertical(lipgloss.Top, header, content)
 	return getSideBarStyles(d.sidebarWidth, d.contentHeight, m).Render(joinedView)
 }
 

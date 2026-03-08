@@ -45,7 +45,7 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		for _, v := range msg {
 			storiesToDisplay = append(storiesToDisplay, v)
 		}
-		stories := list.New(storiesToDisplay, StoriesDelegate{}, 10, 10)
+		stories := list.New(storiesToDisplay, StoriesDelegate{Foreground: m}, 10, 10)
 		m.stories = &stories
 		m.stories.SetShowFilter(false)
 		m.stories.SetShowPagination(false)
@@ -53,7 +53,7 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.stories.SetShowHelp(false)
 		m.stories.SetShowStatusBar(false)
 	case tea.WindowSizeMsg:
-		m.searchResultCombined = list.New([]list.Item{}, SearchDelegate{}, 10, 10)
+		m.searchResultCombined = list.New([]list.Item{}, SearchDelegate{Foreground: m}, 10, 10)
 		m.searchResultCombined.Title = "Search User Result"
 		m.searchResultCombined.SetShowStatusBar(false)
 		m.searchResultCombined.SetShowFilter(false)
