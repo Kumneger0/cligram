@@ -16,15 +16,15 @@ require (
 	github.com/gotd/td v0.136.0
 	github.com/gotesttools/gotestfmt/v2 v2.5.0
 	github.com/hashicorp/go-version v1.8.0
-	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/muesli/mango-cobra v1.3.0
 	github.com/muesli/reflow v0.3.0
 	github.com/muesli/roff v0.1.0
-	github.com/schollz/progressbar/v3 v3.19.0
 	github.com/rmhubbert/bubbletea-overlay v0.6.3
+	github.com/schollz/progressbar/v3 v3.19.0
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616
 	golang.org/x/term v0.39.0
+	golang.org/x/time v0.13.0
 	golang.org/x/tools v0.40.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	mvdan.cc/gofumpt v0.9.2
@@ -251,7 +251,6 @@ require (
 	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/telemetry v0.0.0-20251203150158-8fff8a5912fc // indirect
 	golang.org/x/text v0.32.0 // indirect
-	golang.org/x/time v0.13.0 // indirect
 	golang.org/x/tools/go/expect v0.1.1-deprecated // indirect
 	golang.org/x/tools/go/packages/packagestest v0.1.1-deprecated // indirect
 	google.golang.org/protobuf v1.36.8 // indirect

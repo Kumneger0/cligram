@@ -116,7 +116,7 @@ func getUserIndex(listToSearchFrom list.Model, user types.UserInfo) int {
 func sendMessage(m *Model) (Model, tea.Cmd) {
 	userMsg := m.Input.Value()
 	m.Input.Reset()
-	peerInfo := m.getPeerInfo()
+	peerInfo := getMessageParams(m)
 	var messageToReply types.FormattedMessage
 	if m.ReplyTo != nil {
 		messageToReply = *m.ReplyTo
@@ -336,7 +336,7 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 					}
 					m.ChatUI.SetItems(nil)
 					return *m, telegram.Cligram.GetMessages(telegram.Cligram.Context(), types.GetMessagesRequest{
-						Peer: m.getPeerInfo(),
+						Peer: getMessageParams(m),
 						//TODO:  i might need to revisit this one
 						Limit:         50,
 						OffsetID:      nil,
