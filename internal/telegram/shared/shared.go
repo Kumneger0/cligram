@@ -229,23 +229,31 @@ func calculateLastSeenHumanReadable(wasOnline int) string {
 	return s.String()
 }
 
-func GetMessageAndUserClasses(history tg.MessagesMessagesClass) ([]tg.MessageClass, []tg.UserClass, error) {
-	var msgs []tg.MessageClass
-	var users []tg.UserClass
+type MessageHistoryEntities struct {
+	Messages []tg.MessageClass
+	Users    []tg.UserClass
+	Chats    []tg.ChatClass
+}
+
+func GetMessageAndUserClasses(history tg.MessagesMessagesClass) (*MessageHistoryEntities, error) {
+	entities := &MessageHistoryEntities{}
 	switch h := history.(type) {
 	case *tg.MessagesMessagesSlice:
-		msgs = h.Messages
-		users = h.Users
+		entities.Messages = h.Messages
+		entities.Users = h.Users
+		entities.Chats = h.Chats
 	case *tg.MessagesChannelMessages:
-		msgs = h.Messages
-		users = h.Users
+		entities.Messages = h.Messages
+		entities.Users = h.Users
+		entities.Chats = h.Chats
 	case *tg.MessagesMessages:
-		msgs = h.Messages
-		users = h.Users
+		entities.Messages = h.Messages
+		entities.Users = h.Users
+		entities.Chats = h.Chats
 	default:
-		return nil, nil, types.NewTelegramError(types.ErrorCodeGetMessagesFailed, fmt.Sprintf("unsupported history type: %T", history), nil)
+		return nil, types.NewTelegramError(types.ErrorCodeGetMessagesFailed, fmt.Sprintf("unsupported history type: %T", history), nil)
 	}
-	return msgs, users, nil
+	return entities, nil
 }
 
 func ReadStories(ctx context.Context, client *telegram.Client, peer types.Peer, maxID int) error {
