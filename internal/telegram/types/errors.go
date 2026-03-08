@@ -30,6 +30,7 @@ const (
 	ErrorCodeInvalidPeer       = 1008
 	ErrorCodeSessionFailed     = 1009
 	ErrorCodeUploadFailed      = 1010
+	ErrorCodeInvalidFile       = 1011
 )
 
 func NewTelegramError(code int, message string, cause error) *TelegramError {

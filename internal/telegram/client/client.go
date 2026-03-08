@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log/slog"
 	mathRand "math/rand"
-	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
@@ -145,8 +144,13 @@ func (c *Client) sendMedia(ctx context.Context, peer types.Peer, filePath string
 }
 
 func (c *Client) sendMediaFile(ctx context.Context, path string, caption string, peer tg.InputPeerClass, replyTo *int) (*int, error) {
-	if err := detectFileExists(path); err != nil {
+	fileInfo, err := os.Stat(path)
+	if err != nil {
 		return nil, err
+	}
+
+	if fileInfo.IsDir() {
+		return nil, types.NewTelegramError(types.ErrorCodeInvalidFile, "file is a directory", nil)
 	}
 
 	file, err := os.Open(path)
@@ -154,11 +158,6 @@ func (c *Client) sendMediaFile(ctx context.Context, path string, caption string,
 		return nil, err
 	}
 	defer file.Close()
-
-	fileInfo, err := file.Stat()
-	if err != nil {
-		return nil, err
-	}
 
 	upload := uploader.NewUpload(filepath.Base(path), file, fileInfo.Size())
 	fileUpload, err := uploader.NewUploader(c.GetAPI()).Upload(ctx, upload)
@@ -811,24 +810,6 @@ func convertTGChannelToChannelInfo(channel *tg.Channel) *types.ChannelInfo {
 		ParticipantsCount: &channel.ParticipantsCount,
 	}
 }
-
-func detectFileExists(path string) error {
-	file, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	buf := make([]byte, 512)
-	n, err := file.Read(buf)
-	if err != nil {
-		return err
-	}
-
-	http.DetectContentType(buf[:n])
-	return nil
-}
-
 func parseReplyID(replyID string) *int {
 	if replyID == "" {
 		return nil
