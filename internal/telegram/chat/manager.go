@@ -8,6 +8,8 @@ import (
 	"strconv"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/gotd/td/telegram/query"
+	"github.com/gotd/td/telegram/query/dialogs"
 	"github.com/gotd/td/tg"
 
 	"github.com/kumneger0/cligram/internal/telegram/shared"
@@ -28,6 +30,72 @@ func NewManager(client APIClient) types.ChatManager {
 		client: client,
 	}
 }
+
+func (m *Manager) GetAllChats(ctx context.Context, offsetDate int, offsetID int) (types.GetAllChatsResponse, error) {
+	dialogsSlice, err := m.getAllDialogs(ctx, offsetDate, offsetID)
+	if err != nil {
+		return types.GetAllChatsResponse{
+			PrivateChats: nil,
+			Channels:     nil,
+			Groups:       nil,
+			OffsetDate:   0,
+			OffsetID:     0,
+		}, types.NewTelegramError(types.ErrorCodeGetMessagesFailed, "failed to get dialogs", err)
+	}
+
+	if dialogsSlice == nil {
+		return types.GetAllChatsResponse{
+			PrivateChats: []types.UserInfo{},
+			Channels:     []types.ChannelInfo{},
+			Groups:       []types.ChannelInfo{},
+			OffsetDate:   0,
+			OffsetID:     0,
+		}, nil
+	}
+
+	var users []types.UserInfo
+	for _, tgUser := range dialogsSlice.Users {
+		user := shared.ConvertTGUserToUserInfo(tgUser)
+		unreadCount := getUnreadCount(dialogsSlice.Dialogs, tgUser.ID)
+		user.UnreadCount = unreadCount
+		users = append(users, *user)
+	}
+
+	var channels []types.ChannelInfo
+	var groups []types.ChannelInfo
+	for _, chatClass := range dialogsSlice.Chats {
+		if channel, ok := chatClass.(*tg.Channel); ok {
+			channelInfo := convertTGChannelToChannelInfo(channel)
+			channelInfo.UnreadCount = getUnreadCount(dialogsSlice.Dialogs, channel.ID)
+			if channel.Broadcast {
+				channels = append(channels, *channelInfo)
+			} else {
+				channelInfo.UnreadCount = getUnreadCount(dialogsSlice.Dialogs, channel.ID)
+				groups = append(groups, *channelInfo)
+			}
+		}
+		if chat, ok := chatClass.(*tg.Chat); ok {
+			channelInfo := &types.ChannelInfo{
+				ChannelTitle:      chat.Title,
+				ID:                strconv.FormatInt(chat.ID, 10),
+				IsCreator:         chat.Creator,
+				IsBroadcast:       false,
+				ParticipantsCount: &chat.ParticipantsCount,
+				HasStories:        false,
+				UnreadCount:       getUnreadCount(dialogsSlice.Dialogs, chat.ID),
+			}
+			groups = append(groups, *channelInfo)
+		}
+	}
+
+	return types.GetAllChatsResponse{
+		PrivateChats: users,
+		Channels:     channels,
+		Groups:       groups,
+		OffsetDate:   dialogsSlice.OffsetDate,
+		OffsetID:     dialogsSlice.OffsetID,
+	}, nil
+}
 func (m *Manager) GetUserChats(ctx context.Context, isBot bool, offsetDate, offsetID int) (types.GetUserChatsResult, error) {
 	dialogsSlice, err := m.getAllDialogs(ctx, offsetDate, offsetID)
 	if err != nil {
@@ -46,22 +114,11 @@ func (m *Manager) GetUserChats(ctx context.Context, isBot bool, offsetDate, offs
 		}, nil
 	}
 
-	var userPeerIDs []userPeerIDUnreadCount
-	for _, userClass := range dialogsSlice.Dialogs {
-		if dialog, ok := userClass.(*tg.Dialog); ok {
-			if peer, ok := dialog.Peer.(*tg.PeerUser); ok {
-				userPeerIDs = append(userPeerIDs, userPeerIDUnreadCount{
-					unreadCount: dialog.UnreadCount,
-					peerID:      peer.UserID,
-				})
-			}
-		}
-	}
 	var users []types.UserInfo
-	for _, userClass := range dialogsSlice.Users {
-		if tgUser, ok := userClass.(*tg.User); ok && tgUser.Bot == isBot {
+	for _, tgUser := range dialogsSlice.Users {
+		if tgUser.Bot == isBot {
 			user := shared.ConvertTGUserToUserInfo(tgUser)
-			unreadCount := getUnreadCount(userPeerIDs, tgUser.ID)
+			unreadCount := getUnreadCount(dialogsSlice.Dialogs, int64(tgUser.ID))
 			user.UnreadCount = unreadCount
 			users = append(users, *user)
 		}
@@ -294,17 +351,16 @@ func (m *Manager) GetChatHistoryCmd(ctx context.Context, peer types.Peer, limit 
 	}
 }
 
-// Helper functions and types
-
-type userPeerIDUnreadCount struct {
-	unreadCount int
-	peerID      int64
-}
-
-func getUnreadCount(u []userPeerIDUnreadCount, peerID int64) int {
-	for _, p := range u {
-		if p.peerID == peerID {
-			return p.unreadCount
+func getUnreadCount(chatDialogs []*tg.Dialog, peerID int64) int {
+	for _, p := range chatDialogs {
+		if tgPeerUser, ok := p.Peer.(*tg.PeerUser); ok && tgPeerUser.UserID == peerID {
+			return p.UnreadCount
+		}
+		if tgPeerChannel, ok := p.Peer.(*tg.PeerChannel); ok && tgPeerChannel.ChannelID == peerID {
+			return p.UnreadCount
+		}
+		if tgPeerChat, ok := p.Peer.(*tg.PeerChat); ok && tgPeerChat.ChatID == peerID {
+			return p.UnreadCount
 		}
 	}
 	return 0
@@ -312,81 +368,66 @@ func getUnreadCount(u []userPeerIDUnreadCount, peerID int64) int {
 
 type CligramGetDialogsResponse struct {
 	Chats      []tg.ChatClass
-	Users      []tg.UserClass
-	Dialogs    []tg.DialogClass
+	Users      []*tg.User
+	Dialogs    []*tg.Dialog
 	OffsetDate int
 	OffsetID   int
 }
 
 func (m *Manager) getAllDialogs(ctx context.Context, offsetDate, offsetID int) (*CligramGetDialogsResponse, error) {
+	q := query.NewQuery(m.client.GetAPI())
+	it := dialogs.NewIterator(q.GetDialogs().OffsetID(offsetID).OffsetDate(offsetDate).BatchSize(20), 50)
+
+	var allUsers []*tg.User
 	var allChats []tg.ChatClass
-	var allUsers []tg.UserClass
-	var allDialogs []tg.DialogClass
-	offsetPeer := &tg.InputPeerEmpty{}
-	dialogs, err := m.client.GetAPI().MessagesGetDialogs(ctx, &tg.MessagesGetDialogsRequest{
-		OffsetDate: offsetDate,
-		OffsetID:   offsetID,
-		OffsetPeer: offsetPeer,
-		Limit:      100,
-	})
-	if err != nil {
-		slog.Error(err.Error())
+	var chatDialogs []*tg.Dialog
+
+	var nextOffsetDate int = -1
+	var nextOffsetID int = -1
+
+	for it.Next(ctx) {
+		value := it.Value()
+		peer := value.Peer
+
+		if dialog, ok := value.Dialog.(*tg.Dialog); ok {
+			chatDialogs = append(chatDialogs, dialog)
+		}
+
+		if user, ok := peer.(*tg.InputPeerUser); ok {
+			for _, u := range value.Entities.Users() {
+				if u.ID == user.UserID {
+					allUsers = append(allUsers, u)
+					break
+				}
+			}
+		}
+
+		if peerChat, ok := value.Peer.(*tg.InputPeerChat); ok {
+			if chat, ok := value.Entities.Chat(peerChat.ChatID); ok {
+				allChats = append(allChats, chat)
+			}
+		}
+
+		if channel, ok := value.Peer.(*tg.InputPeerChannel); ok {
+			if chat, ok := value.Entities.Channel(channel.ChannelID); ok {
+				allChats = append(allChats, chat)
+			}
+		}
+		nextOffsetDate = value.Last.GetDate()
+		nextOffsetID = value.Last.GetID()
+	}
+
+	if err := it.Err(); err != nil {
 		return nil, err
 	}
-	switch d := dialogs.(type) {
-	case *tg.MessagesDialogs:
-		allChats = append(allChats, d.Chats...)
-		allUsers = append(allUsers, d.Users...)
-		allDialogs = append(allDialogs, d.Dialogs...)
-		return &CligramGetDialogsResponse{
-			Chats:      allChats,
-			Users:      allUsers,
-			Dialogs:    allDialogs,
-			OffsetDate: -1,
-			OffsetID:   -1,
-		}, nil
 
-	case *tg.MessagesDialogsSlice:
-		allChats = append(allChats, d.Chats...)
-		allUsers = append(allUsers, d.Users...)
-		allDialogs = append(allDialogs, d.Dialogs...)
-		if len(d.Messages) == 0 {
-			return &CligramGetDialogsResponse{
-				Chats:      allChats,
-				Users:      allUsers,
-				Dialogs:    allDialogs,
-				OffsetDate: -1,
-				OffsetID:   -1,
-			}, nil
-		}
-		last := d.Messages[len(d.Messages)-1]
-		switch msg := last.(type) {
-		case *tg.Message:
-			return &CligramGetDialogsResponse{
-				Chats:      allChats,
-				Users:      allUsers,
-				Dialogs:    allDialogs,
-				OffsetDate: msg.Date,
-				OffsetID:   msg.ID,
-			}, nil
-		default:
-			return &CligramGetDialogsResponse{
-				Chats:      allChats,
-				Users:      allUsers,
-				Dialogs:    allDialogs,
-				OffsetDate: -1,
-				OffsetID:   -1,
-			}, nil
-		}
-	default:
-		return &CligramGetDialogsResponse{
-			Chats:      allChats,
-			Users:      allUsers,
-			Dialogs:    allDialogs,
-			OffsetDate: -1,
-			OffsetID:   -1,
-		}, nil
-	}
+	return &CligramGetDialogsResponse{
+		Users:      allUsers,
+		Chats:      allChats,
+		Dialogs:    chatDialogs,
+		OffsetDate: nextOffsetDate,
+		OffsetID:   nextOffsetID,
+	}, nil
 }
 
 func convertTGChannelToChannelInfo(channel *tg.Channel) *types.ChannelInfo {
@@ -408,7 +449,7 @@ func convertPeerToInputPeer(peer types.Peer) (tg.InputPeerClass, error) {
 	}
 
 	accessHash, err := strconv.ParseInt(peer.AccessHash, 10, 64)
-	if err != nil {
+	if err != nil && peer.ChatType != types.GroupChat {
 		return nil, types.NewInvalidPeerError(peer.AccessHash)
 	}
 
@@ -418,11 +459,22 @@ func convertPeerToInputPeer(peer types.Peer) (tg.InputPeerClass, error) {
 			UserID:     peerID,
 			AccessHash: accessHash,
 		}, nil
-	case types.ChannelChat, types.GroupChat:
+	case types.ChannelChat:
 		return &tg.InputPeerChannel{
 			ChannelID:  peerID,
 			AccessHash: accessHash,
 		}, nil
+	case types.GroupChat:
+		if peer.AccessHash == "" {
+			return &tg.InputPeerChat{
+				ChatID: peerID,
+			}, nil
+		}
+		return &tg.InputPeerChannel{
+			ChannelID:  peerID,
+			AccessHash: accessHash,
+		}, nil
+
 	default:
 		return nil, types.NewTelegramError(types.ErrorCodeInvalidPeer, "unsupported chat type", nil)
 	}

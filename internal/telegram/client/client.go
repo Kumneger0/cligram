@@ -9,10 +9,12 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/tg"
+	"golang.org/x/time/rate"
 
 	configManager "github.com/kumneger0/cligram/internal/config"
 	"github.com/kumneger0/cligram/internal/telegram/chat"
@@ -20,6 +22,9 @@ import (
 	"github.com/kumneger0/cligram/internal/telegram/shared"
 	"github.com/kumneger0/cligram/internal/telegram/types"
 	"github.com/kumneger0/cligram/internal/telegram/user"
+
+	floodwait "github.com/gotd/contrib/middleware/floodwait"
+	"github.com/gotd/contrib/middleware/ratelimit"
 )
 
 type Client struct {
@@ -49,14 +54,22 @@ func NewClient(ctx context.Context, config Config) (*Client, error) {
 	updateHandler := newUpdateHandler(config.UpdateChannel)
 	sessionStorage := sessionManager.(*SessionManager).GetTelegramFileSessionStorage()
 
-	Cligram = telegram.NewClient(config.AppID, config.AppHash, telegram.Options{
+	waiter := floodwait.NewSimpleWaiter()
+
+	options := telegram.Options{
+		Middlewares: []telegram.Middleware{
+			waiter,
+			ratelimit.New(rate.Every(time.Millisecond*200), 3),
+		},
 		SessionStorage: sessionStorage,
 		UpdateHandler:  updateHandler,
 		NoUpdates:      false,
 		OnDead: func() {
 			slog.Error("telegram connection is dead")
 		},
-	})
+	}
+
+	Cligram = telegram.NewClient(config.AppID, config.AppHash, options)
 
 	client := &Client{
 		Client:         Cligram,
