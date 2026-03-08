@@ -33,8 +33,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.ModalContent = GetModalContent(msg.Err.Error())
 			return m, nil
 		}
-		response := msg.Response
-		if response {
+		if msg.Response {
 			if selectedMessage, ok := m.ChatUI.SelectedItem().(types.FormattedMessage); ok {
 				selectedMessage.Content = msg.UpdatedMessage
 				items := m.ChatUI.Items()
@@ -49,32 +48,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.SelectedUser.PeerID == user.PeerID {
 			m.SelectedUser = user
 		}
-		var listToSearchFrom list.Model
-		if user.IsBot {
-			listToSearchFrom = m.Bots
-		} else {
-			listToSearchFrom = m.Users
-		}
-
-		userIndex := getUserIndex(listToSearchFrom, user)
+		l := listForUser(&m, user)
+		userIndex := getUserIndex(*l, user)
 		if userIndex != -1 {
-			items := listToSearchFrom.Items()
+			items := l.Items()
 			items[userIndex] = user
-			var cmd tea.Cmd
-			if user.IsBot {
-				cmd = m.Bots.SetItems(items)
-			} else {
-				cmd = m.Users.SetItems(items)
-			}
-			cmds = append(cmds, cmd)
+			cmds = append(cmds, l.SetItems(items))
 		}
 		if user.IsTyping {
-			cmd := tea.Tick(time.Second*3, func(t time.Time) tea.Msg {
+			cmds = append(cmds, tea.Tick(time.Second*3, func(t time.Time) tea.Msg {
 				user.IsOnline = false
 				user.IsTyping = false
 				return types.UserTypingNotification{User: user}
-			})
-			cmds = append(cmds, cmd)
+			}))
 		}
 	case types.ErrorNotification:
 		m.ModalContent = GetModalContent(msg.Error.Error())
@@ -151,26 +137,15 @@ func (m Model) handleMarkMessagesAsRead(msg types.MarkMessagesAsReadMsg) (tea.Mo
 	if msg.Response {
 		m.SelectedUser.UnreadCount = 0
 	}
-	var listToSearchFrom list.Model
-	if m.SelectedUser.IsBot {
-		listToSearchFrom = m.Bots
-	} else {
-		listToSearchFrom = m.Users
-	}
-	userIndex := getUserIndex(listToSearchFrom, m.SelectedUser)
-	var cmd tea.Cmd
+	l := listForUser(&m, m.SelectedUser)
+	userIndex := getUserIndex(*l, m.SelectedUser)
 	if userIndex != -1 {
-		items := listToSearchFrom.Items()
+		items := l.Items()
 		user := items[userIndex].(types.UserInfo)
 		user.UnreadCount = 0
-
-		if m.SelectedUser.IsBot {
-			cmd = m.Bots.SetItem(userIndex, user)
-		} else {
-			cmd = m.Users.SetItem(userIndex, user)
-		}
+		return m, l.SetItem(userIndex, user)
 	}
-	return m, cmd
+	return m, nil
 }
 
 func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, tea.Cmd) {
@@ -179,8 +154,7 @@ func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, te
 		if !areInGroupOrChannelMode {
 			return m, nil
 		}
-		isGroupOrChannelSelected := isChannelOrGroupSelected(&m, &msg)
-		if isGroupOrChannelSelected {
+		if m.SelectedChannel.ID == msg.ChannelOrGroup.ID || m.SelectedGroup.ID == msg.ChannelOrGroup.ID {
 			copy(m.Conversations[:], m.Conversations[1:])
 			m.Conversations[len(m.Conversations)-1] = msg.Message
 			m.updateConversations()
@@ -198,100 +172,62 @@ func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, te
 	if msg.User == nil {
 		return m, nil
 	}
-	isSelected := isUserSelected(&m, &msg)
 	areWeInBotOrUserMode := m.Mode == ModeUsers || m.Mode == ModeBots
-
 	if !areWeInBotOrUserMode {
 		return m, nil
 	}
 
-	if !isSelected {
-		var listToSearchFrom list.Model
-		if msg.User.IsBot {
-			listToSearchFrom = m.Bots
-		} else {
-			listToSearchFrom = m.Users
-		}
-		userIndex := getUserIndex(listToSearchFrom, *msg.User)
-		var cmd tea.Cmd
+	if m.SelectedUser.PeerID != msg.User.PeerID {
+		l := listForUser(&m, *msg.User)
+		userIndex := getUserIndex(*l, *msg.User)
 		if userIndex != -1 {
-			items := listToSearchFrom.Items()
+			items := l.Items()
 			user := items[userIndex].(types.UserInfo)
 			user.UnreadCount++
-			if msg.User.IsBot {
-				cmd = m.Bots.SetItem(userIndex, user)
-			} else {
-				cmd = m.Users.SetItem(userIndex, user)
-			}
+			return m, l.SetItem(userIndex, user)
 		}
-		return m, cmd
+		return m, nil
 	}
 
 	m.SelectedUser.UnreadCount++
-	var shouldWeUpdateCurrentActiveConversation bool = false
 	for _, v := range m.Conversations {
 		if v.FromID != nil && *v.FromID == m.SelectedUser.PeerID {
-			shouldWeUpdateCurrentActiveConversation = true
+			copy(m.Conversations[:], m.Conversations[1:])
+			formattedMessage := msg.Message
+			formattedMessage.Sender = m.SelectedUser.FirstName
+			m.Conversations[len(m.Conversations)-1] = formattedMessage
+			m.updateConversations()
 			break
 		}
 	}
-	if shouldWeUpdateCurrentActiveConversation {
-		copy(m.Conversations[:], m.Conversations[1:])
-		var formattedMessage = msg.Message
-		formattedMessage.Sender = m.SelectedUser.FirstName
-		m.Conversations[len(m.Conversations)-1] = formattedMessage
-		m.updateConversations()
-	}
 	return m, nil
-}
-
-func isChannelOrGroupSelected(m *Model, msg *types.NewMessageNotification) bool {
-	return m.SelectedChannel.ID == msg.ChannelOrGroup.ID ||
-		m.SelectedGroup.ID == msg.ChannelOrGroup.ID
-}
-
-func isUserSelected(m *Model, msg *types.NewMessageNotification) bool {
-	return m.SelectedUser.PeerID == msg.User.PeerID
 }
 
 func (m Model) handleUserOnlineOffline(msg types.UserStatusNotification) (tea.Model, tea.Cmd) {
 	var user types.UserInfo
 	for _, v := range m.Users.Items() {
-		u, ok := v.(types.UserInfo)
-		if ok && u.PeerID == msg.UserInfo.PeerID {
+		if u, ok := v.(types.UserInfo); ok && u.PeerID == msg.UserInfo.PeerID {
 			user = u
 			break
 		}
 	}
-
-	var listToSearchFrom list.Model
-	if user.IsBot {
-		listToSearchFrom = m.Bots
-	} else {
-		listToSearchFrom = m.Users
-	}
-
-	userIndex := getUserIndex(listToSearchFrom, user)
-	var cmd tea.Cmd
+	l := listForUser(&m, user)
+	userIndex := getUserIndex(*l, user)
 	if userIndex != -1 {
-		items := listToSearchFrom.Items()
-		user := items[userIndex].(types.UserInfo)
-		user.IsOnline = msg.Status.IsOnline
-		items[userIndex] = user
-		if user.IsBot {
-			cmd = m.Bots.SetItems(items)
-		} else {
-			cmd = m.Users.SetItems(items)
-		}
+		items := l.Items()
+		u := items[userIndex].(types.UserInfo)
+		u.IsOnline = msg.Status.IsOnline
+		items[userIndex] = u
+		return m, l.SetItems(items)
 	}
-	return m, cmd
+	return m, nil
 }
 
 func (m Model) handleMessageDeletion(msg MessageDeletionConfrimResponseMsg) (tea.Model, tea.Cmd) {
 	if !msg.yes {
 		return m, nil
 	}
-	peer := m.getPeerInfo()
+	peer := getMessageParams(&m)
 	selectedItemInChat := m.ChatUI.SelectedItem().(types.FormattedMessage)
 	response, err := telegram.Cligram.DeleteMessage(telegram.Cligram.Context(), types.DeleteMessageRequest{
 		Peer:      peer,
@@ -313,40 +249,7 @@ func (m Model) handleMessageDeletion(msg MessageDeletionConfrimResponseMsg) (tea
 		cmd := m.ChatUI.SetItems(formatMessages(updatedConversations))
 		return m, cmd
 	}
-
 	return m, nil
-}
-
-func (m Model) getPeerInfo() types.Peer {
-	var peer types.Peer
-	switch m.Mode {
-	case ModeUsers:
-		peer = types.Peer{
-			ID:         m.SelectedUser.PeerID,
-			AccessHash: m.SelectedUser.AccessHash,
-			ChatType:   types.UserChat,
-		}
-	case ModeBots:
-		peer = types.Peer{
-			ID:         m.SelectedUser.PeerID,
-			AccessHash: m.SelectedUser.AccessHash,
-			ChatType:   types.BotChat,
-		}
-	case ModeChannels:
-		peer = types.Peer{
-			ID:         m.SelectedChannel.ID,
-			AccessHash: m.SelectedChannel.AccessHash,
-			ChatType:   types.ChannelChat,
-		}
-	case ModeGroups:
-		peer = types.Peer{
-			ID:         m.SelectedGroup.ID,
-			AccessHash: m.SelectedGroup.AccessHash,
-			ChatType:   types.GroupChat,
-		}
-	}
-
-	return peer
 }
 
 func (m Model) handleGetMessages(msg types.GetMessagesMsg) (tea.Model, tea.Cmd) {
@@ -363,21 +266,16 @@ func (m Model) handleGetMessages(msg types.GetMessagesMsg) (tea.Model, tea.Cmd) 
 		if selectedChat, ok := m.Users.SelectedItem().(types.UserInfo); ok && selectedChat.IsBot {
 			m.Input.SetValue("/start")
 		}
-	}
-
-	if messagesWeGot < 1 {
 		return m, nil
 	}
 
 	m.Conversations = m.mergeConversations(msg.Messages, messagesWeGot)
-	conversationLastIndex := len(m.Conversations) - 1
 	m.updateConversations()
-	m.ChatUI.Select(conversationLastIndex)
+	m.ChatUI.Select(len(m.Conversations) - 1)
 	return m, nil
 }
 
 func (m Model) mergeConversations(newMessages [50]types.FormattedMessage, messagesWeGot int) [50]types.FormattedMessage {
-	var updatedConversations [50]types.FormattedMessage
 	if messagesWeGot >= 50 {
 		return newMessages
 	}
@@ -387,33 +285,24 @@ func (m Model) mergeConversations(newMessages [50]types.FormattedMessage, messag
 			oldMessages = append(oldMessages, msg)
 		}
 	}
-	oldMessagesLength := len(oldMessages)
-	if (messagesWeGot + oldMessagesLength) <= 50 {
+	var updatedConversations [50]types.FormattedMessage
+	if (messagesWeGot + len(oldMessages)) <= 50 {
 		updatedConversations = newMessages
 	} else {
-		numberMessagesWeShouldTakeFromOldConversation := 50 - messagesWeGot
-		messagesToAppend := m.Conversations[:numberMessagesWeShouldTakeFromOldConversation]
-		messagesToAppend = append(messagesToAppend, newMessages[:]...)
-		copy(updatedConversations[:], messagesToAppend)
+		take := 50 - messagesWeGot
+		combined := append(m.Conversations[:take], newMessages[:]...)
+		copy(updatedConversations[:], combined)
 	}
-
 	return updatedConversations
 }
 
 func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	cmds := []tea.Cmd{}
+	var cmds []tea.Cmd
 	switch msg.String() {
 	case "shift+down":
 		if m.FocusedOn == Mainview {
-			items := m.ChatUI.Items()
-			lastIndex := len(items) - 1
-			m.ChatUI.Select(lastIndex)
+			m.ChatUI.Select(len(m.ChatUI.Items()) - 1)
 		}
-	case "down":
-		//disable pagination for now since we are fetching all of them at once
-		// m, cmd := m.handleListPagination()
-		// cmds = append(cmds, cmd)
-		// return m, tea.Batch(cmds...)
 	case "ctrl+a":
 		m, cmd := m.handleCtrlA()
 		cmds = append(cmds, cmd)
@@ -432,9 +321,10 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 		return m, tea.Batch(cmds...)
 	case "m":
-		m, cmd := m.handleMKey(msg)
-		cmds = append(cmds, cmd)
-		return m, tea.Batch(cmds...)
+		if m.FocusedOn != Input {
+			m.IsModalVisible = true
+		}
+		return m, nil
 	case "c":
 		m, cmd := changeSideBarMode(&m, "c")
 		cmds = append(cmds, cmd)
@@ -472,9 +362,7 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 		return m, tea.Batch(cmds...)
 	case "alt+s":
-		return m, func() tea.Msg {
-			return m.Stories
-		}
+		return m, func() tea.Msg { return m.Stories }
 	}
 	cmds = append(cmds, SendUserIsTyping(&m))
 	return m, tea.Batch(cmds...)
@@ -484,17 +372,10 @@ func (m Model) handleListPagination() (Model, tea.Cmd) {
 	if m.Users.Index() < len(m.Users.VisibleItems())-6 {
 		return m, nil
 	}
-
-	if m.OffsetDate == -1 || m.OffsetID == -1 {
+	if m.OffsetDate == -1 || m.OffsetID == -1 || m.OnPagination {
 		return m, nil
 	}
-
-	if m.OnPagination {
-		return m, nil
-	}
-
 	m.OnPagination = true
-
 	if m.Mode == ModeUsers || m.Mode == ModeBots {
 		return m, telegram.Cligram.GetUserChats(telegram.Cligram.Context(), types.ChatType(m.Mode), m.OffsetDate, m.OffsetID)
 	}
@@ -508,7 +389,6 @@ func (m Model) handleEditKey() (tea.Model, tea.Cmd) {
 			m.Input.SetValue(selectedItem.Content)
 			m.EditMessage = &selectedItem
 			m.SkipNextInput = true
-			return m, nil
 		}
 	}
 	return m, nil
@@ -523,14 +403,6 @@ func (m Model) handleCtrlA() (tea.Model, tea.Cmd) {
 	if m.IsFilepickerVisible {
 		m.IsFilepickerVisible = false
 		m.FocusedOn = Input
-	}
-	return m, nil
-}
-
-func (m Model) handleMKey(_ tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if m.FocusedOn != Input {
-		m.IsModalVisible = true
-		return m, nil
 	}
 	return m, nil
 }
@@ -555,7 +427,6 @@ func (m Model) handleReplyKey() (tea.Model, tea.Cmd) {
 				m.SkipNextInput = true
 				m.ReplyTo = &selectedMessage
 			}
-			return m, nil
 		}
 	}
 	return m, nil
@@ -565,42 +436,50 @@ func (m Model) handleDeleteKey() (tea.Model, tea.Cmd) {
 	if m.FocusedOn == Mainview {
 		selectedItem := m.ChatUI.SelectedItem().(types.FormattedMessage)
 		return m, func() tea.Msg {
-			return OpenModalMsg{
-				ModalMode: ModalModeDeleteMessage,
-				Message:   &selectedItem,
-			}
+			return OpenModalMsg{ModalMode: ModalModeDeleteMessage, Message: &selectedItem}
 		}
 	}
 	return m, nil
 }
 
 func (m Model) handleForwardKey() (tea.Model, tea.Cmd) {
-	if m.FocusedOn == Mainview {
-		selectedMessage, ok := m.ChatUI.SelectedItem().(types.FormattedMessage)
-		if !ok {
-			return m, nil
-		}
+	if m.FocusedOn != Mainview {
+		return m, nil
+	}
+	selectedMessage, ok := m.ChatUI.SelectedItem().(types.FormattedMessage)
+	if !ok {
+		return m, nil
+	}
 
-		var from list.Item
-		switch m.Mode {
-		case ModeUsers:
-			from = m.SelectedUser
-		case ModeChannels:
-			from = m.SelectedChannel
-		case ModeGroups:
-			from = &m.SelectedGroup
-		}
+	var from list.Item
+	switch m.Mode {
+	case ModeUsers:
+		from = m.SelectedUser
+	case ModeChannels:
+		from = m.SelectedChannel
+	case ModeGroups:
+		from = &m.SelectedGroup
+	}
 
-		return m, func() tea.Msg {
-			return OpenModalMsg{
-				ModalMode: ModalModeForwardMessage,
-				Message:   &selectedMessage,
-				UsersList: &m.Users,
-				FromPeer:  &from,
-			}
+	return m, func() tea.Msg {
+		return OpenModalMsg{
+			ModalMode: ModalModeForwardMessage,
+			Message:   &selectedMessage,
+			UsersList: &m.Users,
+			FromPeer:  &from,
 		}
 	}
-	return m, nil
+}
+
+// appendListItems appends items with a non-empty title to the list, returning the SetItems cmd.
+func appendListItems[T types.FilterableItem](l *list.Model, items []T) tea.Cmd {
+	current := l.Items()
+	for _, it := range items {
+		if it.FilterValue() != "" {
+			current = append(current, it)
+		}
+	}
+	return l.SetItems(current)
 }
 
 func (m Model) handleUserChats(msg types.UserChatsMsg) (tea.Model, tea.Cmd) {
@@ -609,22 +488,14 @@ func (m Model) handleUserChats(msg types.UserChatsMsg) (tea.Model, tea.Cmd) {
 		m.ModalContent = GetModalContent(msg.Err.Error())
 		return m, nil
 	}
-
 	if msg.Response == nil {
 		return m, nil
 	}
-
-	users := m.Users.Items()
-	for _, du := range msg.Response.Data {
-		if du.FirstName != "" {
-			users = append(users, du)
-		}
-	}
-	m.Users.SetItems(users)
+	cmd := appendListItems(&m.Users, msg.Response.Data)
 	m.OffsetDate = msg.Response.OffsetDate
 	m.OffsetID = msg.Response.OffsetID
 	m.OnPagination = false
-	return m, nil
+	return m, cmd
 }
 
 func (m Model) handleUserChannels(msg types.ChannelsMsg) (tea.Model, tea.Cmd) {
@@ -636,18 +507,11 @@ func (m Model) handleUserChannels(msg types.ChannelsMsg) (tea.Model, tea.Cmd) {
 	if msg.Response == nil {
 		return m, nil
 	}
-
-	channels := m.Channels.Items()
-	for _, du := range msg.Response.Data {
-		if du.ChannelTitle != "" {
-			channels = append(channels, du)
-		}
-	}
-	m.Channels.SetItems(channels)
+	cmd := appendListItems(&m.Channels, msg.Response.Data)
 	m.OffsetDate = msg.Response.OffsetDate
 	m.OffsetID = msg.Response.OffsetID
 	m.OnPagination = false
-	return m, nil
+	return m, cmd
 }
 
 func (m Model) handleUserGroups(msg types.GroupsMsg) (tea.Model, tea.Cmd) {
@@ -656,109 +520,58 @@ func (m Model) handleUserGroups(msg types.GroupsMsg) (tea.Model, tea.Cmd) {
 		m.ModalContent = GetModalContent(msg.Err.Error())
 		return m, nil
 	}
-
 	if msg.Response == nil {
 		return m, nil
 	}
-
-	groups := m.Groups.Items()
-	for _, du := range msg.Response.Data {
-		if du.ChannelTitle != "" {
-			groups = append(groups, du)
-		}
-	}
-	m.Groups.SetItems(groups)
+	cmd := appendListItems(&m.Groups, msg.Response.Data)
 	m.OffsetDate = msg.Response.OffsetDate
 	m.OffsetID = msg.Response.OffsetID
 	m.OnPagination = false
-	return m, nil
+	return m, cmd
 }
 
 func (m Model) handleForwardMessage(msg ForwardMsg) (tea.Model, tea.Cmd) {
-	messageToBeForwarded := msg.msg
-	receiver := *msg.receiver
-	fromPeer := *msg.fromPeer
-
-	from, toPeer := m.extractPeerInfo(fromPeer, receiver)
-	messageIDs := []int{int(messageToBeForwarded.ID)}
-
+	from, toPeer := extractPeerInfo(*msg.fromPeer, *msg.receiver)
 	err := telegram.Cligram.ForwardMessages(telegram.Cligram.Context(), types.ForwardMessagesRequest{
 		FromPeer:   from,
 		ToPeer:     toPeer,
-		MessageIDs: messageIDs,
+		MessageIDs: []int{int(msg.msg.ID)},
 	})
 	if err != nil {
 		slog.Error("Failed to forward message", "error", err.Error())
-		return m, nil
 	}
-
 	return m, nil
 }
 
-func (m Model) extractPeerInfo(fromPeer, receiver list.Item) (from, toPeer types.Peer) {
-	switch p := fromPeer.(type) {
+// peerFromItem converts a list.Item (UserInfo or ChannelInfo, pointer or value) into a types.Peer.
+func peerFromItem(item list.Item) types.Peer {
+	switch p := item.(type) {
 	case types.UserInfo:
-		from.ID = p.PeerID
-		from.AccessHash = p.AccessHash
-		from.ChatType = types.UserChat
+		return types.Peer{ID: p.PeerID, AccessHash: p.AccessHash, ChatType: types.UserChat}
 	case *types.UserInfo:
 		if p != nil {
-			from.ID = p.PeerID
-			from.AccessHash = p.AccessHash
-			from.ChatType = types.UserChat
+			return types.Peer{ID: p.PeerID, AccessHash: p.AccessHash, ChatType: types.UserChat}
 		}
 	case types.ChannelInfo:
-		from.ID = p.ID
-		from.AccessHash = p.AccessHash
+		chatType := types.GroupChat
 		if p.IsBroadcast {
-			from.ChatType = types.ChannelChat
-		} else {
-			from.ChatType = types.GroupChat
+			chatType = types.ChannelChat
 		}
+		return types.Peer{ID: p.ID, AccessHash: p.AccessHash, ChatType: chatType}
 	case *types.ChannelInfo:
 		if p != nil {
-			from.ID = p.ID
-			from.AccessHash = p.AccessHash
+			chatType := types.GroupChat
 			if p.IsBroadcast {
-				from.ChatType = types.ChannelChat
-			} else {
-				from.ChatType = types.GroupChat
+				chatType = types.ChannelChat
 			}
+			return types.Peer{ID: p.ID, AccessHash: p.AccessHash, ChatType: chatType}
 		}
 	}
+	return types.Peer{}
+}
 
-	switch r := receiver.(type) {
-	case types.UserInfo:
-		toPeer.ID = r.PeerID
-		toPeer.AccessHash = r.AccessHash
-		toPeer.ChatType = types.UserChat
-	case *types.UserInfo:
-		if r != nil {
-			toPeer.ID = r.PeerID
-			toPeer.AccessHash = r.AccessHash
-			toPeer.ChatType = types.UserChat
-		}
-	case types.ChannelInfo:
-		toPeer.ID = r.ID
-		toPeer.AccessHash = r.AccessHash
-		if r.IsBroadcast {
-			toPeer.ChatType = types.ChannelChat
-		} else {
-			toPeer.ChatType = types.GroupChat
-		}
-	case *types.ChannelInfo:
-		if r != nil {
-			toPeer.ID = r.ID
-			toPeer.AccessHash = r.AccessHash
-			if r.IsBroadcast {
-				toPeer.ChatType = types.ChannelChat
-			} else {
-				toPeer.ChatType = types.GroupChat
-			}
-		}
-	}
-
-	return
+func extractPeerInfo(fromPeer, receiver list.Item) (from, toPeer types.Peer) {
+	return peerFromItem(fromPeer), peerFromItem(receiver)
 }
 
 func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
@@ -766,8 +579,7 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	m.Height = msg.Height - 4
 	headerHeight := 7
 	footerHeight := 7
-	verticalMarginHeight := headerHeight + footerHeight
-	m.viewport = viewport.New(msg.Width, msg.Height-verticalMarginHeight)
+	m.viewport = viewport.New(msg.Width, msg.Height-(headerHeight+footerHeight))
 	m.viewport.YPosition = headerHeight
 	m.updateConversations()
 	return m, nil
@@ -775,13 +587,11 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleSearchedUserResult(msg SelectSearchedUserResult) (tea.Model, tea.Cmd) {
 	if msg.user != nil || msg.Bot != nil {
-		var userInfo types.UserInfo
-		if msg.user != nil {
-			userInfo = *msg.user
-		} else if msg.Bot != nil {
-			userInfo = *msg.Bot
+		userInfo := msg.user
+		if userInfo == nil {
+			userInfo = msg.Bot
 		}
-		return m.handleSearchedUser(userInfo)
+		return m.handleSearchedUser(*userInfo)
 	}
 	if msg.channel != nil {
 		return m.handleSearchedChannel(*msg.channel)
@@ -794,64 +604,35 @@ func (m Model) handleSearchedUserResult(msg SelectSearchedUserResult) (tea.Model
 
 func (m Model) handleSearchedUser(user types.UserInfo) (tea.Model, tea.Cmd) {
 	m.SelectedUser = user
-
-	var listToSearchFrom list.Model
-	var targetMode Mode
-
+	l := listForUser(&m, user)
+	targetMode := ModeUsers
 	if user.IsBot {
-		listToSearchFrom = m.Bots
 		targetMode = ModeBots
-	} else {
-		listToSearchFrom = m.Users
-		targetMode = ModeUsers
 	}
 
-	index := getUserIndex(listToSearchFrom, user)
+	index := getUserIndex(*l, user)
 	if index != -1 {
-		if user.IsBot {
-			m.Bots.Select(index)
-		} else {
-			m.Users.Select(index)
-		}
+		l.Select(index)
 		m.FocusedOn = SideBar
 		m.Mode = targetMode
 		return handleUserChange(&m)
 	}
 
-	newUpdatedUsers := append(listToSearchFrom.Items(), user)
-	var updateUserCmd tea.Cmd
-	if user.IsBot {
-		updateUserCmd = m.Bots.SetItems(newUpdatedUsers)
-	} else {
-		updateUserCmd = m.Users.SetItems(newUpdatedUsers)
-	}
-
-	if user.IsBot {
-		index = getUserIndex(m.Bots, user)
-	} else {
-		index = getUserIndex(m.Users, user)
-	}
-
+	updateUserCmd := l.SetItems(append(l.Items(), user))
+	index = getUserIndex(*l, user)
 	if index != -1 {
-		if user.IsBot {
-			m.Bots.Select(index)
-		} else {
-			m.Users.Select(index)
-		}
-
+		l.Select(index)
 		m.FocusedOn = SideBar
 		m.Mode = targetMode
 		m, handleUserChangeCmd := handleUserChange(&m)
 		return m, tea.Batch(updateUserCmd, handleUserChangeCmd)
 	}
-
 	return m, updateUserCmd
 }
 
 func (m Model) handleSearchedChannel(channel types.ChannelInfo) (tea.Model, tea.Cmd) {
 	m.SelectedChannel = channel
 	index := getChannelIndex(m, channel)
-
 	if index != -1 {
 		m.Channels.Select(index)
 		m.FocusedOn = SideBar
@@ -859,10 +640,8 @@ func (m Model) handleSearchedChannel(channel types.ChannelInfo) (tea.Model, tea.
 		return handleUserChange(&m)
 	}
 
-	newUpdatedChannelsList := append(m.Channels.Items(), channel)
-	setItemsCmd := m.Channels.SetItems(newUpdatedChannelsList)
+	setItemsCmd := m.Channels.SetItems(append(m.Channels.Items(), channel))
 	index = getChannelIndex(m, channel)
-
 	if index != -1 {
 		m.Channels.Select(index)
 		m.FocusedOn = SideBar
@@ -876,7 +655,6 @@ func (m Model) handleSearchedChannel(channel types.ChannelInfo) (tea.Model, tea.
 func (m Model) handleSearchedGroup(group types.ChannelInfo) (tea.Model, tea.Cmd) {
 	m.SelectedGroup = group
 	index := getGroupIndex(m, group)
-
 	if index != -1 {
 		m.Groups.Select(index)
 		m.FocusedOn = SideBar
@@ -884,10 +662,8 @@ func (m Model) handleSearchedGroup(group types.ChannelInfo) (tea.Model, tea.Cmd)
 		return handleUserChange(&m)
 	}
 
-	newUpdatedGroupsList := append(m.Groups.Items(), group)
-	setItemsCmd := m.Groups.SetItems(newUpdatedGroupsList)
+	setItemsCmd := m.Groups.SetItems(append(m.Groups.Items(), group))
 	index = getGroupIndex(m, group)
-
 	if index != -1 {
 		m.Groups.Select(index)
 		m.FocusedOn = SideBar
@@ -896,4 +672,12 @@ func (m Model) handleSearchedGroup(group types.ChannelInfo) (tea.Model, tea.Cmd)
 		return m, tea.Batch(setItemsCmd, handleChangeUserCmd)
 	}
 	return m, setItemsCmd
+}
+
+// listForUser returns a pointer to the correct list (Bots or Users) based on the user's IsBot flag.
+func listForUser(m *Model, user types.UserInfo) *list.Model {
+	if user.IsBot {
+		return &m.Bots
+	}
+	return &m.Users
 }
