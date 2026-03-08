@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	mathRand "math/rand"
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
@@ -13,15 +14,15 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gotd/td/telegram"
+	"github.com/gotd/td/telegram/query"
+	"github.com/gotd/td/telegram/query/dialogs"
+	"github.com/gotd/td/telegram/uploader"
 	"github.com/gotd/td/tg"
 	"golang.org/x/time/rate"
 
 	configManager "github.com/kumneger0/cligram/internal/config"
-	"github.com/kumneger0/cligram/internal/telegram/chat"
-	"github.com/kumneger0/cligram/internal/telegram/message"
 	"github.com/kumneger0/cligram/internal/telegram/shared"
 	"github.com/kumneger0/cligram/internal/telegram/types"
-	"github.com/kumneger0/cligram/internal/telegram/user"
 
 	floodwait "github.com/gotd/contrib/middleware/floodwait"
 	"github.com/gotd/contrib/middleware/ratelimit"
@@ -29,12 +30,8 @@ import (
 
 type Client struct {
 	*telegram.Client
-	ctx            context.Context
-	updateChannel  chan types.Notification
-	sessionManager types.SessionManager
-	userManager    types.UserManager
-	messageManager types.MessageSender
-	chatManager    types.ChatManager
+	ctx           context.Context
+	updateChannel chan types.Notification
 }
 
 type Config struct {
@@ -46,13 +43,12 @@ type Config struct {
 var Cligram *telegram.Client
 
 func NewClient(ctx context.Context, config Config) (*Client, error) {
-	sessionManager, err := NewSessionManager()
+	sessionStorage, err := newFileSessionStorage()
 	if err != nil {
-		return nil, types.NewTelegramError(types.ErrorCodeSessionFailed, "failed to create session manager", err)
+		return nil, types.NewTelegramError(types.ErrorCodeSessionFailed, "failed to create session storage", err)
 	}
 
 	updateHandler := newUpdateHandler(config.UpdateChannel)
-	sessionStorage := sessionManager.(*SessionManager).GetTelegramFileSessionStorage()
 
 	waiter := floodwait.NewSimpleWaiter()
 
@@ -71,18 +67,11 @@ func NewClient(ctx context.Context, config Config) (*Client, error) {
 
 	Cligram = telegram.NewClient(config.AppID, config.AppHash, options)
 
-	client := &Client{
-		Client:         Cligram,
-		ctx:            ctx,
-		updateChannel:  config.UpdateChannel,
-		sessionManager: sessionManager,
-	}
-
-	client.userManager = user.NewManager(client)
-	client.messageManager = message.NewSender(client)
-	client.chatManager = chat.NewManager(client)
-
-	return client, nil
+	return &Client{
+		Client:        Cligram,
+		ctx:           ctx,
+		updateChannel: config.UpdateChannel,
+	}, nil
 }
 
 func NewClientFromEnv(ctx context.Context, updateChannel chan types.Notification, telegramAPIID, telegramAPIHash string) (*Client, error) {
@@ -91,13 +80,11 @@ func NewClientFromEnv(ctx context.Context, updateChannel chan types.Notification
 		return nil, types.NewTelegramError(types.ErrorCodeAuthFailed, "invalid TELEGRAM_API_ID", err)
 	}
 
-	config := Config{
+	return NewClient(ctx, Config{
 		AppID:         appID,
 		AppHash:       telegramAPIHash,
 		UpdateChannel: updateChannel,
-	}
-
-	return NewClient(ctx, config)
+	})
 }
 
 func (c *Client) GetAPI() *tg.Client {
@@ -108,47 +95,370 @@ func (c *Client) Context() context.Context {
 	return c.ctx
 }
 
-func (c *Client) GetUserManager() types.UserManager {
-	return c.userManager
-}
-
-func (c *Client) GetMessageManager() types.MessageSender {
-	return c.messageManager
-}
-
-func (c *Client) GetChatManager() types.ChatManager {
-	return c.chatManager
-}
-
 func (c *Client) SendMessage(ctx context.Context, req types.SendMessageRequest) tea.Cmd {
 	if req.IsFile {
-		return c.messageManager.SendMedia(ctx, req.Peer, req.FilePath, req.Message, parseReplyID(req.ReplyToMessageID))
+		return c.sendMedia(ctx, req.Peer, req.FilePath, req.Message, parseReplyID(req.ReplyToMessageID))
 	}
-	return c.messageManager.SendText(ctx, req.Peer, req.Message, parseReplyID(req.ReplyToMessageID))
+	return c.sendText(ctx, req.Peer, req.Message, parseReplyID(req.ReplyToMessageID))
+}
+
+func (c *Client) sendText(ctx context.Context, peer types.Peer, text string, replyTo *int) tea.Cmd {
+	return func() tea.Msg {
+		inputPeer, err := shared.ConvertPeerToInputPeer(peer)
+		if err != nil {
+			return types.SendMessageMsg{Err: types.NewSendMessageError(err)}
+		}
+
+		var replyToClass tg.InputReplyToClass
+		if replyTo != nil {
+			replyToClass = &tg.InputReplyToMessage{ReplyToMsgID: *replyTo}
+		}
+
+		_, err = c.GetAPI().MessagesSendMessage(ctx, &tg.MessagesSendMessageRequest{
+			Peer:     inputPeer,
+			ReplyTo:  replyToClass,
+			Message:  text,
+			RandomID: mathRand.Int63(),
+		})
+		if err != nil {
+			return types.SendMessageMsg{Err: types.NewSendMessageError(err)}
+		}
+
+		return types.SendMessageMsg{Response: &types.SendMessageResponse{}}
+	}
+}
+
+func (c *Client) sendMedia(ctx context.Context, peer types.Peer, filePath string, caption string, replyTo *int) tea.Cmd {
+	return func() tea.Msg {
+		inputPeer, err := shared.ConvertPeerToInputPeer(peer)
+		if err != nil {
+			return types.SendMessageMsg{Err: types.NewSendMessageError(err)}
+		}
+
+		messageID, err := c.sendMediaFile(ctx, filePath, caption, inputPeer, replyTo)
+		if err != nil {
+			return types.SendMessageMsg{Err: types.NewSendMessageError(err)}
+		}
+
+		return types.SendMessageMsg{Response: &types.SendMessageResponse{MessageID: messageID}}
+	}
+}
+
+func (c *Client) sendMediaFile(ctx context.Context, path string, caption string, peer tg.InputPeerClass, replyTo *int) (*int, error) {
+	if err := detectFileExists(path); err != nil {
+		return nil, err
+	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	fileInfo, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+
+	upload := uploader.NewUpload(filepath.Base(path), file, fileInfo.Size())
+	fileUpload, err := uploader.NewUploader(c.GetAPI()).Upload(ctx, upload)
+	if err != nil {
+		return nil, types.NewTelegramError(types.ErrorCodeUploadFailed, "failed to upload file", err)
+	}
+
+	var replyToClass tg.InputReplyToClass
+	if replyTo != nil {
+		replyToClass = &tg.InputReplyToMessage{ReplyToMsgID: *replyTo}
+	}
+
+	sendMediaUpdateClass, err := c.GetAPI().MessagesSendMedia(ctx, &tg.MessagesSendMediaRequest{
+		Peer:     peer,
+		Media:    &tg.InputMediaUploadedDocument{File: fileUpload},
+		Message:  caption,
+		RandomID: mathRand.Int63(),
+		ReplyTo:  replyToClass,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var id *int
+	switch u := sendMediaUpdateClass.(type) {
+	case *tg.Updates:
+		for _, up := range u.Updates {
+			switch x := up.(type) {
+			case *tg.UpdateMessageID:
+				i := x.ID
+				id = &i
+			case *tg.UpdateNewMessage:
+				if m, ok := x.Message.(*tg.Message); ok {
+					i := m.ID
+					id = &i
+				}
+			case *tg.UpdateNewChannelMessage:
+				if m, ok := x.Message.(*tg.Message); ok {
+					i := m.ID
+					id = &i
+				}
+			}
+		}
+	case *tg.UpdatesCombined:
+		for _, up := range u.Updates {
+			if x, ok := up.(*tg.UpdateMessageID); ok {
+				i := x.ID
+				id = &i
+			}
+		}
+	case *tg.UpdateShortSentMessage:
+		i := u.ID
+		id = &i
+	}
+	return id, nil
 }
 
 func (c *Client) GetMessages(ctx context.Context, req types.GetMessagesRequest) tea.Cmd {
-	return c.chatManager.GetChatHistoryCmd(ctx, req.Peer, req.Limit, req.OffsetID)
+	return c.GetChatHistoryCmd(ctx, req.Peer, req.Limit, req.OffsetID)
 }
 
 func (c *Client) GetUserChats(ctx context.Context, chatType types.ChatType, offsetDate, offsetID int) tea.Cmd {
-	return c.chatManager.GetUserChatsCmd(ctx, chatType == types.BotChat, offsetDate, offsetID)
+	return c.GetUserChatsCmd(ctx, chatType == types.BotChat, offsetDate, offsetID)
 }
 
 func (c *Client) GetUserChannels(ctx context.Context, isBroadCast bool, offsetDate, offsetID int) tea.Cmd {
-	return c.chatManager.GetChannelsCmd(ctx, isBroadCast, offsetDate, offsetID)
+	return c.GetChannelsCmd(ctx, isBroadCast, offsetDate, offsetID)
 }
 
-func (c *Client) GetAllMessages(ctx context.Context, req types.GetMessagesRequest) tea.Cmd {
-	return c.chatManager.GetChatHistoryCmd(ctx, req.Peer, req.Limit, req.OffsetID)
+func (c *Client) GetChatHistoryCmd(ctx context.Context, peer types.Peer, limit int, offsetID *int) tea.Cmd {
+	return func() tea.Msg {
+		messages, err := c.GetChatHistory(ctx, peer, limit, offsetID)
+		if err != nil {
+			return types.GetMessagesMsg{Messages: [50]types.FormattedMessage{}, Err: err}
+		}
+		var msgArray [50]types.FormattedMessage
+		copy(msgArray[:], messages)
+		return types.GetMessagesMsg{Messages: msgArray}
+	}
+}
+
+func (c *Client) GetChatHistory(ctx context.Context, peer types.Peer, limit int, offsetID *int) ([]types.FormattedMessage, error) {
+	inputPeer, err := shared.ConvertPeerToInputPeer(peer)
+	if err != nil {
+		return nil, err
+	}
+
+	req := &tg.MessagesGetHistoryRequest{Peer: inputPeer, Limit: limit}
+	if offsetID != nil {
+		req.OffsetID = *offsetID
+	}
+
+	history, err := c.GetAPI().MessagesGetHistory(ctx, req)
+	if err != nil {
+		return nil, types.NewGetMessagesError(err)
+	}
+
+	msgs, users, err := shared.GetMessageAndUserClasses(history)
+	if err != nil {
+		return nil, err
+	}
+
+	areWeInUserModeOrBotMode := peer.ChatType == types.BotChat || peer.ChatType == types.UserChat
+
+	var userInfo *types.UserInfo
+	var channel *types.ChannelInfo
+
+	if areWeInUserModeOrBotMode {
+		if id, err := strconv.ParseInt(peer.ID, 10, 64); err == nil {
+			userInfo = getUserFromClasses(users, id)
+		}
+	}
+
+	var formattedMessages []types.FormattedMessage
+	for _, msgClass := range msgs {
+		msg, ok := msgClass.(*tg.Message)
+		if !ok {
+			continue
+		}
+		if areWeInUserModeOrBotMode {
+			formattedMessages = append(formattedMessages, *shared.FormatMessage(msg, userInfo, msgs))
+		} else if peer.ChatType == types.GroupChat {
+			fromID, ok := msg.FromID.(*tg.PeerUser)
+			if ok {
+				ui := getUserFromClasses(users, fromID.UserID)
+				formattedMessages = append(formattedMessages, *shared.FormatMessage(msg, ui, msgs))
+			} else {
+				formattedMessages = append(formattedMessages, *shared.FormatMessage(msg, channel, msgs))
+			}
+		} else {
+			formattedMessages = append(formattedMessages, *shared.FormatMessage(msg, channel, msgs))
+		}
+	}
+
+	slices.Reverse(formattedMessages)
+	return formattedMessages, nil
+}
+
+func (c *Client) GetUserChatsCmd(ctx context.Context, isBot bool, offsetDate, offsetID int) tea.Cmd {
+	return func() tea.Msg {
+		result, err := c.getUserChats(ctx, isBot, offsetDate, offsetID)
+		return types.UserChatsMsg{Response: &result, Err: err}
+	}
+}
+
+func (c *Client) GetChannelsCmd(ctx context.Context, isBroadCast bool, offsetDate, offsetID int) tea.Cmd {
+	return func() tea.Msg {
+		result, err := c.getChannels(ctx, isBroadCast, offsetDate, offsetID)
+		if isBroadCast {
+			return types.ChannelsMsg{Response: &result, Err: err}
+		}
+		return types.GroupsMsg{Response: &result, Err: err}
+	}
+}
+
+func (c *Client) GetAllChats(ctx context.Context, offsetDate int, offsetID int) (types.GetAllChatsResponse, error) {
+	ds, err := c.getAllDialogs(ctx, offsetDate, offsetID)
+	if err != nil {
+		return types.GetAllChatsResponse{}, types.NewTelegramError(types.ErrorCodeGetMessagesFailed, "failed to get dialogs", err)
+	}
+	if ds == nil {
+		return types.GetAllChatsResponse{PrivateChats: []types.UserInfo{}, Channels: []types.ChannelInfo{}, Groups: []types.ChannelInfo{}}, nil
+	}
+
+	var users []types.UserInfo
+	for _, tgUser := range ds.Users {
+		u := shared.ConvertTGUserToUserInfo(tgUser)
+		u.UnreadCount = getUnreadCount(ds.Dialogs, tgUser.ID)
+		users = append(users, *u)
+	}
+
+	var channels, groups []types.ChannelInfo
+	for _, chatClass := range ds.Chats {
+		if channel, ok := chatClass.(*tg.Channel); ok {
+			info := convertTGChannelToChannelInfo(channel)
+			info.UnreadCount = getUnreadCount(ds.Dialogs, channel.ID)
+			if channel.Broadcast {
+				channels = append(channels, *info)
+			} else {
+				groups = append(groups, *info)
+			}
+		}
+		if chat, ok := chatClass.(*tg.Chat); ok {
+			groups = append(groups, types.ChannelInfo{
+				ChannelTitle:      chat.Title,
+				ID:                strconv.FormatInt(chat.ID, 10),
+				IsCreator:         chat.Creator,
+				IsBroadcast:       false,
+				ParticipantsCount: &chat.ParticipantsCount,
+				UnreadCount:       getUnreadCount(ds.Dialogs, chat.ID),
+			})
+		}
+	}
+
+	return types.GetAllChatsResponse{
+		PrivateChats: users,
+		Channels:     channels,
+		Groups:       groups,
+		OffsetDate:   ds.OffsetDate,
+		OffsetID:     ds.OffsetID,
+	}, nil
+}
+
+func (c *Client) getUserChats(ctx context.Context, isBot bool, offsetDate, offsetID int) (types.GetUserChatsResult, error) {
+	ds, err := c.getAllDialogs(ctx, offsetDate, offsetID)
+	if err != nil {
+		return types.GetUserChatsResult{}, types.NewTelegramError(types.ErrorCodeGetMessagesFailed, "failed to get dialogs", err)
+	}
+	if ds == nil {
+		return types.GetUserChatsResult{Data: []types.UserInfo{}}, nil
+	}
+
+	var users []types.UserInfo
+	for _, tgUser := range ds.Users {
+		if tgUser.Bot == isBot {
+			u := shared.ConvertTGUserToUserInfo(tgUser)
+			u.UnreadCount = getUnreadCount(ds.Dialogs, int64(tgUser.ID))
+			users = append(users, *u)
+		}
+	}
+
+	return types.GetUserChatsResult{Data: users, OffsetDate: ds.OffsetDate, OffsetID: ds.OffsetID}, nil
+}
+
+func (c *Client) getChannels(ctx context.Context, isBroadCast bool, offsetDate, offsetID int) (types.GetChannelsResult, error) {
+	ds, err := c.getAllDialogs(ctx, offsetDate, offsetID)
+	if err != nil {
+		return types.GetChannelsResult{}, types.NewTelegramError(types.ErrorCodeGetMessagesFailed, "failed to get dialogs", err)
+	}
+	if ds == nil {
+		return types.GetChannelsResult{Data: []types.ChannelInfo{}}, nil
+	}
+
+	var channels []types.ChannelInfo
+	for _, chatClass := range ds.Chats {
+		if channel, ok := chatClass.(*tg.Channel); ok && channel.Broadcast == isBroadCast {
+			channels = append(channels, *convertTGChannelToChannelInfo(channel))
+		}
+	}
+
+	return types.GetChannelsResult{Data: channels, OffsetDate: ds.OffsetDate, OffsetID: ds.OffsetID}, nil
+}
+
+func (c *Client) GetChannelInfo(ctx context.Context, peer types.Peer) (*types.ChannelInfo, error) {
+	channelID, err := strconv.ParseInt(peer.ID, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	accessHash, err := strconv.ParseInt(peer.AccessHash, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	chatClass, err := c.GetAPI().ChannelsGetChannels(ctx, []tg.InputChannelClass{
+		&tg.InputChannel{ChannelID: channelID, AccessHash: accessHash},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	messageChatClass, ok := chatClass.(*tg.MessagesChats)
+	if !ok || len(messageChatClass.Chats) == 0 {
+		return nil, errors.New("failed to get channel info")
+	}
+
+	chat, ok := messageChatClass.Chats[0].(*tg.Channel)
+	if !ok {
+		return nil, errors.New("unexpected chat type")
+	}
+
+	return &types.ChannelInfo{
+		ChannelTitle:      chat.Title,
+		Username:          &chat.Username,
+		ID:                peer.ID,
+		AccessHash:        strconv.FormatInt(chat.AccessHash, 10),
+		IsCreator:         chat.Creator,
+		IsBroadcast:       chat.Broadcast,
+		ParticipantsCount: &chat.ParticipantsCount,
+	}, nil
+}
+
+func (c *Client) UserInfoFromPeerClass(ctx context.Context, peerClass *tg.PeerUser) *types.UserInfo {
+	userClasses, err := c.GetAPI().UsersGetUsers(ctx, []tg.InputUserClass{
+		&tg.InputUser{UserID: peerClass.UserID},
+	})
+	if err != nil || len(userClasses) == 0 {
+		return nil
+	}
+	user, ok := userClasses[0].(*tg.User)
+	if !ok {
+		return nil
+	}
+	return shared.ConvertTGUserToUserInfo(user)
 }
 
 func (c *Client) DeleteMessage(ctx context.Context, req types.DeleteMessageRequest) (types.DeleteMessageResponse, error) {
-	deleteMessageRequest := &tg.MessagesDeleteMessagesRequest{
+	_, err := c.GetAPI().MessagesDeleteMessages(ctx, &tg.MessagesDeleteMessagesRequest{
 		Revoke: true,
 		ID:     []int{req.MessageID},
-	}
-	_, err := c.Client.API().MessagesDeleteMessages(ctx, deleteMessageRequest)
+	})
 	if err != nil {
 		return types.DeleteMessageResponse{Status: "failed"}, types.NewDeleteMessageError(err)
 	}
@@ -158,29 +468,18 @@ func (c *Client) DeleteMessage(ctx context.Context, req types.DeleteMessageReque
 func (c *Client) EditMessage(ctx context.Context, req types.EditMessageRequest) types.EditMessageMsg {
 	inputPeer, err := shared.ConvertPeerToInputPeer(req.Peer)
 	if err != nil {
-		return types.EditMessageMsg{
-			Response: false,
-			Err:      types.NewEditMessageError(err),
-		}
+		return types.EditMessageMsg{Err: types.NewEditMessageError(err)}
 	}
 
-	editRequest := &tg.MessagesEditMessageRequest{
+	_, err = c.GetAPI().MessagesEditMessage(ctx, &tg.MessagesEditMessageRequest{
 		Peer:    inputPeer,
 		ID:      req.MessageID,
 		Message: req.NewMessage,
-	}
-
-	_, err = c.Client.API().MessagesEditMessage(ctx, editRequest)
+	})
 	if err != nil {
-		return types.EditMessageMsg{
-			Response: false,
-			Err:      types.NewEditMessageError(err),
-		}
+		return types.EditMessageMsg{Err: types.NewEditMessageError(err)}
 	}
-	return types.EditMessageMsg{
-		Response: true,
-		Err:      nil,
-	}
+	return types.EditMessageMsg{Response: true}
 }
 
 func (c *Client) ForwardMessages(ctx context.Context, req types.ForwardMessagesRequest) error {
@@ -194,14 +493,12 @@ func (c *Client) ForwardMessages(ctx context.Context, req types.ForwardMessagesR
 		return types.NewForwardMessageError(err)
 	}
 
-	forwardRequest := &tg.MessagesForwardMessagesRequest{
+	_, err = c.GetAPI().MessagesForwardMessages(ctx, &tg.MessagesForwardMessagesRequest{
 		FromPeer: fromPeer,
 		ToPeer:   toPeer,
 		ID:       req.MessageIDs,
 		RandomID: []int64{mathRand.Int63()},
-	}
-
-	_, err = c.Client.API().MessagesForwardMessages(ctx, forwardRequest)
+	})
 	if err != nil {
 		return types.NewForwardMessageError(err)
 	}
@@ -212,28 +509,14 @@ func (c *Client) MarkMessagesAsRead(ctx context.Context, req types.MarkAsReadReq
 	return func() tea.Msg {
 		inputPeer, err := shared.ConvertPeerToInputPeer(req.Peer)
 		if err != nil {
-			return types.MarkMessagesAsReadMsg{
-				Response: false,
-				Err:      err,
-			}
+			return types.MarkMessagesAsReadMsg{Err: err}
 		}
 
-		readRequest := &tg.MessagesReadHistoryRequest{
-			Peer: inputPeer,
-		}
-
-		_, err = c.Client.API().MessagesReadHistory(ctx, readRequest)
+		_, err = c.GetAPI().MessagesReadHistory(ctx, &tg.MessagesReadHistoryRequest{Peer: inputPeer})
 		if err != nil {
-			return types.MarkMessagesAsReadMsg{
-				Response: false,
-				Err:      err,
-			}
+			return types.MarkMessagesAsReadMsg{Err: err}
 		}
-
-		return types.MarkMessagesAsReadMsg{
-			Response: true,
-			Err:      nil,
-		}
+		return types.MarkMessagesAsReadMsg{Response: true}
 	}
 }
 
@@ -243,22 +526,79 @@ func (c *Client) SetUserTyping(ctx context.Context, req types.SetTypingRequest) 
 		return err
 	}
 
-	typingRequest := &tg.MessagesSetTypingRequest{
+	_, err = c.GetAPI().MessagesSetTyping(ctx, &tg.MessagesSetTypingRequest{
 		Peer:   inputPeer,
 		Action: &tg.SendMessageTypingAction{},
-	}
-
-	_, err = c.Client.API().MessagesSetTyping(ctx, typingRequest)
+	})
 	if err != nil {
 		return types.NewTelegramError(types.ErrorCodeSendFailed, "failed to set typing", err)
 	}
 	return nil
 }
 
+func (c *Client) GetUserInfo(ctx context.Context, userID int64) (*types.UserInfo, error) {
+	userClasses, err := c.GetAPI().UsersGetUsers(ctx, []tg.InputUserClass{&tg.InputUser{UserID: userID}})
+	if err != nil || len(userClasses) == 0 {
+		return nil, types.NewUserNotFoundError(userID)
+	}
+	tgUser, ok := userClasses[0].(*tg.User)
+	if !ok {
+		return nil, types.NewUserNotFoundError(userID)
+	}
+	return shared.ConvertTGUserToUserInfo(tgUser), nil
+}
+
+func (c *Client) GetUserStatus(ctx context.Context, userID int64) (*types.UserStatus, error) {
+	userClasses, err := c.GetAPI().UsersGetUsers(ctx, []tg.InputUserClass{&tg.InputUser{UserID: userID}})
+	if err != nil || len(userClasses) == 0 {
+		return nil, types.NewUserNotFoundError(userID)
+	}
+	tgUser, ok := userClasses[0].(*tg.User)
+	if !ok {
+		return nil, types.NewUserNotFoundError(userID)
+	}
+
+	var lastSeen time.Time
+	isOnline := false
+	if tgUser.Status != nil {
+		switch s := tgUser.Status.(type) {
+		case *tg.UserStatusOnline:
+			isOnline = true
+		case *tg.UserStatusOffline:
+			lastSeen = time.Unix(int64(s.WasOnline), 0)
+		}
+	}
+	return &types.UserStatus{IsOnline: isOnline, LastSeen: lastSeen}, nil
+}
+
+func (c *Client) SearchUsers(ctx context.Context, searchQuery string) {
+	users, err := c.searchUsers(ctx, searchQuery)
+	c.updateChannel <- types.Notification{
+		SearchResult: &types.SearchUsersMsg{
+			Response: &users,
+			Err:      err,
+		},
+	}
+}
+
+func (c *Client) searchUsers(ctx context.Context, q string) ([]types.UserInfo, error) {
+	searchResult, err := c.GetAPI().ContactsSearch(ctx, &tg.ContactsSearchRequest{Q: q, Limit: 50})
+	if err != nil {
+		return nil, types.NewTelegramError(types.ErrorCodeUserNotFound, "failed to search users", err)
+	}
+
+	var users []types.UserInfo
+	for _, userClass := range searchResult.Users {
+		if tgUser, ok := userClass.(*tg.User); ok {
+			users = append(users, *shared.ConvertTGUserToUserInfo(tgUser))
+		}
+	}
+	return users, nil
+}
+
 func (c *Client) GetAllStories(ctx context.Context) tea.Cmd {
 	return func() tea.Msg {
-		allUserStoriesClass, err := c.Client.API().StoriesGetAllStories(ctx, &tg.StoriesGetAllStoriesRequest{})
-
+		allUserStoriesClass, err := c.GetAPI().StoriesGetAllStories(ctx, &tg.StoriesGetAllStoriesRequest{})
 		if err != nil {
 			slog.Error(context.Canceled.Error())
 			return nil
@@ -275,14 +615,8 @@ func (c *Client) GetAllStories(ctx context.Context) tea.Cmd {
 				continue
 			}
 
-			inputUser := tg.InputUser{UserID: peerUser.UserID}
-
-			userClass, err := c.Client.API().UsersGetUsers(ctx, []tg.InputUserClass{&inputUser})
-			if err != nil {
-				continue
-			}
-
-			if len(userClass) == 0 {
+			userClass, err := c.GetAPI().UsersGetUsers(ctx, []tg.InputUserClass{&tg.InputUser{UserID: peerUser.UserID}})
+			if err != nil || len(userClass) == 0 {
 				continue
 			}
 
@@ -309,13 +643,7 @@ func (c *Client) GetAllStories(ctx context.Context) tea.Cmd {
 					if !ok {
 						continue
 					}
-
-					AllStories = append(AllStories, types.Stories{
-						UserInfo:   *userInfo,
-						ID:         storyItem.ID,
-						Data:       document.FileReference,
-						IsSelected: false,
-					})
+					AllStories = append(AllStories, types.Stories{UserInfo: *userInfo, ID: storyItem.ID, Data: document.FileReference})
 				case *tg.MessageMediaPhoto:
 					photoClass, ok := item.GetPhoto()
 					if !ok {
@@ -325,29 +653,11 @@ func (c *Client) GetAllStories(ctx context.Context) tea.Cmd {
 					if !ok {
 						continue
 					}
-
-					AllStories = append(AllStories, types.Stories{
-						UserInfo:   *userInfo,
-						ID:         storyItem.ID,
-						Data:       photo.FileReference,
-						IsSelected: false,
-					})
+					AllStories = append(AllStories, types.Stories{UserInfo: *userInfo, ID: storyItem.ID, Data: photo.FileReference})
 				}
 			}
 		}
-		return types.GetAllStoriesMsg{
-			Stories: AllStories,
-			Err:     nil,
-		}
-	}
-}
-func (c *Client) SearchUsers(ctx context.Context, query string) {
-	users, err := c.userManager.SearchUsers(ctx, query)
-	c.updateChannel <- types.Notification{
-		SearchResult: &types.SearchUsersMsg{
-			Response: &users,
-			Err:      err,
-		},
+		return types.GetAllStoriesMsg{Stories: AllStories}
 	}
 }
 
@@ -355,22 +665,13 @@ func (c *Client) GetPeerStories(ctx context.Context, peer types.Peer) tea.Cmd {
 	return func() tea.Msg {
 		inputPeer, err := shared.ConvertPeerToInputPeer(peer)
 		if err != nil {
-			return types.StoriesDownloadStatusMsg{
-				IDs:  []int{},
-				Done: false,
-				Err:  err,
-				Peer: peer,
-			}
+			return types.StoriesDownloadStatusMsg{IDs: []int{}, Err: err, Peer: peer}
 		}
-		peerUserStories, err := c.Client.API().StoriesGetPeerStories(ctx, inputPeer)
+		peerUserStories, err := c.GetAPI().StoriesGetPeerStories(ctx, inputPeer)
 		if err != nil {
-			return types.StoriesDownloadStatusMsg{
-				IDs:  []int{},
-				Done: false,
-				Err:  err,
-				Peer: peer,
-			}
+			return types.StoriesDownloadStatusMsg{IDs: []int{}, Err: err, Peer: peer}
 		}
+
 		homeDir, _ := os.UserHomeDir()
 		cligramDir := filepath.Join(homeDir, ".cligram")
 		var readStoriesIDs []int
@@ -387,25 +688,123 @@ func (c *Client) GetPeerStories(ctx context.Context, peer types.Peer) tea.Cmd {
 		if len(readStoriesIDs) != 0 {
 			maxID := slices.Max(readStoriesIDs)
 			if configManager.GetConfig().ReadStories {
-				readErr := shared.ReadStories(ctx, c.Client, peer, maxID)
-				if readErr != nil {
+				if readErr := shared.ReadStories(ctx, c.Client, peer, maxID); readErr != nil {
 					slog.Error("failed to mark stories as read", "err", readErr)
 				}
 			}
-			return types.StoriesDownloadStatusMsg{
-				IDs:  readStoriesIDs,
-				Done: true,
-				Err:  nil,
-				Peer: peer,
-			}
+			return types.StoriesDownloadStatusMsg{IDs: readStoriesIDs, Done: true, Peer: peer}
 		}
 		return types.StoriesDownloadStatusMsg{
 			IDs:  []int{},
 			Done: false,
-			Err:  errors.New("we have failed to download the story for some fucking reason"),
+			Err:  errors.New("failed to download story"),
 			Peer: peer,
 		}
 	}
+}
+
+type dialogsResult struct {
+	Chats      []tg.ChatClass
+	Users      []*tg.User
+	Dialogs    []*tg.Dialog
+	OffsetDate int
+	OffsetID   int
+}
+
+func (c *Client) getAllDialogs(ctx context.Context, offsetDate, offsetID int) (*dialogsResult, error) {
+	q := query.NewQuery(c.GetAPI())
+	it := dialogs.NewIterator(q.GetDialogs().OffsetID(offsetID).OffsetDate(offsetDate).BatchSize(20), 50)
+
+	var result dialogsResult
+	result.OffsetDate = -1
+	result.OffsetID = -1
+
+	for it.Next(ctx) {
+		value := it.Value()
+
+		if dialog, ok := value.Dialog.(*tg.Dialog); ok {
+			result.Dialogs = append(result.Dialogs, dialog)
+		}
+
+		if user, ok := value.Peer.(*tg.InputPeerUser); ok {
+			for _, u := range value.Entities.Users() {
+				if u.ID == user.UserID {
+					result.Users = append(result.Users, u)
+					break
+				}
+			}
+		}
+		if peerChat, ok := value.Peer.(*tg.InputPeerChat); ok {
+			if chat, ok := value.Entities.Chat(peerChat.ChatID); ok {
+				result.Chats = append(result.Chats, chat)
+			}
+		}
+		if channel, ok := value.Peer.(*tg.InputPeerChannel); ok {
+			if chat, ok := value.Entities.Channel(channel.ChannelID); ok {
+				result.Chats = append(result.Chats, chat)
+			}
+		}
+		result.OffsetDate = value.Last.GetDate()
+		result.OffsetID = value.Last.GetID()
+	}
+
+	if err := it.Err(); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func getUserFromClasses(users []tg.UserClass, peerID int64) *types.UserInfo {
+	for _, userClass := range users {
+		if user, ok := userClass.(*tg.User); ok && user.ID == peerID {
+			return shared.ConvertTGUserToUserInfo(user)
+		}
+	}
+	return nil
+}
+
+func getUnreadCount(chatDialogs []*tg.Dialog, peerID int64) int {
+	for _, p := range chatDialogs {
+		if tgPeerUser, ok := p.Peer.(*tg.PeerUser); ok && tgPeerUser.UserID == peerID {
+			return p.UnreadCount
+		}
+		if tgPeerChannel, ok := p.Peer.(*tg.PeerChannel); ok && tgPeerChannel.ChannelID == peerID {
+			return p.UnreadCount
+		}
+		if tgPeerChat, ok := p.Peer.(*tg.PeerChat); ok && tgPeerChat.ChatID == peerID {
+			return p.UnreadCount
+		}
+	}
+	return 0
+}
+
+func convertTGChannelToChannelInfo(channel *tg.Channel) *types.ChannelInfo {
+	return &types.ChannelInfo{
+		ChannelTitle:      channel.Title,
+		Username:          &channel.Username,
+		ID:                strconv.FormatInt(channel.ID, 10),
+		AccessHash:        strconv.FormatInt(channel.AccessHash, 10),
+		IsCreator:         channel.Creator,
+		IsBroadcast:       channel.Broadcast,
+		ParticipantsCount: &channel.ParticipantsCount,
+	}
+}
+
+func detectFileExists(path string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	buf := make([]byte, 512)
+	n, err := file.Read(buf)
+	if err != nil {
+		return err
+	}
+
+	http.DetectContentType(buf[:n])
+	return nil
 }
 
 func parseReplyID(replyID string) *int {
