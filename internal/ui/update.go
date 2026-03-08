@@ -647,8 +647,8 @@ func extractPeerInfo(fromPeer, receiver list.Item) (from, toPeer types.Peer) {
 }
 
 func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
-	m.Width = msg.Width - 4
-	m.Height = msg.Height - 4
+	m.Width = msg.Width
+	m.Height = msg.Height
 	headerHeight := 7
 	footerHeight := 7
 	m.viewport = viewport.New(msg.Width, msg.Height-(headerHeight+footerHeight))
