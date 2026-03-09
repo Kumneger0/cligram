@@ -24,7 +24,7 @@ require (
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616
 	golang.org/x/term v0.39.0
-	golang.org/x/time v0.13.0
+	golang.org/x/time v0.15.0
 	golang.org/x/tools v0.40.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	mvdan.cc/gofumpt v0.9.2
