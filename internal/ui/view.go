@@ -85,9 +85,9 @@ func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 	}
 
 	isOnSideBar := d.Model.FocusedOn == SideBar
-	style := normalStyle.Copy()
+	style := normalStyle
 	if index == m.Index() && isOnSideBar {
-		style = selectedStyle.Copy()
+		style = selectedStyle
 	}
 
 	fmt.Fprint(w, style.UnsetWidth().Render(content))
@@ -96,6 +96,7 @@ func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 func (m Model) Init() tea.Cmd {
 	filePickerInitCMD := m.Filepicker.Init()
 	storiesCMD := telegram.Cligram.GetAllStories(telegram.Cligram.Context())
+
 	return tea.Batch(filePickerInitCMD, storiesCMD)
 }
 

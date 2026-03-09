@@ -62,7 +62,7 @@ func (d SearchDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 
 	width := 20
 	if d.Foreground != nil {
-		width = d.Foreground.windowWidth / 3
+		width = max(20, d.Foreground.windowWidth/3)
 	}
 	str := lipgloss.NewStyle().Width(width).Render(title)
 	if index == m.Index() {
@@ -221,8 +221,8 @@ func (f Foreground) View() string {
 		f.UsersList.SetShowStatusBar(false)
 		f.UsersList.SetShowTitle(false)
 		f.UsersList.SetShowHelp(false)
-		f.UsersList.SetWidth(f.windowWidth / 3)
-		f.UsersList.SetHeight(f.windowHeight / 2)
+		f.UsersList.SetWidth(max(20, f.windowWidth/3))
+		f.UsersList.SetHeight(max(10, f.windowHeight/2))
 		content := lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(DefaultTheme.BorderColor).Render(f.UsersList.View())
 		layout := lipgloss.JoinVertical(lipgloss.Left, title, content)
 		return foreStyle.Render(layout)
@@ -277,7 +277,7 @@ func getSearchView(m Foreground) string {
 	} else {
 		inputBorderStyle = lipgloss.NewStyle().Border(lipgloss.DoubleBorder()).BorderForeground(DefaultTheme.AccentColor)
 	}
-	textViewString := lipgloss.NewStyle().Width(m.windowWidth/3).Height(5).Padding(0, 1).Inherit(inputBorderStyle).Background(DefaultTheme.InputBg).Render(m.input.View())
+	textViewString := lipgloss.NewStyle().Width(max(20, m.windowWidth/3)).Height(5).Padding(0, 1).Inherit(inputBorderStyle).Background(DefaultTheme.InputBg).Render(m.input.View())
 	return textViewString
 }
 

@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gotd/td/tg"
+	"github.com/kumneger0/cligram/internal/notification"
 	"github.com/kumneger0/cligram/internal/telegram"
 	"github.com/kumneger0/cligram/internal/telegram/types"
 )
@@ -151,6 +152,41 @@ func (m Model) handleMarkMessagesAsRead(msg types.MarkMessagesAsReadMsg) (tea.Mo
 	return m, nil
 }
 
+func sendNewMessageNotification[T types.UserInfo | types.ChannelInfo](item T, message *tg.Message) {
+	switch v := any(item).(type) {
+	case types.UserInfo:
+		if v.NotifySettings != nil && (v.NotifySettings.Silent || (v.NotifySettings.MuteUntil != 0 && int64(v.NotifySettings.MuteUntil) > time.Now().Unix())) {
+			return
+		}
+
+		title := v.FirstName
+		if v.LastName != "" {
+			title = fmt.Sprintf("%s %s", v.FirstName, v.LastName)
+		}
+
+		content := "Sent you a new message"
+		if v.NotifySettings != nil && v.NotifySettings.ShowPreviews {
+			content = message.Message
+		}
+
+		notification.Notify(title, content)
+
+	case types.ChannelInfo:
+		if v.NotifySettings != nil && (v.NotifySettings.Silent || (v.NotifySettings.MuteUntil != 0 && int64(v.NotifySettings.MuteUntil) > time.Now().Unix())) {
+			return
+		}
+
+		title := v.ChannelTitle
+		content := "New message"
+
+		if v.NotifySettings != nil && v.NotifySettings.ShowPreviews {
+			content = message.Message
+		}
+
+		notification.Notify(title, content)
+	}
+}
+
 func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, tea.Cmd) {
 	var userInfo *types.UserInfo
 	for _, v := range slices.Concat(m.Users.Items(), m.Bots.Items()) {
@@ -168,6 +204,14 @@ func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, te
 				break
 			}
 		}
+	}
+
+	if userInfo != nil {
+		sendNewMessageNotification(*userInfo, msg.Message)
+	}
+
+	if channelOrGroupInfo != nil {
+		sendNewMessageNotification(*channelOrGroupInfo, msg.Message)
 	}
 
 	if channelOrGroupInfo != nil {
@@ -246,19 +290,20 @@ type GetFormattedMessageArg struct {
 
 func getFormattedMessageFunc(arg GetFormattedMessageArg) types.FormattedMessage {
 	var sender string
+	var fromID *string
+
 	if (arg.ChatType == types.UserChat || arg.ChatType == types.BotChat) && arg.UserInfo != nil {
 		sender = arg.UserInfo.FirstName
+		fromID = &arg.UserInfo.PeerID
+	} else if arg.ChannelOrGroupInfo != nil {
+		sender = arg.ChannelOrGroupInfo.ChannelTitle
+		fromID = &arg.ChannelOrGroupInfo.ID
 	}
+
 	var media *string
 	if arg.Message.Media != nil {
 		mediaStr := fmt.Sprintf("%T", arg.Message.Media)
 		media = &mediaStr
-	}
-
-	var fromID *string
-
-	if arg.UserInfo != nil {
-		fromID = &arg.UserInfo.PeerID
 	}
 
 	return types.FormattedMessage{
