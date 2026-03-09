@@ -59,8 +59,8 @@ func NewClient(ctx context.Context, config Config) (*Client, error) {
 		SessionStorage: sessionStorage,
 		UpdateHandler:  updateHandler,
 		NoUpdates:      false,
-		OnDead: func() {
-			slog.Error("telegram connection is dead")
+		OnDead: func(err error) {
+			slog.Error("telegram connection is dead", "error", err)
 		},
 	}
 
