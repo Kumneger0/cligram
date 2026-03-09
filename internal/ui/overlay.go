@@ -33,6 +33,11 @@ const (
 
 type SearchDelegate struct {
 	list.DefaultDelegate
+	*Foreground
+}
+
+func (d SearchDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd {
+	return nil
 }
 
 func (d SearchDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
@@ -55,7 +60,11 @@ func (d SearchDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 		return
 	}
 
-	str := lipgloss.NewStyle().Width(50).Render(title)
+	width := 20
+	if d.Foreground != nil {
+		width = max(20, d.Foreground.windowWidth/3)
+	}
+	str := lipgloss.NewStyle().Width(width).Render(title)
 	if index == m.Index() {
 		fmt.Fprint(w, selectedStyle.Render(" "+str+" "))
 	} else {
@@ -100,7 +109,8 @@ func (s StoriesDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	}
 
 	if loading {
-		fmt.Fprint(w, style.Render(" "+title+" loading..."))
+		loadingText := lipgloss.NewStyle().Foreground(DefaultTheme.AccentColor).Render(" loading...")
+		fmt.Fprint(w, style.Render(" "+title+loadingText))
 	} else {
 		fmt.Fprint(w, style.Render(" "+title+""))
 	}
@@ -194,44 +204,44 @@ func setTotalSearchResultUsers(searchMsg types.SearchUsersMsg, m *Foreground) {
 func (f Foreground) View() string {
 	foreStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder(), true).
-		BorderForeground(lipgloss.Color("6")).
+		BorderForeground(DefaultTheme.AccentColor). // Use theme accent color
 		Padding(0, 1)
 
 	if f.ModalMode == ModalModeShowStories && f.stories != nil {
-		title := "Stories"
+		title := lipgloss.NewStyle().Foreground(DefaultTheme.PrimaryText).Bold(true).Render("Stories")
 		var content string
-		content = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).Render(f.stories.View())
+		content = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(DefaultTheme.BorderColor).Render(f.stories.View())
 		layout := lipgloss.JoinVertical(lipgloss.Left, title, content)
 		return foreStyle.Render(layout)
 	}
 
 	if f.ModalMode == ModalModeForwardMessage {
-		title := "Forward Message"
-		boldStyle := lipgloss.NewStyle().Bold(true)
-		title = boldStyle.Render(title)
+		title := lipgloss.NewStyle().Foreground(DefaultTheme.PrimaryText).Bold(true).Render("Forward Message")
 		f.UsersList.SetShowFilter(false)
 		f.UsersList.SetShowStatusBar(false)
 		f.UsersList.SetShowTitle(false)
 		f.UsersList.SetShowHelp(false)
-		f.UsersList.SetWidth(f.windowWidth / 3)
-		f.UsersList.SetHeight(f.windowHeight / 2)
-		content := lipgloss.NewStyle().Border(lipgloss.NormalBorder()).Render(f.UsersList.View())
+		f.UsersList.SetWidth(max(20, f.windowWidth/3))
+		f.UsersList.SetHeight(max(10, f.windowHeight/2))
+		content := lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(DefaultTheme.BorderColor).Render(f.UsersList.View())
 		layout := lipgloss.JoinVertical(lipgloss.Left, title, content)
 		return foreStyle.Render(layout)
 	}
 	if f.ModalMode == ModalModeDeleteMessage {
-		title := "Delete Message"
+		title := lipgloss.NewStyle().Foreground(DefaultTheme.PrimaryText).Bold(true).Render("Delete Message")
 		yes := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("fff")).
-			Background(lipgloss.Color("#25D366")).
+			Foreground(DefaultTheme.SelectedFg).
+			Background(DefaultTheme.AccentColor).
+			Padding(0, 1).
 			Render("Y")
 		no := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("fff")).
-			Background(lipgloss.Color("#dc2626")).
+			Foreground(DefaultTheme.SelectedFg).
+			Background(DefaultTheme.ErrorColor).
+			Padding(0, 1).
 			Render("N")
 		contentStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("161b22")).
-			Background(lipgloss.Color("fff")).
+			Foreground(DefaultTheme.PrimaryText).
+			Background(DefaultTheme.SubtleBg).
 			Padding(1, 2)
 		var content strings.Builder
 		content.WriteString("Are You Sure You want to delete this message \n")
@@ -243,34 +253,31 @@ func (f Foreground) View() string {
 		content.WriteString(no)
 		content.WriteString(" to cancel")
 		contentString := contentStyle.Render(content.String())
-		boldStyle := lipgloss.NewStyle().Bold(true)
-		title = boldStyle.Render(title)
 		layout := lipgloss.JoinVertical(lipgloss.Left, title, contentString)
 		return foreStyle.Render(layout)
 	}
-	boldStyle := lipgloss.NewStyle().Bold(true)
-	title := boldStyle.Render("Search")
+	title := lipgloss.NewStyle().Foreground(DefaultTheme.PrimaryText).Bold(true).Render("Search")
 	content := getSearchView(f)
-	var border lipgloss.Border
+	var searchResultBorderStyle lipgloss.Style
 	if f.focusedOn == SEARCH {
-		border = lipgloss.NormalBorder()
+		searchResultBorderStyle = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(DefaultTheme.BorderColor)
 	} else {
-		border = lipgloss.DoubleBorder()
+		searchResultBorderStyle = lipgloss.NewStyle().Border(lipgloss.DoubleBorder()).BorderForeground(DefaultTheme.AccentColor)
 	}
 
-	searchResult := lipgloss.NewStyle().Border(border).Render(f.searchResultCombined.View())
+	searchResult := searchResultBorderStyle.Render(f.searchResultCombined.View())
 	layout := lipgloss.JoinVertical(lipgloss.Left, title, content, searchResult)
 	return foreStyle.Render(layout)
 }
 
 func getSearchView(m Foreground) string {
-	var border lipgloss.Border
+	var inputBorderStyle lipgloss.Style
 	if m.focusedOn == LIST {
-		border = lipgloss.NormalBorder()
+		inputBorderStyle = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(DefaultTheme.BorderColor)
 	} else {
-		border = lipgloss.DoubleBorder()
+		inputBorderStyle = lipgloss.NewStyle().Border(lipgloss.DoubleBorder()).BorderForeground(DefaultTheme.AccentColor)
 	}
-	textViewString := lipgloss.NewStyle().Width(m.windowWidth/3).Height(5).Padding(0, 1).Border(border).Render(m.input.View())
+	textViewString := lipgloss.NewStyle().Width(max(20, m.windowWidth/3)).Height(5).Padding(0, 1).Inherit(inputBorderStyle).Background(DefaultTheme.InputBg).Render(m.input.View())
 	return textViewString
 }
 

@@ -22,29 +22,31 @@ type Peer struct {
 }
 
 type UserInfo struct {
-	FirstName   string  `json:"firstName"`
-	LastName    string  `json:"lastName,omitempty"`
-	Username    string  `json:"username,omitempty"`
-	IsBot       bool    `json:"isBot"`
-	PeerID      string  `json:"peerId"`
-	AccessHash  string  `json:"accessHash"`
-	UnreadCount int     `json:"unreadCount"`
-	LastSeen    *string `json:"lastSeen,omitempty"`
-	IsOnline    bool    `json:"isOnline"`
-	IsTyping    bool    `json:"isTyping"`
-	HasStories  bool    `json:"hasStories"`
+	FirstName      string                 `json:"firstName"`
+	LastName       string                 `json:"lastName,omitempty"`
+	Username       string                 `json:"username,omitempty"`
+	IsBot          bool                   `json:"isBot"`
+	PeerID         string                 `json:"peerId"`
+	AccessHash     string                 `json:"accessHash"`
+	UnreadCount    int                    `json:"unreadCount"`
+	LastSeen       *string                `json:"lastSeen,omitempty"`
+	IsOnline       bool                   `json:"isOnline"`
+	IsTyping       bool                   `json:"isTyping"`
+	HasStories     bool                   `json:"hasStories"`
+	NotifySettings *tg.PeerNotifySettings `json:"notifySettings,omitempty"`
 }
 
 type ChannelInfo struct {
-	ChannelTitle      string  `json:"title"`
-	Username          *string `json:"username,omitempty"`
-	ID                string  `json:"id"`
-	AccessHash        string  `json:"accessHash"`
-	IsCreator         bool    `json:"isCreator"`
-	IsBroadcast       bool    `json:"isBroadcast"`
-	ParticipantsCount *int    `json:"participantsCount,omitempty"`
-	UnreadCount       int     `json:"unreadCount"`
-	HasStories        bool    `json:"hasStories"`
+	ChannelTitle      string                 `json:"title"`
+	Username          *string                `json:"username,omitempty"`
+	ID                string                 `json:"id"`
+	AccessHash        string                 `json:"accessHash"`
+	IsCreator         bool                   `json:"isCreator"`
+	IsBroadcast       bool                   `json:"isBroadcast"`
+	ParticipantsCount *int                   `json:"participantsCount,omitempty"`
+	UnreadCount       int                    `json:"unreadCount"`
+	HasStories        bool                   `json:"hasStories"`
+	NotifySettings    *tg.PeerNotifySettings `json:"notifySettings,omitempty"`
 }
 
 type FormattedMessage struct {

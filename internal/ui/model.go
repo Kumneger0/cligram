@@ -23,7 +23,7 @@ import (
 var (
 	dialogBoxStyle = lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#874BFD")).
+		BorderForeground(DefaultTheme.AccentColor).
 		Padding(1, 2).
 		BorderTop(true).
 		BorderLeft(true).
@@ -69,16 +69,32 @@ func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list
 			title = entry.Sender + ": " + title
 		}
 	}
-	date := timestampStyle.Render(entry.Date.Format("02/01/2006 03:04 PM"))
-	title = title + "\n" + date
+	date := strings.Repeat(" ", 4) + timestampStyle.Render(entry.Date.Format("02/01/2006 03:04 PM"))
 
 	isMainViewFocused := d.Model.FocusedOn == Mainview
-
-	str := messageStyle.Render(title)
 	if index == m.Index() && isMainViewFocused {
-		fmt.Fprint(w, selectedStyle.Render(" "+str+" "))
+		str := title + "\n" + date
+
+		lines := strings.Split(str, "\n")
+		var styledLines []string
+
+		lineStyle := selectedStyle.Width(m.Width())
+
+		for i, line := range lines {
+			style := lineStyle
+			if i == 0 {
+				style = style.PaddingTop(1)
+			}
+			if i == len(lines)-1 {
+				style = style.PaddingBottom(1)
+			}
+			styledLines = append(styledLines, style.Render(line))
+		}
+
+		fmt.Fprint(w, strings.Join(styledLines, "\n"))
 	} else {
-		fmt.Fprint(w, normalStyle.Render(" "+str+" "))
+		str := messageStyle.Render(title + "\n" + date)
+		fmt.Fprint(w, normalStyle.Width(m.Width()).Render(str))
 	}
 }
 
@@ -176,7 +192,7 @@ func setItemStyles(m *Model) string {
 	inputView := prepareInputView(m, dimensions)
 
 	row := lipgloss.JoinHorizontal(lipgloss.Top, sidebarContent, mainContent)
-	return lipgloss.JoinVertical(lipgloss.Top, row, inputView)
+	return lipgloss.NewStyle().Background(DefaultTheme.SubtleBg).Render(lipgloss.JoinVertical(lipgloss.Top, row, inputView))
 }
 
 type layoutDimensions struct {
@@ -189,25 +205,23 @@ type layoutDimensions struct {
 func calculateLayoutDimensions(m *Model) layoutDimensions {
 	sidebarWidth := m.Width * 30 / 100
 	return layoutDimensions{
-		sidebarWidth: sidebarWidth,
-		// takin 90% considering the 10 for padding and some space arorund the content
-		// TODO: can we do better 🤔 ?
-		// do we have better solution
-		mainWidth:     (m.Width - sidebarWidth) * 90 / 100,
+		sidebarWidth:  sidebarWidth,
+		mainWidth:     m.Width - sidebarWidth,
 		contentHeight: m.Height * 90 / 100,
 		inputHeight:   m.Height - (m.Height * 90 / 100),
 	}
 }
 
 func updateListDimensions(m *Model, d layoutDimensions) {
-	listHeight := d.contentHeight - 4
+	listHeight := max(0, d.contentHeight-4)
+	listWidth := max(0, d.sidebarWidth-4)
 	m.Users.SetHeight(listHeight)
-	m.Users.SetWidth(d.sidebarWidth)
+	m.Users.SetWidth(listWidth)
 	m.Bots.SetHeight(listHeight)
-	m.Bots.SetWidth(d.sidebarWidth)
-	m.Channels.SetWidth(d.sidebarWidth)
+	m.Bots.SetWidth(listWidth)
+	m.Channels.SetWidth(listWidth)
 	m.Channels.SetHeight(listHeight)
-	m.Groups.SetWidth(d.sidebarWidth)
+	m.Groups.SetWidth(listWidth)
 	m.Groups.SetHeight(listHeight)
 }
 
@@ -273,13 +287,21 @@ func prepareMainContent(m *Model, d layoutDimensions) string {
 	//the terminal height is determined by charater
 	// one list items takes one 1 charater space since we are showing extra info on chats like times
 	// using the d.contentHeight will make the content out of view
-	// TODO: can we do better ? this feels like a hack
 	m.ChatUI.SetHeight(int(d.contentHeight / 5))
 
 	userNameOrChannelName := getUserOrChannelName(m)
-	title := titleStyle.Render(userNameOrChannelName)
-	line := strings.Repeat("─", max(0, d.mainWidth-4-lipgloss.Width(title)))
-	headerView := lipgloss.JoinVertical(lipgloss.Center, title, line)
+	title := lipgloss.NewStyle().
+		Foreground(DefaultTheme.PrimaryText).
+		Bold(true).
+		Padding(0, 1).
+		Render(userNameOrChannelName)
+
+	separatorLine := lipgloss.NewStyle().
+		Foreground(DefaultTheme.BorderColor).
+		SetString(strings.Repeat("─", max(0, d.mainWidth-2))). // Full width line
+		String()
+
+	headerView := lipgloss.JoinVertical(lipgloss.Left, title, "", separatorLine)
 
 	chatsView := m.ChatUI.View()
 
@@ -325,8 +347,18 @@ func prepareSidebarContent(m *Model, d layoutDimensions) string {
 		content = m.Groups.View()
 	}
 
-	storiesIndicator := fmt.Sprintf("%v, stories \n", len(m.Stories))
-	joinedView := lipgloss.JoinVertical(lipgloss.Top, storiesIndicator, content)
+	storiesIndicator := sidebarHeaderStyle.Render(fmt.Sprintf("📖 Stories (%d)", len(m.Stories)))
+	itemsCount := sidebarHeaderStyle.Render(fmt.Sprintf("💬 Chats (%d)", len(m.Users.Items())))
+	if m.Mode == ModeChannels {
+		itemsCount = sidebarHeaderStyle.Render(fmt.Sprintf("📢 Channels (%d)", len(m.Channels.Items())))
+	} else if m.Mode == ModeGroups {
+		itemsCount = sidebarHeaderStyle.Render(fmt.Sprintf("👥 Groups (%d)", len(m.Groups.Items())))
+	} else if m.Mode == ModeBots {
+		itemsCount = sidebarHeaderStyle.Render(fmt.Sprintf("🤖 Bots (%d)", len(m.Bots.Items())))
+	}
+
+	header := lipgloss.JoinVertical(lipgloss.Left, storiesIndicator, "", itemsCount)
+	joinedView := lipgloss.JoinVertical(lipgloss.Top, header, content)
 	return getSideBarStyles(d.sidebarWidth, d.contentHeight, m).Render(joinedView)
 }
 

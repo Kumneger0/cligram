@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -35,50 +36,67 @@ func (d CustomDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd {
 func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	var title string
 	var prefix string
+	var unreadBadge string
 
 	switch item := item.(type) {
 	case types.UserInfo:
-		entry := item
-		title = entry.Title()
-		if entry.IsOnline {
+		title = item.Title()
+		if item.IsOnline {
 			prefix = "🟢 "
 		} else {
 			prefix = "👤 "
 		}
-		if entry.UnreadCount > 0 {
-			title = prefix + title + " 🔴(" + strconv.Itoa(entry.UnreadCount) + ")"
-		} else {
-			title = prefix + title
+		if item.UnreadCount > 0 {
+			unreadBadge = unreadCountStyle.Render(strconv.Itoa(item.UnreadCount))
 		}
 	case types.ChannelInfo:
-		entry := item
-		title = entry.Title()
-		if entry.IsBroadcast {
+		title = item.Title()
+		if item.IsBroadcast {
 			prefix = "📢 "
 		} else {
 			prefix = "👥 "
 		}
-		if entry.UnreadCount > 0 {
-			title = prefix + title + " 🔴(" + strconv.Itoa(entry.UnreadCount) + ")"
-		} else {
-			title = prefix + title
+		if item.UnreadCount > 0 {
+			unreadBadge = unreadCountStyle.Render(strconv.Itoa(item.UnreadCount))
 		}
 	default:
 		return
 	}
 
-	isOnSideBar := d.Model.FocusedOn == SideBar
-	str := lipgloss.NewStyle().Render(title)
-	if index == m.Index() && isOnSideBar {
-		fmt.Fprint(w, selectedStyle.Render(" "+str+" "))
-	} else {
-		fmt.Fprint(w, normalStyle.Render(" "+str+" "))
+	availWidth := m.Width() - 10
+	if availWidth < 0 {
+		availWidth = 0
 	}
+
+	name := lipgloss.NewStyle().MaxWidth(availWidth).Render(title)
+
+	// Join prefix, name (truncated), and badge
+	var content string
+	if unreadBadge != "" {
+		occupied := lipgloss.Width(prefix) + lipgloss.Width(name) + lipgloss.Width(unreadBadge) + 2
+		spacerWidth := m.Width() - occupied
+		if spacerWidth < 0 {
+			spacerWidth = 0
+		}
+		spacer := strings.Repeat(" ", spacerWidth)
+		content = lipgloss.JoinHorizontal(lipgloss.Top, prefix, name, spacer, unreadBadge)
+	} else {
+		content = lipgloss.JoinHorizontal(lipgloss.Top, prefix, name)
+	}
+
+	isOnSideBar := d.Model.FocusedOn == SideBar
+	style := normalStyle
+	if index == m.Index() && isOnSideBar {
+		style = selectedStyle
+	}
+
+	fmt.Fprint(w, style.UnsetWidth().Render(content))
 }
 
 func (m Model) Init() tea.Cmd {
 	filePickerInitCMD := m.Filepicker.Init()
 	storiesCMD := telegram.Cligram.GetAllStories(telegram.Cligram.Context())
+
 	return tea.Batch(filePickerInitCMD, storiesCMD)
 }
 
@@ -371,13 +389,6 @@ func (m *Model) updateConversations() {
 	m.ChatUI.SetItems(formatMessages(m.Conversations))
 	m.viewport.SetContent(m.ChatUI.View())
 	m.viewport.GotoBottom()
-}
-
-func getItemBorder(isSelected bool) lipgloss.Border {
-	if isSelected {
-		return lipgloss.DoubleBorder()
-	}
-	return lipgloss.NormalBorder()
 }
 
 func max(a, b int) int {

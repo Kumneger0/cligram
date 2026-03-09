@@ -330,14 +330,19 @@ func (c *Client) GetAllChats(ctx context.Context, offsetDate int, offsetID int) 
 	for _, tgUser := range ds.Users {
 		u := shared.ConvertTGUserToUserInfo(tgUser)
 		u.UnreadCount = getUnreadCount(ds.Dialogs, tgUser.ID)
+		u.NotifySettings = getNotifySettings(ds.Dialogs, tgUser.ID)
 		users = append(users, *u)
 	}
 
 	var channels, groups []types.ChannelInfo
 	for _, chatClass := range ds.Chats {
 		if channel, ok := chatClass.(*tg.Channel); ok {
-			info := convertTGChannelToChannelInfo(channel)
+			info := convertToChannelInfo(channel)
+			if info == nil {
+				continue
+			}
 			info.UnreadCount = getUnreadCount(ds.Dialogs, channel.ID)
+			info.NotifySettings = getNotifySettings(ds.Dialogs, channel.ID)
 			if channel.Broadcast {
 				channels = append(channels, *info)
 			} else {
@@ -345,14 +350,13 @@ func (c *Client) GetAllChats(ctx context.Context, offsetDate int, offsetID int) 
 			}
 		}
 		if chat, ok := chatClass.(*tg.Chat); ok {
-			groups = append(groups, types.ChannelInfo{
-				ChannelTitle:      chat.Title,
-				ID:                strconv.FormatInt(chat.ID, 10),
-				IsCreator:         chat.Creator,
-				IsBroadcast:       false,
-				ParticipantsCount: &chat.ParticipantsCount,
-				UnreadCount:       getUnreadCount(ds.Dialogs, chat.ID),
-			})
+			info := convertToChannelInfo(chat)
+			if info == nil {
+				continue
+			}
+			info.UnreadCount = getUnreadCount(ds.Dialogs, chat.ID)
+			info.NotifySettings = getNotifySettings(ds.Dialogs, chat.ID)
+			groups = append(groups, *info)
 		}
 	}
 
@@ -398,7 +402,9 @@ func (c *Client) getChannels(ctx context.Context, isBroadCast bool, offsetDate, 
 	var channels []types.ChannelInfo
 	for _, chatClass := range ds.Chats {
 		if channel, ok := chatClass.(*tg.Channel); ok && channel.Broadcast == isBroadCast {
-			channels = append(channels, *convertTGChannelToChannelInfo(channel))
+			if info := convertToChannelInfo(channel); info != nil {
+				channels = append(channels, *info)
+			}
 		}
 	}
 
@@ -769,16 +775,10 @@ func getUserFromClasses(users []tg.UserClass, peerID int64) *types.UserInfo {
 func getChannelFromClasses(chats []tg.ChatClass, peerID int64) *types.ChannelInfo {
 	for _, chatClass := range chats {
 		if channel, ok := chatClass.(*tg.Channel); ok && channel.ID == peerID {
-			return convertTGChannelToChannelInfo(channel)
+			return convertToChannelInfo(channel)
 		}
 		if chat, ok := chatClass.(*tg.Chat); ok && chat.ID == peerID {
-			return &types.ChannelInfo{
-				ChannelTitle:      chat.Title,
-				ID:                strconv.Itoa(int(chat.ID)),
-				IsCreator:         chat.Creator,
-				IsBroadcast:       false,
-				ParticipantsCount: &chat.ParticipantsCount,
-			}
+			return convertToChannelInfo(chat)
 		}
 	}
 	return nil
@@ -799,16 +799,43 @@ func getUnreadCount(chatDialogs []*tg.Dialog, peerID int64) int {
 	return 0
 }
 
-func convertTGChannelToChannelInfo(channel *tg.Channel) *types.ChannelInfo {
-	return &types.ChannelInfo{
-		ChannelTitle:      channel.Title,
-		Username:          &channel.Username,
-		ID:                strconv.FormatInt(channel.ID, 10),
-		AccessHash:        strconv.FormatInt(channel.AccessHash, 10),
-		IsCreator:         channel.Creator,
-		IsBroadcast:       channel.Broadcast,
-		ParticipantsCount: &channel.ParticipantsCount,
+func getNotifySettings(chatDialogs []*tg.Dialog, peerID int64) *tg.PeerNotifySettings {
+	for _, p := range chatDialogs {
+		if tgPeerUser, ok := p.Peer.(*tg.PeerUser); ok && tgPeerUser.UserID == peerID {
+			return &p.NotifySettings
+		}
+		if tgPeerChannel, ok := p.Peer.(*tg.PeerChannel); ok && tgPeerChannel.ChannelID == peerID {
+			return &p.NotifySettings
+		}
+		if tgPeerChat, ok := p.Peer.(*tg.PeerChat); ok && tgPeerChat.ChatID == peerID {
+			return &p.NotifySettings
+		}
 	}
+	return nil
+}
+
+func convertToChannelInfo[T *tg.Channel | *tg.Chat](channel T) *types.ChannelInfo {
+	switch v := any(channel).(type) {
+	case *tg.Channel:
+		return &types.ChannelInfo{
+			ChannelTitle:      v.Title,
+			Username:          &v.Username,
+			ID:                strconv.FormatInt(v.ID, 10),
+			AccessHash:        strconv.FormatInt(v.AccessHash, 10),
+			IsCreator:         v.Creator,
+			IsBroadcast:       v.Broadcast,
+			ParticipantsCount: &v.ParticipantsCount}
+	case *tg.Chat:
+		return &types.ChannelInfo{
+			ChannelTitle:      v.Title,
+			ID:                strconv.FormatInt(v.ID, 10),
+			Username:          nil,
+			IsCreator:         v.Creator,
+			IsBroadcast:       false,
+			ParticipantsCount: &v.ParticipantsCount,
+		}
+	}
+	return nil
 }
 func parseReplyID(replyID string) *int {
 	if replyID == "" {
