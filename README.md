@@ -15,7 +15,6 @@ For full documentation, please visit: [kumneger0.github.io/cligram](https://kumn
 *   Send and receive messages.
 *   Chat with users, groups, and channels.
 *   File attachments.
-*   Customizable notifications.
 
 ## Contributing
 
@@ -31,7 +30,9 @@ We are committed to providing a welcoming and inclusive experience for everyone.
 
 ## Disclaimer
 
-This application interacts with the Telegram API. Users are solely responsible for ensuring their use of this application complies with Telegram's Terms of Service. By using this application, you acknowledge and accept all risks associated with non-compliance with Telegram's Terms of Service. The developers of this application are not responsible for any consequences arising from such non-compliance.
+> [!WARNING]
+>
+> **Use at your own risk.** This application breaks Telegram's <a href="https://core.telegram.org/api/terms" target="_blank">developer TOS</a> to implement "**ghost mode**" features (anonymous story viewing and message reading). Users are solely responsible for ensuring their use of this application complies with the TOS. By using this application, you acknowledge and accept all risks, including potential account termination. The developers are not responsible for any consequences arising from the use of this software.
 
 ## License
 
