@@ -26,8 +26,6 @@ type CliGramConfig struct {
 func defaultCliGramConfig() CliGramConfig {
 	sendTyping := true
 	readReceipt := "default"
-	enabled := true
-	showPreview := true
 	readStories := false
 
 	return CliGramConfig{
@@ -43,13 +41,6 @@ func defaultCliGramConfig() CliGramConfig {
 			LastSeenVisibility *string `json:"lastSeenVisibility,omitempty"`
 		}{
 			LastSeenVisibility: nil,
-		},
-		Notifications: struct {
-			Enabled            *bool `json:"enabled,omitempty"`
-			ShowMessagePreview *bool `json:"showMessagePreview,omitempty"`
-		}{
-			Enabled:            &enabled,
-			ShowMessagePreview: &showPreview,
 		},
 	}
 }
