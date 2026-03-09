@@ -29,6 +29,10 @@ Thank you for your interest in improving cligram!
 
 We are committed to providing a welcoming and inclusive experience for everyone. We expect all participants in our community to abide by our [Code of Conduct](CODE_OF_CONDUCT.md). Please read it to understand what behaviors will and will not be tolerated.
 
+## Disclaimer
+
+This application interacts with the Telegram API. Users are solely responsible for ensuring their use of this application complies with Telegram's Terms of Service. By using this application, you acknowledge and accept all risks associated with non-compliance with Telegram's Terms of Service. The developers of this application are not responsible for any consequences arising from such non-compliance.
+
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
