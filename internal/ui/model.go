@@ -213,8 +213,8 @@ func calculateLayoutDimensions(m *Model) layoutDimensions {
 }
 
 func updateListDimensions(m *Model, d layoutDimensions) {
-	listHeight := d.contentHeight - 4
-	listWidth := d.sidebarWidth - 4
+	listHeight := max(0, d.contentHeight-4)
+	listWidth := max(0, d.sidebarWidth-4)
 	m.Users.SetHeight(listHeight)
 	m.Users.SetWidth(listWidth)
 	m.Bots.SetHeight(listHeight)
