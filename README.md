@@ -28,12 +28,6 @@ Thank you for your interest in improving cligram!
 
 We are committed to providing a welcoming and inclusive experience for everyone. We expect all participants in our community to abide by our [Code of Conduct](CODE_OF_CONDUCT.md). Please read it to understand what behaviors will and will not be tolerated.
 
-## Disclaimer
-
-> [!WARNING]
->
-> **Use at your own risk.** This application breaks Telegram's <a href="https://core.telegram.org/api/terms" target="_blank">developer TOS</a> to implement "**ghost mode**" features (anonymous story viewing and message reading). Users are solely responsible for ensuring their use of this application complies with the TOS. By using this application, you acknowledge and accept all risks, including potential account termination. The developers are not responsible for any consequences arising from the use of this software.
-
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.

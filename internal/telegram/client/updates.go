@@ -71,7 +71,7 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 				slog.Warn("update channel is full, dropping message")
 			}
 		} else {
-			slog.Debug("could not determine peer from message", "msg", msg)
+			slog.Error("could not determine peer from message")
 		}
 		return nil
 	})
