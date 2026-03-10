@@ -188,9 +188,10 @@ func sendNewMessageNotification[T types.UserInfo | types.ChannelInfo](item T, me
 }
 
 func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, tea.Cmd) {
+	peerID := msg.FromID
 	var userInfo *types.UserInfo
 	for _, v := range slices.Concat(m.Users.Items(), m.Bots.Items()) {
-		if user, ok := v.(types.UserInfo); ok && user.PeerID == msg.FromID {
+		if user, ok := v.(types.UserInfo); ok && user.PeerID == peerID {
 			userInfo = &user
 			break
 		}
@@ -199,18 +200,18 @@ func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, te
 	var channelOrGroupInfo *types.ChannelInfo
 	if userInfo == nil {
 		for _, v := range slices.Concat(m.Channels.Items(), m.Groups.Items()) {
-			if cg, ok := v.(types.ChannelInfo); ok && cg.ID == msg.FromID {
+			if cg, ok := v.(types.ChannelInfo); ok && cg.ID == peerID {
 				channelOrGroupInfo = &cg
 				break
 			}
 		}
 	}
 
-	if userInfo != nil {
+	if userInfo != nil && !msg.Message.Out {
 		sendNewMessageNotification(*userInfo, msg.Message)
 	}
 
-	if channelOrGroupInfo != nil {
+	if channelOrGroupInfo != nil && !msg.Message.Out {
 		sendNewMessageNotification(*channelOrGroupInfo, msg.Message)
 	}
 
@@ -264,20 +265,14 @@ func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, te
 
 	m.SelectedUser.UnreadCount++
 
-	for _, v := range m.Conversations {
-		if v.FromID != nil && *v.FromID == m.SelectedUser.PeerID {
-			copy(m.Conversations[:], m.Conversations[1:])
-			formattedMessage := getFormattedMessageFunc(GetFormattedMessageArg{
-				ChatType: chatType,
-				UserInfo: userInfo,
-				Message:  msg.Message,
-			})
-			formattedMessage.Sender = m.SelectedUser.FirstName
-			m.Conversations[len(m.Conversations)-1] = formattedMessage
-			m.updateConversations()
-			break
-		}
-	}
+	copy(m.Conversations[:], m.Conversations[1:])
+	formattedMessage := getFormattedMessageFunc(GetFormattedMessageArg{
+		ChatType: chatType,
+		UserInfo: userInfo,
+		Message:  msg.Message,
+	})
+	m.Conversations[len(m.Conversations)-1] = formattedMessage
+	m.updateConversations()
 	return m, nil
 }
 
@@ -298,6 +293,10 @@ func getFormattedMessageFunc(arg GetFormattedMessageArg) types.FormattedMessage 
 	} else if arg.ChannelOrGroupInfo != nil {
 		sender = arg.ChannelOrGroupInfo.ChannelTitle
 		fromID = &arg.ChannelOrGroupInfo.ID
+	}
+
+	if arg.Message.Out {
+		sender = "You"
 	}
 
 	var media *string
