@@ -34,7 +34,16 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 		if !ok {
 			return nil
 		}
-		if peerClass, ok := msg.GetFromID(); ok {
+		var peerClass tg.PeerClass
+		if p, ok := msg.GetFromID(); ok {
+			peerClass = p
+		} else if msg.Out {
+			if p := msg.GetPeerID(); p != nil {
+				peerClass = p
+			}
+		}
+
+		if peerClass != nil {
 			var fromID string
 			switch peer := peerClass.(type) {
 			case *tg.PeerUser:
@@ -44,6 +53,7 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 			case *tg.PeerChat:
 				fromID = strconv.FormatInt(peer.ChatID, 10)
 			default:
+				slog.Warn("unknown peer type", "peer", peerClass)
 				return nil
 			}
 
@@ -60,6 +70,8 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 			default:
 				slog.Warn("update channel is full, dropping message")
 			}
+		} else {
+			slog.Debug("could not determine peer from message", "msg", msg)
 		}
 		return nil
 	})

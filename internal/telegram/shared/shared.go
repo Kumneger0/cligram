@@ -131,9 +131,16 @@ func GetUserInfo(ctx context.Context, client tg.Client, userID int64) (*types.Us
 }
 
 func ConvertTGUserToUserInfo(tgUser *tg.User) *types.UserInfo {
+	firstName := tgUser.FirstName
+	lastName := tgUser.LastName
+
+	if tgUser.Deleted {
+		firstName = "Deleted Account"
+	}
+
 	userInfo := &types.UserInfo{
-		FirstName:  tgUser.FirstName,
-		LastName:   tgUser.LastName,
+		FirstName:  firstName,
+		LastName:   lastName,
 		Username:   tgUser.Username,
 		IsBot:      tgUser.Bot,
 		PeerID:     strconv.FormatInt(tgUser.ID, 10),
@@ -145,6 +152,11 @@ func ConvertTGUserToUserInfo(tgUser *tg.User) *types.UserInfo {
 	if status := getUserOnlineStatus(tgUser.Status); status != nil {
 		userInfo.IsOnline = status.IsOnline
 		userInfo.LastSeen = status.LastSeen
+	}
+
+	if tgUser.Deleted {
+		lastSeen := "Last seen long time ago"
+		userInfo.LastSeen = &lastSeen
 	}
 	return userInfo
 }

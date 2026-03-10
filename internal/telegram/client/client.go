@@ -5,10 +5,12 @@ import (
 	"errors"
 	"log/slog"
 	mathRand "math/rand"
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -165,14 +167,35 @@ func (c *Client) sendMediaFile(ctx context.Context, path string, caption string,
 		return nil, types.NewTelegramError(types.ErrorCodeUploadFailed, "failed to upload file", err)
 	}
 
+	if _, err := file.Seek(0, 0); err != nil {
+		return nil, err
+	}
+	buffer := make([]byte, 512)
+	n, _ := file.Read(buffer)
+	mimeType := http.DetectContentType(buffer[:n])
+
+	attributes := []tg.DocumentAttributeClass{
+		&tg.DocumentAttributeFilename{FileName: filepath.Base(path)},
+	}
+
+	if strings.HasPrefix(mimeType, "video/") {
+		attributes = append(attributes, &tg.DocumentAttributeVideo{})
+	} else if strings.HasPrefix(mimeType, "audio/") {
+		attributes = append(attributes, &tg.DocumentAttributeAudio{})
+	}
+
 	var replyToClass tg.InputReplyToClass
 	if replyTo != nil {
 		replyToClass = &tg.InputReplyToMessage{ReplyToMsgID: *replyTo}
 	}
 
 	sendMediaUpdateClass, err := c.GetAPI().MessagesSendMedia(ctx, &tg.MessagesSendMediaRequest{
-		Peer:     peer,
-		Media:    &tg.InputMediaUploadedDocument{File: fileUpload},
+		Peer: peer,
+		Media: &tg.InputMediaUploadedDocument{
+			File:       fileUpload,
+			MimeType:   mimeType,
+			Attributes: attributes,
+		},
 		Message:  caption,
 		RandomID: mathRand.Int63(),
 		ReplyTo:  replyToClass,
@@ -282,17 +305,25 @@ func (c *Client) GetChatHistory(ctx context.Context, peer types.Peer, limit int,
 			continue
 		}
 		if areWeInUserModeOrBotMode {
-			formattedMessages = append(formattedMessages, *shared.FormatMessage(msg, userInfo, entities.Messages))
+			formattedMessage := shared.FormatMessage(msg, userInfo, entities.Messages)
+			formattedMessage.PeerID = &peer.ID
+			formattedMessages = append(formattedMessages, *formattedMessage)
 		} else if peer.ChatType == types.GroupChat {
 			fromID, ok := msg.FromID.(*tg.PeerUser)
 			if ok {
 				ui := getUserFromClasses(entities.Users, fromID.UserID)
-				formattedMessages = append(formattedMessages, *shared.FormatMessage(msg, ui, entities.Messages))
+				formattedMessage := shared.FormatMessage(msg, ui, entities.Messages)
+				formattedMessage.PeerID = &peer.ID
+				formattedMessages = append(formattedMessages, *formattedMessage)
 			} else {
-				formattedMessages = append(formattedMessages, *shared.FormatMessage(msg, channel, entities.Messages))
+				formattedMessage := shared.FormatMessage(msg, channel, entities.Messages)
+				formattedMessage.PeerID = &peer.ID
+				formattedMessages = append(formattedMessages, *formattedMessage)
 			}
 		} else {
-			formattedMessages = append(formattedMessages, *shared.FormatMessage(msg, channel, entities.Messages))
+			formattedMessage := shared.FormatMessage(msg, channel, entities.Messages)
+			formattedMessage.PeerID = &peer.ID
+			formattedMessages = append(formattedMessages, *formattedMessage)
 		}
 	}
 

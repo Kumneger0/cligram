@@ -62,6 +62,7 @@ type FormattedMessage struct {
 	FromID               *string           `json:"fromId,omitempty"`
 	SenderUserInfo       *UserInfo         `json:"senderUserInfo,omitempty"`
 	ReplyTo              *FormattedMessage `json:"replyTo,omitempty"`
+	PeerID               *string           `json:"peerId,omitempty"`
 }
 
 type WebPage struct {
