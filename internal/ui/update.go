@@ -226,12 +226,19 @@ func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, te
 		}
 
 		if m.SelectedChannel.ID == channelOrGroupInfo.ID || m.SelectedGroup.ID == channelOrGroupInfo.ID {
-			copy(m.Conversations[:], m.Conversations[1:])
-			m.Conversations[len(m.Conversations)-1] = getFormattedMessageFunc(GetFormattedMessageArg{
+			formattedMessage := getFormattedMessageFunc(GetFormattedMessageArg{
 				ChatType:           chatType,
 				ChannelOrGroupInfo: channelOrGroupInfo,
 				Message:            msg.Message,
 			})
+
+			filled := len(filterEmptyMessages(m.Conversations))
+			if filled < len(m.Conversations) {
+				m.Conversations[filled] = formattedMessage
+			} else {
+				copy(m.Conversations[:], m.Conversations[1:])
+				m.Conversations[len(m.Conversations)-1] = formattedMessage
+			}
 			m.updateConversations()
 			return m, nil
 		}
@@ -265,13 +272,19 @@ func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, te
 
 	m.SelectedUser.UnreadCount++
 
-	copy(m.Conversations[:], m.Conversations[1:])
 	formattedMessage := getFormattedMessageFunc(GetFormattedMessageArg{
 		ChatType: chatType,
 		UserInfo: userInfo,
 		Message:  msg.Message,
 	})
-	m.Conversations[len(m.Conversations)-1] = formattedMessage
+
+	filled := len(filterEmptyMessages(m.Conversations))
+	if filled < len(m.Conversations) {
+		m.Conversations[filled] = formattedMessage
+	} else {
+		copy(m.Conversations[:], m.Conversations[1:])
+		m.Conversations[len(m.Conversations)-1] = formattedMessage
+	}
 	m.updateConversations()
 	return m, nil
 }

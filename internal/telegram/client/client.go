@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -176,12 +175,6 @@ func (c *Client) sendMediaFile(ctx context.Context, path string, caption string,
 
 	attributes := []tg.DocumentAttributeClass{
 		&tg.DocumentAttributeFilename{FileName: filepath.Base(path)},
-	}
-
-	if strings.HasPrefix(mimeType, "video/") {
-		attributes = append(attributes, &tg.DocumentAttributeVideo{})
-	} else if strings.HasPrefix(mimeType, "audio/") {
-		attributes = append(attributes, &tg.DocumentAttributeAudio{})
 	}
 
 	var replyToClass tg.InputReplyToClass
