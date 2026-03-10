@@ -243,7 +243,7 @@ func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, te
 			return m, nil
 		}
 
-		if groupIndex := getGroupIndex(m, *channelOrGroupInfo); groupIndex != -1 {
+		if groupIndex := getGroupIndex(m, *channelOrGroupInfo); groupIndex != -1 && !msg.Message.Out {
 			group := m.Groups.Items()[groupIndex].(types.ChannelInfo)
 			group.UnreadCount++
 			m.Groups.SetItem(groupIndex, group)
@@ -255,7 +255,7 @@ func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, te
 		return m, nil
 	}
 
-	if m.SelectedUser.PeerID != userInfo.PeerID {
+	if m.SelectedUser.PeerID != userInfo.PeerID && !msg.Message.Out {
 		l := listForUser(&m, *userInfo)
 		if userIndex := getUserIndex(*l, *userInfo); userIndex != -1 {
 			user := l.Items()[userIndex].(types.UserInfo)
@@ -270,7 +270,9 @@ func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, te
 		chatType = types.BotChat
 	}
 
-	m.SelectedUser.UnreadCount++
+	if !msg.Message.Out {
+		m.SelectedUser.UnreadCount++
+	}
 
 	formattedMessage := getFormattedMessageFunc(GetFormattedMessageArg{
 		ChatType: chatType,
