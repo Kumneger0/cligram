@@ -62,6 +62,7 @@ type SearchUsersResponse struct {
 }
 
 type SendMessageMsg struct {
+	RandID   int                  `json:"randId"`
 	Response *SendMessageResponse `json:"response,omitempty"`
 	Err      error                `json:"error,omitempty"`
 }

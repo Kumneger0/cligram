@@ -1,6 +1,7 @@
 package types // nolint:revive
 
 type SendMessageRequest struct {
+	RandID           int    `json:"randId"`
 	Peer             Peer   `json:"peer"`
 	Message          string `json:"message"`
 	IsReply          bool   `json:"isReply"`
@@ -20,6 +21,7 @@ type SendReactionRequest struct {
 	Peer      Peer   `json:"peer"`
 	MessageID int    `json:"messageId"`
 	Emoticon  string `json:"emoticon"`
+	Remove    bool   `json:"remove"`
 }
 
 type DeleteMessageRequest struct {
