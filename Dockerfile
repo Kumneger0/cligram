@@ -12,7 +12,7 @@ WORKDIR /app
 COPY . .
 
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go build -ldflags "-X main.version=$(git describe --abbrev=0 --tags || echo dev)" \
+    go build -ldflags "-X main.version=$(git describe --abbrev=0 --tags || echo dev) -X main.telegramAPIID=${TELEGRAM_API_ID} -X main.telegramAPIHash=${TELEGRAM_API_HASH}" \
     -o cligram
 
 FROM debian:stable-slim
