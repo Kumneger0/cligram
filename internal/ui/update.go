@@ -110,6 +110,41 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd := m.handleForwardMessage(msg)
 		m = model.(Model)
 		cmds = append(cmds, cmd)
+	case types.SendReactionResponseMsg:
+		if msg.Err != nil {
+			slog.Error("Failed to send reaction", "error", msg.Err.Error())
+			return m, nil
+		}
+		if msg.Response {
+			pInfo := getMessageParams(&m)
+			return m, telegram.Cligram.GetSingleMessage(telegram.Cligram.Context(), pInfo, msg.MessageID)
+		}
+	case types.SingleMessageMsg:
+		if msg.Err != nil {
+			slog.Error("Failed to fetch message", "error", msg.Err.Error())
+			return m, nil
+		}
+		if msg.Message != nil {
+			for i, conv := range m.Conversations {
+				if conv.ID == msg.Message.ID {
+					m.Conversations[i] = *msg.Message
+					m.updateConversations()
+					break
+				}
+			}
+		}
+	case types.SendReactionMsg:
+		var peer types.Peer
+		if m.SelectedUser.PeerID != "" {
+			peer = peerFromItem(m.SelectedUser)
+			if message, ok := m.ChatUI.SelectedItem().(types.FormattedMessage); ok {
+				cmds = append(cmds, telegram.Cligram.SendReaction(telegram.Cligram.Context(), types.SendReactionRequest{
+					Peer:      peer,
+					MessageID: message.ID,
+					Emoticon:  msg.Reaction.Reaction,
+				}))
+			}
+		}
 	case tea.WindowSizeMsg:
 		model, cmd := m.handleWindowSize(msg)
 		m = model.(Model)
@@ -124,6 +159,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd := m.updateUserStories(msg)
 		m = model.(Model)
 		cmds = append(cmds, cmd)
+	case types.CurrentUserMsg:
+		if msg.Err != nil {
+			slog.Error("Failed to get current user", "error", msg.Err.Error())
+			return m, nil
+		}
+		m.CurrentUser = msg.User
 	}
 	return updateFocusedComponent(&m, msg, &cmds)
 }
@@ -491,6 +532,15 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "e":
 		m, cmd := m.handleEditKey()
 		cmds = append(cmds, cmd)
+		return m, tea.Batch(cmds...)
+	case "ctrl+r":
+		cmds := []tea.Cmd{telegram.Cligram.GetAvailableReactions(telegram.Cligram.Context())}
+		if m.CurrentUser == nil {
+			cmds = append(cmds, func() tea.Msg {
+				user, err := telegram.Cligram.GetMe(telegram.Cligram.Context())
+				return types.CurrentUserMsg{User: user, Err: err}
+			})
+		}
 		return m, tea.Batch(cmds...)
 	case "alt+s":
 		return m, func() tea.Msg { return m.Stories }

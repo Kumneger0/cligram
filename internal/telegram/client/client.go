@@ -629,6 +629,44 @@ func (c *Client) searchUsers(ctx context.Context, q string) ([]types.UserInfo, e
 	return users, nil
 }
 
+func (c *Client) GetAvailableReactions(ctx context.Context) tea.Cmd {
+	return func() tea.Msg {
+		result, err := c.GetAPI().MessagesGetAvailableReactions(ctx, 0)
+		if err != nil {
+			slog.Error(err.Error())
+			return types.AvailableReactions{Err: err}
+		}
+
+		var reactions []types.Reaction
+		switch r := result.(type) {
+		case *tg.MessagesAvailableReactions:
+			for _, reaction := range r.Reactions {
+				reactions = append(reactions, types.Reaction{AvailableReaction: reaction})
+			}
+		}
+		return types.AvailableReactions{Reactions: reactions}
+	}
+}
+
+func (c *Client) SendReaction(ctx context.Context, req types.SendReactionRequest) tea.Cmd {
+	return func() tea.Msg {
+		inputPeer, err := shared.ConvertPeerToInputPeer(req.Peer)
+		if err != nil {
+			return types.SendReactionResponseMsg{Err: err}
+		}
+
+		_, err = c.GetAPI().MessagesSendReaction(ctx, &tg.MessagesSendReactionRequest{
+			Peer:     inputPeer,
+			MsgID:    req.MessageID,
+			Reaction: []tg.ReactionClass{&tg.ReactionEmoji{Emoticon: req.Emoticon}},
+		})
+		if err != nil {
+			return types.SendReactionResponseMsg{Err: err, MessageID: req.MessageID, Emoticon: req.Emoticon}
+		}
+		return types.SendReactionResponseMsg{Response: true, MessageID: req.MessageID, Emoticon: req.Emoticon}
+	}
+}
+
 func (c *Client) GetAllStories(ctx context.Context) tea.Cmd {
 	return func() tea.Msg {
 		allUserStoriesClass, err := c.GetAPI().StoriesGetAllStories(ctx, &tg.StoriesGetAllStoriesRequest{})
@@ -869,4 +907,71 @@ func parseReplyID(replyID string) *int {
 		return &id
 	}
 	return nil
+}
+func (c *Client) GetMe(ctx context.Context) (*types.UserInfo, error) {
+	userClass, err := c.GetAPI().UsersGetUsers(ctx, []tg.InputUserClass{&tg.InputUserSelf{}})
+	if err != nil || len(userClass) == 0 {
+		return nil, errors.New("failed to get current user info")
+	}
+	user, ok := userClass[0].(*tg.User)
+	if !ok {
+		return nil, errors.New("unexpected user type")
+	}
+	return shared.ConvertTGUserToUserInfo(user), nil
+}
+
+func (c *Client) GetSingleMessage(ctx context.Context, peer types.Peer, messageID int) tea.Cmd {
+	return func() tea.Msg {
+		inputPeer, err := shared.ConvertPeerToInputPeer(peer)
+		if err != nil {
+			return types.SingleMessageMsg{Err: err}
+		}
+
+		var id tg.InputMessageClass = &tg.InputMessageID{ID: messageID}
+		var messagesClass tg.MessagesMessagesClass
+
+		if peer.ChatType == types.ChannelChat || peer.ChatType == types.GroupChat {
+			inputChannel, ok := inputPeer.(*tg.InputPeerChannel)
+			if ok {
+				messagesClass, err = c.GetAPI().ChannelsGetMessages(ctx, &tg.ChannelsGetMessagesRequest{
+					Channel: &tg.InputChannel{ChannelID: inputChannel.ChannelID, AccessHash: inputChannel.AccessHash},
+					ID:      []tg.InputMessageClass{id},
+				})
+			} else {
+				messagesClass, err = c.GetAPI().MessagesGetMessages(ctx, []tg.InputMessageClass{id})
+			}
+		} else {
+			messagesClass, err = c.GetAPI().MessagesGetMessages(ctx, []tg.InputMessageClass{id})
+		}
+
+		if err != nil {
+			return types.SingleMessageMsg{Err: err}
+		}
+
+		entities, err := shared.GetMessageAndUserClasses(messagesClass)
+		if err != nil {
+			return types.SingleMessageMsg{Err: err}
+		}
+
+		if len(entities.Messages) == 0 {
+			return types.SingleMessageMsg{Err: errors.New("message not found")}
+		}
+
+		msg, ok := entities.Messages[0].(*tg.Message)
+		if !ok {
+			return types.SingleMessageMsg{Err: errors.New("unexpected message type")}
+		}
+
+		var userInfo *types.UserInfo
+		if peer.ChatType == types.UserChat || peer.ChatType == types.BotChat {
+			if id, err := strconv.ParseInt(peer.ID, 10, 64); err == nil {
+				userInfo = getUserFromClasses(entities.Users, id)
+			}
+		}
+
+		formatted := shared.FormatMessage(msg, userInfo, entities.Messages)
+		formatted.PeerID = &peer.ID
+
+		return types.SingleMessageMsg{Message: formatted}
+	}
 }

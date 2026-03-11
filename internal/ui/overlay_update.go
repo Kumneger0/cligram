@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"log/slog"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -52,6 +53,13 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.stories.SetShowTitle(false)
 		m.stories.SetShowHelp(false)
 		m.stories.SetShowStatusBar(false)
+	case types.AvailableReactions:
+		if msg.Err != nil {
+			m.Error = msg.Err
+			return m, nil
+		}
+		m.allReactions = msg.Reactions
+		m.selectedReactionIndex = 0
 	case tea.WindowSizeMsg:
 		m.searchResultCombined = list.New([]list.Item{}, SearchDelegate{Foreground: m}, 10, 10)
 		m.searchResultCombined.Title = "Search User Result"
@@ -83,6 +91,11 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.ModalMode == ModalModeSearch {
 			m.focusedOn = SEARCH
 		}
+	case types.CurrentUserMsg:
+		if msg.Err != nil {
+			return m, nil
+		}
+		m.isMePremium = msg.User.Premium
 	}
 
 	input, cmd := m.input.Update(message)
@@ -99,6 +112,12 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		users, userCmd := m.searchResultCombined.Update(message)
 		m.searchResultCombined = users
 		cmds = append(cmds, userCmd)
+	}
+
+	if m.availableReactions != nil {
+		reactions, reactionCmd := m.availableReactions.Update(message)
+		m.availableReactions = &reactions
+		cmds = append(cmds, reactionCmd)
 	}
 
 	return m, tea.Batch(cmds...)
@@ -135,6 +154,30 @@ func (m *Foreground) handleSearch(msg types.SearchUsersMsg, cmds *[]tea.Cmd) (te
 func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (tea.Model, tea.Cmd) {
 	cmds := *cmdsFromParent
 	switch msg.String() {
+	case "up":
+		if m.ModalMode == ModalModeSendReaction {
+			if m.selectedReactionIndex >= 8 {
+				m.selectedReactionIndex -= 8
+			}
+		}
+	case "down":
+		if m.ModalMode == ModalModeSendReaction {
+			if m.selectedReactionIndex+8 < len(m.allReactions) {
+				m.selectedReactionIndex += 8
+			}
+		}
+	case "left":
+		if m.ModalMode == ModalModeSendReaction {
+			if m.selectedReactionIndex > 0 {
+				m.selectedReactionIndex--
+			}
+		}
+	case "right":
+		if m.ModalMode == ModalModeSendReaction {
+			if m.selectedReactionIndex < len(m.allReactions)-1 {
+				m.selectedReactionIndex++
+			}
+		}
 	case "tab":
 		if m.focusedOn == SEARCH {
 			m.focusedOn = LIST
@@ -197,10 +240,35 @@ func handleEnterKey(m *Foreground) (tea.Model, tea.Cmd) {
 	if m.ModalMode == ModalModeForwardMessage {
 		return handleForwardMessage(m)
 	}
+	if m.ModalMode == ModalModeSendReaction {
+		return handleSendReaction(m)
+	}
 	if m.focusedOn == LIST {
 		return handleListSelection(m)
 	}
 	return m, nil
+}
+
+func handleSendReaction(m *Foreground) (tea.Model, tea.Cmd) {
+	if len(m.allReactions) == 0 {
+		return m, nil
+	}
+
+	if m.selectedReactionIndex < 0 || m.selectedReactionIndex >= len(m.allReactions) {
+		return m, nil
+	}
+
+	selectedReaction := m.allReactions[m.selectedReactionIndex]
+
+	if selectedReaction.AvailableReaction.Premium && !m.isMePremium {
+		m.Error = fmt.Errorf("this is a premium reaction, upgrade to use it")
+		return m, nil
+	}
+
+	return m, tea.Batch(
+		func() tea.Msg { return CloseOverlay{} },
+		func() tea.Msg { return types.SendReactionMsg{Reaction: selectedReaction} },
+	)
 }
 
 func handleForwardMessage(m *Foreground) (tea.Model, tea.Cmd) {

@@ -78,12 +78,16 @@ var (
 				Padding(0, 1).
 				Bold(true)
 
-	badgeStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("#1E293B")).
-			Foreground(lipgloss.Color("#818CF8")).
-			Padding(0, 1).
-			Bold(true).
-			MarginLeft(1)
+	reactionBadgeStyle = lipgloss.NewStyle().
+				Background(lipgloss.Color("#1E293B")).
+				Foreground(DefaultTheme.PrimaryText).
+				Padding(0, 1)
+
+	myReactionBadgeStyle = lipgloss.NewStyle().
+				Background(DefaultTheme.AccentColor).
+				Foreground(lipgloss.Color("#FFFFFF")).
+				Padding(0, 1).
+				Bold(true)
 )
 
 func getSideBarStyles(sidebarWidth int, contentHeight int, m *Model) lipgloss.Style {

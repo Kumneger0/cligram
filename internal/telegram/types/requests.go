@@ -16,6 +16,12 @@ type GetMessagesRequest struct {
 	ChatAreaWidth *int `json:"chatAreaWidth,omitempty"`
 }
 
+type SendReactionRequest struct {
+	Peer      Peer   `json:"peer"`
+	MessageID int    `json:"messageId"`
+	Emoticon  string `json:"emoticon"`
+}
+
 type DeleteMessageRequest struct {
 	Peer      Peer `json:"peer"`
 	MessageID int  `json:"messageId"`

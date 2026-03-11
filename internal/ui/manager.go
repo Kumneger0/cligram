@@ -66,6 +66,17 @@ func (m Manager) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Batch(cmds...)
 			}
 			m.State = MainView
+		case "ctrl+r":
+			m.State = ModalView
+			bgModel, cmd := m.Background.Update(message)
+			m.Background = bgModel
+			openModalMsg := func() tea.Msg {
+				return OpenModalMsg{
+					ModalMode: ModalModeSendReaction,
+				}
+			}
+			cmds = append(cmds, cmd, openModalMsg)
+			return m, tea.Batch(cmds...)
 		case "alt+s":
 			m.State = ModalView
 			bgModel, cmd := m.Background.Update(message)

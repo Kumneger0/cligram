@@ -34,6 +34,7 @@ type UserInfo struct {
 	IsTyping       bool                   `json:"isTyping"`
 	HasStories     bool                   `json:"hasStories"`
 	NotifySettings *tg.PeerNotifySettings `json:"notifySettings,omitempty"`
+	Premium        bool                   `json:"premium"`
 }
 
 type ChannelInfo struct {
@@ -50,19 +51,20 @@ type ChannelInfo struct {
 }
 
 type FormattedMessage struct {
-	ID                   int               `json:"id"`
-	Sender               string            `json:"sender"`
-	Content              string            `json:"content"`
-	IsFromMe             bool              `json:"isFromMe"`
-	Media                *string           `json:"media,omitempty"`
-	Date                 time.Time         `json:"date"`
-	IsUnsupportedMessage bool              `json:"isUnsupportedMessage"`
-	WebPage              *WebPage          `json:"webPage,omitempty"`
-	Document             *Document         `json:"document,omitempty"`
-	FromID               *string           `json:"fromId,omitempty"`
-	SenderUserInfo       *UserInfo         `json:"senderUserInfo,omitempty"`
-	ReplyTo              *FormattedMessage `json:"replyTo,omitempty"`
-	PeerID               *string           `json:"peerId,omitempty"`
+	ID                   int                  `json:"id"`
+	Sender               string               `json:"sender"`
+	Content              string               `json:"content"`
+	IsFromMe             bool                 `json:"isFromMe"`
+	Media                *string              `json:"media,omitempty"`
+	Date                 time.Time            `json:"date"`
+	IsUnsupportedMessage bool                 `json:"isUnsupportedMessage"`
+	WebPage              *WebPage             `json:"webPage,omitempty"`
+	Document             *Document            `json:"document,omitempty"`
+	FromID               *string              `json:"fromId,omitempty"`
+	SenderUserInfo       *UserInfo            `json:"senderUserInfo,omitempty"`
+	ReplyTo              *FormattedMessage    `json:"replyTo,omitempty"`
+	PeerID               *string              `json:"peerId,omitempty"`
+	Reactions            *tg.MessageReactions `json:"reactions,omitempty"`
 }
 
 type WebPage struct {
