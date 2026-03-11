@@ -63,25 +63,26 @@ func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list
 	}
 
 	var reactions string
-	if len(entry.Reactions.Results) > 0 {
-		var reactionBadges []string
-		for _, r := range entry.Reactions.Results {
-			reaction := r.Reaction.(*tg.ReactionEmoji)
-			isMeReacted := false
-			if _, ok := r.GetChosenOrder(); ok {
-				isMeReacted = true
-			}
+	if entry.Reactions != nil {
+		if len(entry.Reactions.Results) > 0 {
+			var reactionBadges []string
+			for _, r := range entry.Reactions.Results {
+				reaction := r.Reaction.(*tg.ReactionEmoji)
+				isMeReacted := false
+				if _, ok := r.GetChosenOrder(); ok {
+					isMeReacted = true
+				}
 
-			content := reaction.Emoticon + " " + strconv.Itoa(int(r.Count))
-			if isMeReacted {
-				reactionBadges = append(reactionBadges, myReactionBadgeStyle.Render(content))
-			} else {
-				reactionBadges = append(reactionBadges, reactionBadgeStyle.Render(content))
+				content := reaction.Emoticon + " " + strconv.Itoa(int(r.Count))
+				if isMeReacted {
+					reactionBadges = append(reactionBadges, myReactionBadgeStyle.Render(content))
+				} else {
+					reactionBadges = append(reactionBadges, reactionBadgeStyle.Render(content))
+				}
 			}
+			reactions = lipgloss.JoinHorizontal(lipgloss.Top, reactionBadges...)
 		}
-		reactions = lipgloss.JoinHorizontal(lipgloss.Top, reactionBadges...)
 	}
-
 	if entry.IsFromMe {
 		title = "You: " + title
 	} else {

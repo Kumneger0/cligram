@@ -97,16 +97,16 @@ func (c *Client) Context() context.Context {
 
 func (c *Client) SendMessage(ctx context.Context, req types.SendMessageRequest) tea.Cmd {
 	if req.IsFile {
-		return c.sendMedia(ctx, req.Peer, req.FilePath, req.Message, parseReplyID(req.ReplyToMessageID))
+		return c.sendMedia(ctx, req.Peer, req.FilePath, req.Message, parseReplyID(req.ReplyToMessageID), req.RandID)
 	}
-	return c.sendText(ctx, req.Peer, req.Message, parseReplyID(req.ReplyToMessageID))
+	return c.sendText(ctx, req.Peer, req.Message, parseReplyID(req.ReplyToMessageID), req.RandID)
 }
 
-func (c *Client) sendText(ctx context.Context, peer types.Peer, text string, replyTo *int) tea.Cmd {
+func (c *Client) sendText(ctx context.Context, peer types.Peer, text string, replyTo *int, randID int) tea.Cmd {
 	return func() tea.Msg {
 		inputPeer, err := shared.ConvertPeerToInputPeer(peer)
 		if err != nil {
-			return types.SendMessageMsg{Err: types.NewSendMessageError(err)}
+			return types.SendMessageMsg{Err: types.NewSendMessageError(err), RandID: randID}
 		}
 
 		var replyToClass tg.InputReplyToClass
@@ -114,33 +114,69 @@ func (c *Client) sendText(ctx context.Context, peer types.Peer, text string, rep
 			replyToClass = &tg.InputReplyToMessage{ReplyToMsgID: *replyTo}
 		}
 
-		_, err = c.GetAPI().MessagesSendMessage(ctx, &tg.MessagesSendMessageRequest{
+		updateClass, err := c.GetAPI().MessagesSendMessage(ctx, &tg.MessagesSendMessageRequest{
 			Peer:     inputPeer,
 			ReplyTo:  replyToClass,
 			Message:  text,
 			RandomID: mathRand.Int63(),
 		})
 		if err != nil {
-			return types.SendMessageMsg{Err: types.NewSendMessageError(err)}
+			return types.SendMessageMsg{Err: types.NewSendMessageError(err), RandID: randID}
 		}
 
-		return types.SendMessageMsg{Response: &types.SendMessageResponse{}}
+		id := extractMessageID(updateClass)
+		return types.SendMessageMsg{Response: &types.SendMessageResponse{MessageID: id}, RandID: randID}
 	}
 }
 
-func (c *Client) sendMedia(ctx context.Context, peer types.Peer, filePath string, caption string, replyTo *int) tea.Cmd {
+func extractMessageID(updateClass tg.UpdatesClass) *int {
+	var id *int
+	switch u := updateClass.(type) {
+	case *tg.Updates:
+		for _, up := range u.Updates {
+			switch x := up.(type) {
+			case *tg.UpdateMessageID:
+				i := x.ID
+				id = &i
+			case *tg.UpdateNewMessage:
+				if m, ok := x.Message.(*tg.Message); ok {
+					i := m.ID
+					id = &i
+				}
+			case *tg.UpdateNewChannelMessage:
+				if m, ok := x.Message.(*tg.Message); ok {
+					i := m.ID
+					id = &i
+				}
+			}
+		}
+	case *tg.UpdatesCombined:
+		for _, up := range u.Updates {
+			if x, ok := up.(*tg.UpdateMessageID); ok {
+				i := x.ID
+				id = &i
+			}
+		}
+	case *tg.UpdateShortSentMessage:
+		i := u.ID
+		id = &i
+	}
+	return id
+}
+
+func (c *Client) sendMedia(ctx context.Context, peer types.Peer, filePath string, caption string, replyTo *int, randID int) tea.Cmd {
 	return func() tea.Msg {
 		inputPeer, err := shared.ConvertPeerToInputPeer(peer)
 		if err != nil {
-			return types.SendMessageMsg{Err: types.NewSendMessageError(err)}
+			return types.SendMessageMsg{Err: types.NewSendMessageError(err), RandID: randID}
 		}
 
 		messageID, err := c.sendMediaFile(ctx, filePath, caption, inputPeer, replyTo)
 		if err != nil {
-			return types.SendMessageMsg{Err: types.NewSendMessageError(err)}
+			return types.SendMessageMsg{Err: types.NewSendMessageError(err), RandID: randID}
 		}
 
-		return types.SendMessageMsg{Response: &types.SendMessageResponse{MessageID: messageID}}
+		return types.SendMessageMsg{Response: &types.SendMessageResponse{MessageID: messageID}, RandID: randID}
 	}
 }
 
@@ -197,38 +233,7 @@ func (c *Client) sendMediaFile(ctx context.Context, path string, caption string,
 		return nil, err
 	}
 
-	var id *int
-	switch u := sendMediaUpdateClass.(type) {
-	case *tg.Updates:
-		for _, up := range u.Updates {
-			switch x := up.(type) {
-			case *tg.UpdateMessageID:
-				i := x.ID
-				id = &i
-			case *tg.UpdateNewMessage:
-				if m, ok := x.Message.(*tg.Message); ok {
-					i := m.ID
-					id = &i
-				}
-			case *tg.UpdateNewChannelMessage:
-				if m, ok := x.Message.(*tg.Message); ok {
-					i := m.ID
-					id = &i
-				}
-			}
-		}
-	case *tg.UpdatesCombined:
-		for _, up := range u.Updates {
-			if x, ok := up.(*tg.UpdateMessageID); ok {
-				i := x.ID
-				id = &i
-			}
-		}
-	case *tg.UpdateShortSentMessage:
-		i := u.ID
-		id = &i
-	}
-	return id, nil
+	return extractMessageID(sendMediaUpdateClass), nil
 }
 
 func (c *Client) GetMessages(ctx context.Context, req types.GetMessagesRequest) tea.Cmd {
@@ -655,10 +660,15 @@ func (c *Client) SendReaction(ctx context.Context, req types.SendReactionRequest
 			return types.SendReactionResponseMsg{Err: err}
 		}
 
+		var reactionClasses []tg.ReactionClass
+		if !req.Remove {
+			reactionClasses = append(reactionClasses, &tg.ReactionEmoji{Emoticon: req.Emoticon})
+		}
+
 		_, err = c.GetAPI().MessagesSendReaction(ctx, &tg.MessagesSendReactionRequest{
 			Peer:     inputPeer,
 			MsgID:    req.MessageID,
-			Reaction: []tg.ReactionClass{&tg.ReactionEmoji{Emoticon: req.Emoticon}},
+			Reaction: reactionClasses,
 		})
 		if err != nil {
 			return types.SendReactionResponseMsg{Err: err, MessageID: req.MessageID, Emoticon: req.Emoticon}
@@ -973,5 +983,18 @@ func (c *Client) GetSingleMessage(ctx context.Context, peer types.Peer, messageI
 		formatted.PeerID = &peer.ID
 
 		return types.SingleMessageMsg{Message: formatted}
+	}
+}
+
+func (c *Client) GetLastMessage(ctx context.Context, peer types.Peer) tea.Cmd {
+	return func() tea.Msg {
+		messages, err := c.GetChatHistory(ctx, peer, 1, nil)
+		if err != nil {
+			return types.SingleMessageMsg{Err: err}
+		}
+		if len(messages) == 0 {
+			return types.SingleMessageMsg{Err: errors.New("no messages found")}
+		}
+		return types.SingleMessageMsg{Message: &messages[0]}
 	}
 }

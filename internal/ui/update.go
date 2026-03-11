@@ -24,8 +24,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			slog.Error("Failed to send message", "error", msg.Err.Error())
 			m.IsModalVisible = true
 			m.ModalContent = GetModalContent(msg.Err.Error())
-			return m, nil
+
+			var updatedConversations [50]types.FormattedMessage
+			j := 0
+			for _, v := range m.Conversations {
+				if v.ID != msg.RandID {
+					updatedConversations[j] = v
+					j++
+				}
+			}
+			m.Conversations = updatedConversations
+			m.updateConversations()
+		} else if msg.Response != nil && msg.Response.MessageID != nil {
+			for i, conv := range m.Conversations {
+				if conv.ID == msg.RandID {
+					m.Conversations[i].ID = *msg.Response.MessageID
+					m.updateConversations()
+					break
+				}
+			}
 		}
+
 		if m.SelectedFile == "uploading..." {
 			m.SelectedFile = ""
 		}
@@ -124,7 +143,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			slog.Error("Failed to fetch message", "error", msg.Err.Error())
 			return m, nil
 		}
-		if msg.Message != nil {
+
+		isValid := false
+		if msg.Message != nil && msg.Message.PeerID != nil {
+			switch m.Mode {
+			case ModeUsers, ModeBots:
+				isValid = *msg.Message.PeerID == m.SelectedUser.PeerID
+			case ModeChannels:
+				isValid = *msg.Message.PeerID == m.SelectedChannel.ID
+			case ModeGroups:
+				isValid = *msg.Message.PeerID == m.SelectedGroup.ID
+			}
+		}
+
+		if isValid {
 			for i, conv := range m.Conversations {
 				if conv.ID == msg.Message.ID {
 					m.Conversations[i] = *msg.Message
@@ -133,15 +165,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
+
 	case types.SendReactionMsg:
 		var peer types.Peer
 		if m.SelectedUser.PeerID != "" {
 			peer = peerFromItem(m.SelectedUser)
 			if message, ok := m.ChatUI.SelectedItem().(types.FormattedMessage); ok {
+				alreadyReacted := false
+				if message.Reactions != nil {
+					for _, r := range message.Reactions.Results {
+						if _, ok := r.GetChosenOrder(); ok {
+							if reaction, ok := r.Reaction.(*tg.ReactionEmoji); ok && reaction.Emoticon == msg.Reaction.Reaction {
+								alreadyReacted = true
+								break
+							}
+						}
+					}
+				}
+
 				cmds = append(cmds, telegram.Cligram.SendReaction(telegram.Cligram.Context(), types.SendReactionRequest{
 					Peer:      peer,
 					MessageID: message.ID,
 					Emoticon:  msg.Reaction.Reaction,
+					Remove:    alreadyReacted,
 				}))
 			}
 		}

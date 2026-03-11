@@ -162,8 +162,12 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 	if m.IsReply && m.ReplyTo != nil {
 		replyToMessageID = strconv.Itoa(messageToReply.ID)
 	}
+
+	randID := rand.Int()
+
 	cmds = append(cmds, telegram.Cligram.SendMessage(telegram.Cligram.Context(),
 		types.SendMessageRequest{
+			RandID:           randID,
 			Peer:             peerInfo,
 			Message:          userMsg,
 			IsReply:          m.IsReply && m.ReplyTo != nil,
@@ -180,7 +184,7 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 	}
 	cligramConfig := config.GetConfig()
 	newMessage := types.FormattedMessage{
-		ID:                   rand.Int(),
+		ID:                   randID,
 		Sender:               "you",
 		IsFromMe:             true,
 		Content:              content,
@@ -203,6 +207,7 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 	m.Input.Reset()
 	m.IsReply = false
 	m.ReplyTo = nil
+
 	m.updateConversations()
 	return *m, tea.Batch(cmds...)
 }
@@ -391,20 +396,7 @@ func (m *Model) updateConversations() {
 	m.viewport.GotoBottom()
 }
 
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 func (m Model) View() string {
-	// m.Stories.SetShowFilter(false)
-	// m.Stories.SetShowPagination(false)
-	// m.Stories.SetShowTitle(false)
-	// m.Stories.SetShowHelp(false)
-	// m.Stories.SetShowStatusBar(false)
-
 	m.Users.Title = "Chats"
 	m.Channels.Title = "Channels"
 	m.Channels.SetShowStatusBar(false)
