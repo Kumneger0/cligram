@@ -1,5 +1,7 @@
 package types // nolint:revive
 
+import "github.com/gotd/td/tg"
+
 type GetAllChatsResponse struct {
 	PrivateChats         []UserInfo    `json:"chats"`
 	Channels             []ChannelInfo `json:"channels"`
@@ -29,6 +31,30 @@ type UserChatsResponse struct {
 
 type ChannelsResponse struct {
 	Channels []ChannelInfo `json:"channels"`
+}
+
+type Reaction struct {
+	tg.AvailableReaction
+}
+
+type AvailableReactions struct {
+	Reactions []Reaction `json:"reactions"`
+	Err       error
+}
+
+func (s Reaction) FilterValue() string {
+	return s.Reaction
+}
+
+type SendReactionMsg struct {
+	Reaction Reaction
+}
+
+type SendReactionResponseMsg struct {
+	Err       error
+	Response  bool
+	MessageID int
+	Emoticon  string
 }
 
 type SearchUsersResponse struct {
@@ -108,4 +134,14 @@ type GetUserChatsResult struct {
 type GetChannelsResult struct {
 	Data                 []ChannelInfo
 	OffsetDate, OffsetID int
+}
+
+type CurrentUserMsg struct {
+	User *UserInfo
+	Err  error
+}
+
+type SingleMessageMsg struct {
+	Message *FormattedMessage
+	Err     error
 }

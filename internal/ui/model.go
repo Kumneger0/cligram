@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/gotd/td/tg"
 	"github.com/kumneger0/cligram/internal/config"
 	"github.com/kumneger0/cligram/internal/telegram"
 	"github.com/kumneger0/cligram/internal/telegram/types"
@@ -60,6 +62,26 @@ func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list
 		title = wordwrap.String(entry.Title(), m.Width())
 	}
 
+	var reactions string
+	if len(entry.Reactions.Results) > 0 {
+		var reactionBadges []string
+		for _, r := range entry.Reactions.Results {
+			reaction := r.Reaction.(*tg.ReactionEmoji)
+			isMeReacted := false
+			if _, ok := r.GetChosenOrder(); ok {
+				isMeReacted = true
+			}
+
+			content := reaction.Emoticon + " " + strconv.Itoa(int(r.Count))
+			if isMeReacted {
+				reactionBadges = append(reactionBadges, myReactionBadgeStyle.Render(content))
+			} else {
+				reactionBadges = append(reactionBadges, reactionBadgeStyle.Render(content))
+			}
+		}
+		reactions = lipgloss.JoinHorizontal(lipgloss.Top, reactionBadges...)
+	}
+
 	if entry.IsFromMe {
 		title = "You: " + title
 	} else {
@@ -70,6 +92,10 @@ func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list
 		}
 	}
 	date := strings.Repeat(" ", 4) + timestampStyle.Render(entry.Date.Format("02/01/2006 03:04 PM"))
+
+	if reactions != "" {
+		title = title + "\n" + reactions
+	}
 
 	isMainViewFocused := d.Model.FocusedOn == Mainview
 	if index == m.Index() && isMainViewFocused {
@@ -145,6 +171,8 @@ type Model struct {
 	OffsetDate, OffsetID int
 	OnPagination         bool
 	Stories              []types.Stories
+	CurrentUser          *types.UserInfo
+	Error                error
 }
 
 func filterEmptyMessages(msgs [50]types.FormattedMessage) []types.FormattedMessage {

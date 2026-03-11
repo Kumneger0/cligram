@@ -90,6 +90,7 @@ func FormatMessage[T ChannelOrUser](msg *tg.Message, userOrChannel *T, allMessag
 		FromID:               FromID,
 		SenderUserInfo:       SenderUserInfo,
 		ReplyTo:              reply,
+		Reactions:            &msg.Reactions,
 	}
 }
 
@@ -147,6 +148,7 @@ func ConvertTGUserToUserInfo(tgUser *tg.User) *types.UserInfo {
 		AccessHash: strconv.FormatInt(tgUser.AccessHash, 10),
 		IsTyping:   false,
 		IsOnline:   false,
+		Premium:    tgUser.Premium,
 	}
 
 	if status := getUserOnlineStatus(tgUser.Status); status != nil {
