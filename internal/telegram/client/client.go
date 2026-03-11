@@ -160,6 +160,16 @@ func extractMessageID(updateClass tg.UpdatesClass) *int {
 	case *tg.UpdateShortSentMessage:
 		i := u.ID
 		id = &i
+	case *tg.UpdateShortMessage:
+		i := u.ID
+		id = &i
+	case *tg.UpdateShortChatMessage:
+		i := u.ID
+		id = &i
+	case *tg.UpdatesTooLong:
+		slog.Debug("Unhandled UpdatesClass: UpdatesTooLong, no message ID extracted")
+	default:
+		slog.Debug("Unhandled UpdatesClass type", "type", u.String())
 	}
 	return id
 }
