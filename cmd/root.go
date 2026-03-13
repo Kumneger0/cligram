@@ -9,6 +9,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/filepicker"
 	"github.com/charmbracelet/bubbles/list" // Legacy groups have no access hash; supergroups (migrated) do.
+	"github.com/gotd/td/tg"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -97,6 +98,7 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 				}
 
 				model := &ui.Model{}
+				model.CustomEmojis = make(map[int64]*tg.Document)
 				userList := list.New(users, ui.CustomDelegate{Model: model}, 10, 20)
 				userList.SetShowPagination(false)
 				channels := list.New(channelsList, ui.CustomDelegate{Model: model}, 10, 20)

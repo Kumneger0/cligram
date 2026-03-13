@@ -169,7 +169,7 @@ func extractMessageID(updateClass tg.UpdatesClass) *int {
 	case *tg.UpdatesTooLong:
 		slog.Debug("Unhandled UpdatesClass: UpdatesTooLong, no message ID extracted")
 	default:
-		slog.Debug("Unhandled UpdatesClass type", "type", u.String())
+		slog.Debug("Unhandled UpdatesClass type", "type", u.TypeName())
 	}
 	return id
 }
