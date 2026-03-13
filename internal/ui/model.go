@@ -67,13 +67,27 @@ func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list
 		if len(entry.Reactions.Results) > 0 {
 			var reactionBadges []string
 			for _, r := range entry.Reactions.Results {
-				reaction := r.Reaction.(*tg.ReactionEmoji)
-				isMeReacted := false
+				var content string
+				var isMeReacted bool
+
+				switch reaction := r.Reaction.(type) {
+				case *tg.ReactionEmoji:
+					content = reaction.Emoticon + " " + strconv.Itoa(int(r.Count))
+				case *tg.ReactionPaid:
+					content = "⭐" + " " + strconv.Itoa(int(r.Count))
+				case *tg.ReactionCustomEmoji:
+					if doc, found := d.Model.CustomEmojis[reaction.DocumentID]; found {
+						if len(doc.Thumbs) > 0 {
+							thumb := doc.Thumbs[len(doc.Thumbs)-1]
+							_ = thumb
+						}
+					}
+				}
+
 				if _, ok := r.GetChosenOrder(); ok {
 					isMeReacted = true
 				}
 
-				content := reaction.Emoticon + " " + strconv.Itoa(int(r.Count))
 				if isMeReacted {
 					reactionBadges = append(reactionBadges, myReactionBadgeStyle.Render(content))
 				} else {
@@ -174,6 +188,29 @@ type Model struct {
 	Stories              []types.Stories
 	CurrentUser          *types.UserInfo
 	Error                error
+	CustomEmojis         map[int64]*tg.Document
+}
+
+type CustomEmojiDocumentMsg struct {
+	DocumentID int64
+	Document   *tg.Document
+	Err        error
+}
+
+func FetchCustomEmojiDocumentCmd(documentID int64) tea.Cmd {
+	return func() tea.Msg {
+		docs, err := telegram.Cligram.API().MessagesGetCustomEmojiDocuments(telegram.Cligram.Context(), []int64{documentID})
+		if err != nil {
+			slog.Error("failed to get custom emoji documents", "error", err, "document_id", documentID)
+			return CustomEmojiDocumentMsg{DocumentID: documentID, Err: err}
+		}
+		if len(docs) > 0 {
+			if doc, ok := docs[0].(*tg.Document); ok {
+				return CustomEmojiDocumentMsg{DocumentID: documentID, Document: doc}
+			}
+		}
+		return CustomEmojiDocumentMsg{DocumentID: documentID, Err: fmt.Errorf("document not found for ID: %d", documentID)}
+	}
 }
 
 func filterEmptyMessages(msgs [50]types.FormattedMessage) []types.FormattedMessage {

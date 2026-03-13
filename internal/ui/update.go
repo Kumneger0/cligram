@@ -16,6 +16,27 @@ import (
 	"github.com/kumneger0/cligram/internal/telegram/types"
 )
 
+func (m *Model) checkAndFetchCustomEmojis(messages []types.FormattedMessage) tea.Cmd {
+	var cmds []tea.Cmd
+	if m.CustomEmojis == nil {
+		m.CustomEmojis = make(map[int64]*tg.Document)
+	}
+
+	for _, msg := range messages {
+		if msg.Reactions != nil {
+			for _, r := range msg.Reactions.Results {
+				if reaction, ok := r.Reaction.(*tg.ReactionCustomEmoji); ok {
+					documentID := reaction.DocumentID
+					if _, found := m.CustomEmojis[documentID]; !found {
+						cmds = append(cmds, FetchCustomEmojiDocumentCmd(documentID))
+					}
+				}
+			}
+		}
+	}
+	return tea.Batch(cmds...)
+}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	switch msg := msg.(type) {
@@ -211,6 +232,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.CurrentUser = msg.User
+	case CustomEmojiDocumentMsg:
+		if msg.Err != nil {
+			slog.Error("Failed to fetch custom emoji document", "error", msg.Err, "document_id", msg.DocumentID)
+			return m, nil
+		}
+		if m.CustomEmojis == nil {
+			m.CustomEmojis = make(map[int64]*tg.Document)
+		}
+		m.CustomEmojis[msg.DocumentID] = msg.Document
+		return m, nil
 	}
 	return updateFocusedComponent(&m, msg, &cmds)
 }
@@ -375,7 +406,8 @@ func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, te
 		m.Conversations[len(m.Conversations)-1] = formattedMessage
 	}
 	m.updateConversations()
-	return m, nil
+	fetchCmd := m.checkAndFetchCustomEmojis([]types.FormattedMessage{formattedMessage})
+	return m, fetchCmd
 }
 
 type GetFormattedMessageArg struct {
@@ -490,7 +522,9 @@ func (m Model) handleGetMessages(msg types.GetMessagesMsg) (tea.Model, tea.Cmd) 
 	m.Conversations = m.mergeConversations(msg.Messages, messagesWeGot)
 	m.updateConversations()
 	m.ChatUI.Select(len(m.Conversations) - 1)
-	return m, nil
+
+	fetchCmd := m.checkAndFetchCustomEmojis(filterEmptyMessages(m.Conversations))
+	return m, fetchCmd
 }
 
 func (m Model) mergeConversations(newMessages [50]types.FormattedMessage, messagesWeGot int) [50]types.FormattedMessage {
