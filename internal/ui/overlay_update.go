@@ -194,7 +194,7 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 				return CloseOverlay{}
 			}
 			return m, tea.Batch(closeCommandCMD, func() tea.Msg {
-				return MessageDeletionConfrimResponseMsg{yes: true}
+				return MessageDeletionConfirmResponseMsg{yes: true}
 			})
 		}
 	case "n", "N":
@@ -203,7 +203,7 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 				return CloseOverlay{}
 			}
 			return m, tea.Batch(closeCommandCMD, func() tea.Msg {
-				return MessageDeletionConfrimResponseMsg{yes: false}
+				return MessageDeletionConfirmResponseMsg{yes: false}
 			})
 		}
 	}

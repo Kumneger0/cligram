@@ -220,7 +220,7 @@ func (f Foreground) Init() tea.Cmd {
 	return nil
 }
 
-type MessageDeletionConfrimResponseMsg struct {
+type MessageDeletionConfirmResponseMsg struct {
 	yes bool
 }
 
