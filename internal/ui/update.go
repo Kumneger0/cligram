@@ -122,7 +122,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd := m.handleUserOnlineOffline(msg)
 		m = model.(Model)
 		cmds = append(cmds, cmd)
-	case MessageDeletionConfrimResponseMsg:
+	case MessageDeletionConfirmResponseMsg:
 		model, cmd := m.handleMessageDeletion(msg)
 		m = model.(Model)
 		cmds = append(cmds, cmd)
@@ -473,7 +473,7 @@ func (m Model) handleUserOnlineOffline(msg types.UserStatusNotification) (tea.Mo
 	return m, nil
 }
 
-func (m Model) handleMessageDeletion(msg MessageDeletionConfrimResponseMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleMessageDeletion(msg MessageDeletionConfirmResponseMsg) (tea.Model, tea.Cmd) {
 	if !msg.yes {
 		return m, nil
 	}
@@ -552,7 +552,7 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	switch msg.String() {
 	case "shift+down":
-		if m.FocusedOn == Mainview {
+		if m.FocusedOn == Main {
 			m.ChatUI.Select(len(m.ChatUI.Items()) - 1)
 		}
 	case "ctrl+a":
@@ -644,7 +644,7 @@ func (m Model) handleListPagination() (Model, tea.Cmd) {
 }
 
 func (m Model) handleEditKey() (tea.Model, tea.Cmd) {
-	if m.FocusedOn == Mainview {
+	if m.FocusedOn == Main {
 		if selectedItem, ok := m.ChatUI.SelectedItem().(types.FormattedMessage); ok && strings.ToLower(selectedItem.Sender) == "you" {
 			m.FocusedOn = Input
 			m.Input.SetValue(selectedItem.Content)
@@ -658,7 +658,7 @@ func (m Model) handleEditKey() (tea.Model, tea.Cmd) {
 func (m Model) handleCtrlA() (tea.Model, tea.Cmd) {
 	if m.FocusedOn == Input {
 		m.IsFilepickerVisible = true
-		m.FocusedOn = Mainview
+		m.FocusedOn = Main
 		return m, nil
 	}
 	if m.IsFilepickerVisible {
@@ -679,7 +679,7 @@ func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleReplyKey() (tea.Model, tea.Cmd) {
-	if m.FocusedOn == Mainview {
+	if m.FocusedOn == Main {
 		canWrite := (m.Mode == ModeUsers || m.Mode == ModeGroups) || (m.Mode == ModeChannels && m.SelectedChannel.IsCreator)
 		if canWrite {
 			m.IsReply = true
@@ -694,7 +694,7 @@ func (m Model) handleReplyKey() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleDeleteKey() (tea.Model, tea.Cmd) {
-	if m.FocusedOn == Mainview {
+	if m.FocusedOn == Main {
 		selectedItem := m.ChatUI.SelectedItem().(types.FormattedMessage)
 		return m, func() tea.Msg {
 			return OpenModalMsg{ModalMode: ModalModeDeleteMessage, Message: &selectedItem}
@@ -704,7 +704,7 @@ func (m Model) handleDeleteKey() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleForwardKey() (tea.Model, tea.Cmd) {
-	if m.FocusedOn != Mainview {
+	if m.FocusedOn != Main {
 		return m, nil
 	}
 	selectedMessage, ok := m.ChatUI.SelectedItem().(types.FormattedMessage)

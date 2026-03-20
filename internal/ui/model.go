@@ -112,7 +112,7 @@ func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list
 		title = title + "\n" + reactions
 	}
 
-	isMainViewFocused := d.Model.FocusedOn == Mainview
+	isMainViewFocused := d.Model.FocusedOn == Main
 	if index == m.Index() && isMainViewFocused {
 		str := title + "\n" + date
 
@@ -151,9 +151,9 @@ const (
 type FocusedOn string
 
 const (
-	SideBar  FocusedOn = "sideBar"
-	Mainview FocusedOn = "mainView"
-	Input    FocusedOn = "input"
+	SideBar FocusedOn = "sideBar"
+	Main    FocusedOn = "mainView"
+	Input   FocusedOn = "input"
 )
 
 type Model struct {

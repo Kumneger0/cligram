@@ -291,17 +291,17 @@ func handleUserChange(m *Model) (Model, tea.Cmd) {
 
 func changeFocusMode(m *Model, msg string, shift bool) (Model, tea.Cmd) {
 	var cmds []tea.Cmd
-	currentlyFoucsedOn := m.FocusedOn
+	currentlyFocusedOn := m.FocusedOn
 	canWrite := (m.Mode == ModeUsers || m.Mode == ModeGroups || m.Mode == ModeBots) || (m.Mode == ModeChannels && m.SelectedChannel.IsCreator)
-	if currentlyFoucsedOn == SideBar {
+	if currentlyFocusedOn == SideBar {
 		if shift {
 			m.FocusedOn = Input
 		} else {
-			m.FocusedOn = Mainview
+			m.FocusedOn = Main
 			chatListLastIndex := len(m.ChatUI.Items()) - 1
 			m.ChatUI.Select(chatListLastIndex)
 		}
-	} else if currentlyFoucsedOn == Mainview && canWrite {
+	} else if currentlyFocusedOn == Main && canWrite {
 		if shift {
 			m.FocusedOn = SideBar
 		} else {
@@ -309,7 +309,7 @@ func changeFocusMode(m *Model, msg string, shift bool) (Model, tea.Cmd) {
 		}
 	} else {
 		if shift {
-			m.FocusedOn = Mainview
+			m.FocusedOn = Main
 			chatListLastIndex := len(m.ChatUI.Items()) - 1
 			m.ChatUI.Select(chatListLastIndex)
 		} else {
@@ -324,7 +324,7 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 		m.ChatUI.ResetSelected()
 		m.OnPagination = false
 	}
-	areWeInGroupMode := m.Mode == ModeGroups && m.FocusedOn == Mainview
+	areWeInGroupMode := m.Mode == ModeGroups && m.FocusedOn == Main
 	if m.FocusedOn == SideBar || areWeInGroupMode {
 		switch msg {
 		case "c":
