@@ -77,6 +77,12 @@ func FormatMessage[T ChannelOrUser](msg *tg.Message, userOrChannel *T, allMessag
 		content = "This Message is not supported by this Telegram client."
 	}
 
+	var view int
+
+	if result, ok := msg.GetViews(); ok {
+		view = result
+	}
+
 	return &types.FormattedMessage{
 		ID:                   msg.ID,
 		Sender:               sender,
@@ -91,6 +97,7 @@ func FormatMessage[T ChannelOrUser](msg *tg.Message, userOrChannel *T, allMessag
 		SenderUserInfo:       SenderUserInfo,
 		ReplyTo:              reply,
 		Reactions:            &msg.Reactions,
+		Views:                view,
 	}
 }
 

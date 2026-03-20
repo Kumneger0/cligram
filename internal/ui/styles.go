@@ -88,6 +88,12 @@ var (
 				Foreground(lipgloss.Color("#FFFFFF")).
 				Padding(0, 1).
 				Bold(true)
+
+	viewCountStyle = lipgloss.NewStyle().
+			Background(lipgloss.Color("#1A202C")).  // A slightly darker subtle background
+			Foreground(DefaultTheme.SecondaryText). // Use secondary text color for view count
+			Padding(0, 1).
+			Bold(false)
 )
 
 func getSideBarStyles(sidebarWidth int, contentHeight int, m *Model) lipgloss.Style {

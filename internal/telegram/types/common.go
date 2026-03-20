@@ -65,6 +65,7 @@ type FormattedMessage struct {
 	ReplyTo              *FormattedMessage    `json:"replyTo,omitempty"`
 	PeerID               *string              `json:"peerId,omitempty"`
 	Reactions            *tg.MessageReactions `json:"reactions,omitempty"`
+	Views                int                  `json:"view"`
 }
 
 type WebPage struct {
