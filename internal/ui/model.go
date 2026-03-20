@@ -112,6 +112,15 @@ func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list
 		title = title + "\n" + reactions
 	}
 
+	if entry.Views != 0 {
+		viewCountStr := viewCountStyle.Render(fmt.Sprintf("👁️ %d", entry.Views))
+		if reactions != "" {
+			title = title + " " + viewCountStr
+		} else {
+			title = title + "\n" + viewCountStr
+		}
+	}
+
 	isMainViewFocused := d.Model.FocusedOn == Main
 	if index == m.Index() && isMainViewFocused {
 		str := title + "\n" + date
