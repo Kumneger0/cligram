@@ -45,13 +45,11 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 			peerID = strconv.FormatInt(peer.ChatID, 10)
 			PeerType = types.GroupChat
 		default:
-			fmt.Println("ow fuck")
 			slog.Warn("unknown peer type", "peer", peerClass)
 			return nil
 		}
 
 		maxID := u.GetMaxID()
-		fmt.Println("max id", maxID)
 		notification := types.Notification{
 			ReadHistoryOutbox: &types.ReadHistoryOutboxNotification{
 				PeerID:   peerID,
