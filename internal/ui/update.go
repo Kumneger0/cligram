@@ -55,21 +55,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			m.Conversations = updatedConversations
-			m.updateConversations()
 		} else if msg.Response != nil && msg.Response.MessageID != nil {
 			for i, conv := range m.Conversations {
 				if conv.ID == msg.RandID {
 					m.Conversations[i].ID = *msg.Response.MessageID
-					m.updateConversations()
 					break
 				}
 			}
 		}
+		cmds = append(cmds, m.updateConversations())
 
 		if m.SelectedFile == "uploading..." {
 			m.SelectedFile = ""
 		}
-		return m, nil
+		return m, tea.Batch(cmds...)
 	case types.EditMessageMsg:
 		if msg.Err != nil {
 			slog.Error("Failed to edit message", "error", msg.Err.Error())
@@ -188,7 +187,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			for i, conv := range m.Conversations {
 				if conv.ID == msg.Message.ID {
 					m.Conversations[i] = *msg.Message
-					m.updateConversations()
+					cmds = append(cmds, m.updateConversations())
 					break
 				}
 			}
@@ -579,11 +578,11 @@ func (m Model) handleGetMessages(msg types.GetMessagesMsg) (tea.Model, tea.Cmd) 
 	}
 
 	m.Conversations = m.mergeConversations(msg.Messages, messagesWeGot)
-	m.updateConversations()
+	cmd := m.updateConversations()
 	m.ChatUI.Select(len(m.Conversations) - 1)
 
 	fetchCmd := m.checkAndFetchCustomEmojis(filterEmptyMessages(m.Conversations))
-	return m, fetchCmd
+	return m, tea.Batch(fetchCmd, cmd)
 }
 
 func (m Model) mergeConversations(newMessages [50]types.FormattedMessage, messagesWeGot int) [50]types.FormattedMessage {
@@ -901,8 +900,7 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	footerHeight := 7
 	m.viewport = viewport.New(msg.Width, msg.Height-(headerHeight+footerHeight))
 	m.viewport.YPosition = headerHeight
-	m.updateConversations()
-	return m, nil
+	return m, m.updateConversations()
 }
 
 func (m Model) handleSearchedUserResult(msg SelectSearchedUserResult) (tea.Model, tea.Cmd) {

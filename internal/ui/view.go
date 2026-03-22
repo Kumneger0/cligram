@@ -208,7 +208,7 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 	m.IsReply = false
 	m.ReplyTo = nil
 
-	m.updateConversations()
+	cmds = append(cmds, m.updateConversations())
 	return *m, tea.Batch(cmds...)
 }
 
