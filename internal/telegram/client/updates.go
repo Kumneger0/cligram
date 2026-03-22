@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"strconv"
 	"time"
@@ -29,6 +30,44 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 		return nil
 	})
 
+	dispatcher.OnReadHistoryOutbox(func(ctx context.Context, e tg.Entities, u *tg.UpdateReadHistoryOutbox) error {
+		peerClass := u.GetPeer()
+		var PeerType types.ChatType
+		var peerID string
+		switch peer := peerClass.(type) {
+		case *tg.PeerUser:
+			peerID = strconv.FormatInt(peer.UserID, 10)
+			PeerType = types.UserChat
+		case *tg.PeerChannel:
+			peerID = strconv.FormatInt(peer.ChannelID, 10)
+			PeerType = types.ChannelChat
+		case *tg.PeerChat:
+			peerID = strconv.FormatInt(peer.ChatID, 10)
+			PeerType = types.GroupChat
+		default:
+			fmt.Println("ow fuck")
+			slog.Warn("unknown peer type", "peer", peerClass)
+			return nil
+		}
+
+		maxID := u.GetMaxID()
+		fmt.Println("max id", maxID)
+		notification := types.Notification{
+			ReadHistoryOutbox: &types.ReadHistoryOutboxNotification{
+				PeerID:   peerID,
+				MaxID:    maxID,
+				PeerType: PeerType,
+			},
+		}
+
+		select {
+		case updateChannel <- notification:
+		default:
+			slog.Warn("update channel is full, dropping read history outbox notification")
+		}
+		return nil
+	})
+
 	dispatcher.OnNewMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateNewMessage) error {
 		msg, ok := update.Message.(*tg.Message)
 		if !ok {
@@ -38,6 +77,12 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 		if p, ok := msg.GetFromID(); ok {
 			peerClass = p
 		} else if msg.Out {
+			if p := msg.GetPeerID(); p != nil {
+				peerClass = p
+			}
+		}
+
+		if peerClass == nil {
 			if p := msg.GetPeerID(); p != nil {
 				peerClass = p
 			}

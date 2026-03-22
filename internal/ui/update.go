@@ -118,6 +118,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m = model.(Model)
 		cmds = append(cmds, cmd)
 		return m, cmd
+	case types.ReadHistoryOutboxNotification:
+		if msg.MaxID <= 0 {
+			return m, nil
+		}
+		model, cmd := m.handleReadHistoryOutbox(msg)
+		m = model.(Model)
+		return m, cmd
 	case types.UserStatusNotification:
 		model, cmd := m.handleUserOnlineOffline(msg)
 		m = model.(Model)
@@ -305,6 +312,59 @@ func sendNewMessageNotification[T types.UserInfo | types.ChannelInfo](item T, me
 	}
 }
 
+func (m Model) handleReadHistoryOutbox(msg types.ReadHistoryOutboxNotification) (tea.Model, tea.Cmd) {
+	peerID := msg.PeerID
+	var userInfo *types.UserInfo
+	for _, v := range slices.Concat(m.Users.Items(), m.Bots.Items()) {
+		if user, ok := v.(types.UserInfo); ok && user.PeerID == peerID {
+			userInfo = &user
+			break
+		}
+	}
+
+	if userInfo != nil {
+		var listToUpdate *list.Model
+		if userInfo.IsBot {
+			listToUpdate = &m.Bots
+		} else {
+			listToUpdate = &m.Users
+		}
+
+		userIndex := getUserIndex(*listToUpdate, *userInfo)
+		if userIndex != -1 {
+			updatedUser := *userInfo
+			updatedUser.ReadOutboxMaxID = msg.MaxID
+			cmd := listToUpdate.SetItem(userIndex, updatedUser)
+			if m.SelectedUser.PeerID == updatedUser.PeerID {
+				m.SelectedUser = updatedUser
+			}
+			return m, tea.Batch(cmd, m.updateConversations())
+		}
+	}
+
+	var groupInfo *types.ChannelInfo
+	for _, v := range m.Groups.Items() {
+		if cg, ok := v.(types.ChannelInfo); ok && cg.ID == peerID {
+			groupInfo = &cg
+			break
+		}
+	}
+
+	if groupInfo != nil {
+		groupIndex := getGroupIndex(m, *groupInfo)
+		if groupIndex != -1 {
+			updatedGroup := *groupInfo
+			updatedGroup.ReadOutboxMaxID = msg.MaxID
+			cmd := m.Groups.SetItem(groupIndex, updatedGroup)
+			if m.SelectedGroup.ID == updatedGroup.ID {
+				m.SelectedGroup = updatedGroup
+			}
+			return m, tea.Batch(cmd, m.updateConversations())
+		}
+	}
+	return m, nil
+}
+
 func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, tea.Cmd) {
 	peerID := msg.FromID
 	var userInfo *types.UserInfo
@@ -357,8 +417,7 @@ func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, te
 				copy(m.Conversations[:], m.Conversations[1:])
 				m.Conversations[len(m.Conversations)-1] = formattedMessage
 			}
-			m.updateConversations()
-			return m, nil
+			return m, m.updateConversations()
 		}
 
 		if groupIndex := getGroupIndex(m, *channelOrGroupInfo); groupIndex != -1 && !msg.Message.Out {
@@ -405,9 +464,9 @@ func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, te
 		copy(m.Conversations[:], m.Conversations[1:])
 		m.Conversations[len(m.Conversations)-1] = formattedMessage
 	}
-	m.updateConversations()
+	cmd := m.updateConversations()
 	fetchCmd := m.checkAndFetchCustomEmojis([]types.FormattedMessage{formattedMessage})
-	return m, fetchCmd
+	return m, tea.Batch(fetchCmd, cmd)
 }
 
 type GetFormattedMessageArg struct {

@@ -390,10 +390,11 @@ func (m *Model) getMessageSenderUserInfo() *types.UserInfo {
 	return nil
 }
 
-func (m *Model) updateConversations() {
-	m.ChatUI.SetItems(formatMessages(m.Conversations))
+func (m *Model) updateConversations() tea.Cmd {
+	cmd := m.ChatUI.SetItems(formatMessages(m.Conversations))
 	m.viewport.SetContent(m.ChatUI.View())
 	m.viewport.GotoBottom()
+	return cmd
 }
 
 func (m Model) View() string {
