@@ -13,7 +13,7 @@ require (
 	github.com/gofrs/flock v0.13.0
 	github.com/golangci/golangci-lint v1.59.1
 	github.com/gotd/contrib v0.21.1
-	github.com/gotd/td v0.141.0
+	github.com/gotd/td v0.142.0
 	github.com/gotesttools/gotestfmt/v2 v2.5.0
 	github.com/hashicorp/go-version v1.8.0
 	github.com/muesli/mango-cobra v1.3.0
