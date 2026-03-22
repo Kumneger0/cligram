@@ -22,19 +22,21 @@ type Peer struct {
 }
 
 type UserInfo struct {
-	FirstName      string                 `json:"firstName"`
-	LastName       string                 `json:"lastName,omitempty"`
-	Username       string                 `json:"username,omitempty"`
-	IsBot          bool                   `json:"isBot"`
-	PeerID         string                 `json:"peerId"`
-	AccessHash     string                 `json:"accessHash"`
-	UnreadCount    int                    `json:"unreadCount"`
-	LastSeen       *string                `json:"lastSeen,omitempty"`
-	IsOnline       bool                   `json:"isOnline"`
-	IsTyping       bool                   `json:"isTyping"`
-	HasStories     bool                   `json:"hasStories"`
-	NotifySettings *tg.PeerNotifySettings `json:"notifySettings,omitempty"`
-	Premium        bool                   `json:"premium"`
+	FirstName       string                 `json:"firstName"`
+	LastName        string                 `json:"lastName,omitempty"`
+	Username        string                 `json:"username,omitempty"`
+	IsBot           bool                   `json:"isBot"`
+	PeerID          string                 `json:"peerId"`
+	AccessHash      string                 `json:"accessHash"`
+	UnreadCount     int                    `json:"unreadCount"`
+	LastSeen        *string                `json:"lastSeen,omitempty"`
+	IsOnline        bool                   `json:"isOnline"`
+	IsTyping        bool                   `json:"isTyping"`
+	HasStories      bool                   `json:"hasStories"`
+	NotifySettings  *tg.PeerNotifySettings `json:"notifySettings,omitempty"`
+	Premium         bool                   `json:"premium"`
+	ReadInboxMaxID  int                    `json:"readInboxMaxId"`
+	ReadOutboxMaxID int                    `json:"readOutboxMaxId"`
 }
 
 type ChannelInfo struct {
@@ -48,6 +50,8 @@ type ChannelInfo struct {
 	UnreadCount       int                    `json:"unreadCount"`
 	HasStories        bool                   `json:"hasStories"`
 	NotifySettings    *tg.PeerNotifySettings `json:"notifySettings,omitempty"`
+	ReadInboxMaxID    int                    `json:"readInboxMaxId"`
+	ReadOutboxMaxID   int                    `json:"readOutboxMaxId"`
 }
 
 type FormattedMessage struct {
@@ -83,17 +87,24 @@ type UserStatus struct {
 }
 
 type Notification struct {
-	NewMessage   *NewMessageNotification `json:"newMessage,omitempty"`
-	UserStatus   *UserStatusNotification `json:"userStatus,omitempty"`
-	UserTyping   *UserTypingNotification `json:"userTyping,omitempty"`
-	Error        *ErrorNotification      `json:"error,omitempty"`
-	SearchResult *SearchUsersMsg
+	NewMessage        *NewMessageNotification        `json:"newMessage,omitempty"`
+	UserStatus        *UserStatusNotification        `json:"userStatus,omitempty"`
+	UserTyping        *UserTypingNotification        `json:"userTyping,omitempty"`
+	Error             *ErrorNotification             `json:"error,omitempty"`
+	SearchResult      *SearchUsersMsg                `json:"searchResult,omitempty"`
+	ReadHistoryOutbox *ReadHistoryOutboxNotification `json:"readHistoryOutbox,omitempty"`
 }
 
 type NewMessageNotification struct {
 	ID      int         `json:"id"`
 	FromID  string      `json:"fromId"`
 	Message *tg.Message `json:"message"`
+}
+
+type ReadHistoryOutboxNotification struct {
+	PeerID   string   `json:"peerId"`
+	MaxID    int      `json:"maxId"`
+	PeerType ChatType `json:"peerType"`
 }
 
 type UserStatusNotification struct {

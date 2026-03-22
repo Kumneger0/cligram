@@ -62,6 +62,24 @@ func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list
 		title = wordwrap.String(entry.Title(), m.Width())
 	}
 
+	var readMaxOutboxID int
+
+	switch d.Model.Mode {
+	case ModeUsers, ModeBots:
+		readMaxOutboxID = d.Model.SelectedUser.ReadOutboxMaxID
+	case ModeChannels:
+		readMaxOutboxID = d.Model.SelectedChannel.ReadOutboxMaxID
+	case ModeGroups:
+		readMaxOutboxID = d.Model.SelectedGroup.ReadOutboxMaxID
+	}
+
+	var readState string
+	if entry.IsFromMe && entry.ID <= readMaxOutboxID {
+		readState = readStateStyleDouble.Render("✓✓")
+	} else if entry.IsFromMe {
+		readState = readStateStyleSingle.Render("✓")
+	}
+
 	var reactions string
 	if entry.Reactions != nil {
 		if len(entry.Reactions.Results) > 0 {
@@ -106,7 +124,7 @@ func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list
 			title = entry.Sender + ": " + title
 		}
 	}
-	date := strings.Repeat(" ", 4) + timestampStyle.Render(entry.Date.Format("02/01/2006 03:04 PM"))
+	date := strings.Repeat(" ", 4) + timestampStyle.Render(entry.Date.Format("02/01/2006 03:04 PM")) + readState
 
 	if reactions != "" {
 		title = title + "\n" + reactions

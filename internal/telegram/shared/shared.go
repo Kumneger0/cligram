@@ -30,6 +30,7 @@ func FormatMessage[T ChannelOrUser](msg *tg.Message, userOrChannel *T, allMessag
 		slog.Warn("Format message is becoming nil for some reason")
 		return nil
 	}
+
 	var sender string
 	var FromID *string
 	var SenderUserInfo *types.UserInfo

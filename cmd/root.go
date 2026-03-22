@@ -76,15 +76,7 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 						bots = append(bots, du)
 						continue
 					}
-					users = append(users, types.UserInfo{
-						UnreadCount: du.UnreadCount,
-						FirstName:   du.FirstName,
-						IsBot:       du.IsBot,
-						PeerID:      du.PeerID,
-						AccessHash:  du.AccessHash,
-						LastSeen:    du.LastSeen,
-						IsOnline:    du.IsOnline,
-					})
+					users = append(users, du)
 				}
 
 				channelsList := []list.Item{}

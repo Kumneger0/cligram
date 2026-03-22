@@ -94,6 +94,14 @@ var (
 			Foreground(DefaultTheme.SecondaryText). // Use secondary text color for view count
 			Padding(0, 1).
 			Bold(false)
+
+	readStateStyleSingle = lipgloss.NewStyle().
+				Foreground(DefaultTheme.SecondaryText).
+				Padding(0, 1)
+
+	readStateStyleDouble = lipgloss.NewStyle().
+				Foreground(DefaultTheme.AccentColor).
+				Padding(0, 1)
 )
 
 func getSideBarStyles(sidebarWidth int, contentHeight int, m *Model) lipgloss.Style {

@@ -368,8 +368,12 @@ func (c *Client) GetAllChats(ctx context.Context, offsetDate int, offsetID int) 
 	var users []types.UserInfo
 	for _, tgUser := range ds.Users {
 		u := shared.ConvertTGUserToUserInfo(tgUser)
+		readInboxMaxID, readOutboxMaxID := getReadMaxMessageID(ds.Dialogs, tgUser.ID)
 		u.UnreadCount = getUnreadCount(ds.Dialogs, tgUser.ID)
 		u.NotifySettings = getNotifySettings(ds.Dialogs, tgUser.ID)
+		u.ReadInboxMaxID = readInboxMaxID
+		u.ReadOutboxMaxID = readOutboxMaxID
+
 		users = append(users, *u)
 	}
 
@@ -380,6 +384,10 @@ func (c *Client) GetAllChats(ctx context.Context, offsetDate int, offsetID int) 
 			if info == nil {
 				continue
 			}
+			readInboxMaxID, readOutboxMaxID := getReadMaxMessageID(ds.Dialogs, channel.ID)
+
+			info.ReadInboxMaxID = readInboxMaxID
+			info.ReadOutboxMaxID = readOutboxMaxID
 			info.UnreadCount = getUnreadCount(ds.Dialogs, channel.ID)
 			info.NotifySettings = getNotifySettings(ds.Dialogs, channel.ID)
 			if channel.Broadcast {
@@ -393,6 +401,9 @@ func (c *Client) GetAllChats(ctx context.Context, offsetDate int, offsetID int) 
 			if info == nil {
 				continue
 			}
+			readInboxMaxID, readOutboxMaxID := getReadMaxMessageID(ds.Dialogs, chat.ID)
+			info.ReadInboxMaxID = readInboxMaxID
+			info.ReadOutboxMaxID = readOutboxMaxID
 			info.UnreadCount = getUnreadCount(ds.Dialogs, chat.ID)
 			info.NotifySettings = getNotifySettings(ds.Dialogs, chat.ID)
 			groups = append(groups, *info)
@@ -879,6 +890,22 @@ func getUnreadCount(chatDialogs []*tg.Dialog, peerID int64) int {
 		}
 	}
 	return 0
+}
+
+// returns readInboxMaxID, readOutboxMaxID
+func getReadMaxMessageID(chatDialogs []*tg.Dialog, peerID int64) (int, int) {
+	for _, p := range chatDialogs {
+		if tgPeerUser, ok := p.Peer.(*tg.PeerUser); ok && tgPeerUser.UserID == peerID {
+			return p.GetReadInboxMaxID(), p.GetReadOutboxMaxID()
+		}
+		if tgPeerChannel, ok := p.Peer.(*tg.PeerChannel); ok && tgPeerChannel.ChannelID == peerID {
+			return p.GetReadInboxMaxID(), p.GetReadOutboxMaxID()
+		}
+		if tgPeerChat, ok := p.Peer.(*tg.PeerChat); ok && tgPeerChat.ChatID == peerID {
+			return p.GetReadInboxMaxID(), p.GetReadOutboxMaxID()
+		}
+	}
+	return 0, 0
 }
 
 func getNotifySettings(chatDialogs []*tg.Dialog, peerID int64) *tg.PeerNotifySettings {
