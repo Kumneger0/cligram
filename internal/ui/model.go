@@ -20,6 +20,7 @@ import (
 	"github.com/kumneger0/cligram/internal/telegram"
 	"github.com/kumneger0/cligram/internal/telegram/types"
 	"github.com/muesli/reflow/wordwrap"
+	"go.dalton.dog/bubbleup"
 )
 
 var (
@@ -184,6 +185,7 @@ const (
 )
 
 type Model struct {
+	Alert                bubbleup.AlertModel
 	Filepicker           filepicker.Model
 	IsFilepickerVisible  bool
 	SelectedFile         string

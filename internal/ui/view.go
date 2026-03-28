@@ -407,7 +407,7 @@ func (m Model) View() string {
 	m.updateDelegates()
 
 	ui := setItemStyles(&m)
-	return ui
+	return m.Alert.Render(ui)
 }
 
 func (m *Model) updateDelegates() {

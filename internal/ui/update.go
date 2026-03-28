@@ -14,6 +14,7 @@ import (
 	"github.com/kumneger0/cligram/internal/notification"
 	"github.com/kumneger0/cligram/internal/telegram"
 	"github.com/kumneger0/cligram/internal/telegram/types"
+	"go.dalton.dog/bubbleup"
 )
 
 func (m *Model) checkAndFetchCustomEmojis(messages []types.FormattedMessage) tea.Cmd {
@@ -249,6 +250,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.CustomEmojis[msg.DocumentID] = msg.Document
 		return m, nil
 	}
+	outAlert, outCmd := m.Alert.Update(msg)
+	m.Alert = outAlert.(bubbleup.AlertModel)
+
+	cmds = append(cmds, outCmd)
 	return updateFocusedComponent(&m, msg, &cmds)
 }
 
@@ -704,6 +709,14 @@ func (m Model) handleListPagination() (Model, tea.Cmd) {
 func (m Model) handleEditKey() (tea.Model, tea.Cmd) {
 	if m.FocusedOn == Main {
 		if selectedItem, ok := m.ChatUI.SelectedItem().(types.FormattedMessage); ok && strings.ToLower(selectedItem.Sender) == "you" {
+			sentDate := selectedItem.Date
+			now := time.Now()
+			diff := now.Sub(sentDate)
+			if diff.Hours() >= 48 {
+				m.Alert = m.Alert.WithAllowEscToClose().WithPosition(bubbleup.TopLeftPosition)
+				alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, "sorry u can't edit a message older than 48 hours")
+				return m, alertCmd
+			}
 			m.FocusedOn = Input
 			m.Input.SetValue(selectedItem.Content)
 			m.EditMessage = &selectedItem

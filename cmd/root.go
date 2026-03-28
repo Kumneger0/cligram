@@ -6,10 +6,12 @@ import (
 	"log/slog"
 	"os"
 	"runtime/pprof"
+	"time"
 
 	"github.com/charmbracelet/bubbles/filepicker"
 	"github.com/charmbracelet/bubbles/list" // Legacy groups have no access hash; supergroups (migrated) do.
 	"github.com/gotd/td/tg"
+	"go.dalton.dog/bubbleup"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -90,6 +92,7 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 				}
 
 				model := &ui.Model{}
+				model.Alert = *bubbleup.NewAlertModel(80, true, 10*time.Second)
 				model.CustomEmojis = make(map[int64]*tg.Document)
 				userList := list.New(users, ui.CustomDelegate{Model: model}, 10, 20)
 				userList.SetShowPagination(false)
