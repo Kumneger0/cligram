@@ -712,7 +712,7 @@ func (m Model) handleEditKey() (tea.Model, tea.Cmd) {
 			sentDate := selectedItem.Date
 			now := time.Now()
 			diff := now.Sub(sentDate)
-			if diff.Hours() >= 48 {
+			if !sentDate.IsZero() && diff.Hours() >= 48 {
 				m.Alert = m.Alert.WithAllowEscToClose().WithPosition(bubbleup.TopLeftPosition)
 				alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, "sorry u can't edit a message older than 48 hours")
 				return m, alertCmd
