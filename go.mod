@@ -15,7 +15,7 @@ require (
 	github.com/gotd/contrib v0.21.1
 	github.com/gotd/td v0.141.0
 	github.com/gotesttools/gotestfmt/v2 v2.5.0
-	github.com/hashicorp/go-version v1.8.0
+	github.com/hashicorp/go-version v1.9.0
 	github.com/muesli/mango-cobra v1.3.0
 	github.com/muesli/reflow v0.3.0
 	github.com/muesli/roff v0.1.0
