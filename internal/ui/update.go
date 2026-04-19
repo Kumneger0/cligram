@@ -643,6 +643,7 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "backspace":
 		if m.FocusedOn == Main && m.ShowForumTopics && m.SelectedForumTopic != nil {
 			m.SelectedForumTopic = nil
+			m.MainViewLoading = false
 			m.Conversations = [50]types.FormattedMessage{}
 			m.ChatUI.SetItems([]list.Item{})
 			m.ChatUI.ResetSelected()
