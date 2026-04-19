@@ -185,39 +185,41 @@ const (
 )
 
 type Model struct {
-	Alert                bubbleup.AlertModel
-	Filepicker           filepicker.Model
-	IsFilepickerVisible  bool
-	SelectedFile         string
-	Users                list.Model
-	Bots                 list.Model
-	SelectedUser         types.UserInfo
-	Channels             list.Model
-	IsModalVisible       bool
-	ModalContent         string
-	SelectedChannel      types.ChannelInfo
-	Groups               list.Model
-	SelectedGroup        types.ChannelInfo
-	Height               int
-	Width                int
-	MainViewLoading      bool
-	SideBarLoading       bool
-	Mode                 Mode
-	Input                textinput.Model
-	viewport             viewport.Model
-	FocusedOn            FocusedOn
-	ChatUI               list.Model
-	Conversations        [50]types.FormattedMessage
-	IsReply              bool
-	ReplyTo              *types.FormattedMessage
-	EditMessage          *types.FormattedMessage
-	SkipNextInput        bool
-	OffsetDate, OffsetID int
-	OnPagination         bool
-	Stories              []types.Stories
-	CurrentUser          *types.UserInfo
-	Error                error
-	CustomEmojis         map[int64]*tg.Document
+	Alert                    bubbleup.AlertModel
+	Filepicker               filepicker.Model
+	IsFilepickerVisible      bool
+	SelectedFile             string
+	Users                    list.Model
+	Bots                     list.Model
+	SelectedUser             types.UserInfo
+	Channels                 list.Model
+	IsModalVisible           bool
+	ModalContent             string
+	SelectedChannel          types.ChannelInfo
+	Groups                   list.Model
+	SelectedGroup            types.ChannelInfo
+	Height                   int
+	Width                    int
+	MainViewLoading          bool
+	SideBarLoading           bool
+	Mode                     Mode
+	Input                    textinput.Model
+	viewport                 viewport.Model
+	FocusedOn                FocusedOn
+	ChatUI                   list.Model
+	Conversations            [50]types.FormattedMessage
+	IsReply                  bool
+	ReplyTo                  *types.FormattedMessage
+	EditMessage              *types.FormattedMessage
+	SkipNextInput            bool
+	OffsetDate, OffsetID     int
+	OnPagination             bool
+	Stories                  []types.Stories
+	CurrentUser              *types.UserInfo
+	Error                    error
+	CustomEmojis             map[int64]*tg.Document
+	SelectedGroupForumTopics list.Model
+	ForumTopicLoading        bool
 }
 
 type CustomEmojiDocumentMsg struct {

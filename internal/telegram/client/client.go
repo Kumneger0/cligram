@@ -356,6 +356,46 @@ func (c *Client) GetChannelsCmd(ctx context.Context, isBroadCast bool, offsetDat
 	}
 }
 
+func (c *Client) GetChannelForums(peer types.Peer) tea.Cmd {
+	return func() tea.Msg {
+		var forums []types.ForumTopicInfo
+		inputPeer, err := shared.ConvertPeerToInputPeer(peer)
+		if err != nil {
+			slog.Error(err.Error())
+			return types.GetChannelForumsResponseMsg{
+				Forums: nil,
+				Err:    err,
+			}
+		}
+		request := &tg.MessagesGetForumTopicsRequest{
+			Peer: inputPeer,
+		}
+		forumTopics, err := c.Client.API().MessagesGetForumTopics(c.ctx, request)
+		if err != nil {
+			slog.Error(err.Error())
+			return types.GetChannelForumsResponseMsg{
+				Forums: nil,
+				Err:    err,
+			}
+		}
+		for _, topicClass := range forumTopics.Topics {
+			topic, ok := topicClass.(*tg.ForumTopic)
+			if !ok {
+				continue
+			}
+			forums = append(forums, types.ForumTopicInfo{
+				ID:          topic.GetID(),
+				TopicTitle:  topic.Title,
+				UnreadCount: topic.UnreadCount,
+			})
+		}
+		return types.GetChannelForumsResponseMsg{
+			Forums: forums,
+			Err:    nil,
+		}
+	}
+}
+
 func (c *Client) GetAllChats(ctx context.Context, offsetDate int, offsetID int) (types.GetAllChatsResponse, error) {
 	ds, err := c.getAllDialogs(ctx, offsetDate, offsetID)
 	if err != nil {
@@ -390,6 +430,7 @@ func (c *Client) GetAllChats(ctx context.Context, offsetDate int, offsetID int) 
 			info.ReadOutboxMaxID = readOutboxMaxID
 			info.UnreadCount = getUnreadCount(ds.Dialogs, channel.ID)
 			info.NotifySettings = getNotifySettings(ds.Dialogs, channel.ID)
+			info.IsForum = channel.GetForum()
 			if channel.Broadcast {
 				channels = append(channels, *info)
 			} else {
@@ -933,6 +974,7 @@ func convertToChannelInfo[T *tg.Channel | *tg.Chat](channel T) *types.ChannelInf
 			AccessHash:        strconv.FormatInt(v.AccessHash, 10),
 			IsCreator:         v.Creator,
 			IsBroadcast:       v.Broadcast,
+			IsForum:           v.GetForum(),
 			ParticipantsCount: &v.ParticipantsCount}
 	case *tg.Chat:
 		return &types.ChannelInfo{
@@ -940,6 +982,7 @@ func convertToChannelInfo[T *tg.Channel | *tg.Chat](channel T) *types.ChannelInf
 			ID:                strconv.FormatInt(v.ID, 10),
 			Username:          nil,
 			IsCreator:         v.Creator,
+			IsForum:           false,
 			IsBroadcast:       false,
 			ParticipantsCount: &v.ParticipantsCount,
 		}

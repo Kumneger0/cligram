@@ -41,6 +41,19 @@ func (m *Model) checkAndFetchCustomEmojis(messages []types.FormattedMessage) tea
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	switch msg := msg.(type) {
+	case types.GetChannelForumsResponseMsg:
+		m.ForumTopicLoading = false
+		if msg.Err != nil {
+			slog.Error("Failed to get channel forums", "error", msg.Err.Error())
+			m.Alert = m.Alert.WithAllowEscToClose().WithPosition(bubbleup.TopLeftPosition)
+			alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, msg.Err.Error())
+			return m, alertCmd
+		}
+		var forumTopicList []list.Item
+		for _, forum := range msg.Forums {
+			forumTopicList = append(forumTopicList, forum)
+		}
+		m.SelectedGroupForumTopics = list.New(forumTopicList, list.NewDefaultDelegate(), 0, 0)
 	case types.SendMessageMsg:
 		if msg.Err != nil {
 			slog.Error("Failed to send message", "error", msg.Err.Error())
@@ -635,11 +648,6 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m, cmd := changeFocusMode(&m, "tab", true)
 		cmds = append(cmds, cmd)
 		return m, tea.Batch(cmds...)
-	case "m":
-		if m.FocusedOn != Input {
-			m.IsModalVisible = true
-		}
-		return m, nil
 	case "c":
 		m, cmd := changeSideBarMode(&m, "c")
 		cmds = append(cmds, cmd)
