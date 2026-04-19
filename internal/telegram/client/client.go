@@ -113,13 +113,13 @@ func (c *Client) sendText(ctx context.Context, peer types.Peer, text string, rep
 		var replyToClass tg.InputReplyToClass
 		if replyTo != nil {
 			reply := &tg.InputReplyToMessage{ReplyToMsgID: *replyTo}
-			if topMsgID != nil {
+			if topMsgID != nil && *topMsgID != 1 && *replyTo != *topMsgID {
 				reply.TopMsgID = *topMsgID
 				reply.SetFlags()
 			}
 			replyToClass = reply
 		} else if topMsgID != nil {
-			replyToClass = &tg.InputReplyToMessage{ReplyToMsgID: *topMsgID, TopMsgID: *topMsgID}
+			replyToClass = &tg.InputReplyToMessage{ReplyToMsgID: *topMsgID}
 		}
 
 		updateClass, err := c.GetAPI().MessagesSendMessage(ctx, &tg.MessagesSendMessageRequest{
@@ -234,13 +234,13 @@ func (c *Client) sendMediaFile(ctx context.Context, path string, caption string,
 	var replyToClass tg.InputReplyToClass
 	if replyTo != nil {
 		reply := &tg.InputReplyToMessage{ReplyToMsgID: *replyTo}
-		if topMsgID != nil {
+		if topMsgID != nil && *topMsgID != 1 && *replyTo != *topMsgID {
 			reply.TopMsgID = *topMsgID
 			reply.SetFlags()
 		}
 		replyToClass = reply
 	} else if topMsgID != nil {
-		replyToClass = &tg.InputReplyToMessage{ReplyToMsgID: *topMsgID, TopMsgID: *topMsgID}
+		replyToClass = &tg.InputReplyToMessage{ReplyToMsgID: *topMsgID}
 	}
 
 	sendMediaUpdateClass, err := c.GetAPI().MessagesSendMedia(ctx, &tg.MessagesSendMediaRequest{
