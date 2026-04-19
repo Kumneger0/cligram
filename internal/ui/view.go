@@ -269,6 +269,10 @@ func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (M
 
 func handleUserChange(m *Model) (Model, tea.Cmd) {
 	pInfo := getMessageParams(m)
+	if m.Mode == ModeGroups && m.SelectedGroup.IsForum {
+		m.ForumTopicLoading = true
+		return *m, telegram.Cligram.GetChannelForums(pInfo)
+	}
 	cmd := telegram.Cligram.GetMessages(telegram.Cligram.Context(), types.GetMessagesRequest{
 		Peer:          pInfo,
 		Limit:         50,

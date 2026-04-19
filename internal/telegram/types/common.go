@@ -52,6 +52,7 @@ type ChannelInfo struct {
 	NotifySettings    *tg.PeerNotifySettings `json:"notifySettings,omitempty"`
 	ReadInboxMaxID    int                    `json:"readInboxMaxId"`
 	ReadOutboxMaxID   int                    `json:"readOutboxMaxId"`
+	IsForum           bool                   `json:"isForum"`
 }
 
 type FormattedMessage struct {
@@ -93,6 +94,12 @@ type Notification struct {
 	Error             *ErrorNotification             `json:"error,omitempty"`
 	SearchResult      *SearchUsersMsg                `json:"searchResult,omitempty"`
 	ReadHistoryOutbox *ReadHistoryOutboxNotification `json:"readHistoryOutbox,omitempty"`
+}
+
+type ForumTopicInfo struct {
+	ID          int    `json:"id"`
+	TopicTitle  string `json:"title"`
+	UnreadCount int    `json:"unreadCount"`
 }
 
 type NewMessageNotification struct {
@@ -149,4 +156,12 @@ func (m FormattedMessage) Title() string {
 
 func (m FormattedMessage) FilterValue() string {
 	return m.Content
+}
+
+func (f ForumTopicInfo) Title() string {
+	return f.TopicTitle
+}
+
+func (f ForumTopicInfo) FilterValue() string {
+	return f.TopicTitle
 }

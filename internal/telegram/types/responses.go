@@ -9,6 +9,11 @@ type GetAllChatsResponse struct {
 	OffsetDate, OffsetID int
 }
 
+type GetChannelForumsResponseMsg struct {
+	Forums []ForumTopicInfo
+	Err    error
+}
+
 type SendMessageResponse struct {
 	MessageID *int `json:"messageId,omitempty"`
 }
