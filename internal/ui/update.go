@@ -43,6 +43,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case types.GetChannelForumsResponseMsg:
 		m.ForumTopicLoading = false
+		m.MainViewLoading = false
 		if msg.Err != nil {
 			slog.Error("Failed to get channel forums", "error", msg.Err.Error())
 			m.Alert = m.Alert.WithAllowEscToClose().WithPosition(bubbleup.TopLeftPosition)
