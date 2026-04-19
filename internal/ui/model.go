@@ -34,6 +34,56 @@ var (
 		BorderBottom(true)
 )
 
+type ForumTopicsDelegate struct {
+	list.DefaultDelegate
+	*Model
+}
+
+func (d ForumTopicsDelegate) Height() int                               { return 1 }
+func (d ForumTopicsDelegate) Spacing() int                              { return 0 }
+func (d ForumTopicsDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd { return nil }
+
+func (d ForumTopicsDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+	var title string
+	var unreadBadge string
+
+	forumTopic, ok := item.(types.ForumTopicInfo)
+	if !ok {
+		return
+	}
+
+	title = forumTopic.Title()
+	if forumTopic.UnreadCount > 0 {
+		unreadBadge = unreadCountStyle.Render(strconv.Itoa(forumTopic.UnreadCount))
+	}
+
+	var content string
+	if unreadBadge != "" {
+		availWidth := m.Width() - lipgloss.Width(unreadBadge) - 2
+		if availWidth < 0 {
+			availWidth = 0
+		}
+		name := lipgloss.NewStyle().MaxWidth(availWidth).Render(title)
+
+		occupied := lipgloss.Width(name) + lipgloss.Width(unreadBadge) + 2
+		spacerWidth := m.Width() - occupied
+		if spacerWidth < 0 {
+			spacerWidth = 0
+		}
+		spacer := strings.Repeat(" ", spacerWidth)
+		content = lipgloss.JoinHorizontal(lipgloss.Top, name, spacer, unreadBadge)
+	} else {
+		content = title
+	}
+
+	isMainViewFocused := d.Model.FocusedOn == Main
+	if index == m.Index() && isMainViewFocused && d.Model.ShowForumTopics {
+		fmt.Fprint(w, selectedStyle.Render(content))
+	} else {
+		fmt.Fprint(w, normalStyle.Render(content))
+	}
+}
+
 type MessagesDelegate struct {
 	list.DefaultDelegate
 	*Model
@@ -170,10 +220,11 @@ func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list
 type Mode string
 
 const (
-	ModeUsers    Mode = "users"
-	ModeChannels Mode = "channels"
-	ModeGroups   Mode = "groups"
-	ModeBots     Mode = "bot"
+	ModeUsers       Mode = "users"
+	ModeChannels    Mode = "channels"
+	ModeGroups      Mode = "groups"
+	ModeBots        Mode = "bot"
+	ModeForumTopics Mode = "forumTopics"
 )
 
 type FocusedOn string
@@ -220,6 +271,8 @@ type Model struct {
 	CustomEmojis             map[int64]*tg.Document
 	SelectedGroupForumTopics list.Model
 	ForumTopicLoading        bool
+	ShowForumTopics          bool
+	SelectedForumTopic       *types.ForumTopicInfo
 }
 
 type CustomEmojiDocumentMsg struct {
@@ -320,6 +373,11 @@ func updateListDimensions(m *Model, d layoutDimensions) {
 	m.Channels.SetHeight(listHeight)
 	m.Groups.SetWidth(listWidth)
 	m.Groups.SetHeight(listHeight)
+	// Forum topics are displayed in the main view area
+	mainListHeight := max(0, d.contentHeight-8)
+	mainListWidth := max(0, d.mainWidth-4)
+	m.SelectedGroupForumTopics.SetHeight(mainListHeight)
+	m.SelectedGroupForumTopics.SetWidth(mainListWidth)
 }
 
 func renderModal(m *Model) string {
@@ -339,7 +397,14 @@ func getUserOrChannelName(m *Model) string {
 	case ModeChannels:
 		return formatChannelName(m.SelectedChannel)
 	case ModeGroups:
-		return formatGroupName(m.SelectedGroup)
+		groupName := formatGroupName(m.SelectedGroup)
+		if m.SelectedForumTopic != nil {
+			return groupName + " > " + m.SelectedForumTopic.TopicTitle
+		}
+		if m.ShowForumTopics {
+			return groupName + " (Forum)"
+		}
+		return groupName
 	default:
 		return ""
 	}
@@ -380,6 +445,11 @@ func prepareMainContent(m *Model, d layoutDimensions) string {
 	if m.MainViewLoading {
 		return mainStyle.Render("Loading...")
 	}
+
+	if m.ForumTopicLoading {
+		return mainStyle.Render("Loading forum topics...")
+	}
+
 	m.ChatUI.SetWidth(d.mainWidth - 4)
 	//the terminal height is determined by charater
 	// one list items takes one 1 charater space since we are showing extra info on chats like times
@@ -399,6 +469,23 @@ func prepareMainContent(m *Model, d layoutDimensions) string {
 		String()
 
 	headerView := lipgloss.JoinVertical(lipgloss.Left, title, "", separatorLine)
+
+	// Show forum topics list when in forum mode and no topic is selected
+	if m.ShowForumTopics && m.SelectedForumTopic == nil {
+		m.SelectedGroupForumTopics.SetShowFilter(false)
+		m.SelectedGroupForumTopics.SetShowStatusBar(false)
+		m.SelectedGroupForumTopics.SetShowTitle(false)
+		m.SelectedGroupForumTopics.SetShowHelp(false)
+
+		forumView := m.SelectedGroupForumTopics.View()
+
+		mainContent := lipgloss.JoinVertical(
+			lipgloss.Top,
+			headerView,
+			forumView,
+		)
+		return mainStyle.Render(mainContent)
+	}
 
 	chatsView := m.ChatUI.View()
 

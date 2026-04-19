@@ -8,6 +8,7 @@ type SendMessageRequest struct {
 	ReplyToMessageID string `json:"replyToMessageId,omitempty"`
 	IsFile           bool   `json:"isFile"`
 	FilePath         string `json:"filePath,omitempty"`
+	TopMsgID         *int   `json:"topMsgId,omitempty"`
 }
 
 type GetMessagesRequest struct {
@@ -15,6 +16,7 @@ type GetMessagesRequest struct {
 	Limit         int  `json:"limit"`
 	OffsetID      *int `json:"offsetId,omitempty"`
 	ChatAreaWidth *int `json:"chatAreaWidth,omitempty"`
+	TopMsgID      *int `json:"topMsgId,omitempty"`
 }
 
 type SendReactionRequest struct {

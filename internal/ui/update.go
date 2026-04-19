@@ -54,6 +54,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			forumTopicList = append(forumTopicList, forum)
 		}
 		m.SelectedGroupForumTopics = list.New(forumTopicList, list.NewDefaultDelegate(), 0, 0)
+		m.ShowForumTopics = true
+		m.SelectedForumTopic = nil
+		m.FocusedOn = Main
 	case types.SendMessageMsg:
 		if msg.Err != nil {
 			slog.Error("Failed to send message", "error", msg.Err.Error())
@@ -637,6 +640,19 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 	case "q", "ctrl+c":
 		return m, tea.Quit
+	case "backspace":
+		if m.FocusedOn == Main && m.ShowForumTopics && m.SelectedForumTopic != nil {
+			m.SelectedForumTopic = nil
+			m.Conversations = [50]types.FormattedMessage{}
+			m.ChatUI.SetItems([]list.Item{})
+			m.ChatUI.ResetSelected()
+			return m, nil
+		}
+		if m.FocusedOn == Main && m.ShowForumTopics && m.SelectedForumTopic == nil {
+			m.ShowForumTopics = false
+			m.FocusedOn = SideBar
+			return m, nil
+		}
 	case "tab":
 		if !m.IsFilepickerVisible {
 			m, cmd := changeFocusMode(&m, "tab", false)
@@ -753,6 +769,31 @@ func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
 	}
 	if m.FocusedOn == SideBar {
 		return handleUserChange(&m)
+	}
+	// Select a forum topic and load its messages
+	if m.FocusedOn == Main && m.ShowForumTopics && m.SelectedForumTopic == nil {
+		selectedItem := m.SelectedGroupForumTopics.SelectedItem()
+		if selectedItem == nil {
+			return m, nil
+		}
+		forumTopic, ok := selectedItem.(types.ForumTopicInfo)
+		if !ok {
+			return m, nil
+		}
+		m.SelectedForumTopic = &forumTopic
+		m.MainViewLoading = true
+		m.Conversations = [50]types.FormattedMessage{}
+		m.ChatUI.SetItems([]list.Item{})
+		m.ChatUI.ResetSelected()
+
+		pInfo := getMessageParams(&m)
+		topicID := forumTopic.ID
+		cmd := telegram.Cligram.GetMessages(telegram.Cligram.Context(), types.GetMessagesRequest{
+			Peer:     pInfo,
+			Limit:    50,
+			TopMsgID: &topicID,
+		})
+		return m, cmd
 	}
 	return m, nil
 }
