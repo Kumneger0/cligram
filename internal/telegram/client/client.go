@@ -396,7 +396,8 @@ func (c *Client) GetChannelForums(peer types.Peer) tea.Cmd {
 			}
 		}
 		request := &tg.MessagesGetForumTopicsRequest{
-			Peer: inputPeer,
+			Peer:  inputPeer,
+			Limit: 100,
 		}
 		forumTopics, err := c.Client.API().MessagesGetForumTopics(c.ctx, request)
 		if err != nil {
