@@ -463,6 +463,7 @@ func (c *Client) Connect(chatID int64, params string) error {
 
 func (c *Client) SetStreamSources(
 	chatID int64,
+	streamMode C.ntg_stream_mode_enum,
 	mic, speaker *C.ntg_audio_description_struct,
 ) error {
 	var desc C.ntg_media_description_struct
@@ -473,12 +474,32 @@ func (c *Client) SetStreamSources(
 	C.ntg_set_stream_sources(
 		c.ptr,
 		C.int64_t(chatID),
-		C.NTG_STREAM_CAPTURE,
+		streamMode,
 		desc,
 		f.toC(),
 	)
 	f.wait()
 	return parseError(f)
+}
+
+func (c *Client) SetupDefaultAudio(userID int64) error {
+	// Capture stream – default microphone via FFmpeg + PulseAudio
+	cmd := "ffmpeg -f pulse -i default -f s16le -ar 48000 -ac 1 -v quiet pipe:1"
+	micInput := C.CString(cmd)
+	defer C.free(unsafe.Pointer(micInput))
+	mic := C.ntg_audio_description_struct{
+		mediaSource:  C.NTG_SHELL,
+		input:        micInput,
+		sampleRate:   48000,
+		channelCount: 1,
+		keepOpen:     true,
+	}
+	if err := c.SetStreamSources(userID, C.NTG_STREAM_CAPTURE, &mic, nil); err != nil {
+		return fmt.Errorf("set capture stream: %w", err)
+	}
+
+	// Playback of remote audio is handled automatically by ntgcalls.
+	return nil
 }
 
 func (c *Client) Stop(chatID int64) error {

@@ -153,6 +153,7 @@ func (c *Client) CallUser(ctx context.Context, peer types.Peer) tea.Cmd {
 
 		go func() {
 			if err := InitiateP2PCall(ctx, userID, accessHash); err != nil {
+				fmt.Println("err calling user", err)
 				slog.Error("P2P call failed", "userID", userID, "error", err)
 			}
 		}()

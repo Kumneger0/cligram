@@ -118,6 +118,12 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 				return err
 			}
 
+			// 1.5 Set up default audio streams
+			if err := client.SetupDefaultAudio(userID); err != nil {
+				fmt.Println("ntg SetupDefaultAudio failed:", err)
+				return err
+			}
+
 			// 2. InitExchange with the caller's gAHash
 			gB, err := client.InitExchange(
 				userID,
@@ -224,7 +230,6 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 			}
 
 			if !state.isOutgoing {
-				// INCOMING side: we receive g_a and fingerprint
 				p2pStatesMu.Lock()
 				state.gAOrB = u.GAOrB
 				state.fingerprint = u.KeyFingerprint
@@ -233,14 +238,12 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 
 				client := getNtgClient()
 
-				// ExchangeKeys with the caller's g_a
 				_, err := client.ExchangeKeys(userID, u.GAOrB, u.KeyFingerprint)
 				if err != nil {
 					fmt.Println("ntg ExchangeKeys (incoming) failed:", err)
 					return err
 				}
 
-				// Connect P2P
 				servers := parseRTCServers(u.Connections)
 				err = client.ConnectP2P(
 					userID,
@@ -253,24 +256,9 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 					return err
 				}
 			} else {
-				// OUTGOING side: PhoneCallObj arrives after we confirmCall
 				p2pStatesMu.Lock()
 				state.phoneCall = u
 				p2pStatesMu.Unlock()
-
-				// Connect P2P
-				client := getNtgClient()
-				servers := parseRTCServers(u.Connections)
-				err := client.ConnectP2P(
-					userID,
-					servers,
-					u.Protocol.LibraryVersions,
-					u.P2PAllowed,
-				)
-				if err != nil {
-					fmt.Println("ntg ConnectP2P (outgoing) failed:", err)
-					return err
-				}
 			}
 
 		case *tg.PhoneCallDiscarded:
@@ -561,6 +549,12 @@ func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64) error 
 		return fmt.Errorf("ntg CreateP2P: %w", err)
 	}
 
+	// 2.5 Set up default audio streams
+	if err := client.SetupDefaultAudio(userID); err != nil {
+		return fmt.Errorf("ntg SetupDefaultAudio: %w", err)
+	}
+
+	// 3. InitExchange (no gAHash for outgoing calls → ntgcalls returns g_a_hash)
 	gAHash, err := client.InitExchange(
 		userID,
 		int32(dhConfig.G),
@@ -620,10 +614,11 @@ func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64) error 
 
 	authParams, err := client.ExchangeKeys(userID, peerGB, 0)
 	if err != nil {
+		fmt.Println("ntg ExchangeKeys failed", err)
 		return fmt.Errorf("ntg ExchangeKeys: %w", err)
 	}
 
-	_, err = Cligram.API().PhoneConfirmCall(ctx, &tg.PhoneConfirmCallRequest{
+	confirmRes, err := Cligram.API().PhoneConfirmCall(ctx, &tg.PhoneConfirmCallRequest{
 		Peer:           *inputCall,
 		GA:             authParams.GAOrB,
 		KeyFingerprint: authParams.KeyFingerprint,
@@ -636,7 +631,49 @@ func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64) error 
 		},
 	})
 	if err != nil {
+		fmt.Println("phone.confirmCall failed", err)
 		return fmt.Errorf("phone.confirmCall: %w", err)
+	}
+
+	phoneCallObj, ok := confirmRes.PhoneCall.(*tg.PhoneCall)
+	if !ok {
+		return fmt.Errorf("unexpected phone call type after confirmCall: %T", confirmRes)
+	}
+
+	// 9. Connect P2P immediately using the connections from confirmCall result
+	servers := parseRTCServers(phoneCallObj.Connections)
+
+	waitConnectMu.Lock()
+	waitConnect[userID] = make(chan error, 1)
+	waitConnectMu.Unlock()
+
+	err = client.ConnectP2P(
+		userID,
+		servers,
+		phoneCallObj.Protocol.LibraryVersions,
+		phoneCallObj.P2PAllowed,
+	)
+	if err != nil {
+		fmt.Println("ntg ConnectP2P failed", err)
+		return fmt.Errorf("ntg ConnectP2P: %w", err)
+	}
+
+	// 10. Wait for the connection to be established
+	waitConnectMu.Lock()
+	ch := waitConnect[userID]
+	waitConnectMu.Unlock()
+
+	if ch != nil {
+		select {
+		case err = <-ch:
+			if err != nil {
+				fmt.Println("P2P connection failed", err)
+				return err
+			}
+			fmt.Println("P2P connected successfully")
+		case <-time.After(30 * time.Second):
+			return fmt.Errorf("timed out waiting for P2P connection")
+		}
 	}
 
 	return nil
