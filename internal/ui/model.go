@@ -290,7 +290,12 @@ const (
 	Input   FocusedOn = "input"
 )
 
+type PhoneCallDghConfigs struct {
+	Configs map[int64]*types.DHConfig
+}
+
 type Model struct {
+	PhoneCallDhConfigs       *PhoneCallDghConfigs
 	Alert                    bubbleup.AlertModel
 	Filepicker               filepicker.Model
 	IsFilepickerVisible      bool
@@ -386,6 +391,7 @@ func setItemStyles(m *Model) string {
 	if m.IsModalVisible {
 		return renderModal(m)
 	}
+
 	dimensions := calculateLayoutDimensions(m)
 
 	updateListDimensions(m, dimensions)

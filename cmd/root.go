@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/filepicker"
-	"github.com/charmbracelet/bubbles/list" // Legacy groups have no access hash; supergroups (migrated) do.
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/gotd/td/tg"
 	"go.dalton.dog/bubbleup"
 
@@ -156,9 +156,13 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 							if msg.SearchResult != nil {
 								Program.Send(*msg.SearchResult)
 							}
+							if msg.GetUserDHConfigRequest != nil {
+								Program.Send(*msg.GetUserDHConfigRequest)
+							}
 						}
 					}
 				}()
+
 				_, err = Program.Run()
 
 				if err != nil {

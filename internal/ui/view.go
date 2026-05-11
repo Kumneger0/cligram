@@ -283,6 +283,7 @@ func handleUserChange(m *Model, offsetID *int, afterMessagesCmd tea.Cmd) (Model,
 	m.SelectedForumTopic = nil
 
 	pInfo := getMessageParams(m)
+
 	if m.Mode == ModeGroups && m.SelectedGroup.IsForum {
 		m.ForumTopicLoading = true
 		m.Conversations = [50]types.FormattedMessage{}
@@ -306,7 +307,7 @@ func handleUserChange(m *Model, offsetID *int, afterMessagesCmd tea.Cmd) (Model,
 	m.MainViewLoading = true
 	m.ChatUI.ResetSelected()
 	m.ChatUI.SetItems([]list.Item{})
-	return *m, tea.Sequence(cmd, afterMessagesCmd)
+	return *m, tea.Batch(tea.Sequence(cmd, telegram.Cligram.CallUser(telegram.Cligram.Context(), pInfo)), afterMessagesCmd)
 }
 
 func changeFocusMode(m *Model, msg string, shift bool) (Model, tea.Cmd) {

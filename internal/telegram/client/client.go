@@ -2,8 +2,12 @@ package client
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
 	"errors"
+	"fmt"
 	"log/slog"
+	"math/big"
 	mathRand "math/rand"
 	"net/http"
 	"os"
@@ -41,6 +45,8 @@ type Config struct {
 }
 
 var Cligram *telegram.Client
+
+var DhConfigRecvChannel = make(chan types.DHConfig)
 
 func NewClient(ctx context.Context, config Config, account string) (*Client, error) {
 	sessionStorage, err := newFileSessionStorage(account)
@@ -93,6 +99,68 @@ func (c *Client) GetAPI() *tg.Client {
 
 func (c *Client) Context() context.Context {
 	return c.ctx
+}
+
+func (c *Client) GenerateGAHash() ([]byte, *types.DHConfig, error) {
+	dh, err := c.Client.API().MessagesGetDhConfig(c.ctx, &tg.MessagesGetDhConfigRequest{
+		Version:      0,
+		RandomLength: 256,
+	})
+	if err != nil {
+		return nil, nil, types.NewTelegramError(types.ErrorCodeSessionFailed, "failed to get DH config", err)
+	}
+
+	if dhConfig, ok := dh.(*tg.MessagesDhConfig); ok {
+		p := new(big.Int).SetBytes(dhConfig.P)
+		g := big.NewInt(int64(dhConfig.G))
+
+		a, err := rand.Int(rand.Reader, p)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		gA := new(big.Int).Exp(g, a, p)
+
+		hash := sha256.Sum256(gA.Bytes())
+		gAHash := hash[:]
+		return gAHash, &types.DHConfig{
+			G:      int32(dhConfig.G),
+			P:      dhConfig.P,
+			A:      a,
+			GA:     gA,
+			GAHash: gAHash,
+			Random: dhConfig.Random,
+		}, nil
+	}
+
+	return nil, nil, types.NewTelegramError(types.ErrorCodeSessionFailed, "failed to generate GA hash", errors.New("DH config parsing not implemented"))
+}
+
+func (c *Client) CallUser(ctx context.Context, peer types.Peer) tea.Cmd {
+	return func() tea.Msg {
+		fmt.Println("making a call")
+		userID, err := strconv.ParseInt(peer.ID, 10, 64)
+		if err != nil {
+			fmt.Println("err", err.Error())
+			return fmt.Errorf("failed to parse user ID: %w", err)
+		}
+
+		accessHash, err := strconv.ParseInt(peer.AccessHash, 10, 64)
+		if err != nil {
+			fmt.Println("err", err.Error())
+			return fmt.Errorf("failed to parse access hash: %w", err)
+		}
+
+		go func() {
+			if err := InitiateP2PCall(ctx, userID, accessHash); err != nil {
+				slog.Error("P2P call failed", "userID", userID, "error", err)
+			}
+		}()
+
+		return types.CallUserResponse{
+			UserID: &userID,
+		}
+	}
 }
 
 func (c *Client) GetEntityInfo(entity *types.EntityPreviewInfo) tea.Cmd {

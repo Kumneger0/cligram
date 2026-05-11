@@ -115,12 +115,17 @@ type UserStatus struct {
 }
 
 type Notification struct {
-	NewMessage        *NewMessageNotification        `json:"newMessage,omitempty"`
-	UserStatus        *UserStatusNotification        `json:"userStatus,omitempty"`
-	UserTyping        *UserTypingNotification        `json:"userTyping,omitempty"`
-	Error             *ErrorNotification             `json:"error,omitempty"`
-	SearchResult      *SearchUsersMsg                `json:"searchResult,omitempty"`
-	ReadHistoryOutbox *ReadHistoryOutboxNotification `json:"readHistoryOutbox,omitempty"`
+	NewMessage             *NewMessageNotification        `json:"newMessage,omitempty"`
+	UserStatus             *UserStatusNotification        `json:"userStatus,omitempty"`
+	UserTyping             *UserTypingNotification        `json:"userTyping,omitempty"`
+	Error                  *ErrorNotification             `json:"error,omitempty"`
+	SearchResult           *SearchUsersMsg                `json:"searchResult,omitempty"`
+	ReadHistoryOutbox      *ReadHistoryOutboxNotification `json:"readHistoryOutbox,omitempty"`
+	GetUserDHConfigRequest *GetUserDHConfigRequest        `json:"getUserDHConfigRequest,omitempty"`
+}
+
+type GetUserDHConfigRequest struct {
+	UserID int64 `json:"userId"`
 }
 
 type ForumTopicInfo struct {
