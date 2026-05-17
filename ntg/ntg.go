@@ -9,6 +9,7 @@ package ntg
 
 extern void goOnSignaling(uintptr_t ptr, int64_t userId, uint8_t* data, int size, void* userData);
 extern void goOnConnectionChange(uintptr_t ptr, int64_t chatID, ntg_network_info_struct networkInfo, void* userData);
+extern void goOnFrames(uintptr_t ptr, int64_t chatID, ntg_stream_mode_enum streamMode, ntg_stream_device_enum streamDevice, ntg_frame_struct* frames, uint64_t size, void* userData);
 
 // unlockMutex is the promise callback invoked by the C library when
 // an async operation completes. It receives a pointer to a Go sync.Mutex
@@ -138,9 +139,42 @@ type RTCServer struct {
 	PeerTag  []byte
 }
 
+// StreamMode mirrors ntg_stream_mode_enum.
+type StreamMode int
+
+const (
+	CaptureStream StreamMode = iota
+	PlaybackStream
+)
+
+// StreamDevice mirrors ntg_stream_device_enum.
+type StreamDevice int
+
+const (
+	MicrophoneDevice StreamDevice = iota
+	SpeakerDevice
+	CameraDevice
+	ScreenDevice
+)
+
+// FrameData mirrors ntg_frame_data_struct.
+type FrameData struct {
+	AbsoluteCaptureTimestamp uint64
+	Width                    int16
+	Height                   int16
+	Rotation                 uint8
+}
+
+// Frame mirrors a single ntg_frame_struct.
+type Frame struct {
+	Data      []byte
+	FrameData FrameData
+}
+
 // Callback types
 type SignalCallback func(chatID int64, data []byte)
 type ConnectionChangeCallback func(chatID int64, info NetworkInfo)
+type FrameCallback func(chatID int64, mode StreamMode, device StreamDevice, frames []Frame)
 
 // ---------------------------------------------------------------------------
 // Client
@@ -150,6 +184,7 @@ type Client struct {
 	ptr                       C.uintptr_t
 	signalCallbacks           []SignalCallback
 	connectionChangeCallbacks []ConnectionChangeCallback
+	frameCallbacks            []FrameCallback
 }
 
 func Init() *Client {
@@ -161,6 +196,7 @@ func Init() *Client {
 	selfPointer := unsafe.Pointer(instance)
 	C.ntg_on_signaling_data(instance.ptr, (C.ntg_signaling_callback)(unsafe.Pointer(C.goOnSignaling)), selfPointer)
 	C.ntg_on_connection_change(instance.ptr, (C.ntg_connection_callback)(unsafe.Pointer(C.goOnConnectionChange)), selfPointer)
+	C.ntg_on_frames(instance.ptr, (C.ntg_frame_callback)(unsafe.Pointer(C.goOnFrames)), selfPointer)
 
 	return instance
 }
@@ -177,6 +213,11 @@ func (c *Client) OnSignal(cb SignalCallback) {
 // OnConnectionChange registers a callback for connection state changes.
 func (c *Client) OnConnectionChange(cb ConnectionChangeCallback) {
 	c.connectionChangeCallbacks = append(c.connectionChangeCallbacks, cb)
+}
+
+// OnFrame registers a callback for decoded media frames.
+func (c *Client) OnFrame(cb FrameCallback) {
+	c.frameCallbacks = append(c.frameCallbacks, cb)
 }
 
 //export goOnSignaling
@@ -206,6 +247,51 @@ func goOnConnectionChange(_ C.uintptr_t, chatID C.int64_t, networkInfo C.ntg_net
 	}
 	for _, cb := range self.connectionChangeCallbacks {
 		go cb(int64(chatID), NetworkInfo{State: state})
+	}
+}
+
+//export goOnFrames
+func goOnFrames(_ C.uintptr_t, chatID C.int64_t, streamMode C.ntg_stream_mode_enum, streamDevice C.ntg_stream_device_enum, frames *C.ntg_frame_struct, size C.uint64_t, ptr unsafe.Pointer) {
+	self := (*Client)(ptr)
+	goChatID := int64(chatID)
+
+	var mode StreamMode
+	switch streamMode {
+	case 0:
+		mode = CaptureStream
+	case 1:
+		mode = PlaybackStream
+	}
+
+	var device StreamDevice
+	switch streamDevice {
+	case 0:
+		device = MicrophoneDevice
+	case 1:
+		device = SpeakerDevice
+	case 2:
+		device = CameraDevice
+	case 3:
+		device = ScreenDevice
+	}
+
+	count := int(size)
+	goFrames := make([]Frame, count)
+	for i := 0; i < count; i++ {
+		frame := (*C.ntg_frame_struct)(unsafe.Pointer(uintptr(unsafe.Pointer(frames)) + uintptr(i)*unsafe.Sizeof(*frames)))
+		goFrames[i] = Frame{
+			Data: C.GoBytes(unsafe.Pointer(frame.data), C.int(frame.sizeData)),
+			FrameData: FrameData{
+				AbsoluteCaptureTimestamp: uint64(frame.frameData.absoluteCaptureTimestampMs),
+				Width:                    int16(frame.frameData.width),
+				Height:                   int16(frame.frameData.height),
+				Rotation:                 uint8(frame.frameData.rotation),
+			},
+		}
+	}
+
+	for _, cb := range self.frameCallbacks {
+		go cb(goChatID, mode, device, goFrames)
 	}
 }
 
