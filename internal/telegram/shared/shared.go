@@ -70,10 +70,14 @@ func FormatMessage[T ChannelOrUser](msg *tg.Message, userOrChannel *T, allMessag
 		}
 	}
 
-	isUnsupportedMessage := msg.Media != nil
+	isUnsupportedMessage := false
+	if msg.Media != nil {
+		if _, ok := msg.Media.(*tg.MessageMediaWebPage); !ok {
+			isUnsupportedMessage = true
+		}
+	}
 
 	var content = msg.Message
-
 	if isUnsupportedMessage {
 		content = "This Message is not supported by this Telegram client."
 	}
@@ -84,6 +88,7 @@ func FormatMessage[T ChannelOrUser](msg *tg.Message, userOrChannel *T, allMessag
 		view = result
 	}
 
+	webPageMedia, _ := msg.Media.(*tg.MessageMediaWebPage)
 	return &types.FormattedMessage{
 		ID:                   msg.ID,
 		Sender:               sender,
@@ -99,6 +104,8 @@ func FormatMessage[T ChannelOrUser](msg *tg.Message, userOrChannel *T, allMessag
 		ReplyTo:              reply,
 		Reactions:            &msg.Reactions,
 		Views:                view,
+		HasWebPagePreview:    webPageMedia != nil,
+		MessageMediaWebPage:  webPageMedia,
 	}
 }
 
