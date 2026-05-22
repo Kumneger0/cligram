@@ -56,21 +56,23 @@ type ChannelInfo struct {
 }
 
 type FormattedMessage struct {
-	ID                   int                  `json:"id"`
-	Sender               string               `json:"sender"`
-	Content              string               `json:"content"`
-	IsFromMe             bool                 `json:"isFromMe"`
-	Media                *string              `json:"media,omitempty"`
-	Date                 time.Time            `json:"date"`
-	IsUnsupportedMessage bool                 `json:"isUnsupportedMessage"`
-	WebPage              *WebPage             `json:"webPage,omitempty"`
-	Document             *Document            `json:"document,omitempty"`
-	FromID               *string              `json:"fromId,omitempty"`
-	SenderUserInfo       *UserInfo            `json:"senderUserInfo,omitempty"`
-	ReplyTo              *FormattedMessage    `json:"replyTo,omitempty"`
-	PeerID               *string              `json:"peerId,omitempty"`
-	Reactions            *tg.MessageReactions `json:"reactions,omitempty"`
-	Views                int                  `json:"view"`
+	ID                   int                     `json:"id"`
+	Sender               string                  `json:"sender"`
+	Content              string                  `json:"content"`
+	IsFromMe             bool                    `json:"isFromMe"`
+	Media                *string                 `json:"media,omitempty"`
+	Date                 time.Time               `json:"date"`
+	IsUnsupportedMessage bool                    `json:"isUnsupportedMessage"`
+	WebPage              *WebPage                `json:"webPage,omitempty"`
+	Document             *Document               `json:"document,omitempty"`
+	FromID               *string                 `json:"fromId,omitempty"`
+	SenderUserInfo       *UserInfo               `json:"senderUserInfo,omitempty"`
+	ReplyTo              *FormattedMessage       `json:"replyTo,omitempty"`
+	PeerID               *string                 `json:"peerId,omitempty"`
+	Reactions            *tg.MessageReactions    `json:"reactions,omitempty"`
+	Views                int                     `json:"view"`
+	HasWebPagePreview    bool                    `json:"hasWebPagePreview"`
+	MessageMediaWebPage  *tg.MessageMediaWebPage `json:"messageMediaWebPage"`
 }
 
 type WebPage struct {

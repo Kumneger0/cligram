@@ -93,6 +93,81 @@ func (d MessagesDelegate) Height() int                               { return 1 
 func (d MessagesDelegate) Spacing() int                              { return 0 }
 func (d MessagesDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd { return nil }
 
+func (d MessagesDelegate) renderReactions(tgReactions *tg.MessageReactions) string {
+	var reactions string
+	if tgReactions != nil {
+		if len(tgReactions.Results) > 0 {
+			var reactionBadges []string
+			for _, r := range tgReactions.Results {
+				var content string
+				var isMeReacted bool
+
+				switch reaction := r.Reaction.(type) {
+				case *tg.ReactionEmoji:
+					content = reaction.Emoticon + " " + strconv.Itoa(int(r.Count))
+				case *tg.ReactionPaid:
+					content = "⭐" + " " + strconv.Itoa(int(r.Count))
+				case *tg.ReactionCustomEmoji:
+					if doc, found := d.Model.CustomEmojis[reaction.DocumentID]; found {
+						if len(doc.Thumbs) > 0 {
+							thumb := doc.Thumbs[len(doc.Thumbs)-1]
+							_ = thumb
+						}
+					}
+				}
+
+				if _, ok := r.GetChosenOrder(); ok {
+					isMeReacted = true
+				}
+
+				if isMeReacted {
+					reactionBadges = append(reactionBadges, myReactionBadgeStyle.Render(content))
+				} else {
+					reactionBadges = append(reactionBadges, reactionBadgeStyle.Render(content))
+				}
+			}
+			reactions = lipgloss.JoinHorizontal(lipgloss.Top, reactionBadges...)
+		}
+	}
+	return reactions
+}
+
+func (d MessagesDelegate) renderWebPagePreview(webPageMedia *tg.MessageMediaWebPage, width int) string {
+	if webPageMedia == nil {
+		return ""
+	}
+
+	webpage, ok := webPageMedia.Webpage.(*tg.WebPage)
+	if !ok {
+		return ""
+	}
+
+	var builder strings.Builder
+
+	if siteName, ok := webpage.GetSiteName(); ok && siteName != "" {
+		builder.WriteString(linkPreviewSiteStyle.Render(siteName) + "\n")
+	}
+
+	if title, ok := webpage.GetTitle(); ok && title != "" {
+		builder.WriteString(linkPreviewTitleStyle.Render(wordwrap.String(title, width-4)) + "\n")
+	}
+
+	if description, ok := webpage.GetDescription(); ok && description != "" {
+		builder.WriteString(linkPreviewDescStyle.Render(wordwrap.String(description, width-4)) + "\n")
+	}
+
+	if url := webpage.URL; url != "" {
+		builder.WriteString(linkPreviewStyle.Render(url))
+	}
+
+	content := strings.TrimSpace(builder.String())
+	if content == "" {
+		return ""
+	}
+
+	return "\n" + linkPreviewBorderStyle.Render(content)
+}
+
 func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	var title string
 
@@ -133,39 +208,14 @@ func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list
 
 	var reactions string
 	if entry.Reactions != nil {
-		if len(entry.Reactions.Results) > 0 {
-			var reactionBadges []string
-			for _, r := range entry.Reactions.Results {
-				var content string
-				var isMeReacted bool
-
-				switch reaction := r.Reaction.(type) {
-				case *tg.ReactionEmoji:
-					content = reaction.Emoticon + " " + strconv.Itoa(int(r.Count))
-				case *tg.ReactionPaid:
-					content = "⭐" + " " + strconv.Itoa(int(r.Count))
-				case *tg.ReactionCustomEmoji:
-					if doc, found := d.Model.CustomEmojis[reaction.DocumentID]; found {
-						if len(doc.Thumbs) > 0 {
-							thumb := doc.Thumbs[len(doc.Thumbs)-1]
-							_ = thumb
-						}
-					}
-				}
-
-				if _, ok := r.GetChosenOrder(); ok {
-					isMeReacted = true
-				}
-
-				if isMeReacted {
-					reactionBadges = append(reactionBadges, myReactionBadgeStyle.Render(content))
-				} else {
-					reactionBadges = append(reactionBadges, reactionBadgeStyle.Render(content))
-				}
-			}
-			reactions = lipgloss.JoinHorizontal(lipgloss.Top, reactionBadges...)
-		}
+		reactions = d.renderReactions(entry.Reactions)
 	}
+
+	var preview string
+	if entry.MessageMediaWebPage != nil {
+		preview = d.renderWebPagePreview(entry.MessageMediaWebPage, m.Width())
+	}
+
 	if entry.IsFromMe {
 		title = "You: " + title
 	} else {
@@ -175,6 +225,11 @@ func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list
 			title = entry.Sender + ": " + title
 		}
 	}
+
+	if preview != "" {
+		title = title + preview
+	}
+
 	date := strings.Repeat(" ", 4) + timestampStyle.Render(entry.Date.Format("02/01/2006 03:04 PM")) + readState
 
 	if reactions != "" {

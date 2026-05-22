@@ -854,7 +854,6 @@ func (m Model) handleForwardKey() (tea.Model, tea.Cmd) {
 	}
 }
 
-// appendListItems appends items with a non-empty title to the list, returning the SetItems cmd.
 func appendListItems[T types.FilterableItem](l *list.Model, items []T) tea.Cmd {
 	current := l.Items()
 	for _, it := range items {
@@ -926,7 +925,6 @@ func (m Model) handleForwardMessage(msg ForwardMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// peerFromItem converts a list.Item (UserInfo or ChannelInfo, pointer or value) into a types.Peer.
 func peerFromItem(item list.Item) types.Peer {
 	switch p := item.(type) {
 	case types.UserInfo:
