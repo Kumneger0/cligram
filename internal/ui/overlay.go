@@ -181,8 +181,6 @@ const (
 	ModalModeDeleteMessage  ModalMode = "DELETE_MESSAGE"
 	ModalModeShowStories    ModalMode = "SHOW_STORIES"
 	ModalModeSendReaction   ModalMode = "SEND_REACTION"
-	ModalModeEntityPreview  ModalMode = "ENTITY_PREVIEW"
-	ModalModeLoading        ModalMode = "LOADING"
 )
 
 type OpenModalMsg struct {
@@ -273,23 +271,6 @@ func (f Foreground) View() string {
 		Border(lipgloss.RoundedBorder(), true).
 		BorderForeground(DefaultTheme.AccentColor).
 		Padding(0, 1)
-
-	if f.ModalMode == ModalModeLoading {
-		loadingText := lipgloss.NewStyle().Foreground(DefaultTheme.AccentColor).Bold(true).Render("Loading...")
-		return foreStyle.Render(loadingText)
-	}
-
-	if f.ModalMode == ModalModeEntityPreview {
-		title := lipgloss.NewStyle().Foreground(DefaultTheme.PrimaryText).Bold(true).Render("Chat Info")
-		var content string
-		if f.Entity == nil {
-			content = lipgloss.NewStyle().Foreground(DefaultTheme.AccentColor).Render("Loading info...")
-		} else {
-			content = renderEntityInfo(f)
-		}
-		layout := lipgloss.JoinVertical(lipgloss.Left, title, content)
-		return foreStyle.Render(layout)
-	}
 
 	if f.ModalMode == ModalModeShowStories && f.stories != nil {
 		title := lipgloss.NewStyle().Foreground(DefaultTheme.PrimaryText).Bold(true).Render("Stories")
