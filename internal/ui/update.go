@@ -84,15 +84,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Mode = ModeUsers
 			if info.User.IsBot {
 				m.Mode = ModeBots
-				for i, v := range m.Bots.Items() {
-					if bot, ok := v.(types.UserInfo); ok && bot.PeerID == info.User.PeerID {
-						m.Bots.Select(i)
-						m.SelectedUser = m.Bots.Items()[i].(types.UserInfo)
-					} else {
-						items := append(m.Bots.Items(), *info.User)
-						m.Bots = list.New(items, list.NewDefaultDelegate(), 0, 0)
-						m.SelectedUser = *info.User
-					}
+				if userIndex := getUserIndex(m.Bots, *info.User); userIndex != -1 {
+					m.Bots.Select(userIndex)
+					m.SelectedUser = m.Bots.Items()[userIndex].(types.UserInfo)
+				} else {
+					items := append(m.Bots.Items(), *info.User)
+					m.Bots = list.New(items, list.NewDefaultDelegate(), 0, 0)
+					m.SelectedUser = *info.User
 				}
 			} else {
 				if userIndex := getUserIndex(m.Users, *info.User); userIndex != -1 {
