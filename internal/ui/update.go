@@ -942,7 +942,7 @@ func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
 
 func getEntityName(link string) *types.EntityPreviewInfo {
 	var entityPreview *types.EntityPreviewInfo = nil
-	for _, prefix := range []string{"@", "http://t.me/", "https://t.me/", "t.me/", "telegram.me/", "www.t.me/", "www.telegram.me/", "telegram.me/c/", "t.me/c/", "www.t.me/c/", "www.telegram.me/c/", "https://t.me/c/", "https://telegram.me/c/"} {
+	for _, prefix := range []string{"@", "http://t.me/", "https://t.me/", "t.me/", "telegram.me/", "www.t.me/", "www.telegram.me/"} {
 		if after, ok := strings.CutPrefix(link, prefix); ok {
 			entityPreview = &types.EntityPreviewInfo{}
 			if parts := strings.SplitN(after, "/", 3); len(parts) > 0 {
