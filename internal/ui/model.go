@@ -34,6 +34,56 @@ var (
 		BorderBottom(true)
 )
 
+type ForumTopicsDelegate struct {
+	list.DefaultDelegate
+	*Model
+}
+
+func (d ForumTopicsDelegate) Height() int                               { return 1 }
+func (d ForumTopicsDelegate) Spacing() int                              { return 0 }
+func (d ForumTopicsDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd { return nil }
+
+func (d ForumTopicsDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+	var title string
+	var unreadBadge string
+
+	forumTopic, ok := item.(types.ForumTopicInfo)
+	if !ok {
+		return
+	}
+
+	title = forumTopic.Title()
+	if forumTopic.UnreadCount > 0 {
+		unreadBadge = unreadCountStyle.Render(strconv.Itoa(forumTopic.UnreadCount))
+	}
+
+	var content string
+	if unreadBadge != "" {
+		availWidth := m.Width() - lipgloss.Width(unreadBadge) - 2
+		if availWidth < 0 {
+			availWidth = 0
+		}
+		name := lipgloss.NewStyle().MaxWidth(availWidth).Render(title)
+
+		occupied := lipgloss.Width(name) + lipgloss.Width(unreadBadge) + 2
+		spacerWidth := m.Width() - occupied
+		if spacerWidth < 0 {
+			spacerWidth = 0
+		}
+		spacer := strings.Repeat(" ", spacerWidth)
+		content = lipgloss.JoinHorizontal(lipgloss.Top, name, spacer, unreadBadge)
+	} else {
+		content = title
+	}
+
+	isMainViewFocused := d.Model.FocusedOn == Main
+	if index == m.Index() && isMainViewFocused && d.Model.ShowForumTopics {
+		fmt.Fprint(w, selectedStyle.Render(content))
+	} else {
+		fmt.Fprint(w, normalStyle.Render(content))
+	}
+}
+
 type MessagesDelegate struct {
 	list.DefaultDelegate
 	*Model
@@ -42,6 +92,81 @@ type MessagesDelegate struct {
 func (d MessagesDelegate) Height() int                               { return 1 }
 func (d MessagesDelegate) Spacing() int                              { return 0 }
 func (d MessagesDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd { return nil }
+
+func (d MessagesDelegate) renderReactions(tgReactions *tg.MessageReactions) string {
+	var reactions string
+	if tgReactions != nil {
+		if len(tgReactions.Results) > 0 {
+			var reactionBadges []string
+			for _, r := range tgReactions.Results {
+				var content string
+				var isMeReacted bool
+
+				switch reaction := r.Reaction.(type) {
+				case *tg.ReactionEmoji:
+					content = reaction.Emoticon + " " + strconv.Itoa(int(r.Count))
+				case *tg.ReactionPaid:
+					content = "⭐" + " " + strconv.Itoa(int(r.Count))
+				case *tg.ReactionCustomEmoji:
+					if doc, found := d.Model.CustomEmojis[reaction.DocumentID]; found {
+						if len(doc.Thumbs) > 0 {
+							thumb := doc.Thumbs[len(doc.Thumbs)-1]
+							_ = thumb
+						}
+					}
+				}
+
+				if _, ok := r.GetChosenOrder(); ok {
+					isMeReacted = true
+				}
+
+				if isMeReacted {
+					reactionBadges = append(reactionBadges, myReactionBadgeStyle.Render(content))
+				} else {
+					reactionBadges = append(reactionBadges, reactionBadgeStyle.Render(content))
+				}
+			}
+			reactions = lipgloss.JoinHorizontal(lipgloss.Top, reactionBadges...)
+		}
+	}
+	return reactions
+}
+
+func (d MessagesDelegate) renderWebPagePreview(webPageMedia *tg.MessageMediaWebPage, width int) string {
+	if webPageMedia == nil {
+		return ""
+	}
+
+	webpage, ok := webPageMedia.Webpage.(*tg.WebPage)
+	if !ok {
+		return ""
+	}
+
+	var builder strings.Builder
+
+	if siteName, ok := webpage.GetSiteName(); ok && siteName != "" {
+		builder.WriteString(linkPreviewSiteStyle.Render(siteName) + "\n")
+	}
+
+	if title, ok := webpage.GetTitle(); ok && title != "" {
+		builder.WriteString(linkPreviewTitleStyle.Render(wordwrap.String(title, width-4)) + "\n")
+	}
+
+	if description, ok := webpage.GetDescription(); ok && description != "" {
+		builder.WriteString(linkPreviewDescStyle.Render(wordwrap.String(description, width-4)) + "\n")
+	}
+
+	if url := webpage.URL; url != "" {
+		builder.WriteString(linkPreviewStyle.Render(url))
+	}
+
+	content := strings.TrimSpace(builder.String())
+	if content == "" {
+		return ""
+	}
+
+	return "\n" + linkPreviewBorderStyle.Render(content)
+}
 
 func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	var title string
@@ -83,39 +208,14 @@ func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list
 
 	var reactions string
 	if entry.Reactions != nil {
-		if len(entry.Reactions.Results) > 0 {
-			var reactionBadges []string
-			for _, r := range entry.Reactions.Results {
-				var content string
-				var isMeReacted bool
-
-				switch reaction := r.Reaction.(type) {
-				case *tg.ReactionEmoji:
-					content = reaction.Emoticon + " " + strconv.Itoa(int(r.Count))
-				case *tg.ReactionPaid:
-					content = "⭐" + " " + strconv.Itoa(int(r.Count))
-				case *tg.ReactionCustomEmoji:
-					if doc, found := d.Model.CustomEmojis[reaction.DocumentID]; found {
-						if len(doc.Thumbs) > 0 {
-							thumb := doc.Thumbs[len(doc.Thumbs)-1]
-							_ = thumb
-						}
-					}
-				}
-
-				if _, ok := r.GetChosenOrder(); ok {
-					isMeReacted = true
-				}
-
-				if isMeReacted {
-					reactionBadges = append(reactionBadges, myReactionBadgeStyle.Render(content))
-				} else {
-					reactionBadges = append(reactionBadges, reactionBadgeStyle.Render(content))
-				}
-			}
-			reactions = lipgloss.JoinHorizontal(lipgloss.Top, reactionBadges...)
-		}
+		reactions = d.renderReactions(entry.Reactions)
 	}
+
+	var preview string
+	if entry.MessageMediaWebPage != nil {
+		preview = d.renderWebPagePreview(entry.MessageMediaWebPage, m.Width())
+	}
+
 	if entry.IsFromMe {
 		title = "You: " + title
 	} else {
@@ -125,6 +225,11 @@ func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list
 			title = entry.Sender + ": " + title
 		}
 	}
+
+	if preview != "" {
+		title = title + preview
+	}
+
 	date := strings.Repeat(" ", 4) + timestampStyle.Render(entry.Date.Format("02/01/2006 03:04 PM")) + readState
 
 	if reactions != "" {
@@ -170,10 +275,11 @@ func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list
 type Mode string
 
 const (
-	ModeUsers    Mode = "users"
-	ModeChannels Mode = "channels"
-	ModeGroups   Mode = "groups"
-	ModeBots     Mode = "bot"
+	ModeUsers       Mode = "users"
+	ModeChannels    Mode = "channels"
+	ModeGroups      Mode = "groups"
+	ModeBots        Mode = "bot"
+	ModeForumTopics Mode = "forumTopics"
 )
 
 type FocusedOn string
@@ -185,39 +291,43 @@ const (
 )
 
 type Model struct {
-	Alert                bubbleup.AlertModel
-	Filepicker           filepicker.Model
-	IsFilepickerVisible  bool
-	SelectedFile         string
-	Users                list.Model
-	Bots                 list.Model
-	SelectedUser         types.UserInfo
-	Channels             list.Model
-	IsModalVisible       bool
-	ModalContent         string
-	SelectedChannel      types.ChannelInfo
-	Groups               list.Model
-	SelectedGroup        types.ChannelInfo
-	Height               int
-	Width                int
-	MainViewLoading      bool
-	SideBarLoading       bool
-	Mode                 Mode
-	Input                textinput.Model
-	viewport             viewport.Model
-	FocusedOn            FocusedOn
-	ChatUI               list.Model
-	Conversations        [50]types.FormattedMessage
-	IsReply              bool
-	ReplyTo              *types.FormattedMessage
-	EditMessage          *types.FormattedMessage
-	SkipNextInput        bool
-	OffsetDate, OffsetID int
-	OnPagination         bool
-	Stories              []types.Stories
-	CurrentUser          *types.UserInfo
-	Error                error
-	CustomEmojis         map[int64]*tg.Document
+	Alert                    bubbleup.AlertModel
+	Filepicker               filepicker.Model
+	IsFilepickerVisible      bool
+	SelectedFile             string
+	Users                    list.Model
+	Bots                     list.Model
+	SelectedUser             types.UserInfo
+	Channels                 list.Model
+	IsModalVisible           bool
+	ModalContent             string
+	SelectedChannel          types.ChannelInfo
+	Groups                   list.Model
+	SelectedGroup            types.ChannelInfo
+	Height                   int
+	Width                    int
+	MainViewLoading          bool
+	SideBarLoading           bool
+	Mode                     Mode
+	Input                    textinput.Model
+	viewport                 viewport.Model
+	FocusedOn                FocusedOn
+	ChatUI                   list.Model
+	Conversations            [50]types.FormattedMessage
+	IsReply                  bool
+	ReplyTo                  *types.FormattedMessage
+	EditMessage              *types.FormattedMessage
+	SkipNextInput            bool
+	OffsetDate, OffsetID     int
+	OnPagination             bool
+	Stories                  []types.Stories
+	CurrentUser              *types.UserInfo
+	Error                    error
+	CustomEmojis             map[int64]*tg.Document
+	SelectedGroupForumTopics list.Model
+	ForumTopicLoading        bool
+	ShowForumTopics          bool
+	SelectedForumTopic       *types.ForumTopicInfo
 }
 
 type CustomEmojiDocumentMsg struct {
@@ -318,6 +428,11 @@ func updateListDimensions(m *Model, d layoutDimensions) {
 	m.Channels.SetHeight(listHeight)
 	m.Groups.SetWidth(listWidth)
 	m.Groups.SetHeight(listHeight)
+	// Forum topics are displayed in the main view area
+	mainListHeight := max(0, d.contentHeight-8)
+	mainListWidth := max(0, d.mainWidth-4)
+	m.SelectedGroupForumTopics.SetHeight(mainListHeight)
+	m.SelectedGroupForumTopics.SetWidth(mainListWidth)
 }
 
 func renderModal(m *Model) string {
@@ -337,7 +452,14 @@ func getUserOrChannelName(m *Model) string {
 	case ModeChannels:
 		return formatChannelName(m.SelectedChannel)
 	case ModeGroups:
-		return formatGroupName(m.SelectedGroup)
+		groupName := formatGroupName(m.SelectedGroup)
+		if m.SelectedForumTopic != nil {
+			return groupName + " > " + m.SelectedForumTopic.TopicTitle
+		}
+		if m.ShowForumTopics {
+			return groupName + " (Forum)"
+		}
+		return groupName
 	default:
 		return ""
 	}
@@ -378,6 +500,11 @@ func prepareMainContent(m *Model, d layoutDimensions) string {
 	if m.MainViewLoading {
 		return mainStyle.Render("Loading...")
 	}
+
+	if m.ForumTopicLoading {
+		return mainStyle.Render("Loading forum topics...")
+	}
+
 	m.ChatUI.SetWidth(d.mainWidth - 4)
 	//the terminal height is determined by charater
 	// one list items takes one 1 charater space since we are showing extra info on chats like times
@@ -397,6 +524,23 @@ func prepareMainContent(m *Model, d layoutDimensions) string {
 		String()
 
 	headerView := lipgloss.JoinVertical(lipgloss.Left, title, "", separatorLine)
+
+	// Show forum topics list when in forum mode and no topic is selected
+	if m.ShowForumTopics && m.SelectedForumTopic == nil {
+		m.SelectedGroupForumTopics.SetShowFilter(false)
+		m.SelectedGroupForumTopics.SetShowStatusBar(false)
+		m.SelectedGroupForumTopics.SetShowTitle(false)
+		m.SelectedGroupForumTopics.SetShowHelp(false)
+
+		forumView := m.SelectedGroupForumTopics.View()
+
+		mainContent := lipgloss.JoinVertical(
+			lipgloss.Top,
+			headerView,
+			forumView,
+		)
+		return mainStyle.Render(mainContent)
+	}
 
 	chatsView := m.ChatUI.View()
 

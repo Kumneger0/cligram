@@ -165,6 +165,12 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 
 	randID := rand.Int()
 
+	var topMsgID *int
+	if m.SelectedForumTopic != nil {
+		id := m.SelectedForumTopic.ID
+		topMsgID = &id
+	}
+
 	cmds = append(cmds, telegram.Cligram.SendMessage(telegram.Cligram.Context(),
 		types.SendMessageRequest{
 			RandID:           randID,
@@ -174,6 +180,7 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 			ReplyToMessageID: replyToMessageID,
 			IsFile:           isFile,
 			FilePath:         filepath,
+			TopMsgID:         topMsgID,
 		}))
 	if isFile {
 		m.SelectedFile = "uploading..."
@@ -260,15 +267,29 @@ func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (M
 			cmds = append(cmds, cmd)
 		}
 	default:
-		m.ChatUI, cmd = m.ChatUI.Update(msg)
-		cmds = append(cmds, cmd)
+		if m.ShowForumTopics && m.SelectedForumTopic == nil {
+			m.SelectedGroupForumTopics, cmd = m.SelectedGroupForumTopics.Update(msg)
+			cmds = append(cmds, cmd)
+		} else {
+			m.ChatUI, cmd = m.ChatUI.Update(msg)
+			cmds = append(cmds, cmd)
+		}
 	}
 	m.SkipNextInput = false
 	return *m, tea.Batch(cmds...)
 }
 
 func handleUserChange(m *Model) (Model, tea.Cmd) {
+	m.ShowForumTopics = false
+	m.SelectedForumTopic = nil
+
 	pInfo := getMessageParams(m)
+	if m.Mode == ModeGroups && m.SelectedGroup.IsForum {
+		m.ForumTopicLoading = true
+		m.Conversations = [50]types.FormattedMessage{}
+		m.ChatUI.SetItems([]list.Item{})
+		return *m, telegram.Cligram.GetChannelForums(pInfo)
+	}
 	cmd := telegram.Cligram.GetMessages(telegram.Cligram.Context(), types.GetMessagesRequest{
 		Peer:          pInfo,
 		Limit:         50,
@@ -414,11 +435,13 @@ func (m *Model) updateDelegates() {
 	usersDelegate := CustomDelegate{Model: m}
 	channelsDelegate := CustomDelegate{Model: m}
 	groupsDelegate := CustomDelegate{Model: m}
+	forumTopicsDelegate := ForumTopicsDelegate{Model: m}
 	mainViewDelegate := MessagesDelegate{Model: m}
 	// storiesDelegate := StoriesDelegate{Model: m}
 	// m.Stories.SetDelegate(storiesDelegate)
 	m.Users.SetDelegate(usersDelegate)
 	m.Channels.SetDelegate(channelsDelegate)
 	m.Groups.SetDelegate(groupsDelegate)
+	m.SelectedGroupForumTopics.SetDelegate(forumTopicsDelegate)
 	m.ChatUI.SetDelegate(mainViewDelegate)
 }

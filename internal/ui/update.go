@@ -41,6 +41,23 @@ func (m *Model) checkAndFetchCustomEmojis(messages []types.FormattedMessage) tea
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	switch msg := msg.(type) {
+	case types.GetChannelForumsResponseMsg:
+		m.ForumTopicLoading = false
+		m.MainViewLoading = false
+		if msg.Err != nil {
+			slog.Error("Failed to get channel forums", "error", msg.Err.Error())
+			m.Alert = m.Alert.WithAllowEscToClose().WithPosition(bubbleup.TopLeftPosition)
+			alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, msg.Err.Error())
+			return m, alertCmd
+		}
+		var forumTopicList []list.Item
+		for _, forum := range msg.Forums {
+			forumTopicList = append(forumTopicList, forum)
+		}
+		m.SelectedGroupForumTopics = list.New(forumTopicList, list.NewDefaultDelegate(), 0, 0)
+		m.ShowForumTopics = true
+		m.SelectedForumTopic = nil
+		m.FocusedOn = Main
 	case types.SendMessageMsg:
 		if msg.Err != nil {
 			slog.Error("Failed to send message", "error", msg.Err.Error())
@@ -624,6 +641,20 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 	case "q", "ctrl+c":
 		return m, tea.Quit
+	case "backspace":
+		if m.FocusedOn == Main && m.ShowForumTopics && m.SelectedForumTopic != nil {
+			m.SelectedForumTopic = nil
+			m.MainViewLoading = false
+			m.Conversations = [50]types.FormattedMessage{}
+			m.ChatUI.SetItems([]list.Item{})
+			m.ChatUI.ResetSelected()
+			return m, nil
+		}
+		if m.FocusedOn == Main && m.ShowForumTopics && m.SelectedForumTopic == nil {
+			m.ShowForumTopics = false
+			m.FocusedOn = SideBar
+			return m, nil
+		}
 	case "tab":
 		if !m.IsFilepickerVisible {
 			m, cmd := changeFocusMode(&m, "tab", false)
@@ -635,11 +666,6 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m, cmd := changeFocusMode(&m, "tab", true)
 		cmds = append(cmds, cmd)
 		return m, tea.Batch(cmds...)
-	case "m":
-		if m.FocusedOn != Input {
-			m.IsModalVisible = true
-		}
-		return m, nil
 	case "c":
 		m, cmd := changeSideBarMode(&m, "c")
 		cmds = append(cmds, cmd)
@@ -746,6 +772,31 @@ func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
 	if m.FocusedOn == SideBar {
 		return handleUserChange(&m)
 	}
+	// Select a forum topic and load its messages
+	if m.FocusedOn == Main && m.ShowForumTopics && m.SelectedForumTopic == nil {
+		selectedItem := m.SelectedGroupForumTopics.SelectedItem()
+		if selectedItem == nil {
+			return m, nil
+		}
+		forumTopic, ok := selectedItem.(types.ForumTopicInfo)
+		if !ok {
+			return m, nil
+		}
+		m.SelectedForumTopic = &forumTopic
+		m.MainViewLoading = true
+		m.Conversations = [50]types.FormattedMessage{}
+		m.ChatUI.SetItems([]list.Item{})
+		m.ChatUI.ResetSelected()
+
+		pInfo := getMessageParams(&m)
+		topicID := forumTopic.ID
+		cmd := telegram.Cligram.GetMessages(telegram.Cligram.Context(), types.GetMessagesRequest{
+			Peer:     pInfo,
+			Limit:    50,
+			TopMsgID: &topicID,
+		})
+		return m, cmd
+	}
 	return m, nil
 }
 
@@ -803,7 +854,6 @@ func (m Model) handleForwardKey() (tea.Model, tea.Cmd) {
 	}
 }
 
-// appendListItems appends items with a non-empty title to the list, returning the SetItems cmd.
 func appendListItems[T types.FilterableItem](l *list.Model, items []T) tea.Cmd {
 	current := l.Items()
 	for _, it := range items {
@@ -875,7 +925,6 @@ func (m Model) handleForwardMessage(msg ForwardMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// peerFromItem converts a list.Item (UserInfo or ChannelInfo, pointer or value) into a types.Peer.
 func peerFromItem(item list.Item) types.Peer {
 	switch p := item.(type) {
 	case types.UserInfo:

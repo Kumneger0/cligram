@@ -41,6 +41,25 @@ var DefaultTheme = Theme{
 }
 
 var (
+	linkPreviewStyle = lipgloss.NewStyle().
+				Foreground(DefaultTheme.AccentColor).
+				Padding(0, 1)
+
+	linkPreviewTitleStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(DefaultTheme.AccentColor)
+
+	linkPreviewSiteStyle = lipgloss.NewStyle().
+				Foreground(DefaultTheme.SecondaryText).
+				Italic(true)
+
+	linkPreviewDescStyle = lipgloss.NewStyle().
+				Foreground(DefaultTheme.PrimaryText)
+
+	linkPreviewBorderStyle = lipgloss.NewStyle().
+				Border(lipgloss.NormalBorder(), false, false, false, true).
+				BorderForeground(DefaultTheme.AccentColor).
+				PaddingLeft(1)
 	normalStyle = lipgloss.NewStyle().
 			Foreground(DefaultTheme.PrimaryText).
 			PaddingLeft(1)

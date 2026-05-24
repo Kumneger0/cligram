@@ -97,12 +97,13 @@ func (c *Client) Context() context.Context {
 
 func (c *Client) SendMessage(ctx context.Context, req types.SendMessageRequest) tea.Cmd {
 	if req.IsFile {
-		return c.sendMedia(ctx, req.Peer, req.FilePath, req.Message, parseReplyID(req.ReplyToMessageID), req.RandID)
+		// even when not replying to a specific message
+		return c.sendMedia(ctx, req.Peer, req.FilePath, req.Message, parseReplyID(req.ReplyToMessageID), req.RandID, req.TopMsgID)
 	}
-	return c.sendText(ctx, req.Peer, req.Message, parseReplyID(req.ReplyToMessageID), req.RandID)
+	return c.sendText(ctx, req.Peer, req.Message, parseReplyID(req.ReplyToMessageID), req.RandID, req.TopMsgID)
 }
 
-func (c *Client) sendText(ctx context.Context, peer types.Peer, text string, replyTo *int, randID int) tea.Cmd {
+func (c *Client) sendText(ctx context.Context, peer types.Peer, text string, replyTo *int, randID int, topMsgID *int) tea.Cmd {
 	return func() tea.Msg {
 		inputPeer, err := shared.ConvertPeerToInputPeer(peer)
 		if err != nil {
@@ -111,7 +112,14 @@ func (c *Client) sendText(ctx context.Context, peer types.Peer, text string, rep
 
 		var replyToClass tg.InputReplyToClass
 		if replyTo != nil {
-			replyToClass = &tg.InputReplyToMessage{ReplyToMsgID: *replyTo}
+			reply := &tg.InputReplyToMessage{ReplyToMsgID: *replyTo}
+			if topMsgID != nil && *topMsgID != 1 && *replyTo != *topMsgID {
+				reply.TopMsgID = *topMsgID
+				reply.SetFlags()
+			}
+			replyToClass = reply
+		} else if topMsgID != nil {
+			replyToClass = &tg.InputReplyToMessage{ReplyToMsgID: *topMsgID}
 		}
 
 		updateClass, err := c.GetAPI().MessagesSendMessage(ctx, &tg.MessagesSendMessageRequest{
@@ -174,14 +182,14 @@ func extractMessageID(updateClass tg.UpdatesClass) *int {
 	return id
 }
 
-func (c *Client) sendMedia(ctx context.Context, peer types.Peer, filePath string, caption string, replyTo *int, randID int) tea.Cmd {
+func (c *Client) sendMedia(ctx context.Context, peer types.Peer, filePath string, caption string, replyTo *int, randID int, topMsgID *int) tea.Cmd {
 	return func() tea.Msg {
 		inputPeer, err := shared.ConvertPeerToInputPeer(peer)
 		if err != nil {
 			return types.SendMessageMsg{Err: types.NewSendMessageError(err), RandID: randID}
 		}
 
-		messageID, err := c.sendMediaFile(ctx, filePath, caption, inputPeer, replyTo)
+		messageID, err := c.sendMediaFile(ctx, filePath, caption, inputPeer, replyTo, topMsgID)
 		if err != nil {
 			return types.SendMessageMsg{Err: types.NewSendMessageError(err), RandID: randID}
 		}
@@ -190,7 +198,7 @@ func (c *Client) sendMedia(ctx context.Context, peer types.Peer, filePath string
 	}
 }
 
-func (c *Client) sendMediaFile(ctx context.Context, path string, caption string, peer tg.InputPeerClass, replyTo *int) (*int, error) {
+func (c *Client) sendMediaFile(ctx context.Context, path string, caption string, peer tg.InputPeerClass, replyTo *int, topMsgID *int) (*int, error) {
 	fileInfo, err := os.Stat(path)
 	if err != nil {
 		return nil, err
@@ -225,7 +233,14 @@ func (c *Client) sendMediaFile(ctx context.Context, path string, caption string,
 
 	var replyToClass tg.InputReplyToClass
 	if replyTo != nil {
-		replyToClass = &tg.InputReplyToMessage{ReplyToMsgID: *replyTo}
+		reply := &tg.InputReplyToMessage{ReplyToMsgID: *replyTo}
+		if topMsgID != nil && *topMsgID != 1 && *replyTo != *topMsgID {
+			reply.TopMsgID = *topMsgID
+			reply.SetFlags()
+		}
+		replyToClass = reply
+	} else if topMsgID != nil {
+		replyToClass = &tg.InputReplyToMessage{ReplyToMsgID: *topMsgID}
 	}
 
 	sendMediaUpdateClass, err := c.GetAPI().MessagesSendMedia(ctx, &tg.MessagesSendMediaRequest{
@@ -247,7 +262,7 @@ func (c *Client) sendMediaFile(ctx context.Context, path string, caption string,
 }
 
 func (c *Client) GetMessages(ctx context.Context, req types.GetMessagesRequest) tea.Cmd {
-	return c.GetChatHistoryCmd(ctx, req.Peer, req.Limit, req.OffsetID)
+	return c.GetChatHistoryCmd(ctx, req.Peer, req.Limit, req.OffsetID, req.TopMsgID)
 }
 
 func (c *Client) GetUserChats(ctx context.Context, chatType types.ChatType, offsetDate, offsetID int) tea.Cmd {
@@ -258,9 +273,9 @@ func (c *Client) GetUserChannels(ctx context.Context, isBroadCast bool, offsetDa
 	return c.GetChannelsCmd(ctx, isBroadCast, offsetDate, offsetID)
 }
 
-func (c *Client) GetChatHistoryCmd(ctx context.Context, peer types.Peer, limit int, offsetID *int) tea.Cmd {
+func (c *Client) GetChatHistoryCmd(ctx context.Context, peer types.Peer, limit int, offsetID *int, topMsgID *int) tea.Cmd {
 	return func() tea.Msg {
-		messages, err := c.GetChatHistory(ctx, peer, limit, offsetID)
+		messages, err := c.GetChatHistory(ctx, peer, limit, offsetID, topMsgID)
 		if err != nil {
 			return types.GetMessagesMsg{Messages: [50]types.FormattedMessage{}, Err: err}
 		}
@@ -270,18 +285,31 @@ func (c *Client) GetChatHistoryCmd(ctx context.Context, peer types.Peer, limit i
 	}
 }
 
-func (c *Client) GetChatHistory(ctx context.Context, peer types.Peer, limit int, offsetID *int) ([]types.FormattedMessage, error) {
+func (c *Client) GetChatHistory(ctx context.Context, peer types.Peer, limit int, offsetID *int, topMsgID *int) ([]types.FormattedMessage, error) {
 	inputPeer, err := shared.ConvertPeerToInputPeer(peer)
 	if err != nil {
 		return nil, err
 	}
 
-	req := &tg.MessagesGetHistoryRequest{Peer: inputPeer, Limit: limit}
-	if offsetID != nil {
-		req.OffsetID = *offsetID
+	var history tg.MessagesMessagesClass
+	if topMsgID != nil {
+		// Use MessagesGetReplies for forum topic messages
+		repliesReq := &tg.MessagesGetRepliesRequest{
+			Peer:  inputPeer,
+			MsgID: *topMsgID,
+			Limit: limit,
+		}
+		if offsetID != nil {
+			repliesReq.OffsetID = *offsetID
+		}
+		history, err = c.GetAPI().MessagesGetReplies(ctx, repliesReq)
+	} else {
+		req := &tg.MessagesGetHistoryRequest{Peer: inputPeer, Limit: limit}
+		if offsetID != nil {
+			req.OffsetID = *offsetID
+		}
+		history, err = c.GetAPI().MessagesGetHistory(ctx, req)
 	}
-
-	history, err := c.GetAPI().MessagesGetHistory(ctx, req)
 	if err != nil {
 		return nil, types.NewGetMessagesError(err)
 	}
@@ -356,6 +384,47 @@ func (c *Client) GetChannelsCmd(ctx context.Context, isBroadCast bool, offsetDat
 	}
 }
 
+func (c *Client) GetChannelForums(peer types.Peer) tea.Cmd {
+	return func() tea.Msg {
+		var forums []types.ForumTopicInfo
+		inputPeer, err := shared.ConvertPeerToInputPeer(peer)
+		if err != nil {
+			slog.Error(err.Error())
+			return types.GetChannelForumsResponseMsg{
+				Forums: nil,
+				Err:    err,
+			}
+		}
+		request := &tg.MessagesGetForumTopicsRequest{
+			Peer:  inputPeer,
+			Limit: 100,
+		}
+		forumTopics, err := c.Client.API().MessagesGetForumTopics(c.ctx, request)
+		if err != nil {
+			slog.Error(err.Error())
+			return types.GetChannelForumsResponseMsg{
+				Forums: nil,
+				Err:    err,
+			}
+		}
+		for _, topicClass := range forumTopics.Topics {
+			topic, ok := topicClass.(*tg.ForumTopic)
+			if !ok {
+				continue
+			}
+			forums = append(forums, types.ForumTopicInfo{
+				ID:          topic.GetID(),
+				TopicTitle:  topic.Title,
+				UnreadCount: topic.UnreadCount,
+			})
+		}
+		return types.GetChannelForumsResponseMsg{
+			Forums: forums,
+			Err:    nil,
+		}
+	}
+}
+
 func (c *Client) GetAllChats(ctx context.Context, offsetDate int, offsetID int) (types.GetAllChatsResponse, error) {
 	ds, err := c.getAllDialogs(ctx, offsetDate, offsetID)
 	if err != nil {
@@ -390,6 +459,7 @@ func (c *Client) GetAllChats(ctx context.Context, offsetDate int, offsetID int) 
 			info.ReadOutboxMaxID = readOutboxMaxID
 			info.UnreadCount = getUnreadCount(ds.Dialogs, channel.ID)
 			info.NotifySettings = getNotifySettings(ds.Dialogs, channel.ID)
+			info.IsForum = channel.GetForum()
 			if channel.Broadcast {
 				channels = append(channels, *info)
 			} else {
@@ -933,6 +1003,7 @@ func convertToChannelInfo[T *tg.Channel | *tg.Chat](channel T) *types.ChannelInf
 			AccessHash:        strconv.FormatInt(v.AccessHash, 10),
 			IsCreator:         v.Creator,
 			IsBroadcast:       v.Broadcast,
+			IsForum:           v.GetForum(),
 			ParticipantsCount: &v.ParticipantsCount}
 	case *tg.Chat:
 		return &types.ChannelInfo{
@@ -940,6 +1011,7 @@ func convertToChannelInfo[T *tg.Channel | *tg.Chat](channel T) *types.ChannelInf
 			ID:                strconv.FormatInt(v.ID, 10),
 			Username:          nil,
 			IsCreator:         v.Creator,
+			IsForum:           false,
 			IsBroadcast:       false,
 			ParticipantsCount: &v.ParticipantsCount,
 		}
@@ -1025,7 +1097,7 @@ func (c *Client) GetSingleMessage(ctx context.Context, peer types.Peer, messageI
 
 func (c *Client) GetLastMessage(ctx context.Context, peer types.Peer) tea.Cmd {
 	return func() tea.Msg {
-		messages, err := c.GetChatHistory(ctx, peer, 1, nil)
+		messages, err := c.GetChatHistory(ctx, peer, 1, nil, nil)
 		if err != nil {
 			return types.SingleMessageMsg{Err: err}
 		}
