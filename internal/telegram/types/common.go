@@ -75,6 +75,31 @@ type FormattedMessage struct {
 	MessageMediaWebPage  *tg.MessageMediaWebPage `json:"messageMediaWebPage"`
 }
 
+type ShouldHighlightSpecificMessageMsg struct {
+	MessageID int
+}
+
+type OpenNewChatWithPeerMsg struct {
+	Chat *EntityPreviewInfo
+}
+
+type EntityPreviewInfo struct {
+	Entity    string
+	MessageID []string
+}
+
+type ResolvedPeerInfo struct {
+	User    *UserInfo
+	Channel *ChannelInfo
+	Group   *ChannelInfo
+}
+
+type GetEntityInfoMsg struct {
+	Response   *ResolvedPeerInfo `json:"response,omitempty"`
+	MessageIDs []string          `json:"messageId,omitempty"`
+	Err        error             `json:"error,omitempty"`
+}
+
 type WebPage struct {
 	URL        string  `json:"url"`
 	DisplayURL *string `json:"displayUrl,omitempty"`

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -226,24 +227,25 @@ func GetNewVersionInfo(installedVersion string) NewVersionInfo {
 	}
 	response, err := http.Get(REPOURL)
 	if err != nil {
-		fmt.Println(err.Error())
-		log.Fatal(err)
+		slog.Error(err.Error())
 	}
 	defer response.Body.Close()
 	data, err := io.ReadAll(response.Body)
 	if err != nil {
-		fmt.Println(err.Error())
-		log.Fatal("Failed to Read Response Body")
+		slog.Error(err.Error())
 	}
 	var latestRelease Release
 	err = json.Unmarshal(data, &latestRelease)
 	if err != nil {
-		fmt.Println(err.Error())
-		log.Fatal("Failed to Unmarshal", err)
+		slog.Error(err.Error())
 	}
 	latestVersion, err := goversion.NewVersion(strings.Replace(latestRelease.TagName, "v", "", 1))
 	if err != nil {
-		log.Fatal("Failed to get the latest version")
+		slog.Error(err.Error())
+		return NewVersionInfo{
+			IsUpdateAvailable: false,
+			LatestRelease:     latestRelease,
+		}
 	}
 
 	if !latestVersion.GreaterThan(ver) {

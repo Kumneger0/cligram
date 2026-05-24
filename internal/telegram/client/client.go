@@ -95,6 +95,48 @@ func (c *Client) Context() context.Context {
 	return c.ctx
 }
 
+func (c *Client) GetEntityInfo(entity *types.EntityPreviewInfo) tea.Cmd {
+	if entity == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		result, err := c.GetAPI().ContactsResolveUsername(
+			c.ctx,
+			&tg.ContactsResolveUsernameRequest{
+				Username: entity.Entity,
+			},
+		)
+		if err != nil {
+			if err.Error() == "USERNAME_NOT_OCCUPIED" {
+				return types.GetEntityInfoMsg{Response: nil, Err: errors.New("username not found")}
+			}
+			return types.GetEntityInfoMsg{Response: nil, Err: err}
+		}
+		info := &types.ResolvedPeerInfo{}
+		switch peer := result.Peer.(type) {
+		case *tg.PeerUser:
+			for _, u := range result.Users {
+				if user, ok := u.(*tg.User); ok && user.ID == peer.UserID {
+					info.User = shared.ConvertTGUserToUserInfo(user)
+				}
+			}
+		case *tg.PeerChannel:
+			for _, c := range result.Chats {
+				if channel, ok := c.(*tg.Channel); ok && channel.ID == peer.ChannelID {
+					info.Channel = convertToChannelInfo(channel)
+				}
+			}
+		case *tg.PeerChat:
+			for _, c := range result.Chats {
+				if chat, ok := c.(*tg.Chat); ok && chat.ID == peer.ChatID {
+					info.Group = convertToChannelInfo(chat)
+				}
+			}
+		}
+		return types.GetEntityInfoMsg{Response: info, MessageIDs: entity.MessageID, Err: nil}
+	}
+}
+
 func (c *Client) SendMessage(ctx context.Context, req types.SendMessageRequest) tea.Cmd {
 	if req.IsFile {
 		// even when not replying to a specific message
@@ -307,6 +349,7 @@ func (c *Client) GetChatHistory(ctx context.Context, peer types.Peer, limit int,
 		req := &tg.MessagesGetHistoryRequest{Peer: inputPeer, Limit: limit}
 		if offsetID != nil {
 			req.OffsetID = *offsetID
+			req.AddOffset = -(limit / 2)
 		}
 		history, err = c.GetAPI().MessagesGetHistory(ctx, req)
 	}
@@ -1004,7 +1047,8 @@ func convertToChannelInfo[T *tg.Channel | *tg.Chat](channel T) *types.ChannelInf
 			IsCreator:         v.Creator,
 			IsBroadcast:       v.Broadcast,
 			IsForum:           v.GetForum(),
-			ParticipantsCount: &v.ParticipantsCount}
+			ParticipantsCount: &v.ParticipantsCount,
+		}
 	case *tg.Chat:
 		return &types.ChannelInfo{
 			ChannelTitle:      v.Title,

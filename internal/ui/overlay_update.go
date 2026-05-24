@@ -53,6 +53,13 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.stories.SetShowTitle(false)
 		m.stories.SetShowHelp(false)
 		m.stories.SetShowStatusBar(false)
+	// case types.GetEntityInfoMsg:
+	// 	if msg.Err != nil {
+	// 		m.Error = msg.Err
+	// 		return m, nil
+	// 	}
+	// 	m.ModalMode = ModalModeEntityPreview
+	// 	m.Entity = msg.Response
 	case types.AvailableReactions:
 		if msg.Err != nil {
 			m.Error = msg.Err
@@ -84,6 +91,11 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m = model.(*Foreground)
 		return m, cmd
 	case OpenModalMsg:
+		if msg.ModalMode == ModalModeEntityPreview {
+			entity := msg.Entity
+			m.ModalMode = ModalModeLoading
+			return m, telegram.Cligram.GetEntityInfo(entity)
+		}
 		m.ModalMode = msg.ModalMode
 		m.Message = msg.Message
 		m.fromPeer = msg.FromPeer
