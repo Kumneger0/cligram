@@ -3,7 +3,10 @@ package ui
 import (
 	"fmt"
 	"log/slog"
+	"os/exec"
+	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -58,12 +61,113 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ShowForumTopics = true
 		m.SelectedForumTopic = nil
 		m.FocusedOn = Main
+	case types.ShouldHighlightSpecificMessageMsg:
+		items := m.ChatUI.Items()
+		for i, item := range items {
+			if formattedMessage, ok := item.(types.FormattedMessage); ok {
+				if formattedMessage.ID == msg.MessageID {
+					m.ChatUI.Select(i)
+				}
+			} else {
+				slog.Error("Failed to Cast Item to types.Formatted message")
+			}
+		}
+	case types.GetEntityInfoMsg:
+		if msg.Err != nil {
+			slog.Error("Failed to get entity info", "error", msg.Err.Error())
+			m.Alert = m.Alert.WithAllowEscToClose().WithPosition(bubbleup.TopLeftPosition)
+			alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, msg.Err.Error())
+			return m, alertCmd
+		}
+		info := msg.Response
+		if info.User != nil {
+			m.Mode = ModeUsers
+			if info.User.IsBot {
+				m.Mode = ModeBots
+				for i, v := range m.Bots.Items() {
+					if bot, ok := v.(types.UserInfo); ok && bot.PeerID == info.User.PeerID {
+						m.Bots.Select(i)
+						m.SelectedUser = m.Bots.Items()[i].(types.UserInfo)
+					} else {
+						items := append(m.Bots.Items(), *info.User)
+						m.Bots = list.New(items, list.NewDefaultDelegate(), 0, 0)
+						m.SelectedUser = *info.User
+					}
+				}
+			} else {
+				if userIndex := getUserIndex(m.Users, *info.User); userIndex != -1 {
+					m.Users.Select(userIndex)
+					m.SelectedUser = m.Users.Items()[userIndex].(types.UserInfo)
+				} else {
+					items := append(m.Users.Items(), *info.User)
+					m.Users = list.New(items, list.NewDefaultDelegate(), 0, 0)
+					m.SelectedUser = *info.User
+				}
+			}
+		}
+		if info.Channel != nil {
+			m.Mode = ModeChannels
+			if !info.Channel.IsBroadcast {
+				m.Mode = ModeGroups
+				if groupIndex := getGroupIndex(m, *info.Channel); groupIndex != -1 {
+					m.Groups.Select(groupIndex)
+					m.SelectedGroup = m.Groups.Items()[groupIndex].(types.ChannelInfo)
+				} else {
+					items := append(m.Groups.Items(), *info.Channel)
+					m.Groups = list.New(items, list.NewDefaultDelegate(), 0, 0)
+					m.Groups.Select(len(m.Groups.Items()) - 1)
+					m.SelectedGroup = *info.Group
+				}
+			} else {
+				if channelIndex := getChannelIndex(m, *info.Channel); channelIndex != -1 {
+					m.Channels.Select(channelIndex)
+					m.SelectedChannel = m.Channels.Items()[channelIndex].(types.ChannelInfo)
+				} else {
+					items := append(m.Channels.Items(), *info.Channel)
+					m.Channels = list.New(items, list.NewDefaultDelegate(), 0, 0)
+					m.Channels.Select(len(m.Channels.Items()) - 1)
+					m.SelectedChannel = *info.Channel
+				}
+			}
+		}
+		if info.Group != nil {
+			m.Mode = ModeGroups
+			if groupIndex := getGroupIndex(m, *info.Group); groupIndex != -1 {
+				m.Groups.Select(groupIndex)
+				m.SelectedGroup = m.Groups.Items()[groupIndex].(types.ChannelInfo)
+			} else {
+				items := append(m.Groups.Items(), *info.Group)
+				m.Groups = list.New(items, list.NewDefaultDelegate(), 0, 0)
+				m.Groups.Select(len(m.Groups.Items()) - 1)
+				m.SelectedGroup = *info.Group
+			}
+		}
+		var offsetID *int
+		if !msg.Response.Channel.IsForum && len(msg.MessageIDs) > 0 {
+			if id, err := strconv.ParseInt(msg.MessageIDs[0], 10, 64); err == nil {
+				offsetIDInt := int(id)
+				offsetID = &offsetIDInt
+			}
+		}
+
+		highlightTheSelectedMessageCmd := func() tea.Msg {
+			if offsetID == nil {
+				return nil
+			}
+			return types.ShouldHighlightSpecificMessageMsg{
+				MessageID: *offsetID,
+			}
+		}
+		model, cmd := handleUserChange(&m, offsetID, highlightTheSelectedMessageCmd)
+		m = model
+		cmds = append(cmds, cmd)
+	case types.OpenNewChatWithPeerMsg:
+		return m, telegram.Cligram.GetEntityInfo(msg.Chat)
 	case types.SendMessageMsg:
 		if msg.Err != nil {
 			slog.Error("Failed to send message", "error", msg.Err.Error())
 			m.IsModalVisible = true
 			m.ModalContent = GetModalContent(msg.Err.Error())
-
 			var updatedConversations [50]types.FormattedMessage
 			j := 0
 			for _, v := range m.Conversations {
@@ -770,9 +874,8 @@ func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
 		return sendMessage(&m)
 	}
 	if m.FocusedOn == SideBar {
-		return handleUserChange(&m)
+		return handleUserChange(&m, nil, nil)
 	}
-	// Select a forum topic and load its messages
 	if m.FocusedOn == Main && m.ShowForumTopics && m.SelectedForumTopic == nil {
 		selectedItem := m.SelectedGroupForumTopics.SelectedItem()
 		if selectedItem == nil {
@@ -797,7 +900,66 @@ func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
 		})
 		return m, cmd
 	}
+
+	if m.FocusedOn == Main && m.ChatUI.SelectedItem() != nil {
+		if selectedMessage, ok := m.ChatUI.SelectedItem().(types.FormattedMessage); ok && selectedMessage.MessageMediaWebPage != nil {
+			if webPage, ok := selectedMessage.MessageMediaWebPage.Webpage.(*tg.WebPage); ok {
+				if entity := getEntityName(webPage.URL); entity != nil {
+					return m, func() tea.Msg {
+						return types.OpenNewChatWithPeerMsg{
+							Chat: entity,
+						}
+					}
+				}
+
+				url := webPage.URL
+				var cmd tea.Cmd
+				switch runtime.GOOS {
+				case "darwin":
+					cmd = func() tea.Msg {
+						err := exec.Command("open", url).Start()
+						if err != nil {
+							slog.Error("Failed to open URL", "error", err.Error(), "url", url)
+						}
+						return nil
+					}
+				case "linux":
+					cmd = func() tea.Msg {
+						err := exec.Command("xdg-open", url).Start()
+						if err != nil {
+							slog.Error("Failed to open URL", "error", err.Error(), "url", url)
+						}
+						return nil
+					}
+				}
+				return m, cmd
+			}
+		}
+		return m, nil
+	}
 	return m, nil
+}
+
+func getEntityName(link string) *types.EntityPreviewInfo {
+	var entityPreview *types.EntityPreviewInfo = nil
+	for _, prefix := range []string{"@", "http://t.me/", "https://t.me/", "t.me/", "telegram.me/", "www.t.me/", "www.telegram.me/", "telegram.me/c/", "t.me/c/", "www.t.me/c/", "www.telegram.me/c/", "https://t.me/c/", "https://telegram.me/c/"} {
+		if after, ok := strings.CutPrefix(link, prefix); ok {
+			entityPreview = &types.EntityPreviewInfo{}
+			if parts := strings.SplitN(after, "/", 3); len(parts) > 0 {
+				entityPreview.Entity = parts[0]
+				if len(parts) >= 2 {
+					entityPreview.MessageID = append(entityPreview.MessageID, parts[1])
+				}
+				if len(parts) >= 3 {
+					entityPreview.MessageID = append(entityPreview.MessageID, parts[2])
+				}
+				break
+			}
+			entityPreview.Entity = after
+			break
+		}
+	}
+	return entityPreview
 }
 
 func (m Model) handleReplyKey() (tea.Model, tea.Cmd) {
@@ -995,7 +1157,7 @@ func (m Model) handleSearchedUser(user types.UserInfo) (tea.Model, tea.Cmd) {
 		l.Select(index)
 		m.FocusedOn = SideBar
 		m.Mode = targetMode
-		return handleUserChange(&m)
+		return handleUserChange(&m, nil, nil)
 	}
 
 	updateUserCmd := l.SetItems(append(l.Items(), user))
@@ -1004,7 +1166,7 @@ func (m Model) handleSearchedUser(user types.UserInfo) (tea.Model, tea.Cmd) {
 		l.Select(index)
 		m.FocusedOn = SideBar
 		m.Mode = targetMode
-		m, handleUserChangeCmd := handleUserChange(&m)
+		m, handleUserChangeCmd := handleUserChange(&m, nil, nil)
 		return m, tea.Batch(updateUserCmd, handleUserChangeCmd)
 	}
 	return m, updateUserCmd
@@ -1017,7 +1179,7 @@ func (m Model) handleSearchedChannel(channel types.ChannelInfo) (tea.Model, tea.
 		m.Channels.Select(index)
 		m.FocusedOn = SideBar
 		m.Mode = ModeChannels
-		return handleUserChange(&m)
+		return handleUserChange(&m, nil, nil)
 	}
 
 	setItemsCmd := m.Channels.SetItems(append(m.Channels.Items(), channel))
@@ -1026,7 +1188,7 @@ func (m Model) handleSearchedChannel(channel types.ChannelInfo) (tea.Model, tea.
 		m.Channels.Select(index)
 		m.FocusedOn = SideBar
 		m.Mode = ModeChannels
-		m, handleChangeUserCmd := handleUserChange(&m)
+		m, handleChangeUserCmd := handleUserChange(&m, nil, nil)
 		return m, tea.Batch(setItemsCmd, handleChangeUserCmd)
 	}
 	return m, setItemsCmd
@@ -1039,7 +1201,7 @@ func (m Model) handleSearchedGroup(group types.ChannelInfo) (tea.Model, tea.Cmd)
 		m.Groups.Select(index)
 		m.FocusedOn = SideBar
 		m.Mode = ModeGroups
-		return handleUserChange(&m)
+		return handleUserChange(&m, nil, nil)
 	}
 
 	setItemsCmd := m.Groups.SetItems(append(m.Groups.Items(), group))
@@ -1048,7 +1210,7 @@ func (m Model) handleSearchedGroup(group types.ChannelInfo) (tea.Model, tea.Cmd)
 		m.Groups.Select(index)
 		m.FocusedOn = SideBar
 		m.Mode = ModeGroups
-		m, handleChangeUserCmd := handleUserChange(&m)
+		m, handleChangeUserCmd := handleUserChange(&m, nil, nil)
 		return m, tea.Batch(setItemsCmd, handleChangeUserCmd)
 	}
 	return m, setItemsCmd

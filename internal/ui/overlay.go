@@ -181,6 +181,8 @@ const (
 	ModalModeDeleteMessage  ModalMode = "DELETE_MESSAGE"
 	ModalModeShowStories    ModalMode = "SHOW_STORIES"
 	ModalModeSendReaction   ModalMode = "SEND_REACTION"
+	ModalModeEntityPreview  ModalMode = "ENTITY_PREVIEW"
+	ModalModeLoading        ModalMode = "LOADING"
 )
 
 type OpenModalMsg struct {
@@ -188,6 +190,7 @@ type OpenModalMsg struct {
 	FromPeer  *list.Item
 	Message   *types.FormattedMessage
 	UsersList *list.Model
+	Entity    *types.EntityPreviewInfo
 }
 
 type ForwardMsg struct {
@@ -207,6 +210,7 @@ type Foreground struct {
 	SearchResultChannels  []types.ChannelInfo
 	ModalMode             ModalMode
 	UsersList             *list.Model
+	Entity                *types.ResolvedPeerInfo
 	Message               *types.FormattedMessage
 	fromPeer              *list.Item
 	stories               *list.Model
@@ -267,8 +271,25 @@ func (f Foreground) View() string {
 	}
 	foreStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder(), true).
-		BorderForeground(DefaultTheme.AccentColor). // Use theme accent color
+		BorderForeground(DefaultTheme.AccentColor).
 		Padding(0, 1)
+
+	if f.ModalMode == ModalModeLoading {
+		loadingText := lipgloss.NewStyle().Foreground(DefaultTheme.AccentColor).Bold(true).Render("Loading...")
+		return foreStyle.Render(loadingText)
+	}
+
+	if f.ModalMode == ModalModeEntityPreview {
+		title := lipgloss.NewStyle().Foreground(DefaultTheme.PrimaryText).Bold(true).Render("Chat Info")
+		var content string
+		if f.Entity == nil {
+			content = lipgloss.NewStyle().Foreground(DefaultTheme.AccentColor).Render("Loading info...")
+		} else {
+			content = renderEntityInfo(f)
+		}
+		layout := lipgloss.JoinVertical(lipgloss.Left, title, content)
+		return foreStyle.Render(layout)
+	}
 
 	if f.ModalMode == ModalModeShowStories && f.stories != nil {
 		title := lipgloss.NewStyle().Foreground(DefaultTheme.PrimaryText).Bold(true).Render("Stories")
@@ -403,4 +424,63 @@ func (m Model) GetUserAccessHashFromModel(userID int64) (types.UserInfo, error) 
 		}
 	}
 	return userInfo, nil
+}
+
+func renderEntityInfo(f Foreground) string {
+	var info strings.Builder
+	detailStyle := lipgloss.NewStyle().Foreground(DefaultTheme.SecondaryText)
+
+	if f.Entity.User != nil {
+		u := f.Entity.User
+		name := u.FirstName
+		if u.LastName != "" {
+			name += " " + u.LastName
+		}
+		info.WriteString(lipgloss.NewStyle().Foreground(DefaultTheme.PrimaryText).Bold(true).Render(name) + "\n")
+		if u.Username != "" {
+			info.WriteString(detailStyle.Render("@"+u.Username) + "\n")
+		}
+		info.WriteString("\n")
+
+		if u.IsBot {
+			info.WriteString(detailStyle.Render("🤖 Bot") + "\n")
+		}
+
+		if u.IsOnline {
+			info.WriteString(lipgloss.NewStyle().Foreground(DefaultTheme.OnlineStatus).Render("● Online") + "\n")
+		} else if u.LastSeen != nil {
+			info.WriteString(detailStyle.Render("Last seen: "+*u.LastSeen) + "\n")
+		}
+
+		if u.Premium {
+			info.WriteString(lipgloss.NewStyle().Foreground(DefaultTheme.AccentColor).Render("⭐ Premium User") + "\n")
+		}
+		info.WriteString(detailStyle.Render(fmt.Sprintf("ID: %s", u.PeerID)) + "\n")
+	} else if f.Entity.Channel != nil || f.Entity.Group != nil {
+		var c *types.ChannelInfo
+		if f.Entity.Channel != nil {
+			c = f.Entity.Channel
+		} else {
+			c = f.Entity.Group
+		}
+
+		info.WriteString(lipgloss.NewStyle().Foreground(DefaultTheme.PrimaryText).Bold(true).Render(c.ChannelTitle) + "\n")
+		if c.Username != nil && *c.Username != "" {
+			info.WriteString(detailStyle.Render("@"+*c.Username) + "\n")
+		}
+		info.WriteString("\n")
+
+		if c.ParticipantsCount != nil {
+			info.WriteString(detailStyle.Render(fmt.Sprintf("Members: %d", *c.ParticipantsCount)) + "\n")
+		}
+
+		if c.IsBroadcast {
+			info.WriteString(detailStyle.Render("Broadcast Channel") + "\n")
+		}
+		if c.IsForum {
+			info.WriteString(detailStyle.Render("Forum Enabled") + "\n")
+		}
+		info.WriteString(detailStyle.Render(fmt.Sprintf("ID: %s", c.ID)) + "\n")
+	}
+	return lipgloss.NewStyle().Padding(1, 0).Render(info.String())
 }

@@ -279,7 +279,7 @@ func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (M
 	return *m, tea.Batch(cmds...)
 }
 
-func handleUserChange(m *Model) (Model, tea.Cmd) {
+func handleUserChange(m *Model, offsetID *int, afterMessagesCmd tea.Cmd) (Model, tea.Cmd) {
 	m.ShowForumTopics = false
 	m.SelectedForumTopic = nil
 
@@ -293,7 +293,7 @@ func handleUserChange(m *Model) (Model, tea.Cmd) {
 	cmd := telegram.Cligram.GetMessages(telegram.Cligram.Context(), types.GetMessagesRequest{
 		Peer:          pInfo,
 		Limit:         50,
-		OffsetID:      nil,
+		OffsetID:      offsetID,
 		ChatAreaWidth: nil,
 	})
 	cligramConfig := config.GetConfig()
@@ -307,7 +307,7 @@ func handleUserChange(m *Model) (Model, tea.Cmd) {
 	m.MainViewLoading = true
 	m.ChatUI.ResetSelected()
 	m.ChatUI.SetItems([]list.Item{})
-	return *m, cmd
+	return *m, tea.Sequence(cmd, afterMessagesCmd)
 }
 
 func changeFocusMode(m *Model, msg string, shift bool) (Model, tea.Cmd) {
