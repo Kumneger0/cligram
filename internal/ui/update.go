@@ -114,7 +114,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					items := append(m.Groups.Items(), *info.Channel)
 					m.Groups = list.New(items, list.NewDefaultDelegate(), 0, 0)
 					m.Groups.Select(len(m.Groups.Items()) - 1)
-					m.SelectedGroup = *info.Group
+					m.SelectedGroup = *info.Channel
 				}
 			} else {
 				if channelIndex := getChannelIndex(m, *info.Channel); channelIndex != -1 {
@@ -141,7 +141,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		var offsetID *int
-		if !msg.Response.Channel.IsForum && len(msg.MessageIDs) > 0 {
+		isForum := (info.Channel != nil && info.Channel.IsForum) || (info.Group != nil && info.Group.IsForum)
+		if !isForum && len(msg.MessageIDs) > 0 {
 			if id, err := strconv.ParseInt(msg.MessageIDs[0], 10, 64); err == nil {
 				offsetIDInt := int(id)
 				offsetID = &offsetIDInt
@@ -184,7 +185,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		cmds = append(cmds, m.updateConversations())
-
 		if m.SelectedFile == "uploading..." {
 			m.SelectedFile = ""
 		}
