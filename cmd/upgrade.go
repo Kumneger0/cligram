@@ -227,17 +227,21 @@ func GetNewVersionInfo(installedVersion string) NewVersionInfo {
 	}
 	response, err := http.Get(REPOURL)
 	if err != nil {
-		slog.Error(err.Error())
+		slog.Error("failed to fetch latest release", "url", REPOURL, "error", err)
+		return NewVersionInfo{IsUpdateAvailable: false, LatestRelease: Release{}}
 	}
 	defer response.Body.Close()
+
 	data, err := io.ReadAll(response.Body)
 	if err != nil {
-		slog.Error(err.Error())
+		slog.Error("failed to read latest release response", "error", err)
+		return NewVersionInfo{IsUpdateAvailable: false, LatestRelease: Release{}}
 	}
 	var latestRelease Release
 	err = json.Unmarshal(data, &latestRelease)
 	if err != nil {
-		slog.Error(err.Error())
+		slog.Error("failed to decode latest release response", "error", err)
+		return NewVersionInfo{IsUpdateAvailable: false, LatestRelease: Release{}}
 	}
 	latestVersion, err := goversion.NewVersion(strings.Replace(latestRelease.TagName, "v", "", 1))
 	if err != nil {
