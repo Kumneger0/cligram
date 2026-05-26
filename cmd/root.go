@@ -39,7 +39,15 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 			ctx, cancel := context.WithCancel(context.Background())
 			updateChannel := make(chan types.Notification, 128)
 
-			cligram, err := telegram.NewClient(ctx, updateChannel, telegramAPIID, telegramAPIHash)
+			account, err := cmd.Flags().GetString("account")
+
+			if err != nil {
+				slog.Error(err.Error())
+				cancel()
+				return nil
+			}
+
+			cligram, err := telegram.NewClient(ctx, updateChannel, telegramAPIID, telegramAPIHash, account)
 			if err != nil {
 				slog.Error(err.Error())
 				cancel()
@@ -236,11 +244,15 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 	cmd.AddCommand(cligramLog())
 	cmd.AddCommand(ManCmd(cmd))
 	cmd.AddCommand(client.Logout())
+	cmd.AddCommand(Account(telegramAPIID, telegramAPIHash))
 	return cmd
 }
 
 func Execute(version string, telegramAPIID, telegramAPIHash string) error {
 	cmd := newRootCmd(version, telegramAPIID, telegramAPIHash)
+
+	accountPaths := getAccountDirsOnThisDevice()
+	cmd.Flags().StringP("account", "a", accountPaths[0], "account to login in to ")
 
 	cmd.PersistentFlags().StringVar(&cpuFile, "cpuprofile", "", "write cpu profile to `file`")
 	cmd.PersistentFlags().StringVar(&memFile, "memprofile", "", "write memory profile to `file`")

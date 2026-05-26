@@ -42,8 +42,8 @@ type Config struct {
 
 var Cligram *telegram.Client
 
-func NewClient(ctx context.Context, config Config) (*Client, error) {
-	sessionStorage, err := newFileSessionStorage()
+func NewClient(ctx context.Context, config Config, account string) (*Client, error) {
+	sessionStorage, err := newFileSessionStorage(account)
 	if err != nil {
 		return nil, types.NewTelegramError(types.ErrorCodeSessionFailed, "failed to create session storage", err)
 	}
@@ -74,7 +74,7 @@ func NewClient(ctx context.Context, config Config) (*Client, error) {
 	}, nil
 }
 
-func NewClientFromEnv(ctx context.Context, updateChannel chan types.Notification, telegramAPIID, telegramAPIHash string) (*Client, error) {
+func NewClientFromEnv(ctx context.Context, updateChannel chan types.Notification, telegramAPIID, telegramAPIHash, account string) (*Client, error) {
 	appID, err := strconv.Atoi(telegramAPIID)
 	if err != nil {
 		return nil, types.NewTelegramError(types.ErrorCodeAuthFailed, "invalid TELEGRAM_API_ID", err)
@@ -84,7 +84,7 @@ func NewClientFromEnv(ctx context.Context, updateChannel chan types.Notification
 		AppID:         appID,
 		AppHash:       telegramAPIHash,
 		UpdateChannel: updateChannel,
-	})
+	}, account)
 }
 
 func (c *Client) GetAPI() *tg.Client {
