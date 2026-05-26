@@ -252,8 +252,11 @@ func Execute(version string, telegramAPIID, telegramAPIHash string) error {
 	cmd := newRootCmd(version, telegramAPIID, telegramAPIHash)
 
 	accountPaths := getAccountDirsOnThisDevice()
-	cmd.Flags().StringP("account", "a", accountPaths[0], "account to login in to ")
-
+	defaultAccount := "account1"
+	if len(accountPaths) > 0 {
+		defaultAccount = accountPaths[0]
+	}
+	cmd.Flags().StringP("account", "a", defaultAccount, "account to login in to ")
 	cmd.PersistentFlags().StringVar(&cpuFile, "cpuprofile", "", "write cpu profile to `file`")
 	cmd.PersistentFlags().StringVar(&memFile, "memprofile", "", "write memory profile to `file`")
 
