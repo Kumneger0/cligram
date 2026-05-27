@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"syscall"
@@ -17,6 +18,12 @@ import (
 
 	"github.com/kumneger0/cligram/internal/telegram/types"
 )
+
+var phoneNonDigitRe = regexp.MustCompile(`\D`)
+
+func normalizePhone(phone string) string {
+	return phoneNonDigitRe.ReplaceAllString(phone, "")
+}
 
 func (c *Client) Auth(ctx context.Context, accountsOnDeviceInfo []types.AccountsOnDeviceInfo) error {
 	authFlow := &authFlow{}
@@ -48,8 +55,8 @@ func (c *Client) Auth(ctx context.Context, accountsOnDeviceInfo []types.Accounts
 		var isAlreadyExist bool
 
 		for _, accountInfo := range accountsOnDeviceInfo {
-			storedNumber := strings.TrimPrefix(accountInfo.PhoneNumber, "+")
-			inputNumber := strings.TrimPrefix(phoneNumber, "+")
+			storedNumber := normalizePhone(accountInfo.PhoneNumber)
+			inputNumber := normalizePhone(phoneNumber)
 
 			if storedNumber == inputNumber {
 				isAlreadyExist = true

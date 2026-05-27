@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
@@ -52,7 +53,19 @@ func Logout(telegramAPIID, telegramAPIHash string) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStderr(), "We failed to log you out. Please report this error by clicking the following link:\n%s\n", errorLink)
 				return err
 			}
-			cligramWorkingDIR := filepath.Join(userHomeDir, ".cligram", accountToLogout)
+			sessionDir, err := filepath.Abs(filepath.Join(userHomeDir, ".cligram"))
+			if err != nil {
+				return err
+			}
+			cligramWorkingDIR, err := filepath.Abs(filepath.Join(sessionDir, accountToLogout))
+			if err != nil {
+				return err
+			}
+
+			if !strings.HasPrefix(cligramWorkingDIR, sessionDir+string(os.PathSeparator)) {
+				return fmt.Errorf("invalid account name: %s", accountToLogout)
+			}
+
 			err = os.RemoveAll(cligramWorkingDIR)
 			if err != nil {
 				slog.Error(err.Error())
