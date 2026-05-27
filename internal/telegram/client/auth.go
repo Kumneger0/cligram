@@ -22,7 +22,7 @@ import (
 	"github.com/kumneger0/cligram/internal/telegram/types"
 )
 
-func (c *Client) Auth(ctx context.Context) error {
+func (c *Client) Auth(ctx context.Context, accountsOnDeviceInfo []types.AccountsOnDeviceInfo) error {
 	authFlow := &authFlow{}
 
 	flow := auth.NewFlow(
@@ -46,6 +46,23 @@ func (c *Client) Auth(ctx context.Context) error {
 		phoneNumber, err = flow.Auth.Phone(ctx)
 		if err != nil {
 			fmt.Println("⚠️  Invalid phone number. Please try again (example: +14155552671).")
+			continue
+		}
+
+		var isAlreadyExist bool
+
+		for _, accountInfo := range accountsOnDeviceInfo {
+			storedNumber := strings.TrimPrefix(accountInfo.PhoneNumber, "+")
+			inputNumber := strings.TrimPrefix(phoneNumber, "+")
+
+			if storedNumber == inputNumber {
+				isAlreadyExist = true
+				break
+			}
+		}
+
+		if isAlreadyExist {
+			fmt.Println("There is account using this phone number on this device already please try new number")
 			continue
 		}
 

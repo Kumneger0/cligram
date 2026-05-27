@@ -19,13 +19,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type AccountsOnDeviceInfo struct {
-	accountName string
-	path        string
-}
-
 type accountModel struct {
-	accounts []AccountsOnDeviceInfo
+	accounts []types.AccountsOnDeviceInfo
 	cursor   int
 	selected string
 }
@@ -49,7 +44,7 @@ func (m *accountModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor++
 			}
 		case "enter":
-			m.selected = m.accounts[m.cursor].path
+			m.selected = m.accounts[m.cursor].Path
 			return m, tea.Quit
 		}
 	}
@@ -101,9 +96,9 @@ func (m accountModel) View() string {
 		}
 
 		content := fmt.Sprintf("%s\n%s %s",
-			nameStyle.Render(prefix+acc.accountName),
+			nameStyle.Render(prefix+acc.AccountName),
 			pathLabelStyle.Render("    Path:"),
-			pathValueStyle.Render(acc.path),
+			pathValueStyle.Render(acc.Path),
 		)
 		s.WriteString(style.Render(content))
 		s.WriteString("\n")
@@ -136,52 +131,8 @@ func Account(telegramAPIID, telegramAPIHash string) *cobra.Command {
 				}
 				return nil
 			}
-			onlyPaths := getAccountDirsOnThisDevice()
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			updateChannel := make(chan types.Notification, 128)
+			accountsOnThisDevice := getAccountDirsOnThisDevice(telegramAPIID, telegramAPIHash)
 
-			var accountsOnThisDevice []AccountsOnDeviceInfo
-			var mu sync.Mutex
-			var wg sync.WaitGroup
-			for _, p := range onlyPaths {
-				wg.Add(1)
-				go func(path string) {
-					defer wg.Done()
-
-					clientCtx, clientCancel := context.WithCancel(ctx)
-					defer clientCancel()
-
-					cligram, err := telegram.NewClient(clientCtx, updateChannel, telegramAPIID, telegramAPIHash, path)
-					if err != nil {
-						slog.Error("failed to create client", "path", path, "error", err)
-						return
-					}
-
-					err = cligram.Client.Run(clientCtx, func(ctx context.Context) error {
-						self, err := cligram.Client.Self(ctx)
-						if err != nil {
-							slog.Error(err.Error())
-							return err
-						}
-
-						mu.Lock()
-						accountsOnThisDevice = append(accountsOnThisDevice, AccountsOnDeviceInfo{
-							accountName: self.FirstName,
-							path:        path,
-						})
-						mu.Unlock()
-
-						clientCancel()
-						return nil
-					})
-
-					if err != nil {
-						slog.Debug("client run finished", "path", path, "error", err)
-					}
-				}(p)
-			}
-			wg.Wait()
 			if len(accountsOnThisDevice) == 0 {
 				fmt.Println("No active accounts found.")
 				return nil
@@ -246,27 +197,25 @@ func generateDir() string {
 	return fmt.Sprintf("account%d", maxID+1)
 }
 
-func getAccountDirsOnThisDevice() []string {
-	var onlyPaths []string
+type DirInfo struct {
+	name    string
+	modTime int64
+}
 
+func getAccountPaths() []DirInfo {
 	userHomeDir, err := os.UserHomeDir()
 	if err != nil {
 		slog.Error(err.Error())
-		return onlyPaths
+		return []DirInfo{}
 	}
 	sessionDir := filepath.Join(userHomeDir, ".cligram")
 	dirEntry, err := os.ReadDir(sessionDir)
 	if err != nil {
 		slog.Error(err.Error())
-		return onlyPaths
+		return []DirInfo{}
 	}
 
-	type dirInfo struct {
-		name    string
-		modTime int64
-	}
-	var dirs []dirInfo
-
+	var dirs []DirInfo
 	for _, dir := range dirEntry {
 		if dir.IsDir() {
 			info, err := dir.Info()
@@ -274,14 +223,14 @@ func getAccountDirsOnThisDevice() []string {
 				slog.Error(err.Error())
 				continue
 			}
-			dirs = append(dirs, dirInfo{
+			dirs = append(dirs, DirInfo{
 				name:    dir.Name(),
 				modTime: info.ModTime().Unix(),
 			})
 		}
 	}
 
-	slices.SortFunc(dirs, func(a, b dirInfo) int {
+	slices.SortFunc(dirs, func(a, b DirInfo) int {
 		if a.modTime < b.modTime {
 			return -1
 		}
@@ -291,13 +240,67 @@ func getAccountDirsOnThisDevice() []string {
 		return 0
 	})
 
+	return dirs
+}
+
+func getAccountDirsOnThisDevice(telegramAPIID, telegramAPIHash string) []types.AccountsOnDeviceInfo {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	updateChannel := make(chan types.Notification, 128)
+	dirs := getAccountPaths()
+	var accountsOnThisDevice []types.AccountsOnDeviceInfo
 	for _, d := range dirs {
-		onlyPaths = append(onlyPaths, d.name)
+		var mu sync.Mutex
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func(d DirInfo) {
+			defer wg.Done()
+
+			clientCtx, clientCancel := context.WithCancel(ctx)
+			defer clientCancel()
+
+			cligram, err := telegram.NewClient(clientCtx, updateChannel, telegramAPIID, telegramAPIHash, d.name)
+			if err != nil {
+				slog.Error("failed to create client", "path", d.name, "error", err)
+				return
+			}
+
+			err = cligram.Client.Run(clientCtx, func(ctx context.Context) error {
+				self, err := cligram.Client.Self(ctx)
+				if err != nil {
+					slog.Error(err.Error())
+					return err
+				}
+
+				mu.Lock()
+				accountsOnThisDevice = append(accountsOnThisDevice, types.AccountsOnDeviceInfo{
+					AccountName: self.FirstName,
+					PhoneNumber: self.Phone,
+					Path:        d.name,
+					ModTime:     d.modTime,
+				})
+				mu.Unlock()
+
+				clientCancel()
+				return nil
+			})
+
+			if err != nil {
+				slog.Debug("client run finished", "path", d.name, "error", err)
+			}
+		}(d)
+		wg.Wait()
 	}
 
-	if len(onlyPaths) == 0 {
-		dir := generateDir()
-		return []string{dir}
-	}
-	return onlyPaths
+	slices.SortFunc(accountsOnThisDevice, func(a, b types.AccountsOnDeviceInfo) int {
+		if a.ModTime < b.ModTime {
+			return -1
+		}
+		if a.ModTime > b.ModTime {
+			return 1
+		}
+		return 0
+	})
+
+	return accountsOnThisDevice
 }
