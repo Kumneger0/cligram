@@ -15,6 +15,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kumneger0/cligram/internal/telegram"
+	"github.com/kumneger0/cligram/internal/telegram/client"
 	"github.com/kumneger0/cligram/internal/telegram/types"
 	"github.com/spf13/cobra"
 )
@@ -202,14 +203,22 @@ type DirInfo struct {
 	modTime int64
 }
 
-func getAccountPaths() []DirInfo {
+func getCligramDir() *string {
 	userHomeDir, err := os.UserHomeDir()
 	if err != nil {
 		slog.Error(err.Error())
-		return []DirInfo{}
+		return nil
 	}
 	sessionDir := filepath.Join(userHomeDir, ".cligram")
-	dirEntry, err := os.ReadDir(sessionDir)
+	return &sessionDir
+}
+
+func getAccountPaths() []DirInfo {
+	cligramDir := getCligramDir()
+	if cligramDir == nil {
+		return []DirInfo{}
+	}
+	dirEntry, err := os.ReadDir(*cligramDir)
 	if err != nil {
 		slog.Error(err.Error())
 		return []DirInfo{}
@@ -248,6 +257,12 @@ func getAccountDirsOnThisDevice(telegramAPIID, telegramAPIHash string) []types.A
 	defer cancel()
 	updateChannel := make(chan types.Notification, 128)
 	dirs := getAccountPaths()
+
+	originalCligram := client.Cligram
+	defer func() {
+		client.Cligram = originalCligram
+	}()
+
 	var accountsOnThisDevice []types.AccountsOnDeviceInfo
 	for _, d := range dirs {
 		var mu sync.Mutex
@@ -268,7 +283,8 @@ func getAccountDirsOnThisDevice(telegramAPIID, telegramAPIHash string) []types.A
 			err = cligram.Client.Run(clientCtx, func(ctx context.Context) error {
 				self, err := cligram.Client.Self(ctx)
 				if err != nil {
-					slog.Error(err.Error())
+					errMessage := err.Error()
+					slog.Error(errMessage)
 					return err
 				}
 

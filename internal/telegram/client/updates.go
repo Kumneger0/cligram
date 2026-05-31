@@ -48,6 +48,44 @@ var (
 func getNtgClient() *ntg.Client {
 	ntgClientOnce.Do(func() {
 		ntgClient = ntg.Init()
+
+		ntgClient.OnSignal(func(chatID int64, data []byte) {
+			p2pStatesMu.Lock()
+			state := p2pStates[chatID]
+			p2pStatesMu.Unlock()
+
+			if state != nil && state.inputCall != nil {
+				if Cligram == nil {
+					slog.Error("Cligram client is nil during OnSignal")
+					return
+				}
+				_, err := Cligram.API().PhoneSendSignalingData(context.Background(), &tg.PhoneSendSignalingDataRequest{
+					Peer: *state.inputCall,
+					Data: data,
+				})
+				if err != nil {
+					slog.Error("failed to send signaling data", "error", err)
+				}
+			}
+		})
+
+		ntgClient.OnConnectionChange(func(chatID int64, info ntg.NetworkInfo) {
+			waitConnectMu.Lock()
+			ch := waitConnect[chatID]
+			waitConnectMu.Unlock()
+
+			if ch != nil {
+				switch info.State {
+				case ntg.Connected:
+					ch <- nil
+				case ntg.Closed, ntg.Failed:
+					ch <- fmt.Errorf("connection failed")
+				case ntg.Timeout:
+					ch <- fmt.Errorf("connection timeout")
+				default:
+				}
+			}
+		})
 	})
 	return ntgClient
 }
@@ -273,6 +311,11 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 					default:
 					}
 					delete(p2pStates, uid)
+
+					waitConnectMu.Lock()
+					delete(waitConnect, uid)
+					waitConnectMu.Unlock()
+
 					client := getNtgClient()
 					_ = client.Stop(uid)
 					break
@@ -459,41 +502,6 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 		return nil
 	})
 
-	// Register ntgcalls callbacks
-	client := getNtgClient()
-
-	// Forward signaling data from ntgcalls to Telegram
-	client.OnSignal(func(chatID int64, data []byte) {
-		p2pStatesMu.Lock()
-		state := p2pStates[chatID]
-		p2pStatesMu.Unlock()
-		if state != nil && state.inputCall != nil {
-			_, _ = Cligram.API().PhoneSendSignalingData(context.Background(), &tg.PhoneSendSignalingDataRequest{
-				Peer: *state.inputCall,
-				Data: data,
-			})
-		}
-	})
-
-	// Handle connection state changes
-	client.OnConnectionChange(func(chatID int64, info ntg.NetworkInfo) {
-		waitConnectMu.Lock()
-		ch := waitConnect[chatID]
-		waitConnectMu.Unlock()
-
-		if ch != nil {
-			switch info.State {
-			case ntg.Connected:
-				ch <- nil
-			case ntg.Closed, ntg.Failed:
-				ch <- fmt.Errorf("connection failed")
-			case ntg.Timeout:
-				ch <- fmt.Errorf("connection timeout")
-			default:
-			}
-		}
-	})
-
 	return updates.New(updates.Config{
 		Handler: dispatcher,
 	})
@@ -530,8 +538,23 @@ func parseRTCServers(connections []tg.PhoneConnectionClass) []ntg.RTCServer {
 	return servers
 }
 
-func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64) error {
+func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64) (err error) {
 	client := getNtgClient()
+
+	// Cleanup on failure if the call wasn't fully established
+	defer func() {
+		if err != nil {
+			p2pStatesMu.Lock()
+			delete(p2pStates, userID)
+			p2pStatesMu.Unlock()
+
+			waitConnectMu.Lock()
+			delete(waitConnect, userID)
+			waitConnectMu.Unlock()
+
+			_ = client.Stop(userID)
+		}
+	}()
 
 	dhRaw, err := Cligram.API().MessagesGetDhConfig(ctx, &tg.MessagesGetDhConfigRequest{
 		Version:      0,
@@ -603,6 +626,8 @@ func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64) error 
 		if err != nil {
 			return err
 		}
+	case <-ctx.Done():
+		return ctx.Err()
 	case <-time.After(30 * time.Second):
 		return fmt.Errorf("timed out waiting for call acceptance")
 	}
@@ -614,7 +639,6 @@ func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64) error 
 
 	authParams, err := client.ExchangeKeys(userID, peerGB, 0)
 	if err != nil {
-		fmt.Println("ntg ExchangeKeys failed", err)
 		return fmt.Errorf("ntg ExchangeKeys: %w", err)
 	}
 
@@ -631,7 +655,6 @@ func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64) error 
 		},
 	})
 	if err != nil {
-		fmt.Println("phone.confirmCall failed", err)
 		return fmt.Errorf("phone.confirmCall: %w", err)
 	}
 
@@ -647,6 +670,13 @@ func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64) error 
 	waitConnect[userID] = make(chan error, 1)
 	waitConnectMu.Unlock()
 
+	// Ensure waitConnect is cleaned up eventually
+	defer func() {
+		waitConnectMu.Lock()
+		delete(waitConnect, userID)
+		waitConnectMu.Unlock()
+	}()
+
 	err = client.ConnectP2P(
 		userID,
 		servers,
@@ -654,7 +684,6 @@ func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64) error 
 		phoneCallObj.P2PAllowed,
 	)
 	if err != nil {
-		fmt.Println("ntg ConnectP2P failed", err)
 		return fmt.Errorf("ntg ConnectP2P: %w", err)
 	}
 
@@ -667,10 +696,11 @@ func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64) error 
 		select {
 		case err = <-ch:
 			if err != nil {
-				fmt.Println("P2P connection failed", err)
 				return err
 			}
 			fmt.Println("P2P connected successfully")
+		case <-ctx.Done():
+			return ctx.Err()
 		case <-time.After(30 * time.Second):
 			return fmt.Errorf("timed out waiting for P2P connection")
 		}
