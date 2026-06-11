@@ -913,6 +913,10 @@ func (c *Client) GetAllStories(ctx context.Context) tea.Cmd {
 				continue
 			}
 
+			story, _ := os.Create(tgUser.FirstName + "_" + strconv.Itoa(int(peerUser.UserID)) + ".txt")
+
+			fmt.Fprintln(story, "max read id", peerStorie.MaxReadID, "storyid")
+
 			userInfo := shared.ConvertTGUserToUserInfo(tgUser)
 			userInfo.HasStories = true
 
@@ -921,6 +925,7 @@ func (c *Client) GetAllStories(ctx context.Context) tea.Cmd {
 				if !ok {
 					continue
 				}
+				fmt.Fprintln(story, "story id", storyItem.ID)
 				switch item := storyItem.Media.(type) {
 				case *tg.MessageMediaDocument:
 					documentClass, ok := item.GetDocument()
@@ -945,6 +950,7 @@ func (c *Client) GetAllStories(ctx context.Context) tea.Cmd {
 				}
 			}
 		}
+
 		return types.GetAllStoriesMsg{Stories: AllStories}
 	}
 }

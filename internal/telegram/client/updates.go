@@ -49,6 +49,7 @@ func getNtgClient() *ntg.Client {
 	ntgClientOnce.Do(func() {
 		ntgClient = ntg.Init()
 
+		// Forward signaling data from ntgcalls to Telegram
 		ntgClient.OnSignal(func(chatID int64, data []byte) {
 			p2pStatesMu.Lock()
 			state := p2pStates[chatID]
@@ -59,7 +60,7 @@ func getNtgClient() *ntg.Client {
 					slog.Error("Cligram client is nil during OnSignal")
 					return
 				}
-				_, err := Cligram.API().PhoneSendSignalingData(context.Background(), &tg.PhoneSendSignalingDataRequest{
+				_, err := Cligram.API().PhoneSendSignalingData(context.TODO(), &tg.PhoneSendSignalingDataRequest{
 					Peer: *state.inputCall,
 					Data: data,
 				})
@@ -69,6 +70,7 @@ func getNtgClient() *ntg.Client {
 			}
 		})
 
+		// Handle connection state changes
 		ntgClient.OnConnectionChange(func(chatID int64, info ntg.NetworkInfo) {
 			waitConnectMu.Lock()
 			ch := waitConnect[chatID]
@@ -118,7 +120,10 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 			if state.inputCall != nil && state.inputCall.ID == update.PhoneCallID {
 				p2pStatesMu.Unlock()
 				client := getNtgClient()
-				_ = client.SendSignalingData(userID, update.Data)
+				err := client.SendSignalingData(userID, update.Data)
+				if err != nil {
+					slog.Error("failed to send signaling data to ntgcalls", "userID", userID, "error", err)
+				}
 				return nil
 			}
 		}

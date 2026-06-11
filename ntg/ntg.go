@@ -10,6 +10,8 @@ package ntg
 extern void goOnSignaling(uintptr_t ptr, int64_t userId, uint8_t* data, int size, void* userData);
 extern void goOnConnectionChange(uintptr_t ptr, int64_t chatID, ntg_network_info_struct networkInfo, void* userData);
 extern void goOnFrames(uintptr_t ptr, int64_t chatID, ntg_stream_mode_enum streamMode, ntg_stream_device_enum streamDevice, ntg_frame_struct* frames, uint64_t size, void* userData);
+extern void goOnRemoteSourceChange(uintptr_t ptr, int64_t chatID, ntg_remote_source_struct source, void* userData);
+extern void goOnLog(ntg_log_message_struct message);
 
 // unlockMutex is the promise callback invoked by the C library when
 // an async operation completes. It receives a pointer to a Go sync.Mutex
@@ -21,6 +23,9 @@ import "C"
 
 import (
 	"fmt"
+	"log/slog"
+	"os"
+	"os/exec"
 	"sync"
 	"unsafe"
 )
@@ -175,6 +180,7 @@ type Frame struct {
 type SignalCallback func(chatID int64, data []byte)
 type ConnectionChangeCallback func(chatID int64, info NetworkInfo)
 type FrameCallback func(chatID int64, mode StreamMode, device StreamDevice, frames []Frame)
+type RemoteSourceCallback func(chatID int64, ssrc uint32, state int, device StreamDevice)
 
 // ---------------------------------------------------------------------------
 // Client
@@ -185,6 +191,7 @@ type Client struct {
 	signalCallbacks           []SignalCallback
 	connectionChangeCallbacks []ConnectionChangeCallback
 	frameCallbacks            []FrameCallback
+	remoteSourceCallbacks     []RemoteSourceCallback
 }
 
 func Init() *Client {
@@ -197,6 +204,10 @@ func Init() *Client {
 	C.ntg_on_signaling_data(instance.ptr, (C.ntg_signaling_callback)(unsafe.Pointer(C.goOnSignaling)), selfPointer)
 	C.ntg_on_connection_change(instance.ptr, (C.ntg_connection_callback)(unsafe.Pointer(C.goOnConnectionChange)), selfPointer)
 	C.ntg_on_frames(instance.ptr, (C.ntg_frame_callback)(unsafe.Pointer(C.goOnFrames)), selfPointer)
+	C.ntg_on_remote_source_change(instance.ptr, (C.ntg_remote_source_callback)(unsafe.Pointer(C.goOnRemoteSourceChange)), selfPointer)
+
+	// Register the library logger to pipe internal ntgcalls WebRTC & playback logs to slog
+	C.ntg_register_logger((C.ntg_log_message_callback)(unsafe.Pointer(C.goOnLog)))
 
 	return instance
 }
@@ -218,6 +229,11 @@ func (c *Client) OnConnectionChange(cb ConnectionChangeCallback) {
 // OnFrame registers a callback for decoded media frames.
 func (c *Client) OnFrame(cb FrameCallback) {
 	c.frameCallbacks = append(c.frameCallbacks, cb)
+}
+
+// OnRemoteSource registers a callback for remote source changes.
+func (c *Client) OnRemoteSource(cb RemoteSourceCallback) {
+	c.remoteSourceCallbacks = append(c.remoteSourceCallbacks, cb)
 }
 
 //export goOnSignaling
@@ -250,6 +266,66 @@ func goOnConnectionChange(_ C.uintptr_t, chatID C.int64_t, networkInfo C.ntg_net
 	}
 }
 
+//export goOnRemoteSourceChange
+func goOnRemoteSourceChange(_ C.uintptr_t, chatID C.int64_t, source C.ntg_remote_source_struct, ptr unsafe.Pointer) {
+	self := (*Client)(ptr)
+	goChatID := int64(chatID)
+
+	fmt.Println("source", source)
+	var device StreamDevice
+	switch source.device {
+	case 0:
+		device = MicrophoneDevice
+	case 1:
+		device = SpeakerDevice
+	case 2:
+		device = CameraDevice
+	case 3:
+		device = ScreenDevice
+	}
+
+	slog.Info("remote source change detected", "chatID", goChatID, "ssrc", uint32(source.ssrc), "state", int(source.state), "device", int(device))
+
+	for _, cb := range self.remoteSourceCallbacks {
+		go cb(goChatID, uint32(source.ssrc), int(source.state), device)
+	}
+}
+
+//export goOnLog
+func goOnLog(msg C.ntg_log_message_struct) {
+	level := int(msg.level)
+	file := C.GoString(msg.file)
+	line := uint32(msg.line)
+	message := C.GoString(msg.message)
+
+	var levelStr string
+	switch level {
+	case 1: // NTG_LOG_DEBUG
+		levelStr = "DEBUG"
+		slog.Debug("ntgcalls", "message", message, "file", file, "line", line)
+	case 2: // NTG_LOG_INFO
+		levelStr = "INFO"
+		slog.Info("ntgcalls", "message", message, "file", file, "line", line)
+	case 4: // NTG_LOG_WARNING
+		levelStr = "WARN"
+		slog.Warn("ntgcalls", "message", message, "file", file, "line", line)
+	case 8: // NTG_LOG_ERROR
+		levelStr = "ERROR"
+		slog.Error("ntgcalls", "message", message, "file", file, "line", line)
+	default:
+		levelStr = "INFO"
+		slog.Info("ntgcalls", "message", message, "file", file, "line", line)
+	}
+
+	// Also print to stdout so it is visible in the terminal regardless of slog handler
+	fmt.Printf("[ntgcalls][%s] %s  (%s:%d)\n", levelStr, message, file, line)
+}
+
+var (
+	audioFramesMu    sync.Mutex
+	audioFramesCount = make(map[int64]int)
+)
+
 //export goOnFrames
 func goOnFrames(_ C.uintptr_t, chatID C.int64_t, streamMode C.ntg_stream_mode_enum, streamDevice C.ntg_stream_device_enum, frames *C.ntg_frame_struct, size C.uint64_t, ptr unsafe.Pointer) {
 	self := (*Client)(ptr)
@@ -279,14 +355,43 @@ func goOnFrames(_ C.uintptr_t, chatID C.int64_t, streamMode C.ntg_stream_mode_en
 	goFrames := make([]Frame, count)
 	for i := 0; i < count; i++ {
 		frame := (*C.ntg_frame_struct)(unsafe.Pointer(uintptr(unsafe.Pointer(frames)) + uintptr(i)*unsafe.Sizeof(*frames)))
+		frameBytes := C.GoBytes(unsafe.Pointer(frame.data), C.int(frame.sizeData))
 		goFrames[i] = Frame{
-			Data: C.GoBytes(unsafe.Pointer(frame.data), C.int(frame.sizeData)),
+			Data: frameBytes,
 			FrameData: FrameData{
 				AbsoluteCaptureTimestamp: uint64(frame.frameData.absoluteCaptureTimestampMs),
 				Width:                    int16(frame.frameData.width),
 				Height:                   int16(frame.frameData.height),
 				Rotation:                 uint8(frame.frameData.rotation),
 			},
+		}
+
+		fmt.Println("stream mode", streamMode)
+		fmt.Println("stream mode", streamMode)
+		fmt.Println("stream mode", streamMode)
+		fmt.Println("stream mode", streamMode)
+
+		// Log incoming audio frames for debugging
+		if mode == PlaybackStream && device == SpeakerDevice {
+			audioFramesMu.Lock()
+			count := audioFramesCount[goChatID]
+			audioFramesCount[goChatID] = count + 1
+			audioFramesMu.Unlock()
+
+			if count == 0 {
+				slog.Info("🎙️ RECEIVED FIRST REMOTE AUDIO FRAME from peer", "chatID", goChatID, "size", len(frameBytes))
+			} else if count%100 == 0 {
+				slog.Info("🎙️ Remote audio stream active", "chatID", goChatID, "totalFramesReceived", count+1)
+			}
+
+			slog.Debug("received audio frame from peer", "size", len(frameBytes), "chatID", goChatID)
+
+			// Dump raw PCM to a file
+			f, err := os.OpenFile("incoming_audio.raw", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if err == nil {
+				_, _ = f.Write(frameBytes)
+				f.Close()
+			}
 		}
 	}
 
@@ -569,9 +674,40 @@ func (c *Client) SetStreamSources(
 }
 
 func (c *Client) SetupDefaultAudio(userID int64) error {
-	// Capture stream – default microphone via FFmpeg + PulseAudio
-	cmd := "ffmpeg -f pulse -i default -f s16le -ar 48000 -ac 1 -v quiet pipe:1"
-	micInput := C.CString(cmd)
+	// Dynamically choose the best available audio commands for raw, low-latency PCM capture and playback.
+	// We prefer arecord / aplay since they are universal, highly reliable, and support explicit raw formats with low-latency buffering.
+	// Second, we try native pw-record / pw-play.
+	// Last, we fall back to parec / pacat.
+	var cmdCapture, cmdPlayback string
+
+	fmt.Println("setting the audio")
+
+	_, errArecord := exec.LookPath("arecord")
+	_, errAplay := exec.LookPath("aplay")
+	_, errRecord := exec.LookPath("pw-record")
+	_, errPlay := exec.LookPath("pw-play")
+
+	if errArecord == nil && errAplay == nil {
+		slog.Info("🎙️ Universal low-latency ALSA utilities detected, using arecord and aplay")
+		// Capture (microphone)
+		cmdCapture = "arecord -f S16_LE -r 48000 -c 1 -t raw -B 20000 -"
+		// Playback (speaker)
+		cmdPlayback = "aplay -f S16_LE -r 48000 -c 1 -t raw -B 20000 -"
+	} else if errRecord == nil && errPlay == nil {
+		slog.Info("🎙️ Native PipeWire utilities detected, using pw-record and pw-play")
+		// Capture (microphone)
+		cmdCapture = "pw-record --format s16 --rate 48000 --channels 1 --latency 20ms -"
+		// Playback (speaker)
+		cmdPlayback = "pw-play --format s16 --rate 48000 --channels 1 --latency 20ms -"
+	} else {
+		slog.Info("🎙️ Falling back to PulseAudio legacy commands")
+		// Capture (microphone)
+		cmdCapture = "parec --raw --format=s16le --rate=48000 --channels=1 --latency-msec=40"
+		// Playback (speaker)
+		cmdPlayback = "pacat --playback --raw --format=s16le --rate=48000 --channels=1 --latency-msec=40"
+	}
+
+	micInput := C.CString(cmdCapture)
 	defer C.free(unsafe.Pointer(micInput))
 	mic := C.ntg_audio_description_struct{
 		mediaSource:  C.NTG_SHELL,
@@ -580,11 +716,27 @@ func (c *Client) SetupDefaultAudio(userID int64) error {
 		channelCount: 1,
 		keepOpen:     true,
 	}
-	if err := c.SetStreamSources(userID, C.NTG_STREAM_CAPTURE, &mic, nil); err != nil {
+
+	speakerOutput := C.CString(cmdPlayback)
+	defer C.free(unsafe.Pointer(speakerOutput))
+	speaker := C.ntg_audio_description_struct{
+		mediaSource:  C.NTG_SHELL,
+		input:        speakerOutput,
+		sampleRate:   48000,
+		channelCount: 1,
+		keepOpen:     true,
+	}
+
+	// Set up both microphone and speaker descriptions for both directions to prevent ntgcalls
+	// from unregistering/disabling either stream due to a nil/nullptr parameter.
+	if err := c.SetStreamSources(userID, C.NTG_STREAM_CAPTURE, &mic, &speaker); err != nil {
 		return fmt.Errorf("set capture stream: %w", err)
 	}
 
-	// Playback of remote audio is handled automatically by ntgcalls.
+	if err := c.SetStreamSources(userID, C.NTG_STREAM_PLAYBACK, &mic, &speaker); err != nil {
+		return fmt.Errorf("set playback stream: %w", err)
+	}
+
 	return nil
 }
 
