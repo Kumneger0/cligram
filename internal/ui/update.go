@@ -176,6 +176,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			m.Conversations = updatedConversations
+
+			m.Alert = m.Alert.WithAllowEscToClose().WithPosition(bubbleup.TopLeftPosition)
+			alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, msg.Err.Error())
+			cmds = append(cmds, alertCmd)
 		} else if msg.Response != nil && msg.Response.MessageID != nil {
 			for i, conv := range m.Conversations {
 				if conv.ID == msg.RandID {
