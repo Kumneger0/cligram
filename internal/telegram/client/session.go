@@ -1,19 +1,28 @@
 package client
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/gotd/td/telegram"
 )
 
-func newFileSessionStorage() (*telegram.FileSessionStorage, error) {
+func newFileSessionStorage(account string) (*telegram.FileSessionStorage, error) {
+	if account == "" {
+		return nil, errors.New("account cannot be empty")
+	}
+	if account == "." || account == ".." ||
+		strings.Contains(account, string(filepath.Separator)) {
+		return nil, errors.New("invalid account name")
+	}
+
 	userHomeDir, err := os.UserHomeDir()
 	if err != nil {
 		return nil, err
 	}
-
-	sessionDir := filepath.Join(userHomeDir, ".cligram")
+	sessionDir := filepath.Join(userHomeDir, ".cligram", account)
 	if err := ensureDir(sessionDir); err != nil {
 		return nil, err
 	}

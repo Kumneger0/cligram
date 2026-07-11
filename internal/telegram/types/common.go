@@ -192,3 +192,10 @@ func (f ForumTopicInfo) Title() string {
 func (f ForumTopicInfo) FilterValue() string {
 	return f.TopicTitle
 }
+
+type AccountsOnDeviceInfo struct {
+	AccountName string
+	PhoneNumber string
+	Path        string
+	ModTime     int64
+}

@@ -17,7 +17,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/term"
 	"github.com/kumneger0/cligram/internal/telegram"
-	"github.com/kumneger0/cligram/internal/telegram/client"
 	"github.com/kumneger0/cligram/internal/telegram/types"
 	"github.com/kumneger0/cligram/internal/ui"
 	overlay "github.com/rmhubbert/bubbletea-overlay"
@@ -37,18 +36,23 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 		Short: "cligram a cli based telegram client",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 			updateChannel := make(chan types.Notification, 128)
-
-			cligram, err := telegram.NewClient(ctx, updateChannel, telegramAPIID, telegramAPIHash)
+			account, err := cmd.Flags().GetString("account")
 			if err != nil {
 				slog.Error(err.Error())
-				cancel()
+				return nil
+			}
+
+			cligram, err := telegram.NewClient(ctx, updateChannel, telegramAPIID, telegramAPIHash, account)
+			if err != nil {
+				slog.Error(err.Error())
 				return fmt.Errorf("failed to initialize telegram client: %w", err)
 			}
 			telegram.Cligram = cligram
 			err = telegram.Cligram.Run(ctx, func(ctx context.Context) error {
-				if err := cligram.Auth(ctx); err != nil {
-					cancel()
+				accountsOnThisDevice := getAccountDirsOnThisDevice(telegramAPIID, telegramAPIHash)
+				if err := cligram.Auth(ctx, accountsOnThisDevice); err != nil {
 					slog.Error(err.Error())
 					return fmt.Errorf("authentication failed: %w", err)
 				}
@@ -197,9 +201,7 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 				}()
 				_, err = Program.Run()
 
-				cancel()
 				if err != nil {
-					cancel()
 					return fmt.Errorf("failed to start TUI: %w", err)
 				}
 
@@ -235,13 +237,20 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 	cmd.AddCommand(upgradeCligram(version))
 	cmd.AddCommand(cligramLog())
 	cmd.AddCommand(ManCmd(cmd))
-	cmd.AddCommand(client.Logout())
+	cmd.AddCommand(Logout(telegramAPIID, telegramAPIHash))
+	cmd.AddCommand(Account(telegramAPIID, telegramAPIHash))
 	return cmd
 }
 
 func Execute(version string, telegramAPIID, telegramAPIHash string) error {
 	cmd := newRootCmd(version, telegramAPIID, telegramAPIHash)
 
+	accountPaths := getAccountPaths()
+	defaultAccount := "account1"
+	if len(accountPaths) > 0 {
+		defaultAccount = accountPaths[0].name
+	}
+	cmd.Flags().StringP("account", "a", defaultAccount, "account to login in to ")
 	cmd.PersistentFlags().StringVar(&cpuFile, "cpuprofile", "", "write cpu profile to `file`")
 	cmd.PersistentFlags().StringVar(&memFile, "memprofile", "", "write memory profile to `file`")
 
