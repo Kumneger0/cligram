@@ -5,10 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
-	"net/url"
 	"os"
-	"path/filepath"
+	"regexp"
 	"strings"
 
 	"syscall"
@@ -17,12 +15,17 @@ import (
 
 	"github.com/gotd/td/telegram/auth"
 	"github.com/gotd/td/tg"
-	"github.com/spf13/cobra"
 
 	"github.com/kumneger0/cligram/internal/telegram/types"
 )
 
-func (c *Client) Auth(ctx context.Context) error {
+var phoneNonDigitRe = regexp.MustCompile(`\D`)
+
+func normalizePhone(phone string) string {
+	return phoneNonDigitRe.ReplaceAllString(phone, "")
+}
+
+func (c *Client) Auth(ctx context.Context, accountsOnDeviceInfo []types.AccountsOnDeviceInfo) error {
 	authFlow := &authFlow{}
 
 	flow := auth.NewFlow(
@@ -46,6 +49,23 @@ func (c *Client) Auth(ctx context.Context) error {
 		phoneNumber, err = flow.Auth.Phone(ctx)
 		if err != nil {
 			fmt.Println("⚠️  Invalid phone number. Please try again (example: +14155552671).")
+			continue
+		}
+
+		var isAlreadyExist bool
+
+		for _, accountInfo := range accountsOnDeviceInfo {
+			storedNumber := normalizePhone(accountInfo.PhoneNumber)
+			inputNumber := normalizePhone(phoneNumber)
+
+			if storedNumber == inputNumber {
+				isAlreadyExist = true
+				break
+			}
+		}
+
+		if isAlreadyExist {
+			fmt.Println("There is account using this phone number on this device already please try new number")
 			continue
 		}
 
@@ -155,36 +175,4 @@ func (a *authFlow) SignUp(_ context.Context) (auth.UserInfo, error) {
 
 func (a *authFlow) AcceptTermsOfService(context.Context, tg.HelpTermsOfService) error {
 	return nil
-}
-
-func Logout() *cobra.Command {
-	return &cobra.Command{
-		Use:          "logout",
-		Short:        "Log out from cligram",
-		Args:         cobra.NoArgs,
-		SilenceUsage: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			userHomeDir, err := os.UserHomeDir()
-			if err != nil {
-				slog.Error(err.Error())
-				errorLink := fmt.Sprintf("https://github.com/kumneger0/cligram/issues/new?title=%s&body=%s",
-					url.QueryEscape("Logout Error"),
-					url.QueryEscape("Error detail:\n\n"+err.Error()))
-				fmt.Fprintf(cmd.OutOrStderr(), "We failed to log you out. Please report this error by clicking the following link:\n%s\n", errorLink)
-				return err
-			}
-			cligramWorkingDIR := filepath.Join(userHomeDir, ".cligram")
-			err = os.RemoveAll(cligramWorkingDIR)
-			if err != nil {
-				slog.Error(err.Error())
-				errorLink := fmt.Sprintf("https://github.com/kumneger0/cligram/issues/new?title=%s&body=%s",
-					url.QueryEscape("Logout Error "),
-					url.QueryEscape("Error detail:\n\n"+err.Error()))
-				fmt.Fprintf(cmd.OutOrStderr(), "We failed to log you out. Please report this error by clicking the following link:\n%s\n", errorLink)
-				return err
-			}
-			fmt.Fprintln(os.Stdout, "You have successfully logged out")
-			return nil
-		},
-	}
 }
