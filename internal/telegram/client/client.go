@@ -11,6 +11,7 @@ import (
 	mathRand "math/rand"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -27,6 +28,7 @@ import (
 	configManager "github.com/kumneger0/cligram/internal/config"
 	"github.com/kumneger0/cligram/internal/telegram/shared"
 	"github.com/kumneger0/cligram/internal/telegram/types"
+	"github.com/kumneger0/cligram/ntg"
 
 	floodwait "github.com/gotd/contrib/middleware/floodwait"
 	"github.com/gotd/contrib/middleware/ratelimit"
@@ -138,22 +140,20 @@ func (c *Client) GenerateGAHash() ([]byte, *types.DHConfig, error) {
 
 func (c *Client) CallUser(ctx context.Context, peer types.Peer) tea.Cmd {
 	return func() tea.Msg {
-		fmt.Println("making a call")
 		userID, err := strconv.ParseInt(peer.ID, 10, 64)
 		if err != nil {
-			fmt.Println("err", err.Error())
-			return fmt.Errorf("failed to parse user ID: %w", err)
+			slog.Error("failed to parse user ID for call", "error", err)
+			return nil
 		}
 
 		accessHash, err := strconv.ParseInt(peer.AccessHash, 10, 64)
 		if err != nil {
-			fmt.Println("err", err.Error())
-			return fmt.Errorf("failed to parse access hash: %w", err)
+			slog.Error("failed to parse access hash for call", "error", err)
+			return nil
 		}
 
 		go func() {
 			if err := InitiateP2PCall(ctx, userID, accessHash); err != nil {
-				fmt.Println("err calling user", err)
 				slog.Error("P2P call failed", "userID", userID, "error", err)
 			}
 		}()
@@ -161,6 +161,34 @@ func (c *Client) CallUser(ctx context.Context, peer types.Peer) tea.Cmd {
 		return types.CallUserResponse{
 			UserID: &userID,
 		}
+	}
+}
+
+func (c *Client) AcceptCall(ctx context.Context, userID int64) tea.Cmd {
+	return func() tea.Msg {
+		err := AcceptIncomingCall(ctx, userID)
+		return types.CallAcceptedMsg{UserID: userID, Err: err}
+	}
+}
+
+func (c *Client) DeclineCall(ctx context.Context, userID int64) tea.Cmd {
+	return func() tea.Msg {
+		err := DeclineIncomingCall(ctx, userID)
+		return types.CallDeclinedMsg{UserID: userID, Err: err}
+	}
+}
+
+func (c *Client) HangupCall(ctx context.Context, userID int64) tea.Cmd {
+	return func() tea.Msg {
+		err := HangupCall(ctx, userID)
+		return types.CallHungUpMsg{UserID: userID, Err: err}
+	}
+}
+
+func (c *Client) ToggleMute(userID int64) tea.Cmd {
+	return func() tea.Msg {
+		muted, err := ToggleCallMute(userID)
+		return types.CallMuteToggledMsg{UserID: userID, Muted: muted, Err: err}
 	}
 }
 
@@ -913,10 +941,6 @@ func (c *Client) GetAllStories(ctx context.Context) tea.Cmd {
 				continue
 			}
 
-			story, _ := os.Create(tgUser.FirstName + "_" + strconv.Itoa(int(peerUser.UserID)) + ".txt")
-
-			fmt.Fprintln(story, "max read id", peerStorie.MaxReadID, "storyid")
-
 			userInfo := shared.ConvertTGUserToUserInfo(tgUser)
 			userInfo.HasStories = true
 
@@ -925,7 +949,6 @@ func (c *Client) GetAllStories(ctx context.Context) tea.Cmd {
 				if !ok {
 					continue
 				}
-				fmt.Fprintln(story, "story id", storyItem.ID)
 				switch item := storyItem.Media.(type) {
 				case *tg.MessageMediaDocument:
 					documentClass, ok := item.GetDocument()
@@ -1229,4 +1252,79 @@ func (c *Client) GetLastMessage(ctx context.Context, peer types.Peer) tea.Cmd {
 		}
 		return types.SingleMessageMsg{Message: &messages[0]}
 	}
+}
+
+func (c *Client) MuteCall(userID int64, mute bool) error {
+	ntgC := getNtgClient()
+	if mute {
+		_, err := ntgC.Mute(userID)
+		return err
+	}
+	_, err := ntgC.UnMute(userID)
+	return err
+}
+
+func (c *Client) PauseCall(userID int64, pause bool) error {
+	ntgC := getNtgClient()
+	if pause {
+		_, err := ntgC.Pause(userID)
+		return err
+	}
+	_, err := ntgC.Resume(userID)
+	return err
+}
+
+func (c *Client) PlayAudio(userID int64, inputPath string) error {
+	_, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		return fmt.Errorf("ffmpeg not found, required to play audio")
+	}
+
+	ntgC := getNtgClient()
+
+	cmd := fmt.Sprintf("ffmpeg -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2 -i %s -f s16le -ac 1 -ar 48000 -v quiet pipe:1", inputPath)
+
+	audioDesc := ntg.AudioDescription{
+		MediaSource:  ntg.MediaSourceShell,
+		Input:        cmd,
+		SampleRate:   48000,
+		ChannelCount: 1,
+		KeepOpen:     true,
+	}
+
+	desc := ntg.MediaDescription{
+		Microphone: &audioDesc,
+	}
+
+	return ntgC.SetStreamSources(userID, ntg.CaptureStream, desc)
+}
+
+func (c *Client) RecordCall(userID int64, outputPath string) error {
+	_, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		return fmt.Errorf("ffmpeg not found, required to record call")
+	}
+
+	ntgC := getNtgClient()
+
+	cmd := fmt.Sprintf("ffmpeg -f s16le -ac 1 -ar 48000 -i pipe:0 -y %s", outputPath)
+
+	audioDesc := ntg.AudioDescription{
+		MediaSource:  ntg.MediaSourceShell,
+		Input:        cmd,
+		SampleRate:   48000,
+		ChannelCount: 1,
+		KeepOpen:     true,
+	}
+
+	desc := ntg.MediaDescription{
+		Speaker: &audioDesc,
+	}
+
+	return ntgC.SetStreamSources(userID, ntg.PlaybackStream, desc)
+}
+
+func (c *Client) StopAudio(userID int64) error {
+	ntgC := getNtgClient()
+	return ntgC.SetupDefaultAudio(userID)
 }

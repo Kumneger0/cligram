@@ -307,7 +307,7 @@ func handleUserChange(m *Model, offsetID *int, afterMessagesCmd tea.Cmd) (Model,
 	m.MainViewLoading = true
 	m.ChatUI.ResetSelected()
 	m.ChatUI.SetItems([]list.Item{})
-	return *m, tea.Batch(tea.Sequence(cmd, telegram.Cligram.CallUser(telegram.Cligram.Context(), pInfo)), afterMessagesCmd)
+	return *m, tea.Batch(cmd, afterMessagesCmd)
 }
 
 func changeFocusMode(m *Model, msg string, shift bool) (Model, tea.Cmd) {
@@ -428,6 +428,16 @@ func (m Model) View() string {
 	m.updateDelegates()
 
 	ui := setItemStyles(&m)
+
+	// Render call overlay on top of the UI
+	if m.CallOverlay.State == CallOverlayIncoming {
+		callView := m.CallOverlay.View()
+		ui = callView + "\n" + ui
+	} else if m.CallOverlay.State == CallOverlayActive {
+		callView := m.CallOverlay.View()
+		ui = callView + "\n" + ui
+	}
+
 	return m.Alert.Render(ui)
 }
 

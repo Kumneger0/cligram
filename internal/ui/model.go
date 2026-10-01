@@ -333,6 +333,8 @@ type Model struct {
 	ForumTopicLoading        bool
 	ShowForumTopics          bool
 	SelectedForumTopic       *types.ForumTopicInfo
+	CallOverlay              CallOverlayModel
+	ActiveCallUserID         int64
 }
 
 type CustomEmojiDocumentMsg struct {

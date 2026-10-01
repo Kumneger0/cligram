@@ -92,6 +92,19 @@ func getNtgClient() *ntg.Client {
 	return ntgClient
 }
 
+// pendingIncomingCalls stores data for calls waiting for user accept/decline.
+type pendingIncomingCall struct {
+	userID     int64
+	callID     int64
+	accessHash int64
+	gAHash     []byte
+}
+
+var (
+	pendingIncoming   = make(map[int64]*pendingIncomingCall)
+	pendingIncomingMu sync.Mutex
+)
+
 func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHandler {
 	dispatcher := tg.NewUpdateDispatcher()
 	dispatcher.OnNewChannelMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateNewChannelMessage) error {
@@ -108,7 +121,6 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 	})
 
 	dispatcher.OnGroupCall(func(ctx context.Context, e tg.Entities, update *tg.UpdateGroupCall) error {
-		//TODO: implement group cal updates
 		return nil
 	})
 
@@ -135,99 +147,54 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 		switch u := update.PhoneCall.(type) {
 		case *tg.PhoneCallRequested:
 			// ---- INCOMING CALL ----
-			fmt.Println("📞 Incoming call request from user", u.AdminID)
-
 			userID := u.AdminID
+			slog.Info("incoming call request", "userID", userID)
 
-			// Get DH config from Telegram
-			dhRaw, err := Cligram.API().MessagesGetDhConfig(ctx, &tg.MessagesGetDhConfigRequest{
-				Version:      0,
-				RandomLength: 256,
-			})
-			if err != nil {
-				fmt.Println("MessagesGetDhConfig failed:", err)
-				return err
+			// Store pending call data for user to accept/decline
+			pendingIncomingMu.Lock()
+			pendingIncoming[userID] = &pendingIncomingCall{
+				userID:     userID,
+				callID:     u.ID,
+				accessHash: u.AccessHash,
+				gAHash:     u.GAHash,
 			}
-			dhConfig, ok := dhRaw.(*tg.MessagesDhConfig)
-			if !ok {
-				return fmt.Errorf("unexpected DH config type: %T", dhRaw)
-			}
+			pendingIncomingMu.Unlock()
 
-			client := getNtgClient()
-
-			// 1. CreateP2P
-			if err := client.CreateP2P(userID); err != nil {
-				fmt.Println("ntg CreateP2P failed:", err)
-				return err
-			}
-
-			// 1.5 Set up default audio streams
-			if err := client.SetupDefaultAudio(userID); err != nil {
-				fmt.Println("ntg SetupDefaultAudio failed:", err)
-				return err
+			// Resolve caller name
+			userName := fmt.Sprintf("User %d", userID)
+			userInfo, err := shared.GetUserInfo(ctx, *Cligram.API(), userID)
+			if err == nil && userInfo != nil {
+				userName = userInfo.FirstName
+				if userInfo.LastName != "" {
+					userName += " " + userInfo.LastName
+				}
 			}
 
-			// 2. InitExchange with the caller's gAHash
-			gB, err := client.InitExchange(
-				userID,
-				int32(dhConfig.G),
-				dhConfig.P,
-				dhConfig.Random,
-				u.GAHash, // gAHash from the caller
-			)
-			if err != nil {
-				fmt.Println("ntg InitExchange failed:", err)
-				return err
-			}
-
-			// Save state
-			p2pStatesMu.Lock()
-			p2pStates[userID] = &p2pCallState{
-				inputCall: &tg.InputPhoneCall{
-					ID:         u.ID,
-					AccessHash: u.AccessHash,
+			// Notify the UI about the incoming call
+			select {
+			case updateChannel <- types.Notification{
+				CallEvent: &types.CallNotification{
+					UserID:   userID,
+					UserName: userName,
+					State:    types.CallStateIncoming,
 				},
-				isOutgoing: false,
-				gAOrB:      gB,
-				waitData:   make(chan error, 1),
+			}:
+			default:
+				slog.Warn("update channel is full, dropping incoming call notification")
 			}
-			p2pStatesMu.Unlock()
-
-			// 3. Accept the call
-			protocol := ntg.GetProtocol()
-			_, err = Cligram.API().PhoneAcceptCall(ctx, &tg.PhoneAcceptCallRequest{
-				Peer: tg.InputPhoneCall{
-					ID:         u.ID,
-					AccessHash: u.AccessHash,
-				},
-				GB: gB,
-				Protocol: tg.PhoneCallProtocol{
-					MinLayer:        int(protocol.MinLayer),
-					MaxLayer:        int(protocol.MaxLayer),
-					LibraryVersions: protocol.Versions,
-					UDPP2P:          protocol.UDPP2P,
-					UDPReflector:    protocol.UDPReflector,
-				},
-			})
-			if err != nil {
-				fmt.Println("phone.acceptCall failed:", err)
-				return err
-			}
-
-			// The PhoneCallObj update will arrive later with g_a and fingerprint
 
 		case *tg.PhoneCallAccepted:
 			// ---- OUTGOING CALL: peer accepted ----
 			// This means WE initiated the call (phone.requestCall) and the peer accepted.
 			userID := u.ParticipantID
-			fmt.Println("📞 Call accepted by user", userID)
+			slog.Info("call accepted by peer", "userID", userID)
 
 			p2pStatesMu.Lock()
 			state := p2pStates[userID]
 			p2pStatesMu.Unlock()
 
 			if state == nil {
-				fmt.Println("WARNING: PhoneCallAccepted but no p2pState for user", userID)
+				slog.Warn("PhoneCallAccepted but no p2pState", "userID", userID)
 				return nil
 			}
 
@@ -245,7 +212,7 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 
 		case *tg.PhoneCall:
 			// ---- CALL ACTIVE (both sides) ----
-			fmt.Println("🔥 Call is active")
+			slog.Info("call is active")
 
 			// Determine which userID this belongs to
 			var userID int64
@@ -268,7 +235,7 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 			}
 
 			if state == nil {
-				fmt.Println("WARNING: PhoneCallObj but no p2pState found")
+				slog.Warn("PhoneCallObj but no p2pState found")
 				return nil
 			}
 
@@ -283,7 +250,7 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 
 				_, err := client.ExchangeKeys(userID, u.GAOrB, u.KeyFingerprint)
 				if err != nil {
-					fmt.Println("ntg ExchangeKeys (incoming) failed:", err)
+					slog.Error("ntg ExchangeKeys (incoming) failed", "error", err)
 					return err
 				}
 
@@ -295,7 +262,7 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 					u.P2PAllowed,
 				)
 				if err != nil {
-					fmt.Println("ntg ConnectP2P (incoming) failed:", err)
+					slog.Error("ntg ConnectP2P (incoming) failed", "error", err)
 					return err
 				}
 			} else {
@@ -304,12 +271,26 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 				p2pStatesMu.Unlock()
 			}
 
-		case *tg.PhoneCallDiscarded:
-			fmt.Println("❌ Call ended, duration:", u.Duration)
+			// Notify UI that call is now active
+			select {
+			case updateChannel <- types.Notification{
+				CallEvent: &types.CallNotification{
+					UserID: userID,
+					State:  types.CallStateActive,
+				},
+			}:
+			default:
+				slog.Warn("update channel is full, dropping active call notification")
+			}
 
+		case *tg.PhoneCallDiscarded:
+			slog.Info("call ended", "duration", u.Duration)
+
+			var discardedUserID int64
 			p2pStatesMu.Lock()
 			for uid, state := range p2pStates {
 				if state.inputCall != nil && state.inputCall.ID == u.ID {
+					discardedUserID = uid
 					// Signal any waiting goroutines
 					select {
 					case state.waitData <- fmt.Errorf("call discarded"):
@@ -328,8 +309,31 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 			}
 			p2pStatesMu.Unlock()
 
+			// Also clean up any pending incoming call
+			pendingIncomingMu.Lock()
+			for uid := range pendingIncoming {
+				if discardedUserID == 0 {
+					discardedUserID = uid
+				}
+				delete(pendingIncoming, uid)
+			}
+			pendingIncomingMu.Unlock()
+
+			// Notify UI that call has ended
+			select {
+			case updateChannel <- types.Notification{
+				CallEvent: &types.CallNotification{
+					UserID:   discardedUserID,
+					State:    types.CallStateEnded,
+					Duration: u.Duration,
+				},
+			}:
+			default:
+				slog.Warn("update channel is full, dropping ended call notification")
+			}
+
 		case *tg.PhoneCallWaiting:
-			fmt.Println("⏳ Call waiting...")
+			slog.Info("call waiting", "participantID", u.ParticipantID)
 
 			userID := u.ParticipantID
 
@@ -577,9 +581,9 @@ func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64) (err e
 		return fmt.Errorf("ntg CreateP2P: %w", err)
 	}
 
-	// 2.5 Set up default audio streams
-	if err := client.SetupDefaultAudio(userID); err != nil {
-		return fmt.Errorf("ntg SetupDefaultAudio: %w", err)
+	// 2.5 Set up real audio streams
+	if err := client.SetupRealAudio(userID); err != nil {
+		return fmt.Errorf("ntg SetupRealAudio: %w", err)
 	}
 
 	// 3. InitExchange (no gAHash for outgoing calls → ntgcalls returns g_a_hash)
@@ -703,7 +707,7 @@ func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64) (err e
 			if err != nil {
 				return err
 			}
-			fmt.Println("P2P connected successfully")
+			slog.Info("P2P connected successfully")
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-time.After(30 * time.Second):
@@ -712,4 +716,153 @@ func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64) (err e
 	}
 
 	return nil
+}
+
+// AcceptIncomingCall accepts a pending incoming P2P call.
+func AcceptIncomingCall(ctx context.Context, userID int64) error {
+	pendingIncomingMu.Lock()
+	pending := pendingIncoming[userID]
+	delete(pendingIncoming, userID)
+	pendingIncomingMu.Unlock()
+
+	if pending == nil {
+		return fmt.Errorf("no pending incoming call from user %d", userID)
+	}
+
+	client := getNtgClient()
+
+	// Get DH config from Telegram
+	dhRaw, err := Cligram.API().MessagesGetDhConfig(ctx, &tg.MessagesGetDhConfigRequest{
+		Version:      0,
+		RandomLength: 256,
+	})
+	if err != nil {
+		return fmt.Errorf("MessagesGetDhConfig: %w", err)
+	}
+	dhConfig, ok := dhRaw.(*tg.MessagesDhConfig)
+	if !ok {
+		return fmt.Errorf("unexpected DH config type: %T", dhRaw)
+	}
+
+	// 1. CreateP2P
+	if err := client.CreateP2P(userID); err != nil {
+		return fmt.Errorf("ntg CreateP2P: %w", err)
+	}
+
+	// 2. Set up real audio streams
+	if err := client.SetupRealAudio(userID); err != nil {
+		return fmt.Errorf("ntg SetupRealAudio: %w", err)
+	}
+
+	// 3. InitExchange with the caller's gAHash
+	gB, err := client.InitExchange(
+		userID,
+		int32(dhConfig.G),
+		dhConfig.P,
+		dhConfig.Random,
+		pending.gAHash,
+	)
+	if err != nil {
+		return fmt.Errorf("ntg InitExchange: %w", err)
+	}
+
+	// Save state
+	p2pStatesMu.Lock()
+	p2pStates[userID] = &p2pCallState{
+		inputCall: &tg.InputPhoneCall{
+			ID:         pending.callID,
+			AccessHash: pending.accessHash,
+		},
+		isOutgoing: false,
+		gAOrB:      gB,
+		waitData:   make(chan error, 1),
+	}
+	p2pStatesMu.Unlock()
+
+	// 4. Accept the call via Telegram API
+	protocol := ntg.GetProtocol()
+	_, err = Cligram.API().PhoneAcceptCall(ctx, &tg.PhoneAcceptCallRequest{
+		Peer: tg.InputPhoneCall{
+			ID:         pending.callID,
+			AccessHash: pending.accessHash,
+		},
+		GB: gB,
+		Protocol: tg.PhoneCallProtocol{
+			MinLayer:        int(protocol.MinLayer),
+			MaxLayer:        int(protocol.MaxLayer),
+			LibraryVersions: protocol.Versions,
+			UDPP2P:          protocol.UDPP2P,
+			UDPReflector:    protocol.UDPReflector,
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("phone.acceptCall: %w", err)
+	}
+
+	return nil
+}
+
+// DeclineIncomingCall declines a pending incoming P2P call.
+func DeclineIncomingCall(ctx context.Context, userID int64) error {
+	pendingIncomingMu.Lock()
+	pending := pendingIncoming[userID]
+	delete(pendingIncoming, userID)
+	pendingIncomingMu.Unlock()
+
+	if pending == nil {
+		return fmt.Errorf("no pending incoming call from user %d", userID)
+	}
+
+	_, err := Cligram.API().PhoneDiscardCall(ctx, &tg.PhoneDiscardCallRequest{
+		Peer: tg.InputPhoneCall{
+			ID:         pending.callID,
+			AccessHash: pending.accessHash,
+		},
+		Reason: &tg.PhoneCallDiscardReasonHangup{},
+	})
+	return err
+}
+
+// HangupCall terminates an active P2P call.
+func HangupCall(ctx context.Context, userID int64) error {
+	p2pStatesMu.Lock()
+	state := p2pStates[userID]
+	p2pStatesMu.Unlock()
+
+	if state == nil || state.inputCall == nil {
+		return fmt.Errorf("no active call with user %d", userID)
+	}
+
+	client := getNtgClient()
+	_ = client.Stop(userID)
+
+	_, err := Cligram.API().PhoneDiscardCall(ctx, &tg.PhoneDiscardCallRequest{
+		Peer:   *state.inputCall,
+		Reason: &tg.PhoneCallDiscardReasonHangup{},
+	})
+
+	p2pStatesMu.Lock()
+	delete(p2pStates, userID)
+	p2pStatesMu.Unlock()
+
+	waitConnectMu.Lock()
+	delete(waitConnect, userID)
+	waitConnectMu.Unlock()
+
+	return err
+}
+
+// ToggleCallMute toggles mute state for an active call. Returns the new muted state.
+func ToggleCallMute(userID int64) (bool, error) {
+	client := getNtgClient()
+	state, err := client.GetState(userID)
+	if err != nil {
+		return false, err
+	}
+	if state.Muted {
+		_, err = client.UnMute(userID)
+		return false, err
+	}
+	_, err = client.Mute(userID)
+	return true, err
 }

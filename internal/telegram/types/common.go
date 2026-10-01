@@ -122,6 +122,27 @@ type Notification struct {
 	SearchResult           *SearchUsersMsg                `json:"searchResult,omitempty"`
 	ReadHistoryOutbox      *ReadHistoryOutboxNotification `json:"readHistoryOutbox,omitempty"`
 	GetUserDHConfigRequest *GetUserDHConfigRequest        `json:"getUserDHConfigRequest,omitempty"`
+	CallEvent              *CallNotification              `json:"callEvent,omitempty"`
+}
+
+type CallState string
+
+const (
+	CallStateIncoming CallState = "incoming"
+	CallStateOutgoing CallState = "outgoing"
+	CallStateActive   CallState = "active"
+	CallStateEnded    CallState = "ended"
+	CallStateDeclined CallState = "declined"
+)
+
+type CallNotification struct {
+	UserID    int64
+	UserName  string
+	State     CallState
+	Duration  int
+	IsGroup   bool
+	GroupName string
+	Err       error
 }
 
 type GetUserDHConfigRequest struct {

@@ -159,6 +159,12 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 							if msg.GetUserDHConfigRequest != nil {
 								Program.Send(*msg.GetUserDHConfigRequest)
 							}
+							if msg.ReadHistoryOutbox != nil {
+								Program.Send(*msg.ReadHistoryOutbox)
+							}
+							if msg.CallEvent != nil {
+								Program.Send(*msg.CallEvent)
+							}
 						}
 					}
 				}()

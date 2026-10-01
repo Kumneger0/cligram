@@ -174,3 +174,34 @@ type SingleMessageMsg struct {
 	Message *FormattedMessage
 	Err     error
 }
+
+type CallAcceptedMsg struct {
+	UserID int64
+	Err    error
+}
+
+type CallDeclinedMsg struct {
+	UserID int64
+	Err    error
+}
+
+type CallHungUpMsg struct {
+	UserID int64
+	Err    error
+}
+
+type CallMuteToggledMsg struct {
+	UserID int64
+	Muted  bool
+	Err    error
+}
+
+type GroupCallJoinedMsg struct {
+	ChatID int64
+	Err    error
+}
+
+type GroupCallLeftMsg struct {
+	ChatID int64
+	Err    error
+}

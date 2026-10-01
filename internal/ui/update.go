@@ -773,7 +773,37 @@ func (m Model) mergeConversations(newMessages [50]types.FormattedMessage, messag
 
 func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
+
+	// Handle call overlay keybindings first
+	if m.CallOverlay.State == CallOverlayIncoming {
+		switch msg.String() {
+		case "a":
+			return m, telegram.Cligram.AcceptCall(telegram.Cligram.Context(), m.CallOverlay.UserID)
+		case "d":
+			return m, telegram.Cligram.DeclineCall(telegram.Cligram.Context(), m.CallOverlay.UserID)
+		}
+	}
+	if m.CallOverlay.State == CallOverlayActive {
+		switch msg.String() {
+		case "m":
+			if m.FocusedOn != Input {
+				return m, telegram.Cligram.ToggleMute(m.ActiveCallUserID)
+			}
+		case "h":
+			if m.FocusedOn != Input {
+				return m, telegram.Cligram.HangupCall(telegram.Cligram.Context(), m.ActiveCallUserID)
+			}
+		}
+	}
+
 	switch msg.String() {
+	case "ctrl+p":
+		// Initiate P2P call to selected user
+		if m.Mode == ModeUsers && m.SelectedUser.PeerID != "" && m.CallOverlay.State == CallOverlayNone {
+			pInfo := peerFromItem(m.SelectedUser)
+			return m, telegram.Cligram.CallUser(telegram.Cligram.Context(), pInfo)
+		}
+		return m, nil
 	case "shift+down":
 		if m.FocusedOn == Main {
 			m.ChatUI.Select(len(m.ChatUI.Items()) - 1)
