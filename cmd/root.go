@@ -57,52 +57,14 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 					return fmt.Errorf("authentication failed: %w", err)
 				}
 
-				userChatsResult, err := telegram.Cligram.GetAllChats(ctx, 0, 0)
-				modalContent := ""
-				isModalVisible := false
-				userChats := userChatsResult.PrivateChats
-				groupsChat := userChatsResult.Groups
-				channelsChat := userChatsResult.Channels
-
-				var result []types.UserInfo = []types.UserInfo{}
-
-				if err != nil {
-					modalContent = err.Error()
-					isModalVisible = true
-				} else {
-					if userChats != nil {
-						result = userChats
-					}
-				}
-
-				var users []list.Item = []list.Item{}
-				var bots []list.Item = []list.Item{}
-				for _, du := range result {
-					if du.IsBot {
-						bots = append(bots, du)
-						continue
-					}
-					users = append(users, du)
-				}
-
-				channelsList := []list.Item{}
-				for _, channel := range channelsChat {
-					channelsList = append(channelsList, channel)
-				}
-
-				groupsList := []list.Item{}
-				for _, group := range groupsChat {
-					groupsList = append(groupsList, group)
-				}
-
 				model := &ui.Model{}
 				model.Alert = *bubbleup.NewAlertModel(80, true, 10*time.Second)
 				model.CustomEmojis = make(map[int64]*tg.Document)
-				userList := list.New(users, ui.CustomDelegate{Model: model}, 10, 20)
+				userList := list.New([]list.Item{}, ui.CustomDelegate{Model: model}, 10, 20)
 				userList.SetShowPagination(false)
-				channels := list.New(channelsList, ui.CustomDelegate{Model: model}, 10, 20)
-				groups := (list.New(groupsList, ui.CustomDelegate{Model: model}, 10, 20))
-				botsList := list.New(bots, ui.CustomDelegate{Model: model}, 10, 20)
+				channels := list.New([]list.Item{}, ui.CustomDelegate{Model: model}, 10, 20)
+				groups := (list.New([]list.Item{}, ui.CustomDelegate{Model: model}, 10, 20))
+				botsList := list.New([]list.Item{}, ui.CustomDelegate{Model: model}, 10, 20)
 				channels.SetShowPagination(false)
 				groups.SetShowPagination(false)
 
@@ -138,20 +100,18 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 				model.Input = input
 				model.Users = userList
 				model.Groups = groups
-				model.ModalContent = modalContent
+				model.ModalContent = ""
 				model.Height = height - 4
 				model.Width = width - 4
 				model.Channels = channels
-				model.IsModalVisible = isModalVisible
+				model.IsModalVisible = false
 				model.Mode = ui.ModeUsers
 				model.FocusedOn = ui.SideBar
 				model.ChatUI = chatList
 				model.SelectedFile = ""
-				model.OffsetDate = userChatsResult.OffsetDate
-				model.OffsetID = userChatsResult.OffsetID
 				model.OnPagination = false
 				model.Bots = botsList
-
+				model.SideBarLoading = true
 				model.Stories = []types.Stories{}
 
 				background := model
@@ -244,7 +204,6 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 
 func Execute(version string, telegramAPIID, telegramAPIHash string) error {
 	cmd := newRootCmd(version, telegramAPIID, telegramAPIHash)
-
 	accountPaths := getAccountPaths()
 	defaultAccount := "account1"
 	if len(accountPaths) > 0 {

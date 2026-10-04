@@ -468,70 +468,74 @@ func (c *Client) GetChannelForums(peer types.Peer) tea.Cmd {
 	}
 }
 
-func (c *Client) GetAllChats(ctx context.Context, offsetDate int, offsetID int) (types.GetAllChatsResponse, error) {
-	ds, err := c.getAllDialogs(ctx, offsetDate, offsetID)
-	if err != nil {
-		return types.GetAllChatsResponse{}, types.NewTelegramError(types.ErrorCodeGetMessagesFailed, "failed to get dialogs", err)
-	}
-	if ds == nil {
-		return types.GetAllChatsResponse{PrivateChats: []types.UserInfo{}, Channels: []types.ChannelInfo{}, Groups: []types.ChannelInfo{}}, nil
-	}
+func (c *Client) GetAllChats(ctx context.Context, offsetDate int, offsetID int) tea.Cmd {
+	return func() tea.Msg {
+		ds, err := c.getAllDialogs(ctx, offsetDate, offsetID)
+		if err != nil {
+			return types.GetAllChatsResponseMSG{Chats: types.AllChats{}, Err: types.NewTelegramError(types.ErrorCodeGetMessagesFailed, "failed to get dialogs", err)}
+		}
+		if ds == nil {
+			return types.GetAllChatsResponseMSG{Chats: types.AllChats{}, Err: nil}
+		}
 
-	var users []types.UserInfo
-	for _, tgUser := range ds.Users {
-		u := shared.ConvertTGUserToUserInfo(tgUser)
-		readInboxMaxID, readOutboxMaxID := getReadMaxMessageID(ds.Dialogs, tgUser.ID)
-		u.UnreadCount = getUnreadCount(ds.Dialogs, tgUser.ID)
-		u.NotifySettings = getNotifySettings(ds.Dialogs, tgUser.ID)
-		u.ReadInboxMaxID = readInboxMaxID
-		u.ReadOutboxMaxID = readOutboxMaxID
+		var users []types.UserInfo
+		for _, tgUser := range ds.Users {
+			u := shared.ConvertTGUserToUserInfo(tgUser)
+			readInboxMaxID, readOutboxMaxID := getReadMaxMessageID(ds.Dialogs, tgUser.ID)
+			u.UnreadCount = getUnreadCount(ds.Dialogs, tgUser.ID)
+			u.NotifySettings = getNotifySettings(ds.Dialogs, tgUser.ID)
+			u.ReadInboxMaxID = readInboxMaxID
+			u.ReadOutboxMaxID = readOutboxMaxID
 
-		users = append(users, *u)
-	}
+			users = append(users, *u)
+		}
 
-	var channels, groups []types.ChannelInfo
-	for _, chatClass := range ds.Chats {
-		if channel, ok := chatClass.(*tg.Channel); ok {
-			info := convertToChannelInfo(channel)
-			if info == nil {
-				continue
+		var channels, groups []types.ChannelInfo
+		for _, chatClass := range ds.Chats {
+			if channel, ok := chatClass.(*tg.Channel); ok {
+				info := convertToChannelInfo(channel)
+				if info == nil {
+					continue
+				}
+				readInboxMaxID, readOutboxMaxID := getReadMaxMessageID(ds.Dialogs, channel.ID)
+
+				info.ReadInboxMaxID = readInboxMaxID
+				info.ReadOutboxMaxID = readOutboxMaxID
+				info.UnreadCount = getUnreadCount(ds.Dialogs, channel.ID)
+				info.NotifySettings = getNotifySettings(ds.Dialogs, channel.ID)
+				info.IsForum = channel.GetForum()
+				if channel.Broadcast {
+					channels = append(channels, *info)
+				} else {
+					groups = append(groups, *info)
+				}
 			}
-			readInboxMaxID, readOutboxMaxID := getReadMaxMessageID(ds.Dialogs, channel.ID)
-
-			info.ReadInboxMaxID = readInboxMaxID
-			info.ReadOutboxMaxID = readOutboxMaxID
-			info.UnreadCount = getUnreadCount(ds.Dialogs, channel.ID)
-			info.NotifySettings = getNotifySettings(ds.Dialogs, channel.ID)
-			info.IsForum = channel.GetForum()
-			if channel.Broadcast {
-				channels = append(channels, *info)
-			} else {
+			if chat, ok := chatClass.(*tg.Chat); ok {
+				info := convertToChannelInfo(chat)
+				if info == nil {
+					continue
+				}
+				readInboxMaxID, readOutboxMaxID := getReadMaxMessageID(ds.Dialogs, chat.ID)
+				info.ReadInboxMaxID = readInboxMaxID
+				info.ReadOutboxMaxID = readOutboxMaxID
+				info.UnreadCount = getUnreadCount(ds.Dialogs, chat.ID)
+				info.NotifySettings = getNotifySettings(ds.Dialogs, chat.ID)
 				groups = append(groups, *info)
 			}
 		}
-		if chat, ok := chatClass.(*tg.Chat); ok {
-			info := convertToChannelInfo(chat)
-			if info == nil {
-				continue
-			}
-			readInboxMaxID, readOutboxMaxID := getReadMaxMessageID(ds.Dialogs, chat.ID)
-			info.ReadInboxMaxID = readInboxMaxID
-			info.ReadOutboxMaxID = readOutboxMaxID
-			info.UnreadCount = getUnreadCount(ds.Dialogs, chat.ID)
-			info.NotifySettings = getNotifySettings(ds.Dialogs, chat.ID)
-			groups = append(groups, *info)
+
+		return types.GetAllChatsResponseMSG{
+			Chats: types.AllChats{
+				PrivateChats: users,
+				Channels:     channels,
+				Groups:       groups,
+				OffsetDate:   ds.OffsetDate,
+				OffsetID:     ds.OffsetID,
+			},
+			Err: nil,
 		}
 	}
-
-	return types.GetAllChatsResponse{
-		PrivateChats: users,
-		Channels:     channels,
-		Groups:       groups,
-		OffsetDate:   ds.OffsetDate,
-		OffsetID:     ds.OffsetID,
-	}, nil
 }
-
 func (c *Client) getUserChats(ctx context.Context, isBot bool, offsetDate, offsetID int) (types.GetUserChatsResult, error) {
 	ds, err := c.getAllDialogs(ctx, offsetDate, offsetID)
 	if err != nil {

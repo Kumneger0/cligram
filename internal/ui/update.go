@@ -44,6 +44,42 @@ func (m *Model) checkAndFetchCustomEmojis(messages []types.FormattedMessage) tea
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	switch msg := msg.(type) {
+	case types.GetAllChatsResponseMSG:
+		if msg.Err != nil {
+			slog.Error("Failed to get all chats", "error", msg.Err.Error())
+			m.Alert = m.Alert.WithAllowEscToClose().WithPosition(bubbleup.TopLeftPosition)
+			alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, msg.Err.Error())
+			return m, alertCmd
+		}
+		m.OffsetDate = msg.Chats.OffsetDate
+		m.OffsetID = msg.Chats.OffsetID
+		userChats := msg.Chats.PrivateChats
+		groupsChat := msg.Chats.Groups
+		channelsChat := msg.Chats.Channels
+
+		var users []list.Item = []list.Item{}
+		var bots []list.Item = []list.Item{}
+		for _, du := range userChats {
+			if du.IsBot {
+				bots = append(bots, du)
+				continue
+			}
+			users = append(users, du)
+		}
+
+		var channelsList []list.Item = []list.Item{}
+		for _, channel := range channelsChat {
+			channelsList = append(channelsList, channel)
+		}
+
+		var groupsList []list.Item = []list.Item{}
+		for _, group := range groupsChat {
+			groupsList = append(groupsList, group)
+		}
+
+		m.SideBarLoading = false
+		return m, tea.Batch(m.Users.SetItems(users), m.Bots.SetItems(bots), m.Channels.SetItems(channelsList), m.Groups.SetItems(groupsList))
+
 	case types.GetChannelForumsResponseMsg:
 		m.ForumTopicLoading = false
 		m.MainViewLoading = false
