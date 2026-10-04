@@ -307,6 +307,18 @@ func DownloadStoryMedia(ctx context.Context, client *telegram.Client, story *tg.
 	case *tg.MessageMediaDocument:
 		if doc, ok := media.Document.AsNotEmpty(); ok {
 			ext := "bin"
+			var thumbSize string
+			if len(doc.Thumbs) > 0 {
+				var d int
+				for _, t := range doc.Thumbs {
+					if thumb, ok := t.(*tg.PhotoSize); ok {
+						if thumb.Size > d {
+							d = thumb.Size
+						}
+					}
+					thumbSize = fmt.Sprintf("%d", d)
+				}
+			}
 			switch doc.MimeType {
 			case "video/mp4":
 				ext = "mp4"
@@ -315,7 +327,7 @@ func DownloadStoryMedia(ctx context.Context, client *telegram.Client, story *tg.
 			}
 
 			filePath := filepath.Join(outDir, fmt.Sprintf("story_%d,%s.%s", story.ID, peerID, ext))
-			return &story.ID, saveMediaToFileSystem(ctx, client.API(), filePath, doc.AsInputDocumentFileLocation())
+			return &story.ID, saveMediaToFileSystem(ctx, client.API(), filePath, doc.AsInputDocumentFileLocation(thumbSize))
 		}
 
 	case *tg.MessageMediaPhoto:
