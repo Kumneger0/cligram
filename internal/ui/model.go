@@ -376,7 +376,7 @@ func formatMessages(msgs [50]types.FormattedMessage) []list.Item {
 // definitely i need to remove this
 func GetModalContent(errorMessage string) string {
 	var modalContent strings.Builder
-	modalContent.WriteString(errorMessage + "\n")
+	modalContent.WriteString(errorMessage)
 	modalContent.WriteString("\n" + "press ctrl + c or q to close")
 	modalWidth := max(40, len(errorMessage)+4)
 	return dialogBoxStyle.Width(modalWidth).Render(modalContent.String())
@@ -567,13 +567,41 @@ func prepareFilepickerView(m *Model) string {
 	if m.SelectedFile == "" {
 		s.WriteString("Pick a file:")
 	} else {
-		s.WriteString("Selected file: click ctrl + a to close file picker\n" + m.Filepicker.Styles.Selected.Render(m.SelectedFile))
+		s.WriteString("Selected file: click ctrl + a to close file picker\n")
+		s.WriteString(m.Filepicker.Styles.Selected.Render(m.SelectedFile))
 	}
-	s.WriteString("\n\n" + m.Filepicker.View() + "\n")
+	s.WriteString("\n\n")
+	s.WriteString(m.Filepicker.View())
+	s.WriteString("\n")
 	return s.String()
 }
 
 func prepareSidebarContent(m *Model, d layoutDimensions) string {
+	if m.SideBarLoading {
+		loadingText := lipgloss.NewStyle().
+			Foreground(DefaultTheme.PrimaryText).
+			Bold(true).
+			Align(lipgloss.Center).
+			Render("⏳ Loading chats")
+
+		spinner := lipgloss.NewStyle().
+			Foreground(DefaultTheme.AccentColor).
+			Bold(true).
+			Render("◐")
+
+		content := lipgloss.JoinVertical(
+			lipgloss.Center,
+			spinner,
+			loadingText,
+		)
+
+		return lipgloss.NewStyle().
+			Width(d.sidebarWidth).
+			Height(d.contentHeight).
+			Align(lipgloss.Center, lipgloss.Center).
+			Padding(2, 1).
+			Render(content)
+	}
 	var content string
 	switch m.Mode {
 	case ModeBots:
@@ -588,11 +616,12 @@ func prepareSidebarContent(m *Model, d layoutDimensions) string {
 
 	storiesIndicator := sidebarHeaderStyle.Render(fmt.Sprintf("📖 Stories (%d)", len(m.Stories)))
 	itemsCount := sidebarHeaderStyle.Render(fmt.Sprintf("💬 Chats (%d)", len(m.Users.Items())))
-	if m.Mode == ModeChannels {
+	switch m.Mode {
+	case ModeChannels:
 		itemsCount = sidebarHeaderStyle.Render(fmt.Sprintf("📢 Channels (%d)", len(m.Channels.Items())))
-	} else if m.Mode == ModeGroups {
+	case ModeGroups:
 		itemsCount = sidebarHeaderStyle.Render(fmt.Sprintf("👥 Groups (%d)", len(m.Groups.Items())))
-	} else if m.Mode == ModeBots {
+	case ModeBots:
 		itemsCount = sidebarHeaderStyle.Render(fmt.Sprintf("🤖 Bots (%d)", len(m.Bots.Items())))
 	}
 

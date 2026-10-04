@@ -96,8 +96,7 @@ func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 func (m Model) Init() tea.Cmd {
 	filePickerInitCMD := m.Filepicker.Init()
 	storiesCMD := telegram.Cligram.GetAllStories(telegram.Cligram.Context())
-
-	return tea.Batch(filePickerInitCMD, storiesCMD)
+	return tea.Batch(filePickerInitCMD, storiesCMD, telegram.Cligram.GetAllChats(telegram.Cligram.Context(), 0, 0))
 }
 
 func getChannelIndex(m Model, channel types.ChannelInfo) int {

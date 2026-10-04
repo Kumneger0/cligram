@@ -2,7 +2,11 @@ package types // nolint:revive
 
 import "github.com/gotd/td/tg"
 
-type GetAllChatsResponse struct {
+type GetAllChatsResponseMSG struct {
+	Chats AllChats
+	Err   error
+}
+type AllChats struct {
 	PrivateChats         []UserInfo    `json:"chats"`
 	Channels             []ChannelInfo `json:"channels"`
 	Groups               []ChannelInfo `json:"groups"`
