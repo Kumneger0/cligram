@@ -22,6 +22,10 @@ type SidecarHandler struct {
 	isP2PMu  sync.RWMutex
 }
 
+func GetProtocol() ntg.Protocol {
+	return ntg.GetProtocol()
+}
+
 func NewSidecarHandler(r io.Reader, w io.Writer) *SidecarHandler {
 	h := &SidecarHandler{
 		client:  ntg.Init(),
@@ -234,7 +238,15 @@ func (h *SidecarHandler) handleCallCreate(params voip.CreateCallParams) (*voip.C
 		return nil, fmt.Errorf("init exchange: %w", err)
 	}
 
-	return &voip.CreateCallResult{GAOrB: gAOrB}, nil
+	proto := ntg.GetProtocol()
+	return &voip.CreateCallResult{
+		GAOrB:           gAOrB,
+		MinLayer:        proto.MinLayer,
+		MaxLayer:        proto.MaxLayer,
+		UDPP2P:          proto.UDPP2P,
+		UDPReflector:    proto.UDPReflector,
+		LibraryVersions: proto.Versions,
+	}, nil
 }
 
 func (h *SidecarHandler) handleCallConnect(params voip.ConnectCallParams) error {
@@ -249,15 +261,22 @@ func (h *SidecarHandler) handleCallConnect(params voip.ConnectCallParams) error 
 			PeerTag:  s.PeerTag,
 			IsTURN:   s.Turn,
 			IsSTUN:   s.Stun,
+			IsTCP:    s.TCP,
 			Username: s.Username,
 			Password: s.Password,
 		})
 	}
 
+	libVersions := params.LibraryVersions
+	if len(libVersions) == 0 {
+		proto := ntg.GetProtocol()
+		libVersions = proto.Versions
+	}
+
 	err := h.client.ConnectP2P(
 		params.UserID,
 		ntgServers,
-		params.LibraryVersions,
+		libVersions,
 		params.P2PAllowed,
 	)
 	if err != nil {

@@ -33,3 +33,8 @@ func TestResolveAudioCommands(t *testing.T) {
 	// In Linux test environments, at least one of PipeWire, PulseAudio, or ALSA is typically installed
 	t.Logf("Resolved audio server: %s, capture: %s, playback: %s", serverName, captureCmd, playbackCmd)
 }
+
+func TestPrintProtocol(t *testing.T) {
+	proto := main.GetProtocol()
+	t.Logf("NTG PROTOCOL: %+v", proto)
+}

@@ -41,7 +41,12 @@ type CreateCallParams struct {
 }
 
 type CreateCallResult struct {
-	GAOrB []byte `json:"g_a_or_b"`
+	GAOrB           []byte   `json:"g_a_or_b"`
+	MinLayer        int32    `json:"min_layer"`
+	MaxLayer        int32    `json:"max_layer"`
+	UDPP2P          bool     `json:"udp_p2p"`
+	UDPReflector    bool     `json:"udp_reflector"`
+	LibraryVersions []string `json:"library_versions"`
 }
 
 type ExchangeKeysParams struct {
@@ -63,6 +68,7 @@ type RTCServer struct {
 	PeerTag  []byte `json:"peer_tag"`
 	Turn     bool   `json:"turn"`
 	Stun     bool   `json:"stun"`
+	TCP      bool   `json:"tcp,omitempty"`
 	Username string `json:"username,omitempty"`
 	Password string `json:"password,omitempty"`
 }

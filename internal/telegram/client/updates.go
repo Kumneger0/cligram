@@ -59,6 +59,8 @@ func getVoipBridge(ctx context.Context) (voip.SignalingBridge, error) {
 	currentBridgeMu.Lock()
 	defer currentBridgeMu.Unlock()
 
+	voipSupervisor.CancelIdleTimer()
+
 	if currentBridge != nil {
 		return currentBridge, nil
 	}
@@ -473,7 +475,9 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 
 					if bridge != nil {
 						_ = bridge.StopCall(ctx, voip.StopCallParams{UserID: uid})
-						voipSupervisor.ResetIdleTimer(30 * time.Second)
+						if len(p2pStates) == 0 {
+							voipSupervisor.ResetIdleTimer(30 * time.Second)
+						}
 					}
 					break
 				}
@@ -710,10 +714,42 @@ func parseRTCServers(connections []tg.PhoneConnectionClass) []voip.RTCServer {
 				PeerTag: c.PeerTag,
 				Turn:    false,
 				Stun:    false,
+				TCP:     c.TCP,
 			})
 		}
 	}
 	return servers
+}
+
+func buildPhoneCallProtocol(res *voip.CreateCallResult, forceRelay bool) tg.PhoneCallProtocol {
+	minLayer := int(res.MinLayer)
+	if minLayer == 0 {
+		minLayer = 92
+	}
+	maxLayer := int(res.MaxLayer)
+	if maxLayer == 0 {
+		maxLayer = 92
+	}
+	libVersions := res.LibraryVersions
+	if len(libVersions) == 0 {
+		libVersions = []string{"8.0.0", "9.0.0"}
+	}
+	udpP2P := res.UDPP2P
+	if res.MinLayer == 0 {
+		udpP2P = true
+	}
+	udpReflector := res.UDPReflector
+	if res.MinLayer == 0 {
+		udpReflector = true
+	}
+
+	return tg.PhoneCallProtocol{
+		MinLayer:        minLayer,
+		MaxLayer:        maxLayer,
+		UDPP2P:          udpP2P && !forceRelay,
+		UDPReflector:    udpReflector,
+		LibraryVersions: libVersions,
+	}
 }
 
 func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64) (err error) {
@@ -807,13 +843,7 @@ func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64) (err e
 	p2pStatesMu.Unlock()
 
 	forceRelay := config.GetConfig().Calls.ForceRelay
-	protocol := tg.PhoneCallProtocol{
-		MinLayer:        65,
-		MaxLayer:        93,
-		UDPP2P:          !forceRelay,
-		UDPReflector:    true,
-		LibraryVersions: []string{"3.0.0"},
-	}
+	protocol := buildPhoneCallProtocol(res, forceRelay)
 
 	_, err = Cligram.API().PhoneRequestCall(ctx, &tg.PhoneRequestCallRequest{
 		UserID: &tg.InputUser{
@@ -973,13 +1003,7 @@ func AcceptIncomingCall(ctx context.Context, userID int64) error {
 	p2pStatesMu.Unlock()
 
 	forceRelay := config.GetConfig().Calls.ForceRelay
-	protocol := tg.PhoneCallProtocol{
-		MinLayer:        65,
-		MaxLayer:        93,
-		UDPP2P:          !forceRelay,
-		UDPReflector:    true,
-		LibraryVersions: []string{"3.0.0"},
-	}
+	protocol := buildPhoneCallProtocol(res, forceRelay)
 
 	_, err = Cligram.API().PhoneAcceptCall(ctx, &tg.PhoneAcceptCallRequest{
 		Peer: tg.InputPhoneCall{
@@ -1034,7 +1058,12 @@ func HangupCall(ctx context.Context, userID int64) error {
 
 	if bridge != nil {
 		_ = bridge.StopCall(ctx, voip.StopCallParams{UserID: userID})
-		voipSupervisor.ResetIdleTimer(30 * time.Second)
+		p2pStatesMu.Lock()
+		activeCount := len(p2pStates)
+		p2pStatesMu.Unlock()
+		if activeCount == 0 {
+			voipSupervisor.ResetIdleTimer(30 * time.Second)
+		}
 	}
 
 	if state == nil || state.inputCall == nil {

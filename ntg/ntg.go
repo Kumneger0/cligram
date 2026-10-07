@@ -91,7 +91,7 @@ func parseBool(f *Future) (bool, error) {
 }
 
 func parseBytes(data []byte) (*C.uint8_t, C.int) {
-	if data != nil {
+	if len(data) > 0 {
 		rawBytes := C.CBytes(data)
 		return (*C.uint8_t)(rawBytes), C.int(len(data))
 	}
@@ -1041,8 +1041,14 @@ func (c *Client) ExchangeKeys(
 		return AuthParams{}, err
 	}
 
+	var gab []byte
+	if result.g_a_or_b != nil && result.sizeGAB > 0 {
+		gab = C.GoBytes(unsafe.Pointer(result.g_a_or_b), result.sizeGAB)
+		defer C.free(unsafe.Pointer(result.g_a_or_b))
+	}
+
 	return AuthParams{
-		GAOrB:          C.GoBytes(unsafe.Pointer(result.g_a_or_b), result.sizeGAB),
+		GAOrB:          gab,
 		KeyFingerprint: int64(result.key_fingerprint),
 	}, nil
 }

@@ -20,7 +20,11 @@ func FindSidecarBinary() (string, error) {
 	return FindSidecarBinaryCustom("cligram-voip")
 }
 
-// FindSidecarBinaryCustom searches for a specific binary name in PATH, ~/.local/bin, and next to current executable.
+// FindSidecarBinaryCustom searches for a specific binary name in:
+// 1. Next to current executable
+// 2. Current working directory (for 'go run .')
+// 3. PATH
+// 4. Standard user and system bin locations (~/.local/bin, /usr/local/bin, /usr/bin)
 func FindSidecarBinaryCustom(binaryName string) (string, error) {
 	// 1. Check next to current executable
 	if exePath, err := os.Executable(); err == nil {
@@ -31,14 +35,30 @@ func FindSidecarBinaryCustom(binaryName string) (string, error) {
 		}
 	}
 
-	// 2. Check PATH
+	// 2. Check current working directory (e.g. when run with 'go run .')
+	if cwd, err := os.Getwd(); err == nil {
+		candidate := filepath.Join(cwd, binaryName)
+		if fi, err := os.Stat(candidate); err == nil && !fi.IsDir() && fi.Mode()&0o111 != 0 {
+			return candidate, nil
+		}
+	}
+
+	// 3. Check PATH
 	if p, err := exec.LookPath(binaryName); err == nil {
 		return p, nil
 	}
 
-	// 3. Check ~/.local/bin
+	// 4. Check ~/.local/bin
 	if homeDir, err := os.UserHomeDir(); err == nil {
 		candidate := filepath.Join(homeDir, ".local", "bin", binaryName)
+		if fi, err := os.Stat(candidate); err == nil && !fi.IsDir() && fi.Mode()&0o111 != 0 {
+			return candidate, nil
+		}
+	}
+
+	// 5. Check standard system locations
+	for _, dir := range []string{"/usr/local/bin", "/usr/bin"} {
+		candidate := filepath.Join(dir, binaryName)
 		if fi, err := os.Stat(candidate); err == nil && !fi.IsDir() && fi.Mode()&0o111 != 0 {
 			return candidate, nil
 		}

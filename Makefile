@@ -17,9 +17,10 @@ build-voip: ## Build Cgo VoIP ephemeral sidecar
 	@go build -o cligram-voip ./cmd/cligram-voip
 
 .PHONY: install
-install: build 
-	@echo "--> Installing cligram to /usr/local/bin..."
+install: build build-voip
+	@echo "--> Installing cligram and cligram-voip to /usr/local/bin..."
 	@sudo cp $(projectname) /usr/local/bin/
+	@sudo cp cligram-voip /usr/local/bin/
 	@echo "--> Installation complete. Run 'cligram' to start."
 
 .PHONY: run
