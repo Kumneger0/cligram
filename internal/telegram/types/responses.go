@@ -35,6 +35,7 @@ type CallUserResponse struct {
 	Call     *tg.PhonePhoneCall
 	DHConfig *DHConfig
 	UserID   *int64
+	Err      error
 }
 
 type SendMessageResponse struct {
@@ -193,15 +194,5 @@ type CallHungUpMsg struct {
 type CallMuteToggledMsg struct {
 	UserID int64
 	Muted  bool
-	Err    error
-}
-
-type GroupCallJoinedMsg struct {
-	ChatID int64
-	Err    error
-}
-
-type GroupCallLeftMsg struct {
-	ChatID int64
 	Err    error
 }

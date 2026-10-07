@@ -128,21 +128,22 @@ type Notification struct {
 type CallState string
 
 const (
-	CallStateIncoming CallState = "incoming"
-	CallStateOutgoing CallState = "outgoing"
-	CallStateActive   CallState = "active"
-	CallStateEnded    CallState = "ended"
-	CallStateDeclined CallState = "declined"
+	CallStateIncoming      CallState = "incoming"
+	CallStateOutgoing      CallState = "outgoing"
+	CallStateActive        CallState = "active"
+	CallStateEnded         CallState = "ended"
+	CallStateDeclined      CallState = "declined"
+	CallStateMissingHelper CallState = "missing_helper"
+	CallStateBusyMissed    CallState = "busy_missed"
 )
 
 type CallNotification struct {
-	UserID    int64
-	UserName  string
-	State     CallState
-	Duration  int
-	IsGroup   bool
-	GroupName string
-	Err       error
+	UserID   int64
+	UserName string
+	State    CallState
+	Duration int
+	IsRelay  bool
+	Err      error
 }
 
 type GetUserDHConfigRequest struct {

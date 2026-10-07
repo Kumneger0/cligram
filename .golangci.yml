@@ -24,6 +24,16 @@ linters:
         - name: superfluous-else
         - name: unconditional-recursion
         - name: import-shadowing
+        - name: context-as-argument
+        - name: unhandled-error
+          arguments:
+            - "fmt.Printf"
+            - "fmt.Println"
+            - "fmt.Fprintf"
+            - "fmt.Fprintln"
+            - "fmt.Print"
+            - "strings.Builder.WriteString"
+            - "bytes.Buffer.WriteString"
   exclusions:
     generated: lax
     presets:

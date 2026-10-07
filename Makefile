@@ -7,9 +7,14 @@ help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: build
-build: 
-	@echo "--> Building Go application..."
-	@go build -ldflags "-X main.version=$(shell git describe --abbrev=0 --tags) -X main.telegramAPIID=$(shell echo $$TELEGRAM_API_ID) -X main.telegramAPIHash=$(shell echo $$TELEGRAM_API_HASH)" -o $(projectname)
+build: ## Build pure-Go cligram binary
+	@echo "--> Building pure-Go application..."
+	@CGO_ENABLED=0 go build -ldflags "-X main.version=$(shell git describe --abbrev=0 --tags 2>/dev/null || echo dev) -X main.telegramAPIID=$(shell echo $$TELEGRAM_API_ID) -X main.telegramAPIHash=$(shell echo $$TELEGRAM_API_HASH)" -o $(projectname)
+
+.PHONY: build-voip
+build-voip: ## Build Cgo VoIP ephemeral sidecar
+	@echo "--> Building cligram-voip ephemeral sidecar..."
+	@go build -o cligram-voip ./cmd/cligram-voip
 
 .PHONY: install
 install: build 
@@ -25,10 +30,19 @@ run: build
 bootstrap: 
 	go generate -tags tools tools/tools.go
 
+.PHONY: test-core
+test-core: ## Run tests for pure-Go core packages without Cgo
+	@echo "--> Running pure-Go core tests..."
+	@CGO_ENABLED=0 go test --cover -parallel=1 -v -coverprofile=coverage.out ./internal/...
+	@go tool cover -func=coverage.out | sort -rnk3
+
+.PHONY: test-voip
+test-voip: ## Run tests for Cgo VoIP ephemeral sidecar
+	@echo "--> Running VoIP sidecar tests..."
+	@go test -v ./cmd/cligram-voip/...
+
 .PHONY: test
-test: clean
-	go test --cover -parallel=1 -v -coverprofile=coverage.out ./...
-	go tool cover -func=coverage.out | sort -rnk3
+test: clean test-core test-voip ## Run full test suite across core and sidecar
 
 .PHONY: clean
 clean: 

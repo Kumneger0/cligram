@@ -16,6 +16,7 @@ import (
 	"github.com/gotd/td/tg"
 	"github.com/kumneger0/cligram/internal/notification"
 	"github.com/kumneger0/cligram/internal/telegram"
+	"github.com/kumneger0/cligram/internal/telegram/client"
 	"github.com/kumneger0/cligram/internal/telegram/types"
 	"go.dalton.dog/bubbleup"
 )
@@ -41,11 +42,72 @@ func (m *Model) checkAndFetchCustomEmojis(messages []types.FormattedMessage) tea
 	return tea.Batch(cmds...)
 }
 
+type CallTickMsg time.Time
+
+func tickCall() tea.Cmd {
+	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
+		return CallTickMsg(t)
+	})
+}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
-	case types.GetAllChatsResponseMSG:
+	case CallTickMsg:
+		if m.CallOverlay.State == CallOverlayActive {
+			return m, tickCall()
+		}
+		return m, nil
+	case types.GetUserDHConfigRequest:
+		if m.PhoneCallDhConfigs == nil || m.PhoneCallDhConfigs.Configs[msg.UserID] == nil {
+			slog.Warn("GetUserDHConfigRequest: no DHConfig stored for user", "userID", msg.UserID)
+			return m, nil
+		}
+		dhConfig := *m.PhoneCallDhConfigs.Configs[msg.UserID]
+		go func() { client.DhConfigRecvChannel <- dhConfig }()
+		return m, nil
+	case types.CallUserResponse:
+		if msg.Err != nil {
+			slog.Error("call initiation failed", "error", msg.Err)
+			m.CallOverlay.SetNone()
+			alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, "Call failed: "+msg.Err.Error())
+			return m, alertCmd
+		}
+		slog.Info("call initiated", "userID", msg.UserID)
+		return m, nil
+	case types.CallNotification:
+		switch msg.State {
+		case types.CallStateIncoming:
+			m.CallOverlay.SetIncoming(msg.UserName, msg.UserID)
+		case types.CallStateActive:
+			userName := msg.UserName
+			if userName == "" && m.Mode == ModeUsers {
+				userName = m.SelectedUser.FirstName
+			}
+			m.CallOverlay.SetActive(userName, msg.UserID)
+			m.CallOverlay.SetRelay(msg.IsRelay)
+			m.ActiveCallUserID = msg.UserID
+			return m, tickCall()
+		case types.CallStateMissingHelper:
+			m.CallOverlay.SetMissingHelper()
+			alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, "⚠️ cligram-voip helper missing")
+			return m, alertCmd
+		case types.CallStateBusyMissed:
+			alertCmd := m.Alert.NewAlertCmd(bubbleup.InfoKey, "📞 Missed call (line busy)")
+			return m, alertCmd
+		case types.CallStateEnded, types.CallStateDeclined:
+			m.CallOverlay.SetNone()
+			m.ActiveCallUserID = 0
+			if msg.Err != nil {
+				alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, "📞 Call disconnected: "+msg.Err.Error())
+				return m, alertCmd
+			}
+			alertCmd := m.Alert.NewAlertCmd(bubbleup.InfoKey, "📞 Call ended")
+			return m, alertCmd
+		}
+		return m, nil
+	case types.CallAcceptedMsg:
 		if msg.Err != nil {
 			slog.Error("Failed to get all chats", "error", msg.Err.Error())
 			m.Alert = m.Alert.WithAllowEscToClose().WithPosition(bubbleup.TopLeftPosition)
@@ -775,24 +837,51 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	// Handle call overlay keybindings first
+	if m.CallOverlay.State == CallOverlayMissingHelper {
+		switch msg.String() {
+		case "enter", "esc":
+			m.CallOverlay.SetNone()
+			return m, nil
+		}
+	}
+	if m.CallOverlay.State == CallOverlayDialing {
+		switch msg.String() {
+		case "alt+h", "esc":
+			if telegram.Cligram != nil {
+				return m, telegram.Cligram.HangupCall(telegram.Cligram.Context(), m.CallOverlay.UserID)
+			}
+			m.CallOverlay.SetNone()
+			return m, nil
+		}
+	}
 	if m.CallOverlay.State == CallOverlayIncoming {
 		switch msg.String() {
 		case "a":
-			return m, telegram.Cligram.AcceptCall(telegram.Cligram.Context(), m.CallOverlay.UserID)
+			if telegram.Cligram != nil {
+				return m, telegram.Cligram.AcceptCall(telegram.Cligram.Context(), m.CallOverlay.UserID)
+			}
+			return m, nil
 		case "d":
-			return m, telegram.Cligram.DeclineCall(telegram.Cligram.Context(), m.CallOverlay.UserID)
+			if telegram.Cligram != nil {
+				return m, telegram.Cligram.DeclineCall(telegram.Cligram.Context(), m.CallOverlay.UserID)
+			}
+			m.CallOverlay.SetNone()
+			return m, nil
 		}
 	}
 	if m.CallOverlay.State == CallOverlayActive {
 		switch msg.String() {
-		case "m":
-			if m.FocusedOn != Input {
+		case "alt+m":
+			if telegram.Cligram != nil {
 				return m, telegram.Cligram.ToggleMute(m.ActiveCallUserID)
 			}
-		case "h":
-			if m.FocusedOn != Input {
+			return m, nil
+		case "alt+h":
+			if telegram.Cligram != nil {
 				return m, telegram.Cligram.HangupCall(telegram.Cligram.Context(), m.ActiveCallUserID)
 			}
+			m.CallOverlay.SetNone()
+			return m, nil
 		}
 	}
 
@@ -801,6 +890,8 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Initiate P2P call to selected user
 		if m.Mode == ModeUsers && m.SelectedUser.PeerID != "" && m.CallOverlay.State == CallOverlayNone {
 			pInfo := peerFromItem(m.SelectedUser)
+			uID, _ := strconv.ParseInt(pInfo.ID, 10, 64)
+			m.CallOverlay.SetDialing(m.SelectedUser.FirstName, uID)
 			return m, telegram.Cligram.CallUser(telegram.Cligram.Context(), pInfo)
 		}
 		return m, nil

@@ -430,10 +430,7 @@ func (m Model) View() string {
 	ui := setItemStyles(&m)
 
 	// Render call overlay on top of the UI
-	if m.CallOverlay.State == CallOverlayIncoming {
-		callView := m.CallOverlay.View()
-		ui = callView + "\n" + ui
-	} else if m.CallOverlay.State == CallOverlayActive {
+	if m.CallOverlay.IsActive() {
 		callView := m.CallOverlay.View()
 		ui = callView + "\n" + ui
 	}
