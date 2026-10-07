@@ -27,9 +27,6 @@ jobs:
           TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
         run: make build
 
-      - name: Build VoIP ephemeral sidecar
-        run: make build-voip
-
       - name: Run tests
         run: make test
 

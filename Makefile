@@ -37,12 +37,12 @@ test-core: ## Run tests for pure-Go core packages without Cgo
 	@go tool cover -func=coverage.out | sort -rnk3
 
 .PHONY: test-voip
-test-voip: ## Run tests for Cgo VoIP ephemeral sidecar
+test-voip: ## Run tests for Cgo VoIP ephemeral sidecar (requires libntgcalls)
 	@echo "--> Running VoIP sidecar tests..."
 	@go test -v ./cmd/cligram-voip/...
 
 .PHONY: test
-test: clean test-core test-voip ## Run full test suite across core and sidecar
+test: clean test-core ## Run test suite for core application
 
 .PHONY: clean
 clean: 
