@@ -109,6 +109,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case types.CallAcceptedMsg:
 		if msg.Err != nil {
+			slog.Error("failed to accept call", "error", msg.Err)
+			alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, "Failed to accept call: "+msg.Err.Error())
+			return m, alertCmd
+		}
+		return m, nil
+	case types.CallDeclinedMsg:
+		if msg.Err != nil {
+			slog.Error("failed to decline call", "error", msg.Err)
+		}
+		m.CallOverlay.SetNone()
+		return m, nil
+	case types.CallHungUpMsg:
+		if msg.Err != nil {
+			slog.Error("failed to hang up call", "error", msg.Err)
+		}
+		m.CallOverlay.SetNone()
+		m.ActiveCallUserID = 0
+		return m, nil
+	case types.CallMuteToggledMsg:
+		if msg.Err != nil {
+			slog.Error("failed to toggle mute", "error", msg.Err)
+			alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, "Mute toggle failed: "+msg.Err.Error())
+			return m, alertCmd
+		}
+		m.CallOverlay.Muted = msg.Muted
+		return m, nil
+	case types.GetAllChatsResponseMSG:
+		if msg.Err != nil {
 			slog.Error("Failed to get all chats", "error", msg.Err.Error())
 			m.Alert = m.Alert.WithAllowEscToClose().WithPosition(bubbleup.TopLeftPosition)
 			alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, msg.Err.Error())
