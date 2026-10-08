@@ -1,11 +1,14 @@
 package ui
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kumneger0/cligram/internal/telegram/types"
 	overlay "github.com/rmhubbert/bubbletea-overlay"
@@ -308,5 +311,254 @@ func TestManager_SearchAllowsTypingQ(t *testing.T) {
 	activeFg := mgr.Foreground.(*Foreground)
 	if !strings.Contains(activeFg.input.Value(), "q") {
 		t.Errorf("expected search input to receive 'q', got %q", activeFg.input.Value())
+	}
+}
+
+func TestForeground_StoriesModal_Rendering_EmptyState(t *testing.T) {
+	fg := &Foreground{}
+	fgModel, _ := fg.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	fg = fgModel.(*Foreground)
+
+	fgModel, _ = fg.Update(OpenModalMsg{
+		ModalMode: ModalModeShowStories,
+	})
+	fg = fgModel.(*Foreground)
+
+	// Simulate GetAllStoriesMsg completed with 0 stories
+	fgModel, _ = fg.Update(types.GetAllStoriesMsg{Stories: []types.Stories{}})
+	fg = fgModel.(*Foreground)
+
+	view := fg.View()
+	if !strings.Contains(view, "Stories (0)") {
+		t.Errorf("expected view to contain 'Stories (0)', got:\n%s", view)
+	}
+	if !strings.Contains(view, "No stories available") {
+		t.Errorf("expected view to contain 'No stories available', got:\n%s", view)
+	}
+	if !strings.Contains(view, "Navigate") || !strings.Contains(view, "View Story") || !strings.Contains(view, "Close") {
+		t.Errorf("expected footer hints in stories view, got:\n%s", view)
+	}
+}
+
+func TestForeground_StoriesModal_Rendering_WithStories(t *testing.T) {
+	fg := &Foreground{}
+	fgModel, _ := fg.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	fg = fgModel.(*Foreground)
+
+	stories := []types.Stories{
+		{
+			UserInfo:   types.UserInfo{FirstName: "Alice", LastName: "Smith", Username: "alice_s", PeerID: "101"},
+			ID:         1,
+			MediaType:  "photo",
+			Date:       time.Now().Add(-2 * time.Hour),
+			ExpireDate: time.Now().Add(22 * time.Hour),
+			Caption:    "Beach sunset",
+		},
+		{
+			UserInfo:  types.UserInfo{FirstName: "Bob", Premium: true, PeerID: "102"},
+			ID:        2,
+			MediaType: "video",
+			IsPinned:  true,
+			Date:      time.Now().Add(-15 * time.Minute),
+		},
+	}
+
+	fgModel, _ = fg.Update(OpenModalMsg{
+		ModalMode: ModalModeShowStories,
+		Stories:   stories,
+	})
+	fg = fgModel.(*Foreground)
+
+	view := fg.View()
+	if !strings.Contains(view, "Stories (2)") {
+		t.Errorf("expected view to contain 'Stories (2)', got:\n%s", view)
+	}
+	if !strings.Contains(view, "Alice Smith") || !strings.Contains(view, "@alice_s") {
+		t.Errorf("expected view to contain Alice Smith and @alice_s, got:\n%s", view)
+	}
+	if !strings.Contains(view, "📸") || !strings.Contains(view, "Beach sunset") {
+		t.Errorf("expected photo icon and caption, got:\n%s", view)
+	}
+	if !strings.Contains(view, "Bob") || !strings.Contains(view, "⭐") || !strings.Contains(view, "🎥") || !strings.Contains(view, "📌") {
+		t.Errorf("expected Bob with star badge, video icon, and pin, got:\n%s", view)
+	}
+	if !strings.Contains(view, "Navigate") || !strings.Contains(view, "View Story") || !strings.Contains(view, "Close") {
+		t.Errorf("expected footer hints in stories view, got:\n%s", view)
+	}
+}
+
+func TestForeground_StoriesModal_DirectArrowNavigation(t *testing.T) {
+	fg := &Foreground{}
+	fgModel, _ := fg.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	fg = fgModel.(*Foreground)
+
+	stories := []types.Stories{
+		{UserInfo: types.UserInfo{FirstName: "Alice", PeerID: "101"}, ID: 1},
+		{UserInfo: types.UserInfo{FirstName: "Bob", PeerID: "102"}, ID: 2},
+	}
+
+	fgModel, _ = fg.Update(OpenModalMsg{
+		ModalMode: ModalModeShowStories,
+		Stories:   stories,
+	})
+	fg = fgModel.(*Foreground)
+
+	if fg.stories.Index() != 0 {
+		t.Fatalf("expected initial index 0, got %d", fg.stories.Index())
+	}
+
+	// Down arrow
+	fgModel, _ = fg.Update(tea.KeyMsg{Type: tea.KeyDown})
+	fg = fgModel.(*Foreground)
+	if fg.stories.Index() != 1 {
+		t.Errorf("expected Down arrow to move to index 1, got %d", fg.stories.Index())
+	}
+
+	// Up arrow
+	fgModel, _ = fg.Update(tea.KeyMsg{Type: tea.KeyUp})
+	fg = fgModel.(*Foreground)
+	if fg.stories.Index() != 0 {
+		t.Errorf("expected Up arrow to move to index 0, got %d", fg.stories.Index())
+	}
+}
+
+func TestForeground_StoriesModal_FetchingIndicator(t *testing.T) {
+	fg := &Foreground{}
+	fgModel, _ := fg.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	fg = fgModel.(*Foreground)
+
+	// Open modal with no stories (initial fetch)
+	fgModel, cmd := fg.Update(OpenModalMsg{
+		ModalMode: ModalModeShowStories,
+		Stories:   nil,
+	})
+	fg = fgModel.(*Foreground)
+
+	if !fg.storiesLoading {
+		t.Errorf("expected storiesLoading to be true when opened with nil stories")
+	}
+	if cmd == nil {
+		t.Errorf("expected spinner tick command when storiesLoading is true")
+	}
+
+	view := fg.View()
+	if !strings.Contains(view, "Fetching stories from Telegram...") {
+		t.Errorf("expected view to contain 'Fetching stories from Telegram...', got:\n%s", view)
+	}
+
+	// Receive stories
+	stories := []types.Stories{
+		{UserInfo: types.UserInfo{FirstName: "Charlie", PeerID: "103"}, ID: 3},
+	}
+	fgModel, _ = fg.Update(types.GetAllStoriesMsg{Stories: stories})
+	fg = fgModel.(*Foreground)
+
+	if fg.storiesLoading {
+		t.Errorf("expected storiesLoading to be false after receiving stories")
+	}
+	viewAfter := fg.View()
+	if !strings.Contains(viewAfter, "Charlie") {
+		t.Errorf("expected view to contain Charlie after stories arrived, got:\n%s", viewAfter)
+	}
+}
+
+func TestForeground_StoriesModal_DownloadingIndicator(t *testing.T) {
+	fg := &Foreground{}
+	fgModel, _ := fg.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	fg = fgModel.(*Foreground)
+
+	stories := []types.Stories{
+		{UserInfo: types.UserInfo{FirstName: "Alice", PeerID: "101"}, ID: 1},
+	}
+	fgModel, _ = fg.Update(OpenModalMsg{
+		ModalMode: ModalModeShowStories,
+		Stories:   stories,
+	})
+	fg = fgModel.(*Foreground)
+
+	// Press Enter to download story
+	fgModel, cmd := fg.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	fg = fgModel.(*Foreground)
+
+	if !fg.isDownloadingStory {
+		t.Errorf("expected isDownloadingStory to be true after pressing Enter")
+	}
+	if cmd == nil {
+		t.Errorf("expected batch command including spinner tick on Enter")
+	}
+
+	view := fg.View()
+	if !strings.Contains(view, "Downloading...") {
+		t.Errorf("expected view to contain 'Downloading...', got:\n%s", view)
+	}
+	if !strings.Contains(view, "Downloading media...") {
+		t.Errorf("expected header to contain 'Downloading media...', got:\n%s", view)
+	}
+	if !strings.Contains(view, "Downloading story media...") {
+		t.Errorf("expected footer to contain 'Downloading story media...', got:\n%s", view)
+	}
+
+	// Spinner tick updates and continues
+	fgModel, tickCmd := fg.Update(spinner.TickMsg{Time: time.Now()})
+	fg = fgModel.(*Foreground)
+	if tickCmd == nil {
+		t.Errorf("expected tickCmd to be returned while downloading")
+	}
+
+	// Download completes
+	fgModel, _ = fg.Update(types.StoriesDownloadStatusMsg{
+		Done: true,
+		Peer: types.Peer{ID: "101"},
+	})
+	fg = fgModel.(*Foreground)
+
+	if fg.isDownloadingStory {
+		t.Errorf("expected isDownloadingStory to be false after download completed")
+	}
+	viewAfter := fg.View()
+	if strings.Contains(viewAfter, "Downloading") {
+		t.Errorf("expected view to no longer contain 'Downloading', got:\n%s", viewAfter)
+	}
+}
+
+func TestForeground_StoriesModal_DownloadingErrorCleanedUp(t *testing.T) {
+	fg := &Foreground{}
+	fgModel, _ := fg.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	fg = fgModel.(*Foreground)
+
+	stories := []types.Stories{
+		{UserInfo: types.UserInfo{FirstName: "Alice", PeerID: "101"}, ID: 1},
+	}
+	fgModel, _ = fg.Update(OpenModalMsg{
+		ModalMode: ModalModeShowStories,
+		Stories:   stories,
+	})
+	fg = fgModel.(*Foreground)
+
+	// Press Enter to start download
+	fgModel, _ = fg.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	fg = fgModel.(*Foreground)
+
+	if !fg.isDownloadingStory {
+		t.Fatalf("expected isDownloadingStory to be true")
+	}
+
+	// Error occurs during download
+	downloadErr := errors.New("network timeout")
+	fgModel, _ = fg.Update(types.StoriesDownloadStatusMsg{
+		Err:  downloadErr,
+		Peer: types.Peer{ID: "101"},
+	})
+	fg = fgModel.(*Foreground)
+
+	if fg.isDownloadingStory {
+		t.Errorf("expected isDownloadingStory to be false after error")
+	}
+	if fg.Error == nil || fg.Error.Error() != "network timeout" {
+		t.Errorf("expected error to be recorded, got %v", fg.Error)
+	}
+	selectedStory := fg.stories.Items()[0].(types.Stories)
+	if selectedStory.IsSelected {
+		t.Errorf("expected story IsSelected to be false after download error")
 	}
 }

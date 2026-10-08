@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kumneger0/cligram/internal/telegram"
@@ -13,47 +14,46 @@ import (
 )
 
 func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
+	m.ensureSpinner()
 	var cmds []tea.Cmd
 	switch msg := message.(type) {
-	case types.StoriesDownloadStatusMsg:
-		if msg.Err != nil {
-			//TODO: display error messages
-			return m, nil
+	case spinner.TickMsg:
+		if m.storiesLoading || m.isDownloadingStory {
+			var spinCmd tea.Cmd
+			m.spinner, spinCmd = m.spinner.Update(msg)
+			return m, spinCmd
 		}
+		return m, nil
 
-		var storyToUpdate types.Stories
-		var index = -1
-		if !msg.Done {
-			return m, nil
-		}
-		for idx, value := range m.stories.Items() {
-			if story, ok := value.(types.Stories); ok && story.UserInfo.PeerID == msg.Peer.ID {
-				storyToUpdate = story
-				index = idx
-				break
+	case types.StoriesDownloadStatusMsg:
+		m.isDownloadingStory = false
+		m.downloadingStoryPeer = ""
+		if m.stories != nil {
+			for idx, value := range m.stories.Items() {
+				if story, ok := value.(types.Stories); ok {
+					if story.IsSelected || (msg.Peer.ID != "" && story.UserInfo.PeerID == msg.Peer.ID) {
+						story.IsSelected = false
+						_ = m.stories.SetItem(idx, story)
+					}
+				}
 			}
 		}
-
-		if index != -1 {
-			storyToUpdate.IsSelected = false
-			return m, m.stories.SetItem(index, storyToUpdate)
-		}
-
-	case []types.Stories:
-		if len(msg) == 0 {
+		if msg.Err != nil {
+			m.Error = msg.Err
 			return m, nil
 		}
-		var storiesToDisplay []list.Item
-		for _, v := range msg {
-			storiesToDisplay = append(storiesToDisplay, v)
+		return m, nil
+
+	case types.GetAllStoriesMsg:
+		m.storiesLoading = false
+		if msg.Err != nil {
+			m.Error = msg.Err
+			return m, nil
 		}
-		stories := list.New(storiesToDisplay, StoriesDelegate{Foreground: m}, 10, 10)
-		m.stories = &stories
-		m.stories.SetShowFilter(false)
-		m.stories.SetShowPagination(false)
-		m.stories.SetShowTitle(false)
-		m.stories.SetShowHelp(false)
-		m.stories.SetShowStatusBar(false)
+		m.initStories(msg.Stories)
+	case []types.Stories:
+		m.storiesLoading = false
+		m.initStories(msg)
 	case types.AvailableReactions:
 		if msg.Err != nil {
 			m.Error = msg.Err
@@ -99,6 +99,16 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.input.Focus()
 		} else if msg.ModalMode == ModalModeForwardMessage {
 			m.initForwardPicker(msg)
+		} else if msg.ModalMode == ModalModeShowStories {
+			m.ensureSpinner()
+			if len(msg.Stories) > 0 {
+				m.initStories(msg.Stories)
+				m.storiesLoading = false
+			} else {
+				m.storiesLoading = true
+				m.stories = nil
+				cmds = append(cmds, m.spinner.Tick)
+			}
 		}
 	case types.CurrentUserMsg:
 		if msg.Err != nil {
@@ -196,6 +206,9 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 		} else if m.ModalMode == ModalModeForwardMessage {
 			m.forwardDestinations.CursorUp()
 			return m, nil
+		} else if m.ModalMode == ModalModeShowStories && m.stories != nil {
+			m.stories.CursorUp()
+			return m, nil
 		}
 	case "down", "ctrl+n":
 		if m.ModalMode == ModalModeSendReaction {
@@ -207,6 +220,9 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 			return m, nil
 		} else if m.ModalMode == ModalModeForwardMessage {
 			m.forwardDestinations.CursorDown()
+			return m, nil
+		} else if m.ModalMode == ModalModeShowStories && m.stories != nil {
+			m.stories.CursorDown()
 			return m, nil
 		}
 	case "left":
@@ -230,6 +246,18 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 			m.input.Focus()
 		}
 	case "esc":
+		if m.ModalMode == ModalModeShowStories {
+			m.storiesLoading = false
+			m.isDownloadingStory = false
+			if m.stories != nil {
+				for idx, value := range m.stories.Items() {
+					if story, ok := value.(types.Stories); ok && story.IsSelected {
+						story.IsSelected = false
+						_ = m.stories.SetItem(idx, story)
+					}
+				}
+			}
+		}
 		return m, func() tea.Msg { return CloseOverlay{} }
 	case "q", "Q":
 		if m.Error != nil {
@@ -275,17 +303,29 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 
 func handleEnterKey(m *Foreground) (tea.Model, tea.Cmd) {
 	if m.ModalMode == ModalModeShowStories {
-		story, ok := m.stories.SelectedItem().(types.Stories)
-		if !ok {
+		if m.stories == nil || len(m.stories.Items()) == 0 {
 			return m, nil
 		}
+		story, ok := m.stories.SelectedItem().(types.Stories)
+		if !ok || story.IsSelected {
+			return m, nil
+		}
+		m.ensureSpinner()
 		story.IsSelected = true
-		return m, tea.Batch(m.stories.SetItem(m.stories.GlobalIndex(), story), telegram.Cligram.GetPeerStories(telegram.Cligram.Context(), types.Peer{
-			ID:         story.UserInfo.PeerID,
-			AccessHash: story.UserInfo.AccessHash,
-			ChatType:   types.UserChat,
-		}),
-		)
+		m.isDownloadingStory = true
+		m.downloadingStoryPeer = story.UserInfo.PeerID
+
+		var batchCmds []tea.Cmd
+		batchCmds = append(batchCmds, m.stories.SetItem(m.stories.GlobalIndex(), story))
+		batchCmds = append(batchCmds, m.spinner.Tick)
+		if telegram.Cligram != nil && telegram.Cligram.Context() != nil {
+			batchCmds = append(batchCmds, telegram.Cligram.GetPeerStories(telegram.Cligram.Context(), types.Peer{
+				ID:         story.UserInfo.PeerID,
+				AccessHash: story.UserInfo.AccessHash,
+				ChatType:   types.UserChat,
+			}))
+		}
+		return m, tea.Batch(batchCmds...)
 	}
 	if m.ModalMode == ModalModeForwardMessage {
 		return handleForwardMessage(m)
@@ -476,4 +516,22 @@ func findUser(peerID string, users []types.UserInfo) *types.UserInfo {
 		}
 	}
 	return nil
+}
+
+func (m *Foreground) initStories(stories []types.Stories) {
+	if len(stories) == 0 {
+		m.stories = nil
+		return
+	}
+	var storiesToDisplay []list.Item
+	for _, v := range stories {
+		storiesToDisplay = append(storiesToDisplay, v)
+	}
+	stList := list.New(storiesToDisplay, StoriesDelegate{Foreground: m}, 10, 10)
+	stList.SetShowFilter(false)
+	stList.SetShowPagination(false)
+	stList.SetShowTitle(false)
+	stList.SetShowHelp(false)
+	stList.SetShowStatusBar(false)
+	m.stories = &stList
 }

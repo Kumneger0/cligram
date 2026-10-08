@@ -114,6 +114,7 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 				model.Bots = botsList
 				model.SideBarLoading = true
 				model.Stories = []types.Stories{}
+				model.StoriesLoading = true
 
 				background := model
 				foreground := &ui.Foreground{}

@@ -536,6 +536,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) updateUserStories(msg types.GetAllStoriesMsg) (tea.Model, tea.Cmd) {
 	m.Stories = msg.Stories
+	m.StoriesLoading = false
 	return m, nil
 }
 

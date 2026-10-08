@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -59,33 +60,28 @@ func (d SearchDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd {
 	return nil
 }
 
+func entityBadge(t ChannelOrUserType, title string) string {
+	switch t {
+	case USER:
+		return "👤 " + title
+	case GROUP:
+		return "👥 " + title
+	case CHANNEL:
+		return "📢 " + title
+	case BOT:
+		return "🤖 " + title
+	default:
+		return title
+	}
+}
+
 func (d SearchDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	var title string
 
 	if entry, ok := item.(SearchResult); ok {
-		title = entry.FilterValue()
-		switch entry.ChannelOrUserType {
-		case USER:
-			title = "👤 " + title
-		case GROUP:
-			title = "👥 " + title
-		case CHANNEL:
-			title = "📢 " + title
-		case BOT:
-			title = "🤖 " + title
-		}
+		title = entityBadge(entry.ChannelOrUserType, entry.FilterValue())
 	} else if dest, ok := item.(ForwardDestinationItem); ok {
-		title = dest.FilterValue()
-		switch dest.ChannelOrUserType {
-		case USER:
-			title = "👤 " + title
-		case GROUP:
-			title = "👥 " + title
-		case CHANNEL:
-			title = "📢 " + title
-		case BOT:
-			title = "🤖 " + title
-		}
+		title = entityBadge(dest.ChannelOrUserType, dest.FilterValue())
 	} else {
 		return
 	}
@@ -117,19 +113,89 @@ func (s StoriesDelegate) Spacing() int {
 	return 0
 }
 
+func formatStoryMeta(story types.Stories) string {
+	var parts []string
+	if !story.Date.IsZero() {
+		diff := time.Since(story.Date)
+		if diff < time.Minute {
+			parts = append(parts, "just now")
+		} else if diff < time.Hour {
+			parts = append(parts, fmt.Sprintf("%dm ago", int(diff.Minutes())))
+		} else if diff < 24*time.Hour {
+			parts = append(parts, fmt.Sprintf("%dh ago", int(diff.Hours())))
+		} else {
+			parts = append(parts, story.Date.Format("02 Jan"))
+		}
+	}
+	if !story.ExpireDate.IsZero() && time.Until(story.ExpireDate) > 0 {
+		timeLeft := time.Until(story.ExpireDate)
+		if timeLeft < time.Hour {
+			parts = append(parts, fmt.Sprintf("%dm left", int(timeLeft.Minutes())))
+		} else {
+			parts = append(parts, fmt.Sprintf("%dh left", int(timeLeft.Hours())))
+		}
+	}
+	return strings.Join(parts, " • ")
+}
+
 func (s StoriesDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	allStoryItems := m.Items()
 	if len(allStoryItems) == 0 {
 		return
 	}
 
-	currentItem, ok := allStoryItems[index].(types.Stories)
+	story, ok := allStoryItems[index].(types.Stories)
 	if !ok {
 		return
 	}
 
-	title := item.FilterValue()
-	loading := currentItem.IsSelected
+	mediaIcon := "📸"
+	if story.MediaType == "video" {
+		mediaIcon = "🎥"
+	}
+	if story.IsPinned {
+		mediaIcon = "📌 " + mediaIcon
+	}
+
+	name := story.UserInfo.FirstName
+	if story.UserInfo.LastName != "" {
+		name += " " + story.UserInfo.LastName
+	}
+	if name == "" {
+		name = "Unknown"
+	}
+	var badge string
+	if story.UserInfo.Premium {
+		badge = "⭐ "
+	}
+	var statusBadge string
+	if story.IsSelected {
+		spinView := "⠋"
+		if s.Foreground != nil {
+			s.Foreground.ensureSpinner()
+			if v := s.Foreground.spinner.View(); v != "" {
+				spinView = v
+			}
+		}
+		statusBadge = lipgloss.NewStyle().Foreground(DefaultTheme.AccentColor).Bold(true).Render(spinView+" Downloading...") + " "
+	}
+
+	authorStr := fmt.Sprintf("%s%s %s%s", statusBadge, mediaIcon, badge, name)
+	if story.UserInfo.Username != "" {
+		authorStr += " " + lipgloss.NewStyle().Foreground(DefaultTheme.SecondaryText).Render("@"+story.UserInfo.Username)
+	}
+
+	metaStr := formatStoryMeta(story)
+	if metaStr != "" {
+		authorStr += " " + lipgloss.NewStyle().Foreground(DefaultTheme.SecondaryText).Render("• "+metaStr)
+	}
+	if story.Caption != "" {
+		caption := strings.ReplaceAll(story.Caption, "\n", " ")
+		if len(caption) > 24 {
+			caption = caption[:24] + "…"
+		}
+		authorStr += " " + lipgloss.NewStyle().Foreground(DefaultTheme.SecondaryText).Italic(true).Render(`— "`+caption+`"`)
+	}
 
 	var style lipgloss.Style
 	if index == m.Index() {
@@ -138,12 +204,12 @@ func (s StoriesDelegate) Render(w io.Writer, m list.Model, index int, item list.
 		style = normalStyle
 	}
 
-	if loading {
-		loadingText := lipgloss.NewStyle().Foreground(DefaultTheme.AccentColor).Render(" loading...")
-		fmt.Fprint(w, style.Render(" "+title+loadingText))
-	} else {
-		fmt.Fprint(w, style.Render(" "+title+""))
+	width := 50
+	if s.Foreground != nil {
+		width = max(50, min(75, s.Foreground.windowWidth-6))
 	}
+	str := lipgloss.NewStyle().MaxWidth(width).Width(width).Render(authorStr)
+	fmt.Fprint(w, style.Render(" "+str+" "))
 }
 
 type ReactionsDelegate struct {
@@ -221,6 +287,7 @@ type OpenModalMsg struct {
 	ChannelsList *list.Model
 	GroupsList   *list.Model
 	BotsList     *list.Model
+	Stories      []types.Stories
 	Entity       *types.EntityPreviewInfo
 }
 
@@ -255,9 +322,22 @@ type Foreground struct {
 	allReactions           []types.Reaction
 	selectedReactionIndex  int
 	isMePremium            bool
+	spinner                spinner.Model
+	storiesLoading         bool
+	isDownloadingStory     bool
+	downloadingStoryPeer   string
 }
 
-func (f Foreground) Init() tea.Cmd {
+func (f *Foreground) ensureSpinner() {
+	if len(f.spinner.Spinner.Frames) == 0 {
+		s := spinner.New()
+		s.Spinner = spinner.Dot
+		s.Style = lipgloss.NewStyle().Foreground(DefaultTheme.AccentColor)
+		f.spinner = s
+	}
+}
+
+func (f *Foreground) Init() tea.Cmd {
 	return nil
 }
 
@@ -279,7 +359,7 @@ func setTotalSearchResultUsers(searchMsg types.SearchUsersMsg, m *Foreground) {
 	m.searchResultUsers = *searchMsg.Response
 }
 
-func (f Foreground) View() string {
+func (f *Foreground) View() string {
 	if f.Error != nil {
 		errorTitle := lipgloss.NewStyle().
 			Foreground(DefaultTheme.ErrorColor).
@@ -311,12 +391,64 @@ func (f Foreground) View() string {
 		BorderForeground(DefaultTheme.AccentColor).
 		Padding(0, 1)
 
-	if f.ModalMode == ModalModeShowStories && f.stories != nil {
-		title := lipgloss.NewStyle().Foreground(DefaultTheme.PrimaryText).Bold(true).Render("Stories")
-		var content string
-		content = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(DefaultTheme.BorderColor).Render(f.stories.View())
-		layout := lipgloss.JoinVertical(lipgloss.Left, title, content)
-		return foreStyle.Render(layout)
+	if f.ModalMode == ModalModeShowStories {
+		contentWidth := max(50, min(75, f.windowWidth-6))
+		count := 0
+		if f.stories != nil {
+			count = len(f.stories.Items())
+		}
+		spinView := f.spinner.View()
+		if spinView == "" {
+			spinView = "⠋"
+		}
+		titleText := fmt.Sprintf("📖 Stories (%d)", count)
+		if f.storiesLoading && count == 0 {
+			titleText = fmt.Sprintf("📖 Stories — %s Fetching stories...", spinView)
+		} else if f.isDownloadingStory {
+			titleText = fmt.Sprintf("📖 Stories (%d) — %s Downloading media...", count, spinView)
+		}
+		title := lipgloss.NewStyle().
+			Foreground(DefaultTheme.PrimaryText).
+			Bold(true).
+			Render(titleText)
+
+		divider := lipgloss.NewStyle().
+			Foreground(DefaultTheme.BorderColor).
+			Render(strings.Repeat("─", contentWidth))
+
+		var listContent string
+		if f.stories == nil || count == 0 {
+			if f.storiesLoading {
+				listContent = lipgloss.NewStyle().
+					Foreground(DefaultTheme.SecondaryText).
+					Padding(2, 2).
+					Render(fmt.Sprintf("%s Fetching stories from Telegram...", spinView))
+			} else {
+				listContent = lipgloss.NewStyle().
+					Foreground(DefaultTheme.SecondaryText).
+					Italic(true).
+					Padding(2, 2).
+					Render("No stories available right now")
+			}
+		} else {
+			f.stories.SetWidth(contentWidth)
+			f.stories.SetHeight(min(10, max(5, f.windowHeight/2)))
+			listContent = f.stories.View()
+		}
+
+		footerText := "[↑/↓] Navigate  [Enter] View Story  [Esc] Close"
+		footerStyle := lipgloss.NewStyle().Foreground(DefaultTheme.SecondaryText).Padding(0, 1)
+		if f.isDownloadingStory {
+			footerText = fmt.Sprintf("%s Downloading story media... Please wait  [Esc] Cancel", spinView)
+			footerStyle = lipgloss.NewStyle().Foreground(DefaultTheme.AccentColor).Bold(true).Padding(0, 1)
+		} else if f.storiesLoading && count == 0 {
+			footerText = fmt.Sprintf("%s Connecting to Telegram...  [Esc] Close", spinView)
+			footerStyle = lipgloss.NewStyle().Foreground(DefaultTheme.SecondaryText).Padding(0, 1)
+		}
+		footerHints := footerStyle.Render(footerText)
+
+		layout := lipgloss.JoinVertical(lipgloss.Left, title, divider, listContent, "", footerHints)
+		return foreStyle.Width(contentWidth + 2).Render(layout)
 	}
 
 	if f.ModalMode == ModalModeForwardMessage {
@@ -422,7 +554,7 @@ func (f Foreground) View() string {
 	return foreStyle.Width(contentWidth + 2).Render(layout)
 }
 
-func renderReactionsGrid(f Foreground) string {
+func renderReactionsGrid(f *Foreground) string {
 	const columns = 8
 	var rows []string
 	var currentRow []string
@@ -472,7 +604,7 @@ func (m Model) GetUserAccessHashFromModel(userID int64) (types.UserInfo, error) 
 	return userInfo, nil
 }
 
-func renderEntityInfo(f Foreground) string {
+func renderEntityInfo(f *Foreground) string {
 	var info strings.Builder
 	detailStyle := lipgloss.NewStyle().Foreground(DefaultTheme.SecondaryText)
 

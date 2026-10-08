@@ -2,6 +2,8 @@ package ui
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/kumneger0/cligram/internal/telegram"
+	"github.com/kumneger0/cligram/internal/telegram/types"
 	overlay "github.com/rmhubbert/bubbletea-overlay"
 )
 
@@ -87,13 +89,21 @@ func (m Manager) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		case "alt+s":
 			m.State = ModalView
 			bgModel, cmd := m.Background.Update(message)
+			m.Background = bgModel
+			var stories []types.Stories
+			if bg, ok := m.Background.(Model); ok {
+				stories = bg.Stories
+			}
 			openModalMsg := func() tea.Msg {
 				return OpenModalMsg{
 					ModalMode: ModalModeShowStories,
+					Stories:   stories,
 				}
 			}
-			m.Background = bgModel
 			cmds = append(cmds, cmd, openModalMsg)
+			if len(stories) == 0 && telegram.Cligram != nil && telegram.Cligram.Context() != nil {
+				cmds = append(cmds, telegram.Cligram.GetAllStories(telegram.Cligram.Context()))
+			}
 			return m, tea.Batch(cmds...)
 		case "alt+m", "alt+h":
 			bg, bgCmd := m.Background.Update(message)
