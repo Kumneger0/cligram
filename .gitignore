@@ -1,4 +1,5 @@
 cligram
+/cligram-voip
 js/node_modules/
 js/bin
 vendor/

@@ -2,8 +2,11 @@ package client
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
 	"errors"
 	"log/slog"
+	"math/big"
 	mathRand "math/rand"
 	"net/http"
 	"os"
@@ -42,13 +45,20 @@ type Config struct {
 
 var Cligram *telegram.Client
 
+var DhConfigRecvChannel = make(chan types.DHConfig)
+
 func NewClient(ctx context.Context, config Config, account string) (*Client, error) {
 	sessionStorage, err := newFileSessionStorage(account)
 	if err != nil {
 		return nil, types.NewTelegramError(types.ErrorCodeSessionFailed, "failed to create session storage", err)
 	}
 
-	updateHandler := newUpdateHandler(config.UpdateChannel)
+	var updateHandler telegram.UpdateHandler
+	noUpdates := true
+	if config.UpdateChannel != nil {
+		updateHandler = newUpdateHandler(config.UpdateChannel)
+		noUpdates = false
+	}
 
 	waiter := floodwait.NewSimpleWaiter()
 
@@ -59,7 +69,7 @@ func NewClient(ctx context.Context, config Config, account string) (*Client, err
 		},
 		SessionStorage: sessionStorage,
 		UpdateHandler:  updateHandler,
-		NoUpdates:      false,
+		NoUpdates:      noUpdates,
 		OnDead: func(err error) {
 			slog.Error("telegram connection is dead", "error", err)
 		},
@@ -92,7 +102,99 @@ func (c *Client) GetAPI() *tg.Client {
 }
 
 func (c *Client) Context() context.Context {
+	if c == nil || c.ctx == nil {
+		return context.Background()
+	}
 	return c.ctx
+}
+
+func (c *Client) GenerateGAHash() ([]byte, *types.DHConfig, error) {
+	dh, err := c.Client.API().MessagesGetDhConfig(c.ctx, &tg.MessagesGetDhConfigRequest{
+		Version:      0,
+		RandomLength: 256,
+	})
+	if err != nil {
+		return nil, nil, types.NewTelegramError(types.ErrorCodeSessionFailed, "failed to get DH config", err)
+	}
+
+	if dhConfig, ok := dh.(*tg.MessagesDhConfig); ok {
+		p := new(big.Int).SetBytes(dhConfig.P)
+		g := big.NewInt(int64(dhConfig.G))
+
+		a, err := rand.Int(rand.Reader, p)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		gA := new(big.Int).Exp(g, a, p)
+
+		hash := sha256.Sum256(gA.Bytes())
+		gAHash := hash[:]
+		return gAHash, &types.DHConfig{
+			G:      int32(dhConfig.G),
+			P:      dhConfig.P,
+			A:      a,
+			GA:     gA,
+			GAHash: gAHash,
+			Random: dhConfig.Random,
+		}, nil
+	}
+
+	return nil, nil, types.NewTelegramError(types.ErrorCodeSessionFailed, "failed to generate GA hash", errors.New("DH config parsing not implemented"))
+}
+
+func (c *Client) CallUser(ctx context.Context, peer types.Peer) tea.Cmd {
+	return func() tea.Msg {
+		userID, err := strconv.ParseInt(peer.ID, 10, 64)
+		if err != nil {
+			slog.Error("failed to parse user ID for call", "error", err)
+			return types.CallUserResponse{Err: err}
+		}
+
+		accessHash, err := strconv.ParseInt(peer.AccessHash, 10, 64)
+		if err != nil {
+			slog.Error("failed to parse access hash for call", "error", err)
+			return types.CallUserResponse{UserID: &userID, Err: err}
+		}
+
+		callErr := InitiateP2PCall(ctx, userID, accessHash, c.updateChannel)
+		if callErr != nil {
+			slog.Error("P2P call failed", "userID", userID, "error", callErr)
+		}
+
+		return types.CallUserResponse{
+			UserID: &userID,
+			Err:    callErr,
+		}
+	}
+}
+
+func (c *Client) AcceptCall(ctx context.Context, userID int64) tea.Cmd {
+	return func() tea.Msg {
+		err := AcceptIncomingCall(ctx, userID)
+		return types.CallAcceptedMsg{UserID: userID, Err: err}
+	}
+}
+
+func (c *Client) DeclineCall(ctx context.Context, userID int64) tea.Cmd {
+	return func() tea.Msg {
+		err := DeclineIncomingCall(ctx, userID)
+		return types.CallDeclinedMsg{UserID: userID, Err: err}
+	}
+}
+
+func (c *Client) HangupCall(ctx context.Context, userID int64) tea.Cmd {
+	return func() tea.Msg {
+		err := HangupCall(ctx, userID)
+		return types.CallHungUpMsg{UserID: userID, Err: err}
+	}
+}
+
+func (c *Client) ToggleMute(userID int64) tea.Cmd {
+	return func() tea.Msg {
+		muted, err := ToggleCallMute(userID)
+		return types.CallMuteToggledMsg{UserID: userID, Muted: muted, Err: err}
+	}
 }
 
 func (c *Client) GetEntityInfo(entity *types.EntityPreviewInfo) tea.Cmd {
@@ -876,6 +978,7 @@ func (c *Client) GetAllStories(ctx context.Context) tea.Cmd {
 				}
 			}
 		}
+
 		return types.GetAllStoriesMsg{Stories: AllStories}
 	}
 }

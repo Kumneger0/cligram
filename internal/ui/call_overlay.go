@@ -1,0 +1,170 @@
+package ui
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/charmbracelet/lipgloss"
+)
+
+type CallOverlayState int
+
+const (
+	CallOverlayNone CallOverlayState = iota
+	CallOverlayIncoming
+	CallOverlayDialing
+	CallOverlayActive
+	CallOverlayMissingHelper
+)
+
+type CallOverlayModel struct {
+	State          CallOverlayState
+	UserName       string
+	UserID         int64
+	Muted          bool
+	IsRelay        bool
+	StartTime      time.Time
+	ElapsedSeconds int
+}
+
+var (
+	callOverlayBorderStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color("#10B981")).
+				Padding(1, 2)
+
+	callOverlayWarningStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color("#EF4444")).
+				Padding(1, 2)
+
+	callStatusBarStyle = lipgloss.NewStyle().
+				Background(DefaultTheme.SubtleBg).
+				Foreground(DefaultTheme.PrimaryText).
+				Padding(0, 1)
+
+	callMutedStyle = lipgloss.NewStyle().
+			Foreground(DefaultTheme.ErrorColor).
+			Bold(true)
+
+	callBadgeStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#3B82F6")).
+			Bold(true)
+)
+
+func NewCallOverlay() CallOverlayModel {
+	return CallOverlayModel{
+		State:   CallOverlayNone,
+		IsRelay: true, // Default safe display
+	}
+}
+
+func (m CallOverlayModel) View() string {
+	switch m.State {
+	case CallOverlayNone:
+		return ""
+	case CallOverlayMissingHelper:
+		prompt := "⚠️  VoIP Helper Missing\n\nVoice calling requires 'cligram-voip'.\nPlease install it to ~/.local/bin or your PATH.\n\n    [Enter/Esc] Dismiss"
+		return callOverlayWarningStyle.Render(prompt)
+	case CallOverlayDialing:
+		prompt := fmt.Sprintf("📞 Calling %s...\n\n    [Alt+H] Cancel", m.UserName)
+		return callOverlayBorderStyle.Render(prompt)
+	case CallOverlayIncoming:
+		prompt := fmt.Sprintf("📞 Incoming call from %s\n\n    [a] Accept    [d/Esc] Decline", m.UserName)
+		return callOverlayBorderStyle.Render(prompt)
+	case CallOverlayActive:
+		duration := m.Duration()
+		badge := "[Relay]"
+		if !m.IsRelay {
+			badge = "[P2P]"
+		}
+
+		status := fmt.Sprintf("📞 In call with %s (%s)  %s", m.UserName, duration, callBadgeStyle.Render(badge))
+
+		muteStr := ""
+		muteAction := "Mute"
+		if m.Muted {
+			muteStr = "  " + callMutedStyle.Render("🔇 MUTED")
+			muteAction = "Unmute"
+		}
+
+		controls := fmt.Sprintf("[Alt+M: %s]  [Alt+H: Hangup]", muteAction)
+
+		barContent := fmt.Sprintf("%s%s  %s", status, muteStr, controls)
+		return callStatusBarStyle.Render(barContent)
+	}
+	return ""
+}
+
+func (m *CallOverlayModel) SetDialing(userName string, userID int64) {
+	m.State = CallOverlayDialing
+	m.UserName = userName
+	m.UserID = userID
+	m.Muted = false
+}
+
+func (m *CallOverlayModel) SetIncoming(userName string, userID int64) {
+	m.State = CallOverlayIncoming
+	m.UserName = userName
+	m.UserID = userID
+	m.Muted = false
+}
+
+func (m *CallOverlayModel) SetActive(userName string, userID int64) {
+	m.State = CallOverlayActive
+	m.UserName = userName
+	m.UserID = userID
+	m.ElapsedSeconds = 0
+	if m.StartTime.IsZero() {
+		m.StartTime = time.Now()
+	}
+}
+
+func (m *CallOverlayModel) SetMissingHelper() {
+	m.State = CallOverlayMissingHelper
+}
+
+func (m *CallOverlayModel) SetRelay(isRelay bool) {
+	m.IsRelay = isRelay
+}
+
+func (m *CallOverlayModel) SetNone() {
+	m.State = CallOverlayNone
+	m.Muted = false
+	m.StartTime = time.Time{}
+	m.ElapsedSeconds = 0
+}
+
+func (m *CallOverlayModel) ToggleMute() {
+	m.Muted = !m.Muted
+}
+
+// IsModal returns true if the overlay is in a centered modal dialog state.
+func (m CallOverlayModel) IsModal() bool {
+	switch m.State {
+	case CallOverlayIncoming, CallOverlayDialing, CallOverlayMissingHelper:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsVisible returns true if any overlay or status bar is active.
+func (m CallOverlayModel) IsVisible() bool {
+	return m.State != CallOverlayNone
+}
+
+// IsActive returns true if the call overlay is currently in an active call state.
+func (m CallOverlayModel) IsActive() bool {
+	return m.State == CallOverlayActive
+}
+
+func (m CallOverlayModel) Duration() string {
+	secs := m.ElapsedSeconds
+	if secs == 0 && !m.StartTime.IsZero() {
+		secs = int(time.Since(m.StartTime).Seconds())
+	}
+	mins := secs / 60
+	remSecs := secs % 60
+	return fmt.Sprintf("%02d:%02d", mins, remSecs)
+}

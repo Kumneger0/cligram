@@ -15,6 +15,7 @@ import (
 	"github.com/kumneger0/cligram/internal/config"
 	"github.com/kumneger0/cligram/internal/telegram"
 	"github.com/kumneger0/cligram/internal/telegram/types"
+	overlay "github.com/rmhubbert/bubbletea-overlay"
 )
 
 type CustomDelegate struct {
@@ -283,6 +284,7 @@ func handleUserChange(m *Model, offsetID *int, afterMessagesCmd tea.Cmd) (Model,
 	m.SelectedForumTopic = nil
 
 	pInfo := getMessageParams(m)
+
 	if m.Mode == ModeGroups && m.SelectedGroup.IsForum {
 		m.ForumTopicLoading = true
 		m.Conversations = [50]types.FormattedMessage{}
@@ -306,7 +308,7 @@ func handleUserChange(m *Model, offsetID *int, afterMessagesCmd tea.Cmd) (Model,
 	m.MainViewLoading = true
 	m.ChatUI.ResetSelected()
 	m.ChatUI.SetItems([]list.Item{})
-	return *m, tea.Sequence(cmd, afterMessagesCmd)
+	return *m, tea.Batch(cmd, afterMessagesCmd)
 }
 
 func changeFocusMode(m *Model, msg string, shift bool) (Model, tea.Cmd) {
@@ -427,6 +429,12 @@ func (m Model) View() string {
 	m.updateDelegates()
 
 	ui := setItemStyles(&m)
+
+	// Render modal call overlays centered on top of the UI without altering line count
+	if m.CallOverlay.IsModal() {
+		ui = overlay.Composite(m.CallOverlay.View(), ui, overlay.Center, overlay.Center, 0, 0)
+	}
+
 	return m.Alert.Render(ui)
 }
 

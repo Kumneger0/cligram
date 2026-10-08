@@ -88,6 +88,10 @@ func (m Manager) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.Background = bgModel
 			cmds = append(cmds, cmd, openModalMsg)
 			return m, tea.Batch(cmds...)
+		case "alt+m", "alt+h":
+			bg, bgCmd := m.Background.Update(message)
+			m.Background = bg
+			return m, bgCmd
 		}
 		if m.State == ModalView {
 			fg, fgCmd := m.Foreground.Update(message)

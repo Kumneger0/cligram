@@ -21,6 +21,23 @@ type CliGramConfig struct {
 		Enabled            *bool `json:"enabled,omitempty"`
 		ShowMessagePreview *bool `json:"showMessagePreview,omitempty"`
 	} `json:"notifications"`
+	Calls CallsConfig `json:"calls"`
+}
+
+type CallsConfig struct {
+	ForceRelay bool `json:"force_relay,omitempty"`
+}
+
+func (c *CallsConfig) UnmarshalJSON(data []byte) error {
+	var raw struct {
+		ForceRelaySnake bool `json:"force_relay"`
+		ForceRelayCamel bool `json:"forceRelay"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	c.ForceRelay = raw.ForceRelaySnake || raw.ForceRelayCamel
+	return nil
 }
 
 func defaultCliGramConfig() CliGramConfig {

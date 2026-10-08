@@ -1,6 +1,10 @@
 package types // nolint:revive
 
-import "github.com/gotd/td/tg"
+import (
+	"math/big"
+
+	"github.com/gotd/td/tg"
+)
 
 type GetAllChatsResponseMSG struct {
 	Chats AllChats
@@ -16,6 +20,22 @@ type AllChats struct {
 type GetChannelForumsResponseMsg struct {
 	Forums []ForumTopicInfo
 	Err    error
+}
+
+type DHConfig struct {
+	G      int32  // generator from Telegram's MessagesGetDhConfig
+	P      []byte // safe prime
+	A      *big.Int
+	GA     *big.Int
+	GAHash []byte // SHA-256(g^a mod p) — sent in PhoneRequestCall and needed to confirm
+	Random []byte // server-provided random bytes from MessagesGetDhConfig
+}
+
+type CallUserResponse struct {
+	Call     *tg.PhonePhoneCall
+	DHConfig *DHConfig
+	UserID   *int64
+	Err      error
 }
 
 type SendMessageResponse struct {
@@ -154,4 +174,25 @@ type CurrentUserMsg struct {
 type SingleMessageMsg struct {
 	Message *FormattedMessage
 	Err     error
+}
+
+type CallAcceptedMsg struct {
+	UserID int64
+	Err    error
+}
+
+type CallDeclinedMsg struct {
+	UserID int64
+	Err    error
+}
+
+type CallHungUpMsg struct {
+	UserID int64
+	Err    error
+}
+
+type CallMuteToggledMsg struct {
+	UserID int64
+	Muted  bool
+	Err    error
 }

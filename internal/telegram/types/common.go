@@ -115,12 +115,39 @@ type UserStatus struct {
 }
 
 type Notification struct {
-	NewMessage        *NewMessageNotification        `json:"newMessage,omitempty"`
-	UserStatus        *UserStatusNotification        `json:"userStatus,omitempty"`
-	UserTyping        *UserTypingNotification        `json:"userTyping,omitempty"`
-	Error             *ErrorNotification             `json:"error,omitempty"`
-	SearchResult      *SearchUsersMsg                `json:"searchResult,omitempty"`
-	ReadHistoryOutbox *ReadHistoryOutboxNotification `json:"readHistoryOutbox,omitempty"`
+	NewMessage             *NewMessageNotification        `json:"newMessage,omitempty"`
+	UserStatus             *UserStatusNotification        `json:"userStatus,omitempty"`
+	UserTyping             *UserTypingNotification        `json:"userTyping,omitempty"`
+	Error                  *ErrorNotification             `json:"error,omitempty"`
+	SearchResult           *SearchUsersMsg                `json:"searchResult,omitempty"`
+	ReadHistoryOutbox      *ReadHistoryOutboxNotification `json:"readHistoryOutbox,omitempty"`
+	GetUserDHConfigRequest *GetUserDHConfigRequest        `json:"getUserDHConfigRequest,omitempty"`
+	CallEvent              *CallNotification              `json:"callEvent,omitempty"`
+}
+
+type CallState string
+
+const (
+	CallStateIncoming      CallState = "incoming"
+	CallStateOutgoing      CallState = "outgoing"
+	CallStateActive        CallState = "active"
+	CallStateEnded         CallState = "ended"
+	CallStateDeclined      CallState = "declined"
+	CallStateMissingHelper CallState = "missing_helper"
+	CallStateBusyMissed    CallState = "busy_missed"
+)
+
+type CallNotification struct {
+	UserID   int64
+	UserName string
+	State    CallState
+	Duration int
+	IsRelay  bool
+	Err      error
+}
+
+type GetUserDHConfigRequest struct {
+	UserID int64 `json:"userId"`
 }
 
 type ForumTopicInfo struct {

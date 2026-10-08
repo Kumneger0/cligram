@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/filepicker"
-	"github.com/charmbracelet/bubbles/list" // Legacy groups have no access hash; supergroups (migrated) do.
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/gotd/td/tg"
 	"go.dalton.dog/bubbleup"
 
@@ -52,6 +52,7 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 			telegram.Cligram = cligram
 			err = telegram.Cligram.Run(ctx, func(ctx context.Context) error {
 				accountsOnThisDevice := getAccountDirsOnThisDevice(telegramAPIID, telegramAPIHash)
+				telegram.SetGlobalUpdateChannel(updateChannel)
 				if err := cligram.Auth(ctx, accountsOnThisDevice); err != nil {
 					slog.Error(err.Error())
 					return fmt.Errorf("authentication failed: %w", err)
@@ -156,9 +157,19 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 							if msg.SearchResult != nil {
 								Program.Send(*msg.SearchResult)
 							}
+							if msg.GetUserDHConfigRequest != nil {
+								Program.Send(*msg.GetUserDHConfigRequest)
+							}
+							if msg.ReadHistoryOutbox != nil {
+								Program.Send(*msg.ReadHistoryOutbox)
+							}
+							if msg.CallEvent != nil {
+								Program.Send(*msg.CallEvent)
+							}
 						}
 					}
 				}()
+
 				_, err = Program.Run()
 
 				if err != nil {
