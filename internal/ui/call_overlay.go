@@ -69,7 +69,7 @@ func (m CallOverlayModel) View() string {
 		prompt := fmt.Sprintf("📞 Calling %s...\n\n    [Alt+H] Cancel", m.UserName)
 		return callOverlayBorderStyle.Render(prompt)
 	case CallOverlayIncoming:
-		prompt := fmt.Sprintf("📞 Incoming call from %s\n\n    [a] Accept    [d] Decline", m.UserName)
+		prompt := fmt.Sprintf("📞 Incoming call from %s\n\n    [a] Accept    [d/Esc] Decline", m.UserName)
 		return callOverlayBorderStyle.Render(prompt)
 	case CallOverlayActive:
 		duration := m.Duration()
@@ -136,8 +136,23 @@ func (m *CallOverlayModel) ToggleMute() {
 	m.Muted = !m.Muted
 }
 
-func (m CallOverlayModel) IsActive() bool {
+// IsModal returns true if the overlay is in a centered modal dialog state.
+func (m CallOverlayModel) IsModal() bool {
+	switch m.State {
+	case CallOverlayIncoming, CallOverlayDialing, CallOverlayMissingHelper:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsVisible returns true if any overlay or status bar is active.
+func (m CallOverlayModel) IsVisible() bool {
 	return m.State != CallOverlayNone
+}
+
+func (m CallOverlayModel) IsActive() bool {
+	return m.IsVisible()
 }
 
 func (m CallOverlayModel) Duration() string {

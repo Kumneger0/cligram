@@ -187,34 +187,47 @@ func TestModel_CallOverlayKeybindings(t *testing.T) {
 	telegram.Cligram = &client.Client{}
 	defer func() { telegram.Cligram = oldCligram }()
 
-	m := Model{
-		CallOverlay:      NewCallOverlay(),
-		ActiveCallUserID: 2002,
-	}
+	m := newTestModel(80, 24)
+	m.ActiveCallUserID = 2002
 	m.CallOverlay.SetActive("Bob", 2002)
 
 	// Typing normal alphanumeric character 'm' or 'h' while in active call
 	// should NOT trigger call mute/hangup
-	_, cmd := m.handleKeyPress(tea.KeyMsg{
+	resM, cmd := m.Update(tea.KeyMsg{
 		Type:  tea.KeyRunes,
 		Runes: []rune{'m'},
 	})
+	m = resM.(Model)
 	if cmd != nil {
 		t.Logf("cmd returned for 'm': %v", cmd)
 	}
 
 	// Alt+M should trigger toggle mute
-	_, muteCmd := m.handleKeyPress(tea.KeyMsg{
+	resM, muteCmd := m.Update(tea.KeyMsg{
 		Type:  tea.KeyRunes,
 		Runes: []rune{'m'},
 		Alt:   true,
 	})
+	m = resM.(Model)
 	if muteCmd == nil {
 		t.Errorf("expected tea.Cmd for Alt+M")
 	}
 
+	// Feeding CallMuteToggledMsg verifies mute badge toggling in View()
+	resM, _ = m.Update(types.CallMuteToggledMsg{UserID: 2002, Muted: true})
+	m = resM.(Model)
+	if !strings.Contains(m.View(), "MUTED") || !strings.Contains(m.View(), "[Alt+M: Unmute]") {
+		t.Errorf("expected MUTED badge and Unmute hint in View(), got:\n%s", m.View())
+	}
+
+	resM, _ = m.Update(types.CallMuteToggledMsg{UserID: 2002, Muted: false})
+	m = resM.(Model)
+	if strings.Contains(m.View(), "MUTED") || !strings.Contains(m.View(), "[Alt+M: Mute]") {
+		t.Errorf("expected MUTED badge removed and Mute hint in View(), got:\n%s", m.View())
+	}
+
 	// Alt+H should trigger hangup
-	_, hangupCmd := m.handleKeyPress(tea.KeyMsg{
+	_, hangupCmd := m.Update(tea.KeyMsg{
 		Type:  tea.KeyRunes,
 		Runes: []rune{'h'},
 		Alt:   true,
@@ -225,7 +238,7 @@ func TestModel_CallOverlayKeybindings(t *testing.T) {
 
 	// Missing helper modal: esc dismisses modal
 	m.CallOverlay.SetMissingHelper()
-	resM, _ := m.handleKeyPress(tea.KeyMsg{Type: tea.KeyEsc})
+	resM, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	m = resM.(Model)
 	if m.CallOverlay.State != CallOverlayNone {
 		t.Errorf("expected CallOverlayNone after pressing Esc on MissingHelper modal")
@@ -247,7 +260,7 @@ func TestModel_IncomingCallOverlayCompositing(t *testing.T) {
 	if !strings.Contains(view, "Incoming call from Alice") && !strings.Contains(view, "Alice") {
 		t.Errorf("expected view to contain incoming caller Alice, got:\n%s", view)
 	}
-	if !strings.Contains(view, "[a] Accept") || !strings.Contains(view, "Decline") {
+	if !strings.Contains(view, "[a] Accept") || !strings.Contains(view, "[d/Esc] Decline") {
 		t.Errorf("expected view to contain call actions, got:\n%s", view)
 	}
 
@@ -268,7 +281,7 @@ func TestModel_IncomingCallKeyInterception(t *testing.T) {
 
 	// Normal alphanumeric keys should be intercepted and NOT typed into chat input
 	m.Input.SetValue("hello")
-	resModel, cmd := m.handleKeyPress(tea.KeyMsg{
+	resModel, cmd := m.Update(tea.KeyMsg{
 		Type:  tea.KeyRunes,
 		Runes: []rune{'x'},
 	})
@@ -281,7 +294,7 @@ func TestModel_IncomingCallKeyInterception(t *testing.T) {
 	}
 
 	// Pressing 'a' should trigger accept call command
-	_, acceptCmd := m.handleKeyPress(tea.KeyMsg{
+	_, acceptCmd := m.Update(tea.KeyMsg{
 		Type:  tea.KeyRunes,
 		Runes: []rune{'a'},
 	})
@@ -290,7 +303,7 @@ func TestModel_IncomingCallKeyInterception(t *testing.T) {
 	}
 
 	// Pressing 'd' should trigger decline call command and reset overlay state
-	resModel, declineCmd := m.handleKeyPress(tea.KeyMsg{
+	resModel, declineCmd := m.Update(tea.KeyMsg{
 		Type:  tea.KeyRunes,
 		Runes: []rune{'d'},
 	})
@@ -304,7 +317,7 @@ func TestModel_IncomingCallKeyInterception(t *testing.T) {
 
 	// Reset to incoming state to test Esc key
 	m.CallOverlay.SetIncoming("Alice", 1001)
-	resModel, escCmd := m.handleKeyPress(tea.KeyMsg{Type: tea.KeyEsc})
+	resModel, escCmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	m = resModel.(Model)
 	if escCmd == nil {
 		t.Errorf("expected tea.Cmd for Esc (decline call)")
@@ -412,7 +425,7 @@ func TestModel_ActiveCallHangupRestoresLayout(t *testing.T) {
 	}
 
 	// Hangup via Alt+H
-	resModel, hangupCmd := m.handleKeyPress(tea.KeyMsg{
+	resModel, hangupCmd := m.Update(tea.KeyMsg{
 		Type:  tea.KeyRunes,
 		Runes: []rune{'h'},
 		Alt:   true,

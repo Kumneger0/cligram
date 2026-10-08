@@ -12,6 +12,10 @@ import (
 
 var (
 	once sync.Once
+
+	// NotifyFn and AlertFn allow overriding for tests or custom dispatchers.
+	NotifyFn = defaultNotify
+	AlertFn  = defaultAlert
 )
 
 func getAppLogo() *[]byte {
@@ -43,25 +47,27 @@ func getAppIconPath() string {
 	return path
 }
 
-func Notify(title string, message string) {
+func emitDesktop(notifyFunc func(title, message string, appIcon any) error, title, message string) {
 	beeep.AppName = "Cligram"
 	logo := getAppIconPath()
 
-	err := beeep.Notify(title, message, logo)
-	if err != nil {
-		slog.Error(err.Error())
+	if err := notifyFunc(title, message, logo); err != nil {
+		slog.Error("failed to emit desktop notification", "error", err)
 	}
 }
 
+func defaultNotify(title string, message string) {
+	emitDesktop(beeep.Notify, title, message)
+}
+
+func defaultAlert(title string, message string) {
+	emitDesktop(beeep.Alert, title, message)
+}
+
+func Notify(title string, message string) {
+	NotifyFn(title, message)
+}
+
 func Alert(title string, message string) {
-	beeep.AppName = "Cligram"
-	logo := getAppIconPath()
-
-	// Sound terminal bell
-	os.Stdout.WriteString("\a")
-
-	err := beeep.Alert(title, message, logo)
-	if err != nil {
-		slog.Error("failed to emit desktop alert", "error", err)
-	}
+	AlertFn(title, message)
 }

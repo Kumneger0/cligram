@@ -431,11 +431,8 @@ func (m Model) View() string {
 	ui := setItemStyles(&m)
 
 	// Render modal call overlays centered on top of the UI without altering line count
-	if m.CallOverlay.IsActive() {
-		switch m.CallOverlay.State {
-		case CallOverlayIncoming, CallOverlayDialing, CallOverlayMissingHelper:
-			ui = overlay.Composite(m.CallOverlay.View(), ui, overlay.Center, overlay.Center, 0, 0)
-		}
+	if m.CallOverlay.IsModal() {
+		ui = overlay.Composite(m.CallOverlay.View(), ui, overlay.Center, overlay.Center, 0, 0)
 	}
 
 	return m.Alert.Render(ui)

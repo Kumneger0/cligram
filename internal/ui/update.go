@@ -80,6 +80,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.State {
 		case types.CallStateIncoming:
 			m.CallOverlay.SetIncoming(msg.UserName, msg.UserID)
+			return m, tea.Printf("\a")
 		case types.CallStateActive:
 			userName := msg.UserName
 			if userName == "" && m.CallOverlay.UserName != "" {
