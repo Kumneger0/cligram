@@ -160,9 +160,14 @@ func handlePhoneCall(ctx context.Context, phoneCall tg.PhoneCallClass, updateCha
 		p2pStatesMu.Unlock()
 
 		if state == nil {
-			userID = u.AdminID
 			p2pStatesMu.Lock()
-			state = p2pStates[userID]
+			if s, ok := p2pStates[u.ParticipantID]; ok {
+				userID = u.ParticipantID
+				state = s
+			} else if s, ok := p2pStates[u.AdminID]; ok {
+				userID = u.AdminID
+				state = s
+			}
 			p2pStatesMu.Unlock()
 		}
 

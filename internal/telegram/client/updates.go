@@ -72,43 +72,62 @@ func getVoipBridge(ctx context.Context) (voip.SignalingBridge, error) {
 	}
 
 	// Wire callbacks
-	bridge.OnSignaling(func(event voip.SignalingEvent) {
-		slog.Info("signaling event received from sidecar", "userID", event.UserID, "dataLen", len(event.Data))
-		p2pStatesMu.Lock()
-		state := p2pStates[event.UserID]
-		if state == nil && len(p2pStates) == 1 {
-			for uid, s := range p2pStates {
-				state = s
-				slog.Info("matched outbound signaling to single active call", "eventUserID", event.UserID, "actualUserID", uid)
-				break
+	sigCtx, sigCancel := context.WithCancel(context.Background())
+	signalingQueue := make(chan voip.SignalingEvent, 128)
+	go func() {
+		for {
+			select {
+			case <-sigCtx.Done():
+				return
+			case event := <-signalingQueue:
+				p2pStatesMu.Lock()
+				state := p2pStates[event.UserID]
+				if state == nil && len(p2pStates) == 1 {
+					for uid, s := range p2pStates {
+						state = s
+						slog.Info("matched outbound signaling to single active call", "eventUserID", event.UserID, "actualUserID", uid)
+						break
+					}
+				}
+				p2pStatesMu.Unlock()
+
+				if state == nil {
+					slog.Warn("outbound signaling dropped: no active call state found", "userID", event.UserID)
+					continue
+				}
+				if state.inputCall == nil {
+					slog.Warn("outbound signaling dropped: call state has nil inputCall", "userID", event.UserID)
+					continue
+				}
+				if Cligram == nil {
+					slog.Warn("outbound signaling dropped: Cligram client is nil", "userID", event.UserID)
+					continue
+				}
+
+				sendCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				slog.Info("sending outbound signaling data to Telegram", "userID", event.UserID, "callID", state.inputCall.ID, "dataLen", len(event.Data))
+				_, err := Cligram.API().PhoneSendSignalingData(sendCtx, &tg.PhoneSendSignalingDataRequest{
+					Peer: *state.inputCall,
+					Data: event.Data,
+				})
+				cancel()
+				if err != nil {
+					slog.Error("failed to send signaling data to Telegram", "userID", event.UserID, "callID", state.inputCall.ID, "error", err)
+				} else {
+					slog.Info("successfully sent signaling data to Telegram", "userID", event.UserID, "callID", state.inputCall.ID)
+				}
 			}
 		}
-		p2pStatesMu.Unlock()
+	}()
 
-		if state == nil {
-			slog.Warn("outbound signaling dropped: no active call state found", "userID", event.UserID)
+	bridge.OnSignaling(func(event voip.SignalingEvent) {
+		slog.Info("signaling event received from sidecar", "userID", event.UserID, "dataLen", len(event.Data))
+		select {
+		case <-sigCtx.Done():
 			return
-		}
-		if state.inputCall == nil {
-			slog.Warn("outbound signaling dropped: call state has nil inputCall", "userID", event.UserID)
-			return
-		}
-		if Cligram == nil {
-			slog.Warn("outbound signaling dropped: Cligram client is nil", "userID", event.UserID)
-			return
-		}
-
-		sigCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		slog.Info("sending outbound signaling data to Telegram", "userID", event.UserID, "callID", state.inputCall.ID, "dataLen", len(event.Data))
-		_, err := Cligram.API().PhoneSendSignalingData(sigCtx, &tg.PhoneSendSignalingDataRequest{
-			Peer: *state.inputCall,
-			Data: event.Data,
-		})
-		if err != nil {
-			slog.Error("failed to send signaling data to Telegram", "userID", event.UserID, "callID", state.inputCall.ID, "error", err)
-		} else {
-			slog.Info("successfully sent signaling data to Telegram", "userID", event.UserID, "callID", state.inputCall.ID)
+		case signalingQueue <- event:
+		default:
+			slog.Warn("signaling queue full, dropping outbound packet", "userID", event.UserID)
 		}
 	})
 
@@ -162,6 +181,7 @@ func getVoipBridge(ctx context.Context) (voip.SignalingBridge, error) {
 	})
 
 	bridge.OnClose(func(err error) {
+		sigCancel()
 		slog.Warn("voip bridge connection closed", "error", err)
 		currentBridgeMu.Lock()
 		currentBridge = nil
@@ -692,6 +712,17 @@ func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64) (err e
 		slog.Info("updated outgoing call with confirmed inputCall", "userID", userID, "callID", phoneCallObj.ID)
 	}
 	p2pStatesMu.Unlock()
+
+	// Notify UI and handle confirmed call state immediately
+	updateChannelGlobalMu.Lock()
+	chGlobal := updateChannelGlobal
+	updateChannelGlobalMu.Unlock()
+
+	if chGlobal != nil {
+		if err := handlePhoneCall(ctx, phoneCallObj, chGlobal); err != nil {
+			slog.Warn("handlePhoneCall failed for confirmed outgoing call", "userID", userID, "error", err)
+		}
+	}
 
 	// Connect P2P immediately using the connections from confirmCall result
 	servers := parseRTCServers(phoneCallObj.Connections)

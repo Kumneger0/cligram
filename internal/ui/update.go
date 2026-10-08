@@ -75,6 +75,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, alertCmd
 		}
 		slog.Info("call initiated", "userID", msg.UserID)
+		if m.CallOverlay.State == CallOverlayDialing && msg.UserID != nil {
+			userName := m.CallOverlay.UserName
+			if userName == "" && m.Mode == ModeUsers {
+				userName = m.SelectedUser.FirstName
+			}
+			m.CallOverlay.SetActive(userName, *msg.UserID)
+			m.ActiveCallUserID = *msg.UserID
+			return m, tickCall()
+		}
 		return m, nil
 	case types.CallNotification:
 		switch msg.State {

@@ -455,3 +455,83 @@ func TestModel_ActiveCallHangupRestoresLayout(t *testing.T) {
 		t.Errorf("expected exactly 24 lines in idle view after hangup, got %d", len(lines))
 	}
 }
+
+func TestModel_OutgoingCallTransitionToActive(t *testing.T) {
+	m := newTestModel(80, 24)
+
+	// User dialed Kune
+	m.CallOverlay.SetDialing("Kune", 5660513633)
+	if m.CallOverlay.State != CallOverlayDialing || !m.CallOverlay.IsModal() {
+		t.Fatalf("expected CallOverlayDialing and modal active")
+	}
+
+	dialingView := m.View()
+	if !strings.Contains(dialingView, "Calling Kune...") {
+		t.Errorf("expected dialing view to contain 'Calling Kune...', got:\n%s", dialingView)
+	}
+
+	// Remote peer answers and CallStateActive arrives
+	resModel, cmd := m.Update(types.CallNotification{
+		State:   types.CallStateActive,
+		UserID:  5660513633,
+		IsRelay: false,
+	})
+	m = resModel.(Model)
+
+	// Dialing modal dismissed, status bar active
+	if m.CallOverlay.State != CallOverlayActive {
+		t.Errorf("expected CallOverlayActive, got %v", m.CallOverlay.State)
+	}
+	if m.CallOverlay.IsModal() {
+		t.Errorf("expected modal dismissed once call is active")
+	}
+	if m.CallOverlay.UserName != "Kune" {
+		t.Errorf("expected username preserved as 'Kune', got %q", m.CallOverlay.UserName)
+	}
+	if m.ActiveCallUserID != 5660513633 {
+		t.Errorf("expected ActiveCallUserID 5660513633, got %d", m.ActiveCallUserID)
+	}
+	if cmd == nil {
+		t.Errorf("expected tickCall cmd returned when outgoing call transitions to active")
+	}
+
+	// View shows in-call bar and NOT dialing modal
+	activeView := m.View()
+	if strings.Contains(activeView, "Calling Kune...") {
+		t.Errorf("expected dialing modal to be dismissed, but was still present")
+	}
+	if !strings.Contains(activeView, "In call with Kune") {
+		t.Errorf("expected in-call status bar with 'In call with Kune', got:\n%s", activeView)
+	}
+	if !strings.Contains(activeView, "[P2P]") {
+		t.Errorf("expected [P2P] badge for non-relay call")
+	}
+
+	// Total height remains strictly budgeted
+	lines := strings.Split(strings.TrimRight(activeView, "\n"), "\n")
+	if len(lines) > 24 {
+		t.Errorf("expected lines <= 24, got %d lines", len(lines))
+	}
+}
+
+func TestModel_OutgoingCall_CallUserResponseFallback(t *testing.T) {
+	m := newTestModel(80, 24)
+	uID := int64(777888)
+	m.CallOverlay.SetDialing("Bob", uID)
+
+	resModel, cmd := m.Update(types.CallUserResponse{
+		UserID: &uID,
+		Err:    nil,
+	})
+	m = resModel.(Model)
+
+	if m.CallOverlay.State != CallOverlayActive {
+		t.Errorf("expected CallOverlayActive from CallUserResponse fallback, got %v", m.CallOverlay.State)
+	}
+	if m.CallOverlay.UserName != "Bob" {
+		t.Errorf("expected username preserved as 'Bob', got %q", m.CallOverlay.UserName)
+	}
+	if cmd == nil {
+		t.Errorf("expected tickCall cmd returned on CallUserResponse activation")
+	}
+}

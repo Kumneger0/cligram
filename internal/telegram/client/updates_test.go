@@ -114,3 +114,65 @@ func TestHandlePhoneCall_MissingSidecarDeclinesCall(t *testing.T) {
 		t.Fatalf("expected notification on update channel")
 	}
 }
+
+func TestHandlePhoneCall_OutgoingCallActive(t *testing.T) {
+	updateChan := make(chan types.Notification, 10)
+	ctx := context.Background()
+
+	peerUserID := int64(888999)
+	callID := int64(1234567)
+
+	p2pStatesMu.Lock()
+	p2pStates[peerUserID] = &p2pCallState{
+		isOutgoing: true,
+		inputCall: &tg.InputPhoneCall{
+			ID:         callID,
+			AccessHash: 998877,
+		},
+	}
+	p2pStatesMu.Unlock()
+
+	defer func() {
+		p2pStatesMu.Lock()
+		delete(p2pStates, peerUserID)
+		p2pStatesMu.Unlock()
+	}()
+
+	phoneCall := &tg.PhoneCall{
+		ID:            callID,
+		AccessHash:    998877,
+		AdminID:       111222, // our user ID
+		ParticipantID: peerUserID,
+		P2PAllowed:    true,
+	}
+
+	err := handlePhoneCall(ctx, phoneCall, updateChan)
+	if err != nil {
+		t.Fatalf("unexpected error handling outgoing PhoneCall: %v", err)
+	}
+
+	select {
+	case notif := <-updateChan:
+		if notif.CallEvent == nil {
+			t.Fatalf("expected CallEvent notification")
+		}
+		if notif.CallEvent.State != types.CallStateActive {
+			t.Errorf("expected CallStateActive, got %v", notif.CallEvent.State)
+		}
+		if notif.CallEvent.UserID != peerUserID {
+			t.Errorf("expected UserID %d, got %d", peerUserID, notif.CallEvent.UserID)
+		}
+		if notif.CallEvent.IsRelay {
+			t.Errorf("expected IsRelay=false for P2PAllowed=true, got true")
+		}
+	default:
+		t.Fatalf("expected notification on update channel for outgoing PhoneCall")
+	}
+
+	p2pStatesMu.Lock()
+	state := p2pStates[peerUserID]
+	p2pStatesMu.Unlock()
+	if state == nil || state.phoneCall != phoneCall {
+		t.Errorf("expected p2pState to hold phoneCall object")
+	}
+}
