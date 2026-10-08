@@ -72,20 +72,42 @@ func getVoipBridge(ctx context.Context) (voip.SignalingBridge, error) {
 
 	// Wire callbacks
 	bridge.OnSignaling(func(event voip.SignalingEvent) {
+		slog.Info("signaling event received from sidecar", "userID", event.UserID, "dataLen", len(event.Data))
 		p2pStatesMu.Lock()
 		state := p2pStates[event.UserID]
+		if state == nil && len(p2pStates) == 1 {
+			for uid, s := range p2pStates {
+				state = s
+				slog.Info("matched outbound signaling to single active call", "eventUserID", event.UserID, "actualUserID", uid)
+				break
+			}
+		}
 		p2pStatesMu.Unlock()
 
-		if state != nil && state.inputCall != nil && Cligram != nil {
-			sigCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			_, err := Cligram.API().PhoneSendSignalingData(sigCtx, &tg.PhoneSendSignalingDataRequest{
-				Peer: *state.inputCall,
-				Data: event.Data,
-			})
-			if err != nil {
-				slog.Error("failed to send signaling data", "error", err)
-			}
+		if state == nil {
+			slog.Warn("outbound signaling dropped: no active call state found", "userID", event.UserID)
+			return
+		}
+		if state.inputCall == nil {
+			slog.Warn("outbound signaling dropped: call state has nil inputCall", "userID", event.UserID)
+			return
+		}
+		if Cligram == nil {
+			slog.Warn("outbound signaling dropped: Cligram client is nil", "userID", event.UserID)
+			return
+		}
+
+		sigCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		slog.Info("sending outbound signaling data to Telegram", "userID", event.UserID, "callID", state.inputCall.ID, "dataLen", len(event.Data))
+		_, err := Cligram.API().PhoneSendSignalingData(sigCtx, &tg.PhoneSendSignalingDataRequest{
+			Peer: *state.inputCall,
+			Data: event.Data,
+		})
+		if err != nil {
+			slog.Error("failed to send signaling data to Telegram", "userID", event.UserID, "callID", state.inputCall.ID, "error", err)
+		} else {
+			slog.Info("successfully sent signaling data to Telegram", "userID", event.UserID, "callID", state.inputCall.ID)
 		}
 	})
 
@@ -230,22 +252,40 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 
 	// Handle signaling data updates from Telegram
 	dispatcher.OnPhoneCallSignalingData(func(ctx context.Context, e tg.Entities, update *tg.UpdatePhoneCallSignalingData) error {
+		slog.Info("received incoming signaling data from Telegram", "phoneCallID", update.PhoneCallID, "dataLen", len(update.Data))
 		p2pStatesMu.Lock()
+		var targetUserID int64
 		for userID, state := range p2pStates {
 			if state.inputCall != nil && state.inputCall.ID == update.PhoneCallID {
-				p2pStatesMu.Unlock()
-				currentBridgeMu.Lock()
-				bridge := currentBridge
-				currentBridgeMu.Unlock()
-				if bridge != nil {
-					if err := bridge.SendSignaling(ctx, userID, update.Data); err != nil {
-						slog.Error("failed to forward signaling data to bridge", "userID", userID, "error", err)
-					}
-				}
-				return nil
+				targetUserID = userID
+				break
+			}
+		}
+		if targetUserID == 0 && len(p2pStates) == 1 {
+			for userID := range p2pStates {
+				targetUserID = userID
+				slog.Info("matched incoming signaling data to single active call", "userID", targetUserID, "phoneCallID", update.PhoneCallID)
+				break
 			}
 		}
 		p2pStatesMu.Unlock()
+
+		if targetUserID == 0 {
+			slog.Warn("dropping incoming signaling data: no active call matches", "phoneCallID", update.PhoneCallID)
+			return nil
+		}
+
+		currentBridgeMu.Lock()
+		bridge := currentBridge
+		currentBridgeMu.Unlock()
+		if bridge != nil {
+			slog.Info("forwarding incoming signaling data to voip bridge", "userID", targetUserID, "dataLen", len(update.Data))
+			if err := bridge.SendSignaling(ctx, targetUserID, update.Data); err != nil {
+				slog.Error("failed to forward signaling data to bridge", "userID", targetUserID, "error", err)
+			}
+		} else {
+			slog.Warn("voip bridge is nil, cannot forward incoming signaling data", "userID", targetUserID)
+		}
 		return nil
 	})
 
@@ -372,7 +412,7 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 
 		case *tg.PhoneCall:
 			// ---- CALL ACTIVE (both sides) ----
-			slog.Info("call is active")
+			slog.Info("call is active", "callID", u.ID)
 
 			var userID int64
 			p2pStatesMu.Lock()
@@ -392,16 +432,34 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 				p2pStatesMu.Unlock()
 			}
 
+			if state == nil && len(p2pStates) == 1 {
+				p2pStatesMu.Lock()
+				for uid, s := range p2pStates {
+					userID = uid
+					state = s
+					slog.Info("matched PhoneCall update to single active call", "userID", userID, "callID", u.ID)
+					break
+				}
+				p2pStatesMu.Unlock()
+			}
+
 			if state == nil {
-				slog.Warn("PhoneCallObj but no p2pState found")
+				slog.Warn("PhoneCallObj but no p2pState found", "callID", u.ID)
 				return nil
 			}
+
+			p2pStatesMu.Lock()
+			state.inputCall = &tg.InputPhoneCall{
+				ID:         u.ID,
+				AccessHash: u.AccessHash,
+			}
+			state.phoneCall = u
+			p2pStatesMu.Unlock()
 
 			if !state.isOutgoing {
 				p2pStatesMu.Lock()
 				state.gAOrB = u.GAOrB
 				state.fingerprint = u.KeyFingerprint
-				state.phoneCall = u
 				p2pStatesMu.Unlock()
 
 				currentBridgeMu.Lock()
@@ -432,10 +490,6 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 						return err
 					}
 				}
-			} else {
-				p2pStatesMu.Lock()
-				state.phoneCall = u
-				p2pStatesMu.Unlock()
 			}
 
 			// Notify UI that call is now active
@@ -845,7 +899,7 @@ func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64) (err e
 	forceRelay := config.GetConfig().Calls.ForceRelay
 	protocol := buildPhoneCallProtocol(res, forceRelay)
 
-	_, err = Cligram.API().PhoneRequestCall(ctx, &tg.PhoneRequestCallRequest{
+	reqCallRes, err := Cligram.API().PhoneRequestCall(ctx, &tg.PhoneRequestCallRequest{
 		UserID: &tg.InputUser{
 			UserID:     userID,
 			AccessHash: accessHash,
@@ -856,6 +910,18 @@ func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64) (err e
 	})
 	if err != nil {
 		return fmt.Errorf("phone.requestCall: %w", err)
+	}
+
+	if phoneCallWaiting, ok := reqCallRes.PhoneCall.(*tg.PhoneCallWaiting); ok {
+		p2pStatesMu.Lock()
+		if state, ok := p2pStates[userID]; ok && state != nil {
+			state.inputCall = &tg.InputPhoneCall{
+				ID:         phoneCallWaiting.ID,
+				AccessHash: phoneCallWaiting.AccessHash,
+			}
+			slog.Info("initialized outgoing call with inputCall from phone.requestCall", "userID", userID, "callID", phoneCallWaiting.ID)
+		}
+		p2pStatesMu.Unlock()
 	}
 
 	p2pStatesMu.Lock()
@@ -901,6 +967,17 @@ func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64) (err e
 	if !ok {
 		return fmt.Errorf("unexpected phone call type after confirmCall: %T", confirmRes)
 	}
+
+	p2pStatesMu.Lock()
+	if state, ok := p2pStates[userID]; ok && state != nil {
+		state.inputCall = &tg.InputPhoneCall{
+			ID:         phoneCallObj.ID,
+			AccessHash: phoneCallObj.AccessHash,
+		}
+		state.phoneCall = phoneCallObj
+		slog.Info("updated outgoing call with confirmed inputCall", "userID", userID, "callID", phoneCallObj.ID)
+	}
+	p2pStatesMu.Unlock()
 
 	// Connect P2P immediately using the connections from confirmCall result
 	servers := parseRTCServers(phoneCallObj.Connections)
@@ -1005,7 +1082,7 @@ func AcceptIncomingCall(ctx context.Context, userID int64) error {
 	forceRelay := config.GetConfig().Calls.ForceRelay
 	protocol := buildPhoneCallProtocol(res, forceRelay)
 
-	_, err = Cligram.API().PhoneAcceptCall(ctx, &tg.PhoneAcceptCallRequest{
+	acceptRes, err := Cligram.API().PhoneAcceptCall(ctx, &tg.PhoneAcceptCallRequest{
 		Peer: tg.InputPhoneCall{
 			ID:         pending.callID,
 			AccessHash: pending.accessHash,
@@ -1015,6 +1092,20 @@ func AcceptIncomingCall(ctx context.Context, userID int64) error {
 	})
 	if err != nil {
 		return fmt.Errorf("phone.acceptCall: %w", err)
+	}
+
+	if acceptRes != nil {
+		if waiting, ok := acceptRes.PhoneCall.(*tg.PhoneCallWaiting); ok {
+			p2pStatesMu.Lock()
+			if state, ok := p2pStates[userID]; ok && state != nil {
+				state.inputCall = &tg.InputPhoneCall{
+					ID:         waiting.ID,
+					AccessHash: waiting.AccessHash,
+				}
+				slog.Info("updated incoming call with inputCall from phone.acceptCall", "userID", userID, "callID", waiting.ID)
+			}
+			p2pStatesMu.Unlock()
+		}
 	}
 
 	return nil

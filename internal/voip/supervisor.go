@@ -129,6 +129,13 @@ func (s *Supervisor) Start(ctx context.Context) (SignalingBridge, error) {
 	cmd := exec.CommandContext(ctx, binaryPath)
 	cmd.ExtraFiles = []*os.File{childFile} // In child, ExtraFiles start at FD 3
 
+	// Redirect sidecar stdout and stderr to /tmp/cligram-voip.log for observability
+	if logFile, err := os.OpenFile("/tmp/cligram-voip.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
+		cmd.Stdout = logFile
+		cmd.Stderr = logFile
+		defer logFile.Close()
+	}
+
 	if err := cmd.Start(); err != nil {
 		_ = parentFile.Close()
 		_ = childFile.Close()

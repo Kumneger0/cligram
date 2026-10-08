@@ -1076,6 +1076,9 @@ func (c *Client) SkipExchange(userID int64, encryptionKey []byte, isOutgoing boo
 func (c *Client) SendSignalingData(userID int64, data []byte) error {
 	f := newFuture()
 	dataC, dataSize := parseBytes(data)
+	if dataC != nil {
+		defer C.free(unsafe.Pointer(dataC))
+	}
 
 	C.ntg_send_signaling_data(
 		c.ptr,
@@ -1322,7 +1325,7 @@ func (c *Client) SetupTestAudio(userID int64) error {
 			KeepOpen:     true,
 		}
 		descPlayback := MediaDescription{
-			Speaker: &speaker,
+			Microphone: &speaker,
 		}
 		if err := c.SetStreamSources(userID, PlaybackStream, descPlayback); err != nil {
 			slog.Warn("🔊 Native device playback failed, falling back to shell", "error", err)
@@ -1359,7 +1362,7 @@ func (c *Client) SetupTestAudio(userID int64) error {
 			KeepOpen:     true,
 		}
 		descPlayback := MediaDescription{
-			Speaker: &speaker,
+			Microphone: &speaker,
 		}
 		if err := c.SetStreamSources(userID, PlaybackStream, descPlayback); err != nil {
 			return fmt.Errorf("set playback stream: %w", err)
@@ -1443,7 +1446,7 @@ func (c *Client) SetupRealAudio(userID int64) error {
 			KeepOpen:     true,
 		}
 		descPlayback := MediaDescription{
-			Speaker: speaker,
+			Microphone: speaker,
 		}
 		if err := c.SetStreamSources(userID, PlaybackStream, descPlayback); err != nil {
 			slog.Warn("🔊 Native device playback failed, falling back to shell", "error", err)
@@ -1479,7 +1482,7 @@ func (c *Client) SetupRealAudio(userID int64) error {
 				KeepOpen:     true,
 			}
 			descPlayback := MediaDescription{
-				Speaker: speaker,
+				Microphone: speaker,
 			}
 			if err := c.SetStreamSources(userID, PlaybackStream, descPlayback); err != nil {
 				return fmt.Errorf("set playback stream fallback: %w", err)

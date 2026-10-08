@@ -15,6 +15,10 @@ func main() {
 	loopbackFlag := flag.Bool("loopback", false, "Run audio capture and playback loopback diagnostic")
 	flag.Parse()
 
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	})))
+
 	if *loopbackFlag {
 		runLoopbackDiagnostic()
 		return
