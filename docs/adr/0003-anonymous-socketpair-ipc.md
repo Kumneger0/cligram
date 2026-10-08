@@ -1,3 +1,0 @@
-# Anonymous Socketpair IPC Transport via File Descriptor Inheritance
-
-Inter-process communication between Cligram core and the ephemeral `cligram-voip` sidecar requires a fast, secure local transport without file system leakages or permission conflicts. We decided to establish communication using an anonymous UNIX stream socketpair (`syscall.Socketpair`) passed to the child process via file descriptor inheritance (`exec.Cmd.ExtraFiles` on FD 3). This avoids creating temporary socket files in `/run` or `/tmp`, eliminates stale socket leaks during ungraceful process crashes, prevents socket path collision across concurrent users, and ensures immediate kernel-level EOF notification upon child process exit.

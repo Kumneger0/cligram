@@ -1,3 +1,0 @@
-# Core-Mediated Signaling with Sidecar Media Processing over JSON-RPC 2.0
-
-Telegram voice calling requires cryptographic Diffie-Hellman handshakes, MTProto signaling updates, and low-latency WebRTC media streams. We decided that Cligram core retains full ownership of Telegram MTProto signaling and session credentials, while delegating raw media exchange and audio I/O to an ephemeral `cligram-voip` sidecar communicating over JSON-RPC 2.0 across a local Unix domain socket. This keeps the Cgo-linked sidecar completely stateless and credential-free, eliminates the need for binary serialization compilers like Protobuf, and ensures audio capture/playback subprocesses remain local to the media engine without saturating the IPC socket.

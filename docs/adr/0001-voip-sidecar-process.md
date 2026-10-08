@@ -1,3 +1,0 @@
-# Out-of-Process VoIP Sidecar Daemon
-
-Cligram core must remain a pure-Go, portable TUI application that compiles cleanly without Cgo or third-party C library prerequisites (`libntgcalls`, `libopus`, `libcrypto`). We decided to isolate all `ntgcalls` Cgo bindings, WebRTC media processing, and C-level dependencies into an independent helper daemon (`cligram-voip`) communicating with Cligram core over a local Unix domain socket. This prevents Cgo crashes from taking down the main TUI and preserves cross-compilation and easy distribution for non-VoIP builds while supporting full voice calling when the sidecar is available.
