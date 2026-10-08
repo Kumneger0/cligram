@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gotd/td/tg"
@@ -84,7 +85,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		slog.Info("call initiated", "userID", msg.UserID)
 		if m.CallOverlay.State == CallOverlayDialing && msg.UserID != nil {
 			userName := m.CallOverlay.UserName
-			if userName == "" && m.Mode == ModeUsers {
+			if userName == "" && (m.Mode == ModeUsers || m.Mode == ModeAll) {
 				userName = m.SelectedUser.FirstName
 			}
 			m.CallOverlay.SetActive(userName, *msg.UserID)
@@ -102,7 +103,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if (userName == "" || strings.HasPrefix(userName, "User ")) && m.CallOverlay.UserName != "" {
 				userName = m.CallOverlay.UserName
 			}
-			if (userName == "" || strings.HasPrefix(userName, "User ")) && m.Mode == ModeUsers && m.SelectedUser.FirstName != "" {
+			if (userName == "" || strings.HasPrefix(userName, "User ")) && (m.Mode == ModeUsers || m.Mode == ModeAll) && m.SelectedUser.FirstName != "" {
 				userName = m.SelectedUser.FirstName
 			}
 			m.CallOverlay.SetActive(userName, msg.UserID)
@@ -165,38 +166,72 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case types.GetAllChatsResponseMSG:
 		if msg.Err != nil {
 			slog.Error("Failed to get all chats", "error", msg.Err.Error())
+			m.SideBarLoading = false
+			m.AllLoading = false
+			m.UsersLoading = false
+			m.BotsLoading = false
+			m.ChannelsLoading = false
+			m.GroupsLoading = false
+			m.OnPagination = false
 			m.Alert = m.Alert.WithAllowEscToClose().WithPosition(bubbleup.TopLeftPosition)
 			alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, msg.Err.Error())
 			return m, alertCmd
 		}
 		m.OffsetDate = msg.Chats.OffsetDate
 		m.OffsetID = msg.Chats.OffsetID
-		userChats := msg.Chats.PrivateChats
-		groupsChat := msg.Chats.Groups
-		channelsChat := msg.Chats.Channels
-
-		var users []list.Item = []list.Item{}
-		var bots []list.Item = []list.Item{}
-		for _, du := range userChats {
-			if du.IsBot {
-				bots = append(bots, du)
-				continue
-			}
-			users = append(users, du)
-		}
-
-		var channelsList []list.Item = []list.Item{}
-		for _, channel := range channelsChat {
-			channelsList = append(channelsList, channel)
-		}
-
-		var groupsList []list.Item = []list.Item{}
-		for _, group := range groupsChat {
-			groupsList = append(groupsList, group)
-		}
-
 		m.SideBarLoading = false
-		return m, tea.Batch(m.Users.SetItems(users), m.Bots.SetItems(bots), m.Channels.SetItems(channelsList), m.Groups.SetItems(groupsList))
+		m.OnPagination = false
+		m.AllLoading = false
+		m.AllLoaded = true
+		m.UsersLoading = false
+		m.UsersLoaded = true
+		m.BotsLoading = false
+		m.BotsLoaded = true
+		m.ChannelsLoading = false
+		m.ChannelsLoaded = true
+		m.GroupsLoading = false
+		m.GroupsLoaded = true
+
+		var allItems []types.FilterableItem
+		if len(msg.Chats.All) > 0 {
+			allItems = msg.Chats.All
+		} else {
+			for _, u := range msg.Chats.PrivateChats {
+				allItems = append(allItems, u)
+			}
+			for _, b := range msg.Chats.Bots {
+				allItems = append(allItems, b)
+			}
+			for _, g := range msg.Chats.Groups {
+				allItems = append(allItems, g)
+			}
+			for _, c := range msg.Chats.Channels {
+				allItems = append(allItems, c)
+			}
+		}
+		cmdAll := appendListItems(&m.All, allItems)
+
+		var usersList []types.UserInfo
+		var botsList []types.UserInfo
+		if len(msg.Chats.Bots) > 0 {
+			usersList = msg.Chats.PrivateChats
+			botsList = msg.Chats.Bots
+		} else {
+			for _, u := range msg.Chats.PrivateChats {
+				if u.IsBot {
+					botsList = append(botsList, u)
+				} else {
+					usersList = append(usersList, u)
+				}
+			}
+		}
+
+		cmdUsers := appendListItems(&m.Users, usersList)
+		cmdBots := appendListItems(&m.Bots, botsList)
+		cmdChannels := appendListItems(&m.Channels, msg.Chats.Channels)
+		cmdGroups := appendListItems(&m.Groups, msg.Chats.Groups)
+
+		return m, tea.Batch(cmdAll, cmdUsers, cmdBots, cmdChannels, cmdGroups)
 
 	case types.GetChannelForumsResponseMsg:
 		m.ForumTopicLoading = false
@@ -414,6 +449,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd := m.handleGetMessages(msg)
 		m = model.(Model)
 		cmds = append(cmds, cmd)
+	case spinner.TickMsg:
+		m.ensureSidebarSpinner()
+		var spinCmd tea.Cmd
+		m.SidebarSpinner, spinCmd = m.SidebarSpinner.Update(msg)
+		if m.isAnyCategoryLoading() {
+			cmds = append(cmds, spinCmd)
+		}
+		return m, tea.Batch(cmds...)
 	case tea.KeyMsg:
 		model, cmd := m.handleKeyPress(msg)
 		m = model.(Model)
@@ -950,16 +993,28 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch msg.String() {
 	case "ctrl+p":
-		// Initiate P2P call to selected user
-		if m.Mode == ModeUsers && m.SelectedUser.PeerID != "" && m.CallOverlay.State == CallOverlayNone {
-			pInfo := peerFromItem(m.SelectedUser)
+		canCall := false
+		var userToCall types.UserInfo
+		if m.Mode == ModeUsers && m.SelectedUser.PeerID != "" {
+			canCall = true
+			userToCall = m.SelectedUser
+		} else if m.Mode == ModeAll {
+			if selected := m.All.SelectedItem(); selected != nil {
+				if u, ok := selected.(types.UserInfo); ok && !u.IsBot && u.PeerID != "" {
+					canCall = true
+					userToCall = u
+				}
+			}
+		}
+		if canCall && m.CallOverlay.State == CallOverlayNone {
+			pInfo := peerFromItem(userToCall)
 			uID, err := strconv.ParseInt(pInfo.ID, 10, 64)
 			if err != nil {
 				slog.Error("failed to parse peer ID for call", "error", err)
 				alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, "Invalid user ID: "+err.Error())
 				return m, alertCmd
 			}
-			m.CallOverlay.SetDialing(m.SelectedUser.FirstName, uID)
+			m.CallOverlay.SetDialing(userToCall.FirstName, uID)
 			return m, telegram.Cligram.CallUser(telegram.Cligram.Context(), pInfo)
 		}
 		return m, nil
@@ -996,6 +1051,10 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "shift+tab":
 		m, cmd := changeFocusMode(&m, "tab", true)
+		cmds = append(cmds, cmd)
+		return m, tea.Batch(cmds...)
+	case "a":
+		m, cmd := changeSideBarMode(&m, "a")
 		cmds = append(cmds, cmd)
 		return m, tea.Batch(cmds...)
 	case "c":
@@ -1051,17 +1110,44 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleListPagination() (Model, tea.Cmd) {
-	if m.Users.Index() < len(m.Users.VisibleItems())-6 {
+	if telegram.Cligram == nil {
 		return m, nil
 	}
-	if m.OffsetDate == -1 || m.OffsetID == -1 || m.OnPagination {
+
+	var activeList *list.Model
+
+	switch m.Mode {
+	case ModeAll:
+		activeList = &m.All
+	case ModeUsers:
+		activeList = &m.Users
+	case ModeBots:
+		activeList = &m.Bots
+	case ModeChannels:
+		activeList = &m.Channels
+	case ModeGroups:
+		activeList = &m.Groups
+	default:
 		return m, nil
 	}
+
+	visibleItemsCount := len(activeList.VisibleItems())
+	if visibleItemsCount == 0 || activeList.Index() < visibleItemsCount-6 {
+		return m, nil
+	}
+
+	// Do not paginate if already loading/paginating, or end of list reached (-1)
+	if m.isCurrentCategoryLoading() || m.SideBarLoading || m.OnPagination || m.OffsetDate == -1 || m.OffsetID == -1 {
+		return m, nil
+	}
+
+	m.ensureSidebarSpinner()
 	m.OnPagination = true
-	if m.Mode == ModeUsers || m.Mode == ModeBots {
-		return m, telegram.Cligram.GetUserChats(telegram.Cligram.Context(), types.ChatType(m.Mode), m.OffsetDate, m.OffsetID)
-	}
-	return m, telegram.Cligram.GetUserChannels(telegram.Cligram.Context(), m.Mode == ModeChannels, m.OffsetDate, m.OffsetID)
+	m.setCategoryLoading(m.Mode, true)
+	return m, tea.Batch(
+		m.SidebarSpinner.Tick,
+		telegram.Cligram.GetAllChats(telegram.Cligram.Context(), m.OffsetDate, m.OffsetID, 50),
+	)
 }
 
 func (m Model) handleEditKey() (tea.Model, tea.Cmd) {
@@ -1247,11 +1333,53 @@ func (m Model) handleForwardKey() (tea.Model, tea.Cmd) {
 	}
 }
 
+func itemUniqueKey(item list.Item) string {
+	switch v := item.(type) {
+	case types.UserInfo:
+		if v.IsBot {
+			return "bot:" + v.PeerID
+		}
+		return "user:" + v.PeerID
+	case *types.UserInfo:
+		if v != nil {
+			if v.IsBot {
+				return "bot:" + v.PeerID
+			}
+			return "user:" + v.PeerID
+		}
+	case types.ChannelInfo:
+		if v.IsBroadcast {
+			return "channel:" + v.ID
+		}
+		return "group:" + v.ID
+	case *types.ChannelInfo:
+		if v != nil {
+			if v.IsBroadcast {
+				return "channel:" + v.ID
+			}
+			return "group:" + v.ID
+		}
+	}
+	if item != nil {
+		return item.FilterValue()
+	}
+	return ""
+}
+
 func appendListItems[T types.FilterableItem](l *list.Model, items []T) tea.Cmd {
 	current := l.Items()
+	existing := make(map[string]bool, len(current)+len(items))
+	for _, it := range current {
+		key := itemUniqueKey(it)
+		if key != "" {
+			existing[key] = true
+		}
+	}
 	for _, it := range items {
-		if it.FilterValue() != "" {
+		key := itemUniqueKey(it)
+		if key != "" && !existing[key] {
 			current = append(current, it)
+			existing[key] = true
 		}
 	}
 	return l.SetItems(current)
@@ -1259,49 +1387,94 @@ func appendListItems[T types.FilterableItem](l *list.Model, items []T) tea.Cmd {
 
 func (m Model) handleUserChats(msg types.UserChatsMsg) (tea.Model, tea.Cmd) {
 	if msg.Err != nil {
+		m.OnPagination = false
+		m.UsersLoading = false
+		m.BotsLoading = false
+		m.SideBarLoading = false
 		m.IsModalVisible = true
 		m.ModalContent = GetModalContent(msg.Err.Error())
 		return m, nil
 	}
 	if msg.Response == nil {
+		m.OnPagination = false
+		m.UsersLoading = false
+		m.BotsLoading = false
+		m.SideBarLoading = false
 		return m, nil
 	}
-	cmd := appendListItems(&m.Users, msg.Response.Data)
+	m.SideBarLoading = false
+	m.OnPagination = false
+
+	if msg.IsBot {
+		m.BotsLoading = false
+		m.BotsLoaded = true
+		m.BotsOffsetDate = msg.Response.OffsetDate
+		m.BotsOffsetID = msg.Response.OffsetID
+		cmd := appendListItems(&m.Bots, msg.Response.Data)
+		return m, cmd
+	}
+
+	m.UsersLoading = false
+	m.UsersLoaded = true
+	m.UsersOffsetDate = msg.Response.OffsetDate
+	m.UsersOffsetID = msg.Response.OffsetID
 	m.OffsetDate = msg.Response.OffsetDate
 	m.OffsetID = msg.Response.OffsetID
-	m.OnPagination = false
+	cmd := appendListItems(&m.Users, msg.Response.Data)
 	return m, cmd
 }
 
 func (m Model) handleUserChannels(msg types.ChannelsMsg) (tea.Model, tea.Cmd) {
 	if msg.Err != nil {
+		m.OnPagination = false
+		m.ChannelsLoading = false
+		m.SideBarLoading = false
 		m.IsModalVisible = true
 		m.ModalContent = GetModalContent(msg.Err.Error())
 		return m, nil
 	}
 	if msg.Response == nil {
+		m.OnPagination = false
+		m.ChannelsLoading = false
+		m.SideBarLoading = false
 		return m, nil
 	}
-	cmd := appendListItems(&m.Channels, msg.Response.Data)
+	m.SideBarLoading = false
+	m.OnPagination = false
+	m.ChannelsLoading = false
+	m.ChannelsLoaded = true
+	m.ChannelsOffsetDate = msg.Response.OffsetDate
+	m.ChannelsOffsetID = msg.Response.OffsetID
 	m.OffsetDate = msg.Response.OffsetDate
 	m.OffsetID = msg.Response.OffsetID
-	m.OnPagination = false
+	cmd := appendListItems(&m.Channels, msg.Response.Data)
 	return m, cmd
 }
 
 func (m Model) handleUserGroups(msg types.GroupsMsg) (tea.Model, tea.Cmd) {
 	if msg.Err != nil {
+		m.OnPagination = false
+		m.GroupsLoading = false
+		m.SideBarLoading = false
 		m.IsModalVisible = true
 		m.ModalContent = GetModalContent(msg.Err.Error())
 		return m, nil
 	}
 	if msg.Response == nil {
+		m.OnPagination = false
+		m.GroupsLoading = false
+		m.SideBarLoading = false
 		return m, nil
 	}
-	cmd := appendListItems(&m.Groups, msg.Response.Data)
+	m.SideBarLoading = false
+	m.OnPagination = false
+	m.GroupsLoading = false
+	m.GroupsLoaded = true
+	m.GroupsOffsetDate = msg.Response.OffsetDate
+	m.GroupsOffsetID = msg.Response.OffsetID
 	m.OffsetDate = msg.Response.OffsetDate
 	m.OffsetID = msg.Response.OffsetID
-	m.OnPagination = false
+	cmd := appendListItems(&m.Groups, msg.Response.Data)
 	return m, cmd
 }
 

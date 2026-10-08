@@ -121,6 +121,36 @@ var (
 	readStateStyleDouble = lipgloss.NewStyle().
 				Foreground(DefaultTheme.AccentColor).
 				Padding(0, 1)
+
+	activeTabStyle = lipgloss.NewStyle().
+			Foreground(DefaultTheme.AccentColor).
+			Bold(true)
+
+	inactiveTabStyle = lipgloss.NewStyle().
+				Foreground(DefaultTheme.SecondaryText)
+
+	tabBadgeStyle = lipgloss.NewStyle().
+			Foreground(DefaultTheme.UnreadCountFg).
+			Bold(true)
+
+	tabShortcutStyle = lipgloss.NewStyle().
+				Foreground(DefaultTheme.SecondaryText)
+
+	listItemNormalStyle = lipgloss.NewStyle().
+				Foreground(DefaultTheme.PrimaryText)
+
+	listItemSelectedStyle = lipgloss.NewStyle().
+				Foreground(DefaultTheme.SelectedFg).
+				Background(DefaultTheme.SelectedBg).
+				Bold(true)
+
+	listItemUnfocusedStyle = lipgloss.NewStyle().
+				Foreground(DefaultTheme.PrimaryText).
+				Background(lipgloss.Color("#1E293B"))
+
+	selectedIndicatorStyle = lipgloss.NewStyle().
+				Foreground(DefaultTheme.AccentColor).
+				Bold(true)
 )
 
 func getSideBarStyles(sidebarWidth int, contentHeight int, m *Model) lipgloss.Style {

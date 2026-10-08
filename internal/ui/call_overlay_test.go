@@ -24,6 +24,7 @@ func newTestModel(width, height int) Model {
 		Mode:        ModeUsers,
 		Input:       textinput.New(),
 	}
+	m.All = list.New([]list.Item{}, CustomDelegate{Model: &m}, 10, 20)
 	m.Users = list.New([]list.Item{}, CustomDelegate{Model: &m}, 10, 20)
 	m.Channels = list.New([]list.Item{}, CustomDelegate{Model: &m}, 10, 20)
 	m.Groups = list.New([]list.Item{}, CustomDelegate{Model: &m}, 10, 20)

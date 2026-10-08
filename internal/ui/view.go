@@ -36,68 +36,99 @@ func (d CustomDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd {
 }
 func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	var title string
-	var prefix string
-	var unreadBadge string
+	var icon string
+	var unreadCount int
 
-	switch item := item.(type) {
+	switch it := item.(type) {
 	case types.UserInfo:
-		title = item.Title()
-		if item.IsOnline {
-			prefix = "🟢 "
+		title = it.Title()
+		unreadCount = it.UnreadCount
+		if it.IsBot {
+			icon = "🤖 "
+		} else if it.IsOnline {
+			icon = "🟢 "
 		} else {
-			prefix = "👤 "
-		}
-		if item.UnreadCount > 0 {
-			unreadBadge = unreadCountStyle.Render(strconv.Itoa(item.UnreadCount))
+			icon = "👤 "
 		}
 	case types.ChannelInfo:
-		title = item.Title()
-		if item.IsBroadcast {
-			prefix = "📢 "
+		title = it.Title()
+		unreadCount = it.UnreadCount
+		if it.IsBroadcast {
+			icon = "📢 "
+		} else if it.IsForum {
+			icon = "💬 "
 		} else {
-			prefix = "👥 "
-		}
-		if item.UnreadCount > 0 {
-			unreadBadge = unreadCountStyle.Render(strconv.Itoa(item.UnreadCount))
+			icon = "👥 "
 		}
 	default:
 		return
 	}
 
-	availWidth := m.Width() - 10
-	if availWidth < 0 {
-		availWidth = 0
-	}
-
-	name := lipgloss.NewStyle().MaxWidth(availWidth).Render(title)
-
-	// Join prefix, name (truncated), and badge
-	var content string
-	if unreadBadge != "" {
-		occupied := lipgloss.Width(prefix) + lipgloss.Width(name) + lipgloss.Width(unreadBadge) + 2
-		spacerWidth := m.Width() - occupied
-		if spacerWidth < 0 {
-			spacerWidth = 0
-		}
-		spacer := strings.Repeat(" ", spacerWidth)
-		content = lipgloss.JoinHorizontal(lipgloss.Top, prefix, name, spacer, unreadBadge)
-	} else {
-		content = lipgloss.JoinHorizontal(lipgloss.Top, prefix, name)
-	}
-
 	isOnSideBar := d.Model.FocusedOn == SideBar
-	style := normalStyle
-	if index == m.Index() && isOnSideBar {
-		style = selectedStyle
+	isSelected := index == m.Index()
+
+	var badge string
+	if unreadCount > 0 {
+		badge = unreadCountStyle.Render(strconv.Itoa(unreadCount))
 	}
 
-	fmt.Fprint(w, style.UnsetWidth().Render(content))
+	var indicator string
+	if isSelected && isOnSideBar {
+		indicator = selectedIndicatorStyle.Render("▎") + " "
+	} else if isSelected {
+		indicator = "· "
+	} else {
+		indicator = "  "
+	}
+
+	totalWidth := m.Width()
+	if totalWidth <= 0 {
+		totalWidth = 30
+	}
+
+	badgeWidth := lipgloss.Width(badge)
+	indicatorWidth := lipgloss.Width(indicator)
+	iconWidth := lipgloss.Width(icon)
+
+	availNameWidth := totalWidth - indicatorWidth - iconWidth - badgeWidth - 1
+	if availNameWidth < 3 {
+		availNameWidth = 3
+	}
+
+	name := lipgloss.NewStyle().MaxWidth(availNameWidth).Render(title)
+	nameWidth := lipgloss.Width(name)
+
+	spacerWidth := totalWidth - indicatorWidth - iconWidth - nameWidth - badgeWidth
+	if spacerWidth < 0 {
+		spacerWidth = 0
+	}
+	spacer := strings.Repeat(" ", spacerWidth)
+
+	var rowContent string
+	if badge != "" {
+		rowContent = indicator + icon + name + spacer + badge
+	} else {
+		rowContent = indicator + icon + name + spacer
+	}
+
+	rowStyle := listItemNormalStyle
+	if isSelected && isOnSideBar {
+		rowStyle = listItemSelectedStyle
+	} else if isSelected {
+		rowStyle = listItemUnfocusedStyle
+	}
+
+	fmt.Fprint(w, rowStyle.Width(totalWidth).Render(rowContent))
 }
 
 func (m Model) Init() tea.Cmd {
+	m.ensureSidebarSpinner()
 	filePickerInitCMD := m.Filepicker.Init()
+	if telegram.Cligram == nil {
+		return filePickerInitCMD
+	}
 	storiesCMD := telegram.Cligram.GetAllStories(telegram.Cligram.Context())
-	return tea.Batch(filePickerInitCMD, storiesCMD, telegram.Cligram.GetAllChats(telegram.Cligram.Context(), 0, 0))
+	return tea.Batch(filePickerInitCMD, storiesCMD, telegram.Cligram.GetAllChats(telegram.Cligram.Context(), 0, 0, 50), m.SidebarSpinner.Tick)
 }
 
 func getChannelIndex(m Model, channel types.ChannelInfo) int {
@@ -253,6 +284,9 @@ func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (M
 	case SideBar:
 		m.Input.Blur()
 		switch m.Mode {
+		case ModeAll:
+			m.All, cmd = m.All.Update(msg)
+			cmds = append(cmds, cmd)
 		case ModeChannels:
 			m.Channels, cmd = m.Channels.Update(msg)
 			cmds = append(cmds, cmd)
@@ -265,6 +299,13 @@ func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (M
 		default:
 			m.Groups, cmd = m.Groups.Update(msg)
 			cmds = append(cmds, cmd)
+		}
+		if _, isKey := msg.(tea.KeyMsg); isKey {
+			pagModel, pagCmd := m.handleListPagination()
+			*m = pagModel
+			if pagCmd != nil {
+				cmds = append(cmds, pagCmd)
+			}
 		}
 	default:
 		if m.ShowForumTopics && m.SelectedForumTopic == nil {
@@ -285,7 +326,9 @@ func handleUserChange(m *Model, offsetID *int, afterMessagesCmd tea.Cmd) (Model,
 
 	pInfo := getMessageParams(m)
 
-	if m.Mode == ModeGroups && m.SelectedGroup.IsForum {
+	isGroupForum := (m.Mode == ModeGroups && m.SelectedGroup.IsForum) ||
+		(m.Mode == ModeAll && m.SelectedGroup.IsForum && pInfo.ChatType == types.GroupChat)
+	if isGroupForum {
 		m.ForumTopicLoading = true
 		m.Conversations = [50]types.FormattedMessage{}
 		m.ChatUI.SetItems([]list.Item{})
@@ -311,10 +354,24 @@ func handleUserChange(m *Model, offsetID *int, afterMessagesCmd tea.Cmd) (Model,
 	return *m, tea.Batch(cmd, afterMessagesCmd)
 }
 
+func isReadOnlyBroadcast(m *Model) bool {
+	if m.Mode == ModeChannels && !m.SelectedChannel.IsCreator {
+		return true
+	}
+	if m.Mode == ModeAll {
+		if selected := m.All.SelectedItem(); selected != nil {
+			if ch, ok := selected.(types.ChannelInfo); ok && ch.IsBroadcast && !ch.IsCreator {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func changeFocusMode(m *Model, msg string, shift bool) (Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	currentlyFocusedOn := m.FocusedOn
-	canWrite := (m.Mode == ModeUsers || m.Mode == ModeGroups || m.Mode == ModeBots) || (m.Mode == ModeChannels && m.SelectedChannel.IsCreator)
+	canWrite := !isReadOnlyBroadcast(m)
 	if currentlyFocusedOn == SideBar {
 		if shift {
 			m.FocusedOn = Input
@@ -349,6 +406,10 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 	areWeInGroupMode := m.Mode == ModeGroups && m.FocusedOn == Main
 	if m.FocusedOn == SideBar || areWeInGroupMode {
 		switch msg {
+		case "a":
+			m.Mode = ModeAll
+			m.Input.Reset()
+			return m.checkThresholdAndBackfill(ModeAll)
 		case "c":
 			m.Mode = ModeChannels
 			if !m.SelectedChannel.IsCreator {
@@ -356,9 +417,10 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 			} else {
 				m.Input.Reset()
 			}
-			return *m, nil
+			return m.checkThresholdAndBackfill(ModeChannels)
 		case "u":
 			m.Mode = ModeUsers
+			m.Input.Reset()
 			if areWeInGroupMode {
 				selectedUser := m.getMessageSenderUserInfo()
 				if selectedUser != nil {
@@ -380,25 +442,29 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 						m.Users.Select(foundIndex)
 					}
 					m.ChatUI.SetItems(nil)
-					return *m, telegram.Cligram.GetMessages(telegram.Cligram.Context(), types.GetMessagesRequest{
-						Peer: getMessageParams(m),
-						//TODO:  i might need to revisit this one
-						Limit:         50,
-						OffsetID:      nil,
-						ChatAreaWidth: nil,
-					})
+					if telegram.Cligram != nil {
+						return *m, telegram.Cligram.GetMessages(telegram.Cligram.Context(), types.GetMessagesRequest{
+							Peer:          getMessageParams(m),
+							Limit:         50,
+							OffsetID:      nil,
+							ChatAreaWidth: nil,
+						})
+					}
+					return *m, nil
 				}
 			}
-			return *m, nil
+			return m.checkThresholdAndBackfill(ModeUsers)
 
 		case "g":
 			m.Mode = ModeGroups
-			return *m, nil
+			m.Input.Reset()
+			return m.checkThresholdAndBackfill(ModeGroups)
 		case "b":
 			m.Mode = ModeBots
+			m.Input.Reset()
 			m.Bots.Select(0)
 			m.Bots.ResetSelected()
-			return *m, nil
+			return m.checkThresholdAndBackfill(ModeBots)
 		}
 		return *m, nil
 	}
@@ -420,12 +486,16 @@ func (m *Model) updateConversations() tea.Cmd {
 }
 
 func (m Model) View() string {
+	m.All.Title = "All"
+	m.All.SetShowStatusBar(false)
 	m.Users.Title = "Chats"
 	m.Channels.Title = "Channels"
 	m.Channels.SetShowStatusBar(false)
 	m.Users.SetShowStatusBar(false)
 	m.Groups.Title = "Groups"
 	m.Groups.SetShowStatusBar(false)
+	m.Bots.Title = "Bots"
+	m.Bots.SetShowStatusBar(false)
 	m.updateDelegates()
 
 	ui := setItemStyles(&m)
@@ -446,7 +516,9 @@ func (m *Model) updateDelegates() {
 	mainViewDelegate := MessagesDelegate{Model: m}
 	// storiesDelegate := StoriesDelegate{Model: m}
 	// m.Stories.SetDelegate(storiesDelegate)
+	m.All.SetDelegate(usersDelegate)
 	m.Users.SetDelegate(usersDelegate)
+	m.Bots.SetDelegate(usersDelegate)
 	m.Channels.SetDelegate(channelsDelegate)
 	m.Groups.SetDelegate(groupsDelegate)
 	m.SelectedGroupForumTopics.SetDelegate(forumTopicsDelegate)

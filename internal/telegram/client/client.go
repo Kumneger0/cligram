@@ -409,12 +409,12 @@ func (c *Client) GetMessages(ctx context.Context, req types.GetMessagesRequest) 
 	return c.GetChatHistoryCmd(ctx, req.Peer, req.Limit, req.OffsetID, req.TopMsgID)
 }
 
-func (c *Client) GetUserChats(ctx context.Context, chatType types.ChatType, offsetDate, offsetID int) tea.Cmd {
-	return c.GetUserChatsCmd(ctx, chatType == types.BotChat, offsetDate, offsetID)
+func (c *Client) GetUserChats(ctx context.Context, chatType types.ChatType, offsetDate, offsetID int, limit ...int) tea.Cmd {
+	return c.GetUserChatsCmd(ctx, chatType == types.BotChat, offsetDate, offsetID, limit...)
 }
 
-func (c *Client) GetUserChannels(ctx context.Context, isBroadCast bool, offsetDate, offsetID int) tea.Cmd {
-	return c.GetChannelsCmd(ctx, isBroadCast, offsetDate, offsetID)
+func (c *Client) GetUserChannels(ctx context.Context, isBroadCast bool, offsetDate, offsetID int, limit ...int) tea.Cmd {
+	return c.GetChannelsCmd(ctx, isBroadCast, offsetDate, offsetID, limit...)
 }
 
 func (c *Client) GetChatHistoryCmd(ctx context.Context, peer types.Peer, limit int, offsetID *int, topMsgID *int) tea.Cmd {
@@ -512,16 +512,16 @@ func (c *Client) GetChatHistory(ctx context.Context, peer types.Peer, limit int,
 	return formattedMessages, nil
 }
 
-func (c *Client) GetUserChatsCmd(ctx context.Context, isBot bool, offsetDate, offsetID int) tea.Cmd {
+func (c *Client) GetUserChatsCmd(ctx context.Context, isBot bool, offsetDate, offsetID int, limit ...int) tea.Cmd {
 	return func() tea.Msg {
-		result, err := c.getUserChats(ctx, isBot, offsetDate, offsetID)
-		return types.UserChatsMsg{Response: &result, Err: err}
+		result, err := c.getUserChats(ctx, isBot, offsetDate, offsetID, limit...)
+		return types.UserChatsMsg{Response: &result, Err: err, IsBot: isBot}
 	}
 }
 
-func (c *Client) GetChannelsCmd(ctx context.Context, isBroadCast bool, offsetDate, offsetID int) tea.Cmd {
+func (c *Client) GetChannelsCmd(ctx context.Context, isBroadCast bool, offsetDate, offsetID int, limit ...int) tea.Cmd {
 	return func() tea.Msg {
-		result, err := c.getChannels(ctx, isBroadCast, offsetDate, offsetID)
+		result, err := c.getChannels(ctx, isBroadCast, offsetDate, offsetID, limit...)
 		if isBroadCast {
 			return types.ChannelsMsg{Response: &result, Err: err}
 		}
@@ -570,9 +570,11 @@ func (c *Client) GetChannelForums(peer types.Peer) tea.Cmd {
 	}
 }
 
-func (c *Client) GetAllChats(ctx context.Context, offsetDate int, offsetID int) tea.Cmd {
+func (c *Client) GetAllChats(ctx context.Context, offsetDate int, offsetID int, limit ...int) tea.Cmd {
 	return func() tea.Msg {
-		ds, err := c.getAllDialogs(ctx, offsetDate, offsetID)
+		tCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		ds, err := c.getAllDialogs(tCtx, offsetDate, offsetID, limit...)
 		if err != nil {
 			return types.GetAllChatsResponseMSG{Chats: types.AllChats{}, Err: types.NewTelegramError(types.ErrorCodeGetMessagesFailed, "failed to get dialogs", err)}
 		}
@@ -581,54 +583,32 @@ func (c *Client) GetAllChats(ctx context.Context, offsetDate int, offsetID int) 
 		}
 
 		var users []types.UserInfo
-		for _, tgUser := range ds.Users {
-			u := shared.ConvertTGUserToUserInfo(tgUser)
-			readInboxMaxID, readOutboxMaxID := getReadMaxMessageID(ds.Dialogs, tgUser.ID)
-			u.UnreadCount = getUnreadCount(ds.Dialogs, tgUser.ID)
-			u.NotifySettings = getNotifySettings(ds.Dialogs, tgUser.ID)
-			u.ReadInboxMaxID = readInboxMaxID
-			u.ReadOutboxMaxID = readOutboxMaxID
+		var bots []types.UserInfo
+		var channels []types.ChannelInfo
+		var groups []types.ChannelInfo
 
-			users = append(users, *u)
-		}
-
-		var channels, groups []types.ChannelInfo
-		for _, chatClass := range ds.Chats {
-			if channel, ok := chatClass.(*tg.Channel); ok {
-				info := convertToChannelInfo(channel)
-				if info == nil {
-					continue
-				}
-				readInboxMaxID, readOutboxMaxID := getReadMaxMessageID(ds.Dialogs, channel.ID)
-
-				info.ReadInboxMaxID = readInboxMaxID
-				info.ReadOutboxMaxID = readOutboxMaxID
-				info.UnreadCount = getUnreadCount(ds.Dialogs, channel.ID)
-				info.NotifySettings = getNotifySettings(ds.Dialogs, channel.ID)
-				info.IsForum = channel.GetForum()
-				if channel.Broadcast {
-					channels = append(channels, *info)
+		for _, item := range ds.Ordered {
+			switch v := item.(type) {
+			case types.UserInfo:
+				if v.IsBot {
+					bots = append(bots, v)
 				} else {
-					groups = append(groups, *info)
+					users = append(users, v)
 				}
-			}
-			if chat, ok := chatClass.(*tg.Chat); ok {
-				info := convertToChannelInfo(chat)
-				if info == nil {
-					continue
+			case types.ChannelInfo:
+				if v.IsBroadcast {
+					channels = append(channels, v)
+				} else {
+					groups = append(groups, v)
 				}
-				readInboxMaxID, readOutboxMaxID := getReadMaxMessageID(ds.Dialogs, chat.ID)
-				info.ReadInboxMaxID = readInboxMaxID
-				info.ReadOutboxMaxID = readOutboxMaxID
-				info.UnreadCount = getUnreadCount(ds.Dialogs, chat.ID)
-				info.NotifySettings = getNotifySettings(ds.Dialogs, chat.ID)
-				groups = append(groups, *info)
 			}
 		}
 
 		return types.GetAllChatsResponseMSG{
 			Chats: types.AllChats{
+				All:          ds.Ordered,
 				PrivateChats: users,
+				Bots:         bots,
 				Channels:     channels,
 				Groups:       groups,
 				OffsetDate:   ds.OffsetDate,
@@ -638,8 +618,9 @@ func (c *Client) GetAllChats(ctx context.Context, offsetDate int, offsetID int) 
 		}
 	}
 }
-func (c *Client) getUserChats(ctx context.Context, isBot bool, offsetDate, offsetID int) (types.GetUserChatsResult, error) {
-	ds, err := c.getAllDialogs(ctx, offsetDate, offsetID)
+
+func (c *Client) getUserChats(ctx context.Context, isBot bool, offsetDate, offsetID int, limit ...int) (types.GetUserChatsResult, error) {
+	ds, err := c.getAllDialogs(ctx, offsetDate, offsetID, limit...)
 	if err != nil {
 		return types.GetUserChatsResult{}, types.NewTelegramError(types.ErrorCodeGetMessagesFailed, "failed to get dialogs", err)
 	}
@@ -648,19 +629,17 @@ func (c *Client) getUserChats(ctx context.Context, isBot bool, offsetDate, offse
 	}
 
 	var users []types.UserInfo
-	for _, tgUser := range ds.Users {
-		if tgUser.Bot == isBot {
-			u := shared.ConvertTGUserToUserInfo(tgUser)
-			u.UnreadCount = getUnreadCount(ds.Dialogs, int64(tgUser.ID))
-			users = append(users, *u)
+	for _, item := range ds.Ordered {
+		if u, ok := item.(types.UserInfo); ok && u.IsBot == isBot {
+			users = append(users, u)
 		}
 	}
 
 	return types.GetUserChatsResult{Data: users, OffsetDate: ds.OffsetDate, OffsetID: ds.OffsetID}, nil
 }
 
-func (c *Client) getChannels(ctx context.Context, isBroadCast bool, offsetDate, offsetID int) (types.GetChannelsResult, error) {
-	ds, err := c.getAllDialogs(ctx, offsetDate, offsetID)
+func (c *Client) getChannels(ctx context.Context, isBroadCast bool, offsetDate, offsetID int, limit ...int) (types.GetChannelsResult, error) {
+	ds, err := c.getAllDialogs(ctx, offsetDate, offsetID, limit...)
 	if err != nil {
 		return types.GetChannelsResult{}, types.NewTelegramError(types.ErrorCodeGetMessagesFailed, "failed to get dialogs", err)
 	}
@@ -669,11 +648,9 @@ func (c *Client) getChannels(ctx context.Context, isBroadCast bool, offsetDate, 
 	}
 
 	var channels []types.ChannelInfo
-	for _, chatClass := range ds.Chats {
-		if channel, ok := chatClass.(*tg.Channel); ok && channel.Broadcast == isBroadCast {
-			if info := convertToChannelInfo(channel); info != nil {
-				channels = append(channels, *info)
-			}
+	for _, item := range ds.Ordered {
+		if ch, ok := item.(types.ChannelInfo); ok && ch.IsBroadcast == isBroadCast {
+			channels = append(channels, ch)
 		}
 	}
 
@@ -1052,13 +1029,31 @@ type dialogsResult struct {
 	Chats      []tg.ChatClass
 	Users      []*tg.User
 	Dialogs    []*tg.Dialog
+	Ordered    []types.FilterableItem
 	OffsetDate int
 	OffsetID   int
 }
 
-func (c *Client) getAllDialogs(ctx context.Context, offsetDate, offsetID int) (*dialogsResult, error) {
+func applyDialogMetadata(d *tg.Dialog, unreadCount *int, notifySettings **tg.PeerNotifySettings, readInboxMaxID *int, readOutboxMaxID *int) {
+	if d != nil {
+		*unreadCount = d.UnreadCount
+		*notifySettings = &d.NotifySettings
+		*readInboxMaxID = d.ReadInboxMaxID
+		*readOutboxMaxID = d.ReadOutboxMaxID
+	}
+}
+
+func (c *Client) getAllDialogs(ctx context.Context, offsetDate, offsetID int, limit ...int) (*dialogsResult, error) {
+	fetchLimit := 50
+	if len(limit) > 0 && limit[0] > 0 {
+		fetchLimit = limit[0]
+	}
+	batchSize := 20
+	if fetchLimit > 50 {
+		batchSize = 50
+	}
 	q := query.NewQuery(c.GetAPI())
-	it := dialogs.NewIterator(q.GetDialogs().OffsetID(offsetID).OffsetDate(offsetDate).BatchSize(20), 50)
+	it := dialogs.NewIterator(q.GetDialogs().OffsetID(offsetID).OffsetDate(offsetDate).BatchSize(batchSize), fetchLimit)
 
 	var result dialogsResult
 	result.OffsetDate = -1
@@ -1067,7 +1062,9 @@ func (c *Client) getAllDialogs(ctx context.Context, offsetDate, offsetID int) (*
 	for it.Next(ctx) {
 		value := it.Value()
 
+		var d *tg.Dialog
 		if dialog, ok := value.Dialog.(*tg.Dialog); ok {
+			d = dialog
 			result.Dialogs = append(result.Dialogs, dialog)
 		}
 
@@ -1075,6 +1072,9 @@ func (c *Client) getAllDialogs(ctx context.Context, offsetDate, offsetID int) (*
 			for _, u := range value.Entities.Users() {
 				if u.ID == user.UserID {
 					result.Users = append(result.Users, u)
+					userInfo := shared.ConvertTGUserToUserInfo(u)
+					applyDialogMetadata(d, &userInfo.UnreadCount, &userInfo.NotifySettings, &userInfo.ReadInboxMaxID, &userInfo.ReadOutboxMaxID)
+					result.Ordered = append(result.Ordered, *userInfo)
 					break
 				}
 			}
@@ -1082,11 +1082,20 @@ func (c *Client) getAllDialogs(ctx context.Context, offsetDate, offsetID int) (*
 		if peerChat, ok := value.Peer.(*tg.InputPeerChat); ok {
 			if chat, ok := value.Entities.Chat(peerChat.ChatID); ok {
 				result.Chats = append(result.Chats, chat)
+				if info := convertToChannelInfo(chat); info != nil {
+					applyDialogMetadata(d, &info.UnreadCount, &info.NotifySettings, &info.ReadInboxMaxID, &info.ReadOutboxMaxID)
+					result.Ordered = append(result.Ordered, *info)
+				}
 			}
 		}
 		if channel, ok := value.Peer.(*tg.InputPeerChannel); ok {
 			if chat, ok := value.Entities.Channel(channel.ChannelID); ok {
 				result.Chats = append(result.Chats, chat)
+				if info := convertToChannelInfo(chat); info != nil {
+					applyDialogMetadata(d, &info.UnreadCount, &info.NotifySettings, &info.ReadInboxMaxID, &info.ReadOutboxMaxID)
+					info.IsForum = chat.GetForum()
+					result.Ordered = append(result.Ordered, *info)
+				}
 			}
 		}
 		result.OffsetDate = value.Last.GetDate()
@@ -1115,52 +1124,6 @@ func getChannelFromClasses(chats []tg.ChatClass, peerID int64) *types.ChannelInf
 		}
 		if chat, ok := chatClass.(*tg.Chat); ok && chat.ID == peerID {
 			return convertToChannelInfo(chat)
-		}
-	}
-	return nil
-}
-
-func getUnreadCount(chatDialogs []*tg.Dialog, peerID int64) int {
-	for _, p := range chatDialogs {
-		if tgPeerUser, ok := p.Peer.(*tg.PeerUser); ok && tgPeerUser.UserID == peerID {
-			return p.UnreadCount
-		}
-		if tgPeerChannel, ok := p.Peer.(*tg.PeerChannel); ok && tgPeerChannel.ChannelID == peerID {
-			return p.UnreadCount
-		}
-		if tgPeerChat, ok := p.Peer.(*tg.PeerChat); ok && tgPeerChat.ChatID == peerID {
-			return p.UnreadCount
-		}
-	}
-	return 0
-}
-
-// returns readInboxMaxID, readOutboxMaxID
-func getReadMaxMessageID(chatDialogs []*tg.Dialog, peerID int64) (int, int) {
-	for _, p := range chatDialogs {
-		if tgPeerUser, ok := p.Peer.(*tg.PeerUser); ok && tgPeerUser.UserID == peerID {
-			return p.GetReadInboxMaxID(), p.GetReadOutboxMaxID()
-		}
-		if tgPeerChannel, ok := p.Peer.(*tg.PeerChannel); ok && tgPeerChannel.ChannelID == peerID {
-			return p.GetReadInboxMaxID(), p.GetReadOutboxMaxID()
-		}
-		if tgPeerChat, ok := p.Peer.(*tg.PeerChat); ok && tgPeerChat.ChatID == peerID {
-			return p.GetReadInboxMaxID(), p.GetReadOutboxMaxID()
-		}
-	}
-	return 0, 0
-}
-
-func getNotifySettings(chatDialogs []*tg.Dialog, peerID int64) *tg.PeerNotifySettings {
-	for _, p := range chatDialogs {
-		if tgPeerUser, ok := p.Peer.(*tg.PeerUser); ok && tgPeerUser.UserID == peerID {
-			return &p.NotifySettings
-		}
-		if tgPeerChannel, ok := p.Peer.(*tg.PeerChannel); ok && tgPeerChannel.ChannelID == peerID {
-			return &p.NotifySettings
-		}
-		if tgPeerChat, ok := p.Peer.(*tg.PeerChat); ok && tgPeerChat.ChatID == peerID {
-			return &p.NotifySettings
 		}
 	}
 	return nil
