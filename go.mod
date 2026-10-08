@@ -1,6 +1,6 @@
 module github.com/kumneger0/cligram
 
-go 1.25.4
+go 1.26.0
 
 require (
 	github.com/charmbracelet/bubbles v1.0.0
@@ -25,7 +25,7 @@ require (
 	go.dalton.dog/bubbleup v1.4.0
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616
 	golang.org/x/term v0.45.0
-	golang.org/x/time v0.15.0
+	golang.org/x/time v0.16.0
 	golang.org/x/tools v0.49.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	mvdan.cc/gofumpt v0.10.0
