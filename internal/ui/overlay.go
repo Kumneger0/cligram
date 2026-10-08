@@ -31,10 +31,29 @@ const (
 	BOT     ChannelOrUserType = "BOT"
 )
 
+type ForwardDestinationItem struct {
+	OriginalItem      list.Item
+	Name              string
+	PeerID            string
+	AccessHash        string
+	ChannelOrUserType ChannelOrUserType
+}
+
+func (f ForwardDestinationItem) FilterValue() string {
+	return f.Name
+}
+
+func (f ForwardDestinationItem) Title() string {
+	return f.Name
+}
+
 type SearchDelegate struct {
 	list.DefaultDelegate
 	*Foreground
 }
+
+func (d SearchDelegate) Height() int  { return 1 }
+func (d SearchDelegate) Spacing() int { return 0 }
 
 func (d SearchDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd {
 	return nil
@@ -43,10 +62,21 @@ func (d SearchDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd {
 func (d SearchDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	var title string
 
-	entry, ok := item.(SearchResult)
-	if ok {
+	if entry, ok := item.(SearchResult); ok {
 		title = entry.FilterValue()
 		switch entry.ChannelOrUserType {
+		case USER:
+			title = "👤 " + title
+		case GROUP:
+			title = "👥 " + title
+		case CHANNEL:
+			title = "📢 " + title
+		case BOT:
+			title = "🤖 " + title
+		}
+	} else if dest, ok := item.(ForwardDestinationItem); ok {
+		title = dest.FilterValue()
+		switch dest.ChannelOrUserType {
 		case USER:
 			title = "👤 " + title
 		case GROUP:
@@ -184,11 +214,14 @@ const (
 )
 
 type OpenModalMsg struct {
-	ModalMode ModalMode
-	FromPeer  *list.Item
-	Message   *types.FormattedMessage
-	UsersList *list.Model
-	Entity    *types.EntityPreviewInfo
+	ModalMode    ModalMode
+	FromPeer     *list.Item
+	Message      *types.FormattedMessage
+	UsersList    *list.Model
+	ChannelsList *list.Model
+	GroupsList   *list.Model
+	BotsList     *list.Model
+	Entity       *types.EntityPreviewInfo
 }
 
 type ForwardMsg struct {
@@ -198,24 +231,30 @@ type ForwardMsg struct {
 }
 
 type Foreground struct {
-	Error                 error
-	windowWidth           int
-	windowHeight          int
-	input                 textinput.Model
-	searchResultCombined  list.Model
-	focusedOn             focusState
-	searchResultUsers     []types.UserInfo
-	SearchResultChannels  []types.ChannelInfo
-	ModalMode             ModalMode
-	UsersList             *list.Model
-	Entity                *types.ResolvedPeerInfo
-	Message               *types.FormattedMessage
-	fromPeer              *list.Item
-	stories               *list.Model
-	availableReactions    *list.Model
-	allReactions          []types.Reaction
-	selectedReactionIndex int
-	isMePremium           bool
+	Error                  error
+	windowWidth            int
+	windowHeight           int
+	input                  textinput.Model
+	searchResultCombined   list.Model
+	focusedOn              focusState
+	searchResultUsers      []types.UserInfo
+	SearchResultChannels   []types.ChannelInfo
+	ModalMode              ModalMode
+	UsersList              *list.Model
+	ChannelsList           *list.Model
+	GroupsList             *list.Model
+	BotsList               *list.Model
+	forwardInput           textinput.Model
+	forwardDestinations    list.Model
+	allForwardDestinations []list.Item
+	Entity                 *types.ResolvedPeerInfo
+	Message                *types.FormattedMessage
+	fromPeer               *list.Item
+	stories                *list.Model
+	availableReactions     *list.Model
+	allReactions           []types.Reaction
+	selectedReactionIndex  int
+	isMePremium            bool
 }
 
 func (f Foreground) Init() tea.Cmd {
@@ -282,15 +321,34 @@ func (f Foreground) View() string {
 
 	if f.ModalMode == ModalModeForwardMessage {
 		title := lipgloss.NewStyle().Foreground(DefaultTheme.PrimaryText).Bold(true).Render("Forward Message")
-		f.UsersList.SetShowFilter(false)
-		f.UsersList.SetShowStatusBar(false)
-		f.UsersList.SetShowTitle(false)
-		f.UsersList.SetShowHelp(false)
-		f.UsersList.SetWidth(max(20, f.windowWidth/3))
-		f.UsersList.SetHeight(max(10, f.windowHeight/2))
-		content := lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(DefaultTheme.BorderColor).Render(f.UsersList.View())
-		layout := lipgloss.JoinVertical(lipgloss.Left, title, content)
-		return foreStyle.Render(layout)
+		contentWidth := max(40, min(70, f.windowWidth*2/3))
+		f.forwardInput.Width = contentWidth - 4
+		inputLine := lipgloss.NewStyle().
+			Width(contentWidth).
+			Background(DefaultTheme.InputBg).
+			Padding(0, 1).
+			Render(f.forwardInput.View())
+		divider := lipgloss.NewStyle().
+			Foreground(DefaultTheme.BorderColor).
+			Render(strings.Repeat("─", contentWidth))
+		var listContent string
+		if len(f.forwardDestinations.Items()) == 0 {
+			listContent = lipgloss.NewStyle().
+				Foreground(DefaultTheme.SecondaryText).
+				Italic(true).
+				Padding(1, 2).
+				Render("No destinations found")
+		} else {
+			f.forwardDestinations.SetWidth(contentWidth)
+			f.forwardDestinations.SetHeight(min(10, max(5, f.windowHeight/2)))
+			listContent = f.forwardDestinations.View()
+		}
+		footerHints := lipgloss.NewStyle().
+			Foreground(DefaultTheme.SecondaryText).
+			Padding(0, 1).
+			Render("[↑/↓] Navigate  [Enter] Forward  [Esc] Cancel")
+		layout := lipgloss.JoinVertical(lipgloss.Left, title, "", inputLine, divider, listContent, "", footerHints)
+		return foreStyle.Width(contentWidth + 2).Render(layout)
 	}
 	if f.ModalMode == ModalModeDeleteMessage {
 		title := lipgloss.NewStyle().Foreground(DefaultTheme.PrimaryText).Bold(true).Render("Delete Message")
@@ -332,29 +390,36 @@ func (f Foreground) View() string {
 		layout := lipgloss.JoinVertical(lipgloss.Left, title, content)
 		return foreStyle.Render(layout)
 	}
+
 	title := lipgloss.NewStyle().Foreground(DefaultTheme.PrimaryText).Bold(true).Render("Search")
-	content := getSearchView(f)
-	var searchResultBorderStyle lipgloss.Style
-	if f.focusedOn == SEARCH {
-		searchResultBorderStyle = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(DefaultTheme.BorderColor)
+	contentWidth := max(40, min(70, f.windowWidth*2/3))
+	f.input.Width = contentWidth - 4
+	inputLine := lipgloss.NewStyle().
+		Width(contentWidth).
+		Background(DefaultTheme.InputBg).
+		Padding(0, 1).
+		Render(f.input.View())
+	divider := lipgloss.NewStyle().
+		Foreground(DefaultTheme.BorderColor).
+		Render(strings.Repeat("─", contentWidth))
+	var listContent string
+	if len(f.searchResultCombined.Items()) == 0 {
+		listContent = lipgloss.NewStyle().
+			Foreground(DefaultTheme.SecondaryText).
+			Italic(true).
+			Padding(1, 2).
+			Render("Type to search users, bots, channels...")
 	} else {
-		searchResultBorderStyle = lipgloss.NewStyle().Border(lipgloss.DoubleBorder()).BorderForeground(DefaultTheme.AccentColor)
+		f.searchResultCombined.SetWidth(contentWidth)
+		f.searchResultCombined.SetHeight(min(10, max(5, f.windowHeight/2)))
+		listContent = f.searchResultCombined.View()
 	}
-
-	searchResult := searchResultBorderStyle.Render(f.searchResultCombined.View())
-	layout := lipgloss.JoinVertical(lipgloss.Left, title, content, searchResult)
-	return foreStyle.Render(layout)
-}
-
-func getSearchView(m Foreground) string {
-	var inputBorderStyle lipgloss.Style
-	if m.focusedOn == LIST {
-		inputBorderStyle = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(DefaultTheme.BorderColor)
-	} else {
-		inputBorderStyle = lipgloss.NewStyle().Border(lipgloss.DoubleBorder()).BorderForeground(DefaultTheme.AccentColor)
-	}
-	textViewString := lipgloss.NewStyle().Width(max(20, m.windowWidth/3)).Height(5).Padding(0, 1).Inherit(inputBorderStyle).Background(DefaultTheme.InputBg).Render(m.input.View())
-	return textViewString
+	footerHints := lipgloss.NewStyle().
+		Foreground(DefaultTheme.SecondaryText).
+		Padding(0, 1).
+		Render("[↑/↓] Navigate  [Enter] Select  [Esc] Close")
+	layout := lipgloss.JoinVertical(lipgloss.Left, title, "", inputLine, divider, listContent, "", footerHints)
+	return foreStyle.Width(contentWidth + 2).Render(layout)
 }
 
 func renderReactionsGrid(f Foreground) string {

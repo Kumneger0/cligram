@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -65,7 +66,9 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.searchResultCombined.Title = "Search User Result"
 		m.searchResultCombined.SetShowStatusBar(false)
 		m.searchResultCombined.SetShowFilter(false)
-		m.searchResultCombined.SetShowStatusBar(false)
+		m.searchResultCombined.SetShowHelp(false)
+		m.searchResultCombined.SetShowTitle(false)
+		m.searchResultCombined.SetShowPagination(false)
 		m.windowWidth = msg.Width
 		m.windowHeight = msg.Height
 		m.focusedOn = SEARCH
@@ -88,8 +91,14 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.Message = msg.Message
 		m.fromPeer = msg.FromPeer
 		m.UsersList = msg.UsersList
+		m.ChannelsList = msg.ChannelsList
+		m.GroupsList = msg.GroupsList
+		m.BotsList = msg.BotsList
 		if msg.ModalMode == ModalModeSearch {
 			m.focusedOn = SEARCH
+			m.input.Focus()
+		} else if msg.ModalMode == ModalModeForwardMessage {
+			m.initForwardPicker(msg)
 		}
 	case types.CurrentUserMsg:
 		if msg.Err != nil {
@@ -98,8 +107,31 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.isMePremium = msg.User.Premium
 	}
 
-	input, cmd := m.input.Update(message)
-	m.input = input
+	if m.ModalMode == ModalModeForwardMessage {
+		prevVal := m.forwardInput.Value()
+		fInput, fCmd := m.forwardInput.Update(message)
+		m.forwardInput = fInput
+		cmds = append(cmds, fCmd)
+
+		if m.forwardInput.Value() != prevVal {
+			query := strings.ToLower(strings.TrimSpace(m.forwardInput.Value()))
+			var filtered []list.Item
+			for _, item := range m.allForwardDestinations {
+				dest, ok := item.(ForwardDestinationItem)
+				if !ok {
+					continue
+				}
+				if query == "" || strings.Contains(strings.ToLower(dest.Name), query) {
+					filtered = append(filtered, dest)
+				}
+			}
+			m.forwardDestinations.SetItems(filtered)
+		}
+	} else {
+		input, cmd := m.input.Update(message)
+		m.input = input
+		cmds = append(cmds, cmd)
+	}
 
 	if m.UsersList != nil {
 		userList, userListCmd := m.UsersList.Update(message)
@@ -107,7 +139,6 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, userListCmd)
 	}
 
-	cmds = append(cmds, cmd)
 	if m.focusedOn == LIST {
 		users, userCmd := m.searchResultCombined.Update(message)
 		m.searchResultCombined = users
@@ -154,17 +185,29 @@ func (m *Foreground) handleSearch(msg types.SearchUsersMsg, cmds *[]tea.Cmd) (te
 func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (tea.Model, tea.Cmd) {
 	cmds := *cmdsFromParent
 	switch msg.String() {
-	case "up":
+	case "up", "ctrl+p":
 		if m.ModalMode == ModalModeSendReaction {
 			if m.selectedReactionIndex >= 8 {
 				m.selectedReactionIndex -= 8
 			}
+		} else if m.ModalMode == ModalModeSearch {
+			m.searchResultCombined.CursorUp()
+			return m, nil
+		} else if m.ModalMode == ModalModeForwardMessage {
+			m.forwardDestinations.CursorUp()
+			return m, nil
 		}
-	case "down":
+	case "down", "ctrl+n":
 		if m.ModalMode == ModalModeSendReaction {
 			if m.selectedReactionIndex+8 < len(m.allReactions) {
 				m.selectedReactionIndex += 8
 			}
+		} else if m.ModalMode == ModalModeSearch {
+			m.searchResultCombined.CursorDown()
+			return m, nil
+		} else if m.ModalMode == ModalModeForwardMessage {
+			m.forwardDestinations.CursorDown()
+			return m, nil
 		}
 	case "left":
 		if m.ModalMode == ModalModeSendReaction {
@@ -185,6 +228,13 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 		} else {
 			m.focusedOn = SEARCH
 			m.input.Focus()
+		}
+	case "esc":
+		return m, func() tea.Msg { return CloseOverlay{} }
+	case "q", "Q":
+		if m.Error != nil {
+			m.Error = nil
+			return m, func() tea.Msg { return CloseOverlay{} }
 		}
 	case "enter":
 		return handleEnterKey(m)
@@ -243,7 +293,7 @@ func handleEnterKey(m *Foreground) (tea.Model, tea.Cmd) {
 	if m.ModalMode == ModalModeSendReaction {
 		return handleSendReaction(m)
 	}
-	if m.focusedOn == LIST {
+	if m.ModalMode == ModalModeSearch || m.focusedOn == LIST {
 		return handleListSelection(m)
 	}
 	return m, nil
@@ -272,12 +322,13 @@ func handleSendReaction(m *Foreground) (tea.Model, tea.Cmd) {
 }
 
 func handleForwardMessage(m *Foreground) (tea.Model, tea.Cmd) {
-	if m.UsersList == nil {
-		return m, nil
+	var selectedDest list.Item
+	if len(m.forwardDestinations.Items()) > 0 {
+		selectedDest = m.forwardDestinations.SelectedItem()
+	} else if m.UsersList != nil {
+		selectedDest = m.UsersList.SelectedItem()
 	}
-
-	selectedUser := m.UsersList.SelectedItem()
-	if selectedUser == nil {
+	if selectedDest == nil {
 		return m, nil
 	}
 
@@ -291,11 +342,90 @@ func handleForwardMessage(m *Foreground) (tea.Model, tea.Cmd) {
 		func() tea.Msg {
 			return ForwardMsg{
 				msg:      m.Message,
-				receiver: &selectedUser,
+				receiver: &selectedDest,
 				fromPeer: &from,
 			}
 		},
 	)
+}
+
+func (m *Foreground) initForwardPicker(msg OpenModalMsg) {
+	m.focusedOn = SEARCH
+	forwardInput := textinput.New()
+	forwardInput.Placeholder = "Forward to..."
+	forwardInput.Prompt = "✈️  "
+	forwardInput.CharLimit = 256
+	forwardInput.Focus()
+	m.forwardInput = forwardInput
+
+	var destinations []list.Item
+	seen := make(map[string]bool)
+
+	addDest := func(it list.Item, name, peerID, accessHash string, t ChannelOrUserType) {
+		if peerID != "" && seen[peerID] {
+			return
+		}
+		if peerID != "" {
+			seen[peerID] = true
+		}
+		destinations = append(destinations, ForwardDestinationItem{
+			OriginalItem:      it,
+			Name:              name,
+			PeerID:            peerID,
+			AccessHash:        accessHash,
+			ChannelOrUserType: t,
+		})
+	}
+
+	if msg.UsersList != nil {
+		for _, it := range msg.UsersList.Items() {
+			if u, ok := it.(types.UserInfo); ok {
+				destType := USER
+				if u.IsBot {
+					destType = BOT
+				}
+				name := u.FirstName
+				if u.LastName != "" {
+					name += " " + u.LastName
+				}
+				addDest(it, name, u.PeerID, u.AccessHash, destType)
+			}
+		}
+	}
+	if msg.BotsList != nil {
+		for _, it := range msg.BotsList.Items() {
+			if u, ok := it.(types.UserInfo); ok {
+				name := u.FirstName
+				if u.LastName != "" {
+					name += " " + u.LastName
+				}
+				addDest(it, name, u.PeerID, u.AccessHash, BOT)
+			}
+		}
+	}
+	if msg.ChannelsList != nil {
+		for _, it := range msg.ChannelsList.Items() {
+			if c, ok := it.(types.ChannelInfo); ok {
+				addDest(it, c.ChannelTitle, c.ID, c.AccessHash, CHANNEL)
+			}
+		}
+	}
+	if msg.GroupsList != nil {
+		for _, it := range msg.GroupsList.Items() {
+			if g, ok := it.(types.ChannelInfo); ok {
+				addDest(it, g.ChannelTitle, g.ID, g.AccessHash, GROUP)
+			}
+		}
+	}
+
+	m.allForwardDestinations = destinations
+	destList := list.New(destinations, SearchDelegate{Foreground: m}, 10, 10)
+	destList.SetShowTitle(false)
+	destList.SetShowFilter(false)
+	destList.SetShowStatusBar(false)
+	destList.SetShowPagination(false)
+	destList.SetShowHelp(false)
+	m.forwardDestinations = destList
 }
 
 func handleListSelection(m *Foreground) (tea.Model, tea.Cmd) {

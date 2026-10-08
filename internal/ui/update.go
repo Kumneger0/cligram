@@ -1235,10 +1235,13 @@ func (m Model) handleForwardKey() (tea.Model, tea.Cmd) {
 
 	return m, func() tea.Msg {
 		return OpenModalMsg{
-			ModalMode: ModalModeForwardMessage,
-			Message:   &selectedMessage,
-			UsersList: &m.Users,
-			FromPeer:  &from,
+			ModalMode:    ModalModeForwardMessage,
+			Message:      &selectedMessage,
+			UsersList:    &m.Users,
+			ChannelsList: &m.Channels,
+			GroupsList:   &m.Groups,
+			BotsList:     &m.Bots,
+			FromPeer:     &from,
 		}
 	}
 }
@@ -1316,6 +1319,12 @@ func (m Model) handleForwardMessage(msg ForwardMsg) (tea.Model, tea.Cmd) {
 
 func peerFromItem(item list.Item) types.Peer {
 	switch p := item.(type) {
+	case ForwardDestinationItem:
+		return peerFromItem(p.OriginalItem)
+	case *ForwardDestinationItem:
+		if p != nil {
+			return peerFromItem(p.OriginalItem)
+		}
 	case types.UserInfo:
 		return types.Peer{ID: p.PeerID, AccessHash: p.AccessHash, ChatType: types.UserChat}
 	case *types.UserInfo:

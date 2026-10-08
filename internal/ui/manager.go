@@ -2,6 +2,7 @@ package ui
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
+	overlay "github.com/rmhubbert/bubbletea-overlay"
 )
 
 type SessionState int
@@ -48,12 +49,18 @@ func (m Manager) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.State = ModalView
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "q", "ctrl+c", "esc":
+		case "ctrl+c":
+			return m, tea.Quit
+		case "esc":
+			if m.State == ModalView {
+				m.State = MainView
+				return m, nil
+			}
+			return m, tea.Quit
+		case "q":
 			if m.State == MainView {
 				return m, tea.Quit
 			}
-			m.State = MainView
-			return m, nil
 		case "ctrl+k":
 			if m.State == MainView {
 				m.State = ModalView
@@ -113,7 +120,9 @@ func (m Manager) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 }
 func (m Manager) View() string {
 	if m.State == ModalView {
-		return m.Overlay.View()
+		fg := m.Foreground.View()
+		bg := m.Background.View()
+		return overlay.Composite(fg, bg, overlay.Center, overlay.Center, 0, 0)
 	}
 	return m.Background.View()
 }
