@@ -113,7 +113,9 @@ func (m *CallOverlayModel) SetActive(userName string, userID int64) {
 	m.State = CallOverlayActive
 	m.UserName = userName
 	m.UserID = userID
-	m.StartTime = time.Now()
+	if m.StartTime.IsZero() {
+		m.StartTime = time.Now()
+	}
 }
 
 func (m *CallOverlayModel) SetMissingHelper() {
@@ -127,6 +129,7 @@ func (m *CallOverlayModel) SetRelay(isRelay bool) {
 func (m *CallOverlayModel) SetNone() {
 	m.State = CallOverlayNone
 	m.Muted = false
+	m.StartTime = time.Time{}
 }
 
 func (m *CallOverlayModel) ToggleMute() {

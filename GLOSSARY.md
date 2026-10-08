@@ -48,5 +48,13 @@ _Avoid_: Audio retry, driver cascade
 An opaque WebRTC media signaling payload emitted by the VoIP sidecar and conveyed across Telegram MTProto via phone.sendSignalingData.
 _Avoid_: Control packet, raw payload
 
+**Incoming Call Overlay**:
+A modal dialog composited over the TUI viewport upon receiving an incoming Call Session, capturing single-key actions (`[a]` Accept, `[d]` Decline) while preventing accidental chat input keystrokes.
+_Avoid_: Call alert, ringing popup
+
+**In-Call Status Bar**:
+A persistent single-line bar pinned at the top of the TUI layout throughout an active Call Session, displaying peer identity, live duration timer (`MM:SS`), Connection Badge, and audio controls.
+_Avoid_: Call header, active call indicator
+
 
 

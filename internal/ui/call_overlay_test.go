@@ -5,11 +5,32 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kumneger0/cligram/internal/telegram"
 	"github.com/kumneger0/cligram/internal/telegram/client"
 	"github.com/kumneger0/cligram/internal/telegram/types"
+	"go.dalton.dog/bubbleup"
 )
+
+func newTestModel(width, height int) Model {
+	m := Model{
+		Width:       width,
+		Height:      height,
+		CallOverlay: NewCallOverlay(),
+		Alert:       *bubbleup.NewAlertModel(width, true, 10*time.Second),
+		Mode:        ModeUsers,
+		Input:       textinput.New(),
+	}
+	m.Users = list.New([]list.Item{}, CustomDelegate{Model: &m}, 10, 20)
+	m.Channels = list.New([]list.Item{}, CustomDelegate{Model: &m}, 10, 20)
+	m.Groups = list.New([]list.Item{}, CustomDelegate{Model: &m}, 10, 20)
+	m.Bots = list.New([]list.Item{}, CustomDelegate{Model: &m}, 10, 20)
+	m.ChatUI = list.New([]list.Item{}, MessagesDelegate{Model: &m}, 10, 20)
+	m.SelectedGroupForumTopics = list.New([]list.Item{}, ForumTopicsDelegate{Model: &m}, 10, 20)
+	return m
+}
 
 func TestCallOverlay_ViewStates(t *testing.T) {
 	overlay := NewCallOverlay()
@@ -208,5 +229,216 @@ func TestModel_CallOverlayKeybindings(t *testing.T) {
 	m = resM.(Model)
 	if m.CallOverlay.State != CallOverlayNone {
 		t.Errorf("expected CallOverlayNone after pressing Esc on MissingHelper modal")
+	}
+}
+
+func TestModel_IncomingCallOverlayCompositing(t *testing.T) {
+	m := newTestModel(80, 24)
+	resModel, _ := m.Update(types.CallNotification{
+		State:    types.CallStateIncoming,
+		UserName: "Alice",
+		UserID:   1001,
+	})
+	m = resModel.(Model)
+
+	view := m.View()
+
+	// 1. View must contain the incoming call prompt
+	if !strings.Contains(view, "Incoming call from Alice") && !strings.Contains(view, "Alice") {
+		t.Errorf("expected view to contain incoming caller Alice, got:\n%s", view)
+	}
+	if !strings.Contains(view, "[a] Accept") || !strings.Contains(view, "Decline") {
+		t.Errorf("expected view to contain call actions, got:\n%s", view)
+	}
+
+	// 2. View line count must NOT overflow the terminal height (24 lines)
+	lines := strings.Split(strings.TrimRight(view, "\n"), "\n")
+	if len(lines) > 24 {
+		t.Errorf("expected view lines <= 24 to prevent off-screen scrolling, got %d lines", len(lines))
+	}
+}
+
+func TestModel_IncomingCallKeyInterception(t *testing.T) {
+	oldCligram := telegram.Cligram
+	telegram.Cligram = &client.Client{}
+	defer func() { telegram.Cligram = oldCligram }()
+
+	m := newTestModel(80, 24)
+	m.CallOverlay.SetIncoming("Alice", 1001)
+
+	// Normal alphanumeric keys should be intercepted and NOT typed into chat input
+	m.Input.SetValue("hello")
+	resModel, cmd := m.handleKeyPress(tea.KeyMsg{
+		Type:  tea.KeyRunes,
+		Runes: []rune{'x'},
+	})
+	m = resModel.(Model)
+	if m.Input.Value() != "hello" {
+		t.Errorf("expected input to remain unchanged during incoming call, got %q", m.Input.Value())
+	}
+	if cmd != nil {
+		t.Errorf("expected no command for regular character during incoming call, got %v", cmd)
+	}
+
+	// Pressing 'a' should trigger accept call command
+	_, acceptCmd := m.handleKeyPress(tea.KeyMsg{
+		Type:  tea.KeyRunes,
+		Runes: []rune{'a'},
+	})
+	if acceptCmd == nil {
+		t.Errorf("expected tea.Cmd for 'a' (accept call)")
+	}
+
+	// Pressing 'd' should trigger decline call command and reset overlay state
+	resModel, declineCmd := m.handleKeyPress(tea.KeyMsg{
+		Type:  tea.KeyRunes,
+		Runes: []rune{'d'},
+	})
+	m = resModel.(Model)
+	if declineCmd == nil {
+		t.Errorf("expected tea.Cmd for 'd' (decline call)")
+	}
+	if m.CallOverlay.State != CallOverlayNone {
+		t.Errorf("expected CallOverlayNone after declining call, got %v", m.CallOverlay.State)
+	}
+
+	// Reset to incoming state to test Esc key
+	m.CallOverlay.SetIncoming("Alice", 1001)
+	resModel, escCmd := m.handleKeyPress(tea.KeyMsg{Type: tea.KeyEsc})
+	m = resModel.(Model)
+	if escCmd == nil {
+		t.Errorf("expected tea.Cmd for Esc (decline call)")
+	}
+	if m.CallOverlay.State != CallOverlayNone {
+		t.Errorf("expected CallOverlayNone after pressing Esc on incoming call, got %v", m.CallOverlay.State)
+	}
+}
+
+func TestModel_ActiveCallLayoutBudgetingAndStatusBar(t *testing.T) {
+	m := newTestModel(80, 24)
+
+	// In idle state, view has exactly 24 lines
+	idleLines := strings.Split(strings.TrimRight(m.View(), "\n"), "\n")
+	if len(idleLines) != 24 {
+		t.Fatalf("expected idle view to have 24 lines, got %d", len(idleLines))
+	}
+
+	// Transition to active call with IsRelay = false (P2P)
+	resModel, tickCmd := m.Update(types.CallNotification{
+		State:    types.CallStateActive,
+		UserName: "Bob",
+		UserID:   2002,
+		IsRelay:  false,
+	})
+	m = resModel.(Model)
+	if tickCmd == nil {
+		t.Fatalf("expected tickCmd on transition to CallStateActive")
+	}
+
+	activeView := m.View()
+
+	// 1. Status bar must be rendered with peer name, timer, P2P badge, and control hints
+	if !strings.Contains(activeView, "In call with Bob") {
+		t.Errorf("expected view to contain 'In call with Bob', got:\n%s", activeView)
+	}
+	if !strings.Contains(activeView, "[P2P]") {
+		t.Errorf("expected view to contain '[P2P]' badge, got:\n%s", activeView)
+	}
+	if !strings.Contains(activeView, "(00:00)") {
+		t.Errorf("expected view to contain '(00:00)' initial duration, got:\n%s", activeView)
+	}
+	if !strings.Contains(activeView, "[Alt+M: Mute]") || !strings.Contains(activeView, "[Alt+H: Hangup]") {
+		t.Errorf("expected view to contain hotkey hints, got:\n%s", activeView)
+	}
+
+	// 2. Line count must strictly equal 24 lines (layout height budgeted with status bar)
+	activeLines := strings.Split(strings.TrimRight(activeView, "\n"), "\n")
+	if len(activeLines) != 24 {
+		t.Errorf("expected active view to strictly equal 24 lines, got %d", len(activeLines))
+	}
+}
+
+func TestModel_ActiveCallDurationTimerTick(t *testing.T) {
+	m := newTestModel(80, 24)
+	resModel, _ := m.Update(types.CallNotification{
+		State:    types.CallStateActive,
+		UserName: "Charlie",
+		UserID:   3003,
+		IsRelay:  true,
+	})
+	m = resModel.(Model)
+
+	// Simulate 75 seconds elapsed
+	m.CallOverlay.StartTime = time.Now().Add(-75 * time.Second)
+
+	// Handle timer tick
+	resModel, nextTickCmd := m.Update(CallTickMsg(time.Now()))
+	m = resModel.(Model)
+	if nextTickCmd == nil {
+		t.Fatalf("expected next tick cmd on CallTickMsg")
+	}
+
+	view := m.View()
+	if !strings.Contains(view, "(01:15)") {
+		t.Errorf("expected duration '(01:15)' in view, got:\n%s", view)
+	}
+	if !strings.Contains(view, "[Relay]") {
+		t.Errorf("expected '[Relay]' badge in view, got:\n%s", view)
+	}
+
+	lines := strings.Split(strings.TrimRight(view, "\n"), "\n")
+	if len(lines) != 24 {
+		t.Errorf("expected exactly 24 lines, got %d", len(lines))
+	}
+}
+
+func TestModel_ActiveCallHangupRestoresLayout(t *testing.T) {
+	oldCligram := telegram.Cligram
+	telegram.Cligram = &client.Client{}
+	defer func() { telegram.Cligram = oldCligram }()
+
+	m := newTestModel(80, 24)
+	resModel, _ := m.Update(types.CallNotification{
+		State:    types.CallStateActive,
+		UserName: "Alice",
+		UserID:   1001,
+		IsRelay:  true,
+	})
+	m = resModel.(Model)
+
+	// In active call, status bar is visible
+	if !strings.Contains(m.View(), "In call with Alice") {
+		t.Fatalf("expected active call view to contain 'In call with Alice'")
+	}
+
+	// Hangup via Alt+H
+	resModel, hangupCmd := m.handleKeyPress(tea.KeyMsg{
+		Type:  tea.KeyRunes,
+		Runes: []rune{'h'},
+		Alt:   true,
+	})
+	m = resModel.(Model)
+	if hangupCmd == nil {
+		t.Errorf("expected hangup command on Alt+H")
+	}
+
+	// Simulate call ended notification
+	resModel, _ = m.Update(types.CallNotification{
+		State:  types.CallStateEnded,
+		UserID: 1001,
+	})
+	m = resModel.(Model)
+
+	// Status bar dismissed
+	if m.CallOverlay.State != CallOverlayNone {
+		t.Errorf("expected CallOverlayNone after call ended, got %v", m.CallOverlay.State)
+	}
+	idleView := m.View()
+	if strings.Contains(idleView, "In call with Alice") {
+		t.Errorf("expected status bar removed after call ended")
+	}
+	lines := strings.Split(strings.TrimRight(idleView, "\n"), "\n")
+	if len(lines) != 24 {
+		t.Errorf("expected exactly 24 lines in idle view after hangup, got %d", len(lines))
 	}
 }

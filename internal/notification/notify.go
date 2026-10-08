@@ -52,3 +52,16 @@ func Notify(title string, message string) {
 		slog.Error(err.Error())
 	}
 }
+
+func Alert(title string, message string) {
+	beeep.AppName = "Cligram"
+	logo := getAppIconPath()
+
+	// Sound terminal bell
+	os.Stdout.WriteString("\a")
+
+	err := beeep.Alert(title, message, logo)
+	if err != nil {
+		slog.Error("failed to emit desktop alert", "error", err)
+	}
+}

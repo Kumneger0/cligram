@@ -405,7 +405,16 @@ func setItemStyles(m *Model) string {
 	inputView := prepareInputView(m, dimensions)
 
 	row := lipgloss.JoinHorizontal(lipgloss.Top, sidebarContent, mainContent)
-	return lipgloss.NewStyle().Background(DefaultTheme.SubtleBg).Render(lipgloss.JoinVertical(lipgloss.Top, row, inputView))
+
+	var fullLayout string
+	if m.CallOverlay.State == CallOverlayActive {
+		callBar := m.CallOverlay.View()
+		fullLayout = lipgloss.JoinVertical(lipgloss.Top, callBar, row, inputView)
+	} else {
+		fullLayout = lipgloss.JoinVertical(lipgloss.Top, row, inputView)
+	}
+
+	return lipgloss.NewStyle().Background(DefaultTheme.SubtleBg).Render(fullLayout)
 }
 
 type layoutDimensions struct {
@@ -417,11 +426,16 @@ type layoutDimensions struct {
 
 func calculateLayoutDimensions(m *Model) layoutDimensions {
 	sidebarWidth := m.Width * 30 / 100
+	totalHeight := m.Height
+	if m.CallOverlay.State == CallOverlayActive {
+		totalHeight = max(0, totalHeight-1)
+	}
+	contentHeight := totalHeight * 90 / 100
 	return layoutDimensions{
 		sidebarWidth:  sidebarWidth,
 		mainWidth:     m.Width - sidebarWidth,
-		contentHeight: m.Height * 90 / 100,
-		inputHeight:   m.Height - (m.Height * 90 / 100),
+		contentHeight: contentHeight,
+		inputHeight:   totalHeight - contentHeight,
 	}
 }
 

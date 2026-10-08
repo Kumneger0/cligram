@@ -15,6 +15,7 @@ import (
 	"github.com/kumneger0/cligram/internal/config"
 	"github.com/kumneger0/cligram/internal/telegram"
 	"github.com/kumneger0/cligram/internal/telegram/types"
+	overlay "github.com/rmhubbert/bubbletea-overlay"
 )
 
 type CustomDelegate struct {
@@ -429,10 +430,12 @@ func (m Model) View() string {
 
 	ui := setItemStyles(&m)
 
-	// Render call overlay on top of the UI
+	// Render modal call overlays centered on top of the UI without altering line count
 	if m.CallOverlay.IsActive() {
-		callView := m.CallOverlay.View()
-		ui = callView + "\n" + ui
+		switch m.CallOverlay.State {
+		case CallOverlayIncoming, CallOverlayDialing, CallOverlayMissingHelper:
+			ui = overlay.Composite(m.CallOverlay.View(), ui, overlay.Center, overlay.Center, 0, 0)
+		}
 	}
 
 	return m.Alert.Render(ui)

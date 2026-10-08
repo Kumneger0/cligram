@@ -371,6 +371,9 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 			}
 			pendingIncomingMu.Unlock()
 
+			// Alert via desktop notification and audible chime
+			notification.Alert("📞 Incoming Call", fmt.Sprintf("Incoming call from %s", userName))
+
 			// Notify the UI about the incoming call
 			select {
 			case updateChannel <- types.Notification{

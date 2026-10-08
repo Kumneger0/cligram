@@ -82,6 +82,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.CallOverlay.SetIncoming(msg.UserName, msg.UserID)
 		case types.CallStateActive:
 			userName := msg.UserName
+			if userName == "" && m.CallOverlay.UserName != "" {
+				userName = m.CallOverlay.UserName
+			}
 			if userName == "" && m.Mode == ModeUsers {
 				userName = m.SelectedUser.FirstName
 			}
@@ -889,11 +892,15 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, telegram.Cligram.AcceptCall(telegram.Cligram.Context(), m.CallOverlay.UserID)
 			}
 			return m, nil
-		case "d":
-			if telegram.Cligram != nil {
-				return m, telegram.Cligram.DeclineCall(telegram.Cligram.Context(), m.CallOverlay.UserID)
-			}
+		case "d", "esc":
+			userID := m.CallOverlay.UserID
 			m.CallOverlay.SetNone()
+			if telegram.Cligram != nil {
+				return m, telegram.Cligram.DeclineCall(telegram.Cligram.Context(), userID)
+			}
+			return m, nil
+		default:
+			// Intercept and absorb all other keystrokes so typing doesn't leak into chat inputs
 			return m, nil
 		}
 	}
