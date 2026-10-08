@@ -18,12 +18,13 @@ const (
 )
 
 type CallOverlayModel struct {
-	State     CallOverlayState
-	UserName  string
-	UserID    int64
-	Muted     bool
-	IsRelay   bool
-	StartTime time.Time
+	State          CallOverlayState
+	UserName       string
+	UserID         int64
+	Muted          bool
+	IsRelay        bool
+	StartTime      time.Time
+	ElapsedSeconds int
 }
 
 var (
@@ -113,6 +114,7 @@ func (m *CallOverlayModel) SetActive(userName string, userID int64) {
 	m.State = CallOverlayActive
 	m.UserName = userName
 	m.UserID = userID
+	m.ElapsedSeconds = 0
 	if m.StartTime.IsZero() {
 		m.StartTime = time.Now()
 	}
@@ -130,6 +132,7 @@ func (m *CallOverlayModel) SetNone() {
 	m.State = CallOverlayNone
 	m.Muted = false
 	m.StartTime = time.Time{}
+	m.ElapsedSeconds = 0
 }
 
 func (m *CallOverlayModel) ToggleMute() {
@@ -151,16 +154,17 @@ func (m CallOverlayModel) IsVisible() bool {
 	return m.State != CallOverlayNone
 }
 
+// IsActive returns true if the call overlay is currently in an active call state.
 func (m CallOverlayModel) IsActive() bool {
-	return m.IsVisible()
+	return m.State == CallOverlayActive
 }
 
 func (m CallOverlayModel) Duration() string {
-	if m.StartTime.IsZero() {
-		return "00:00"
+	secs := m.ElapsedSeconds
+	if secs == 0 && !m.StartTime.IsZero() {
+		secs = int(time.Since(m.StartTime).Seconds())
 	}
-	d := time.Since(m.StartTime)
-	mins := int(d.Minutes())
-	secs := int(d.Seconds()) % 60
-	return fmt.Sprintf("%02d:%02d", mins, secs)
+	mins := secs / 60
+	remSecs := secs % 60
+	return fmt.Sprintf("%02d:%02d", mins, remSecs)
 }

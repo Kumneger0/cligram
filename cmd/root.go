@@ -52,6 +52,7 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 			telegram.Cligram = cligram
 			err = telegram.Cligram.Run(ctx, func(ctx context.Context) error {
 				accountsOnThisDevice := getAccountDirsOnThisDevice(telegramAPIID, telegramAPIHash)
+				telegram.SetGlobalUpdateChannel(updateChannel)
 				if err := cligram.Auth(ctx, accountsOnThisDevice); err != nil {
 					slog.Error(err.Error())
 					return fmt.Errorf("authentication failed: %w", err)

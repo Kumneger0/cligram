@@ -255,12 +255,13 @@ func getAccountPaths() []DirInfo {
 func getAccountDirsOnThisDevice(telegramAPIID, telegramAPIHash string) []types.AccountsOnDeviceInfo {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	updateChannel := make(chan types.Notification, 128)
 	dirs := getAccountPaths()
 
 	originalCligram := client.Cligram
+	originalUpdateChannel := client.GetGlobalUpdateChannel()
 	defer func() {
 		client.Cligram = originalCligram
+		client.SetGlobalUpdateChannel(originalUpdateChannel)
 	}()
 
 	var accountsOnThisDevice []types.AccountsOnDeviceInfo
@@ -274,7 +275,7 @@ func getAccountDirsOnThisDevice(telegramAPIID, telegramAPIHash string) []types.A
 			clientCtx, clientCancel := context.WithCancel(ctx)
 			defer clientCancel()
 
-			cligram, err := telegram.NewClient(clientCtx, updateChannel, telegramAPIID, telegramAPIHash, d.name)
+			cligram, err := telegram.NewClient(clientCtx, nil, telegramAPIID, telegramAPIHash, d.name)
 			if err != nil {
 				slog.Error("failed to create client", "path", d.name, "error", err)
 				return

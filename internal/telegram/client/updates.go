@@ -162,12 +162,23 @@ func getVoipBridge(ctx context.Context) (voip.SignalingBridge, error) {
 			updateChannelGlobalMu.Unlock()
 
 			if chGlobal != nil {
+				userName := fmt.Sprintf("User %d", event.UserID)
+				if Cligram != nil && Cligram.API() != nil {
+					userInfo, err := shared.GetUserInfo(sigCtx, *Cligram.API(), event.UserID)
+					if err == nil && userInfo != nil {
+						userName = userInfo.FirstName
+						if userInfo.LastName != "" {
+							userName += " " + userInfo.LastName
+						}
+					}
+				}
 				select {
 				case chGlobal <- types.Notification{
 					CallEvent: &types.CallNotification{
-						UserID:  event.UserID,
-						State:   types.CallStateActive,
-						IsRelay: !event.IsP2P,
+						UserID:   event.UserID,
+						UserName: userName,
+						State:    types.CallStateActive,
+						IsRelay:  !event.IsP2P,
 					},
 				}:
 				default:
@@ -249,10 +260,22 @@ var (
 	pendingIncomingMu sync.Mutex
 )
 
-func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHandler {
+// SetGlobalUpdateChannel explicitly sets the global notification channel used by background voip callbacks.
+func SetGlobalUpdateChannel(ch chan types.Notification) {
 	updateChannelGlobalMu.Lock()
-	updateChannelGlobal = updateChannel
+	updateChannelGlobal = ch
 	updateChannelGlobalMu.Unlock()
+}
+
+// GetGlobalUpdateChannel returns the current global notification channel.
+func GetGlobalUpdateChannel() chan types.Notification {
+	updateChannelGlobalMu.Lock()
+	defer updateChannelGlobalMu.Unlock()
+	return updateChannelGlobal
+}
+
+func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHandler {
+	SetGlobalUpdateChannel(updateChannel)
 	dispatcher := tg.NewUpdateDispatcher()
 	dispatcher.OnNewChannelMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateNewChannelMessage) error {
 		msg, ok := update.Message.(*tg.Message)
@@ -540,17 +563,18 @@ func buildPhoneCallProtocol(res *voip.CreateCallResult, forceRelay bool) tg.Phon
 	}
 }
 
-func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64) (err error) {
+func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64, updateChannel chan types.Notification) (err error) {
+	if updateChannel == nil {
+		updateChannel = GetGlobalUpdateChannel()
+	}
+
 	bridge, err := getVoipBridge(ctx)
 	if err != nil {
 		if errors.Is(err, voip.ErrHelperNotFound) {
 			slog.Warn("cligram-voip helper not found")
-			updateChannelGlobalMu.Lock()
-			chGlobal := updateChannelGlobal
-			updateChannelGlobalMu.Unlock()
-			if chGlobal != nil {
+			if updateChannel != nil {
 				select {
-				case chGlobal <- types.Notification{
+				case updateChannel <- types.Notification{
 					CallEvent: &types.CallNotification{
 						UserID: userID,
 						State:  types.CallStateMissingHelper,
@@ -581,12 +605,9 @@ func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64) (err e
 			}
 
 			if !errors.Is(err, voip.ErrHelperNotFound) {
-				updateChannelGlobalMu.Lock()
-				chGlobal := updateChannelGlobal
-				updateChannelGlobalMu.Unlock()
-				if chGlobal != nil {
+				if updateChannel != nil {
 					select {
-					case chGlobal <- types.Notification{
+					case updateChannel <- types.Notification{
 						CallEvent: &types.CallNotification{
 							UserID: userID,
 							State:  types.CallStateEnded,
@@ -714,12 +735,8 @@ func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64) (err e
 	p2pStatesMu.Unlock()
 
 	// Notify UI and handle confirmed call state immediately
-	updateChannelGlobalMu.Lock()
-	chGlobal := updateChannelGlobal
-	updateChannelGlobalMu.Unlock()
-
-	if chGlobal != nil {
-		if err := handlePhoneCall(ctx, phoneCallObj, chGlobal); err != nil {
+	if updateChannel != nil {
+		if err := handlePhoneCall(ctx, phoneCallObj, updateChannel); err != nil {
 			slog.Warn("handlePhoneCall failed for confirmed outgoing call", "userID", userID, "error", err)
 		}
 	}

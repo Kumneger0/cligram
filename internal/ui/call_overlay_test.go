@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -514,11 +515,12 @@ func TestModel_OutgoingCallTransitionToActive(t *testing.T) {
 	}
 }
 
-func TestModel_OutgoingCall_CallUserResponseFallback(t *testing.T) {
+func TestModel_OutgoingCall_CallUserResponse(t *testing.T) {
 	m := newTestModel(80, 24)
 	uID := int64(777888)
 	m.CallOverlay.SetDialing("Bob", uID)
 
+	// CallUserResponse with Err: nil transitions dialing overlay to active
 	resModel, cmd := m.Update(types.CallUserResponse{
 		UserID: &uID,
 		Err:    nil,
@@ -526,12 +528,221 @@ func TestModel_OutgoingCall_CallUserResponseFallback(t *testing.T) {
 	m = resModel.(Model)
 
 	if m.CallOverlay.State != CallOverlayActive {
-		t.Errorf("expected CallOverlayActive from CallUserResponse fallback, got %v", m.CallOverlay.State)
+		t.Errorf("expected CallOverlayActive upon CallUserResponse success, got %v", m.CallOverlay.State)
 	}
 	if m.CallOverlay.UserName != "Bob" {
 		t.Errorf("expected username preserved as 'Bob', got %q", m.CallOverlay.UserName)
 	}
+	if m.ActiveCallUserID != uID {
+		t.Errorf("expected ActiveCallUserID %d, got %d", uID, m.ActiveCallUserID)
+	}
 	if cmd == nil {
-		t.Errorf("expected tickCall cmd returned on CallUserResponse activation")
+		t.Errorf("expected tickCall cmd from CallUserResponse success, got nil")
+	}
+
+	// Subsequent CallUserResponse when already active is a no-op
+	resModel2, cmd2 := m.Update(types.CallUserResponse{
+		UserID: &uID,
+		Err:    nil,
+	})
+	m = resModel2.(Model)
+	if m.CallOverlay.State != CallOverlayActive {
+		t.Errorf("expected CallOverlayActive maintained, got %v", m.CallOverlay.State)
+	}
+	if cmd2 != nil {
+		t.Errorf("expected nil cmd when already active, got %v", cmd2)
+	}
+
+	// CallUserResponse with error resets overlay and alerts
+	m.CallOverlay.SetDialing("Bob", uID)
+	m.ActiveCallUserID = uID
+	resModel, errCmd := m.Update(types.CallUserResponse{
+		UserID: &uID,
+		Err:    errors.New("connection failed"),
+	})
+	m = resModel.(Model)
+
+	if m.CallOverlay.State != CallOverlayNone {
+		t.Errorf("expected CallOverlayNone after CallUserResponse failure, got %v", m.CallOverlay.State)
+	}
+	if m.ActiveCallUserID != 0 {
+		t.Errorf("expected ActiveCallUserID 0 after failure, got %d", m.ActiveCallUserID)
+	}
+	if errCmd == nil {
+		t.Errorf("expected error alert cmd when CallUserResponse returns error")
+	}
+}
+
+func TestCallOverlay_IsActive(t *testing.T) {
+	overlay := NewCallOverlay()
+	if overlay.IsActive() {
+		t.Errorf("expected IsActive()=false for CallOverlayNone")
+	}
+
+	overlay.SetDialing("Alice", 1)
+	if overlay.IsActive() {
+		t.Errorf("expected IsActive()=false for CallOverlayDialing")
+	}
+
+	overlay.SetIncoming("Alice", 1)
+	if overlay.IsActive() {
+		t.Errorf("expected IsActive()=false for CallOverlayIncoming")
+	}
+
+	overlay.SetMissingHelper()
+	if overlay.IsActive() {
+		t.Errorf("expected IsActive()=false for CallOverlayMissingHelper")
+	}
+
+	overlay.SetActive("Alice", 1)
+	if !overlay.IsActive() {
+		t.Errorf("expected IsActive()=true for CallOverlayActive")
+	}
+}
+
+func TestModel_CallAcceptedError_DismissesOverlay(t *testing.T) {
+	m := newTestModel(80, 24)
+	m.CallOverlay.SetIncoming("Alice", 1001)
+
+	resModel, cmd := m.Update(types.CallAcceptedMsg{
+		Err: errors.New("signaling exchange error"),
+	})
+	m = resModel.(Model)
+
+	if m.CallOverlay.State != CallOverlayNone {
+		t.Errorf("expected CallOverlayNone after accept failure, got %v", m.CallOverlay.State)
+	}
+	if m.ActiveCallUserID != 0 {
+		t.Errorf("expected ActiveCallUserID 0 after accept failure, got %d", m.ActiveCallUserID)
+	}
+	if cmd == nil {
+		t.Errorf("expected alert cmd when accept fails")
+	}
+}
+
+func TestModel_CallDeclinedError_Alerts(t *testing.T) {
+	m := newTestModel(80, 24)
+	m.CallOverlay.SetIncoming("Alice", 1001)
+	m.ActiveCallUserID = 1001
+
+	resModel, cmd := m.Update(types.CallDeclinedMsg{
+		Err: errors.New("decline rpc error"),
+	})
+	m = resModel.(Model)
+
+	if m.CallOverlay.State != CallOverlayNone {
+		t.Errorf("expected CallOverlayNone, got %v", m.CallOverlay.State)
+	}
+	if m.ActiveCallUserID != 0 {
+		t.Errorf("expected ActiveCallUserID 0, got %d", m.ActiveCallUserID)
+	}
+	if cmd == nil {
+		t.Errorf("expected alert cmd on decline failure")
+	}
+}
+
+func TestModel_CallHungUpError_Alerts(t *testing.T) {
+	m := newTestModel(80, 24)
+	m.CallOverlay.SetActive("Alice", 1001)
+	m.ActiveCallUserID = 1001
+
+	resModel, cmd := m.Update(types.CallHungUpMsg{
+		Err: errors.New("hangup rpc error"),
+	})
+	m = resModel.(Model)
+
+	if m.CallOverlay.State != CallOverlayNone {
+		t.Errorf("expected CallOverlayNone, got %v", m.CallOverlay.State)
+	}
+	if m.ActiveCallUserID != 0 {
+		t.Errorf("expected ActiveCallUserID 0, got %d", m.ActiveCallUserID)
+	}
+	if cmd == nil {
+		t.Errorf("expected alert cmd on hangup failure")
+	}
+}
+
+func TestModel_CtrlP_InvalidUserID_Alerts(t *testing.T) {
+	m := newTestModel(80, 24)
+	m.Mode = ModeUsers
+	m.SelectedUser = types.UserInfo{
+		FirstName: "Broken",
+		PeerID:    "not_a_valid_int",
+	}
+
+	resModel, cmd := m.Update(tea.KeyMsg{
+		Type:  tea.KeyCtrlP,
+		Runes: []rune{'p'},
+	})
+	m = resModel.(Model)
+
+	if m.CallOverlay.State != CallOverlayNone {
+		t.Errorf("expected CallOverlayNone when user ID is invalid, got %v", m.CallOverlay.State)
+	}
+	if cmd == nil {
+		t.Errorf("expected error alert cmd when parsing invalid user ID")
+	}
+}
+
+func TestModel_CallTickMsg_AdvancesDuration(t *testing.T) {
+	m := newTestModel(80, 24)
+	resModel, _ := m.Update(types.CallNotification{
+		State:    types.CallStateActive,
+		UserName: "Alice",
+		UserID:   1001,
+		IsRelay:  false,
+	})
+	m = resModel.(Model)
+
+	if m.CallOverlay.Duration() != "00:00" {
+		t.Errorf("expected initial duration '00:00', got %q", m.CallOverlay.Duration())
+	}
+
+	// First tick increments elapsed time
+	resModel, _ = m.Update(CallTickMsg{})
+	m = resModel.(Model)
+	if m.CallOverlay.Duration() != "00:01" {
+		t.Errorf("expected duration '00:01' after first tick, got %q", m.CallOverlay.Duration())
+	}
+
+	// Second tick increments again
+	resModel, _ = m.Update(CallTickMsg{})
+	m = resModel.(Model)
+	if m.CallOverlay.Duration() != "00:02" {
+		t.Errorf("expected duration '00:02' after second tick, got %q", m.CallOverlay.Duration())
+	}
+
+	// View shows the updated duration
+	view := m.View()
+	if !strings.Contains(view, "(00:02)") {
+		t.Errorf("expected view to contain '(00:02)', got:\n%s", view)
+	}
+}
+
+func TestManager_ModalView_GlobalHotkeys(t *testing.T) {
+	bg := newTestModel(80, 24)
+	bg.CallOverlay.SetActive("Alice", 1001)
+	bg.ActiveCallUserID = 1001
+
+	mgr := Manager{
+		State:      ModalView,
+		Background: bg,
+		Foreground: &Foreground{},
+	}
+
+	// Alt+H hangup is routed to background even when Manager is in ModalView
+	resMgr, _ := mgr.Update(tea.KeyMsg{
+		Type:  tea.KeyRunes,
+		Runes: []rune{'h'},
+		Alt:   true,
+	})
+	updatedMgr := resMgr.(Manager)
+	updatedBg := updatedMgr.Background.(Model)
+
+	if updatedBg.CallOverlay.State != CallOverlayNone {
+		t.Errorf("expected Alt+H to dismiss call overlay in Background from ModalView, got %v", updatedBg.CallOverlay.State)
+	}
+	if updatedBg.ActiveCallUserID != 0 {
+		t.Errorf("expected ActiveCallUserID 0 after Alt+H in ModalView, got %d", updatedBg.ActiveCallUserID)
 	}
 }

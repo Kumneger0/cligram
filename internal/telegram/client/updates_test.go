@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -162,6 +163,9 @@ func TestHandlePhoneCall_OutgoingCallActive(t *testing.T) {
 		if notif.CallEvent.UserID != peerUserID {
 			t.Errorf("expected UserID %d, got %d", peerUserID, notif.CallEvent.UserID)
 		}
+		if notif.CallEvent.UserName != fmt.Sprintf("User %d", peerUserID) {
+			t.Errorf("expected UserName 'User %d', got %q", peerUserID, notif.CallEvent.UserName)
+		}
 		if notif.CallEvent.IsRelay {
 			t.Errorf("expected IsRelay=false for P2PAllowed=true, got true")
 		}
@@ -174,5 +178,22 @@ func TestHandlePhoneCall_OutgoingCallActive(t *testing.T) {
 	p2pStatesMu.Unlock()
 	if state == nil || state.phoneCall != phoneCall {
 		t.Errorf("expected p2pState to hold phoneCall object")
+	}
+}
+
+func TestGlobalUpdateChannel_Binding(t *testing.T) {
+	orig := GetGlobalUpdateChannel()
+	defer SetGlobalUpdateChannel(orig)
+
+	ch := make(chan types.Notification, 10)
+	SetGlobalUpdateChannel(ch)
+
+	if GetGlobalUpdateChannel() != ch {
+		t.Errorf("expected GetGlobalUpdateChannel to return bound channel")
+	}
+
+	SetGlobalUpdateChannel(nil)
+	if GetGlobalUpdateChannel() != nil {
+		t.Errorf("expected GetGlobalUpdateChannel to return nil after clearing")
 	}
 }

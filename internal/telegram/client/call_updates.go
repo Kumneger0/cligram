@@ -231,13 +231,26 @@ func handlePhoneCall(ctx context.Context, phoneCall tg.PhoneCallClass, updateCha
 			}
 		}
 
+		// Resolve peer name
+		userName := fmt.Sprintf("User %d", userID)
+		if Cligram != nil && Cligram.API() != nil {
+			userInfo, err := shared.GetUserInfo(ctx, *Cligram.API(), userID)
+			if err == nil && userInfo != nil {
+				userName = userInfo.FirstName
+				if userInfo.LastName != "" {
+					userName += " " + userInfo.LastName
+				}
+			}
+		}
+
 		// Notify UI that call is now active
 		select {
 		case updateChannel <- types.Notification{
 			CallEvent: &types.CallNotification{
-				UserID:  userID,
-				State:   types.CallStateActive,
-				IsRelay: !u.P2PAllowed,
+				UserID:   userID,
+				UserName: userName,
+				State:    types.CallStateActive,
+				IsRelay:  !u.P2PAllowed,
 			},
 		}:
 		default:

@@ -56,6 +56,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case CallTickMsg:
 		if m.CallOverlay.State == CallOverlayActive {
+			tTime := time.Time(msg)
+			if !tTime.IsZero() && !m.CallOverlay.StartTime.IsZero() && tTime.After(m.CallOverlay.StartTime) {
+				m.CallOverlay.ElapsedSeconds = int(tTime.Sub(m.CallOverlay.StartTime).Seconds())
+			} else {
+				m.CallOverlay.ElapsedSeconds++
+			}
 			return m, tickCall()
 		}
 		return m, nil
@@ -71,6 +77,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Err != nil {
 			slog.Error("call initiation failed", "error", msg.Err)
 			m.CallOverlay.SetNone()
+			m.ActiveCallUserID = 0
 			alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, "Call failed: "+msg.Err.Error())
 			return m, alertCmd
 		}
@@ -92,10 +99,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Printf("\a")
 		case types.CallStateActive:
 			userName := msg.UserName
-			if userName == "" && m.CallOverlay.UserName != "" {
+			if (userName == "" || strings.HasPrefix(userName, "User ")) && m.CallOverlay.UserName != "" {
 				userName = m.CallOverlay.UserName
 			}
-			if userName == "" && m.Mode == ModeUsers {
+			if (userName == "" || strings.HasPrefix(userName, "User ")) && m.Mode == ModeUsers && m.SelectedUser.FirstName != "" {
 				userName = m.SelectedUser.FirstName
 			}
 			m.CallOverlay.SetActive(userName, msg.UserID)
@@ -123,22 +130,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case types.CallAcceptedMsg:
 		if msg.Err != nil {
 			slog.Error("failed to accept call", "error", msg.Err)
+			m.CallOverlay.SetNone()
+			m.ActiveCallUserID = 0
 			alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, "Failed to accept call: "+msg.Err.Error())
 			return m, alertCmd
 		}
 		return m, nil
 	case types.CallDeclinedMsg:
-		if msg.Err != nil {
-			slog.Error("failed to decline call", "error", msg.Err)
-		}
-		m.CallOverlay.SetNone()
-		return m, nil
-	case types.CallHungUpMsg:
-		if msg.Err != nil {
-			slog.Error("failed to hang up call", "error", msg.Err)
-		}
 		m.CallOverlay.SetNone()
 		m.ActiveCallUserID = 0
+		if msg.Err != nil {
+			slog.Error("failed to decline call", "error", msg.Err)
+			alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, "Failed to decline call: "+msg.Err.Error())
+			return m, alertCmd
+		}
+		return m, nil
+	case types.CallHungUpMsg:
+		m.CallOverlay.SetNone()
+		m.ActiveCallUserID = 0
+		if msg.Err != nil {
+			slog.Error("failed to hang up call", "error", msg.Err)
+			alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, "Failed to hang up call: "+msg.Err.Error())
+			return m, alertCmd
+		}
 		return m, nil
 	case types.CallMuteToggledMsg:
 		if msg.Err != nil {
@@ -892,6 +906,7 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, telegram.Cligram.HangupCall(telegram.Cligram.Context(), m.CallOverlay.UserID)
 			}
 			m.CallOverlay.SetNone()
+			m.ActiveCallUserID = 0
 			return m, nil
 		}
 	}
@@ -905,6 +920,7 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "d", "esc":
 			userID := m.CallOverlay.UserID
 			m.CallOverlay.SetNone()
+			m.ActiveCallUserID = 0
 			if telegram.Cligram != nil {
 				return m, telegram.Cligram.DeclineCall(telegram.Cligram.Context(), userID)
 			}
@@ -926,6 +942,7 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, telegram.Cligram.HangupCall(telegram.Cligram.Context(), m.ActiveCallUserID)
 			}
 			m.CallOverlay.SetNone()
+			m.ActiveCallUserID = 0
 			return m, nil
 		}
 	}
@@ -935,7 +952,12 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Initiate P2P call to selected user
 		if m.Mode == ModeUsers && m.SelectedUser.PeerID != "" && m.CallOverlay.State == CallOverlayNone {
 			pInfo := peerFromItem(m.SelectedUser)
-			uID, _ := strconv.ParseInt(pInfo.ID, 10, 64)
+			uID, err := strconv.ParseInt(pInfo.ID, 10, 64)
+			if err != nil {
+				slog.Error("failed to parse peer ID for call", "error", err)
+				alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, "Invalid user ID: "+err.Error())
+				return m, alertCmd
+			}
 			m.CallOverlay.SetDialing(m.SelectedUser.FirstName, uID)
 			return m, telegram.Cligram.CallUser(telegram.Cligram.Context(), pInfo)
 		}

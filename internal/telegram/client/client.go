@@ -53,7 +53,12 @@ func NewClient(ctx context.Context, config Config, account string) (*Client, err
 		return nil, types.NewTelegramError(types.ErrorCodeSessionFailed, "failed to create session storage", err)
 	}
 
-	updateHandler := newUpdateHandler(config.UpdateChannel)
+	var updateHandler telegram.UpdateHandler
+	noUpdates := true
+	if config.UpdateChannel != nil {
+		updateHandler = newUpdateHandler(config.UpdateChannel)
+		noUpdates = false
+	}
 
 	waiter := floodwait.NewSimpleWaiter()
 
@@ -64,7 +69,7 @@ func NewClient(ctx context.Context, config Config, account string) (*Client, err
 		},
 		SessionStorage: sessionStorage,
 		UpdateHandler:  updateHandler,
-		NoUpdates:      false,
+		NoUpdates:      noUpdates,
 		OnDead: func(err error) {
 			slog.Error("telegram connection is dead", "error", err)
 		},
@@ -152,7 +157,7 @@ func (c *Client) CallUser(ctx context.Context, peer types.Peer) tea.Cmd {
 			return types.CallUserResponse{UserID: &userID, Err: err}
 		}
 
-		callErr := InitiateP2PCall(ctx, userID, accessHash)
+		callErr := InitiateP2PCall(ctx, userID, accessHash, c.updateChannel)
 		if callErr != nil {
 			slog.Error("P2P call failed", "userID", userID, "error", callErr)
 		}
