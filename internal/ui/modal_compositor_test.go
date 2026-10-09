@@ -314,6 +314,84 @@ func TestManager_SearchAllowsTypingQ(t *testing.T) {
 	}
 }
 
+func TestManager_MainView_EscCancelsReplyWithoutQuitting(t *testing.T) {
+	bg := newTestModel(80, 24)
+	bg.FocusedOn = Input
+	bg.IsReply = true
+	bg.ReplyTo = &types.FormattedMessage{
+		ID:      1,
+		Sender:  "Alice",
+		Content: "Hello",
+	}
+
+	mgr := Manager{
+		State:        MainView,
+		WindowWidth:  80,
+		WindowHeight: 24,
+		Foreground:   &Foreground{},
+		Background:   bg,
+	}
+
+	// Press Esc while replying in MainView
+	mgrModel, cmd := mgr.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	mgr = mgrModel.(Manager)
+
+	// Must NOT return tea.Quit cmd
+	if cmd != nil {
+		msg := cmd()
+		if _, ok := msg.(tea.QuitMsg); ok {
+			t.Fatalf("expected Esc in MainView not to return tea.Quit")
+		}
+	}
+
+	// State must remain MainView
+	if mgr.State != MainView {
+		t.Errorf("expected Manager state to remain MainView, got %v", mgr.State)
+	}
+
+	// Background model must have canceled reply and moved focus to Main
+	updatedBg := mgr.Background.(Model)
+	if updatedBg.IsReply {
+		t.Errorf("expected IsReply=false after Esc, got true")
+	}
+	if updatedBg.ReplyTo != nil {
+		t.Errorf("expected ReplyTo=nil after Esc, got %+v", updatedBg.ReplyTo)
+	}
+	if updatedBg.FocusedOn != Main {
+		t.Errorf("expected FocusedOn=Main after Esc, got %v", updatedBg.FocusedOn)
+	}
+}
+
+func TestManager_MainView_InputAllowsTypingQ(t *testing.T) {
+	bg := newTestModel(80, 24)
+	bg.FocusedOn = Input
+	bg.Input.SetValue("")
+
+	mgr := Manager{
+		State:        MainView,
+		WindowWidth:  80,
+		WindowHeight: 24,
+		Foreground:   &Foreground{},
+		Background:   bg,
+	}
+
+	// Typing 'q' while in Input must NOT quit
+	mgrModel, cmd := mgr.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	mgr = mgrModel.(Manager)
+
+	if cmd != nil {
+		msg := cmd()
+		if _, ok := msg.(tea.QuitMsg); ok {
+			t.Fatalf("expected typing 'q' in Input not to return tea.Quit")
+		}
+	}
+
+	updatedBg := mgr.Background.(Model)
+	if updatedBg.Input.Value() != "q" {
+		t.Errorf("expected input to receive 'q', got %q", updatedBg.Input.Value())
+	}
+}
+
 func TestForeground_StoriesModal_Rendering_EmptyState(t *testing.T) {
 	fg := &Foreground{}
 	fgModel, _ := fg.Update(tea.WindowSizeMsg{Width: 80, Height: 24})

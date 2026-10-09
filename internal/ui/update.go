@@ -1195,8 +1195,12 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m, cmd := m.handleCtrlA()
 		cmds = append(cmds, cmd)
 		return m, tea.Batch(cmds...)
-	case "q", "ctrl+c":
+	case "ctrl+c":
 		return m, tea.Quit
+	case "q":
+		if m.FocusedOn != Input {
+			return m, tea.Quit
+		}
 	case "backspace":
 		if m.FocusedOn == Main && m.ShowForumTopics && m.SelectedForumTopic != nil {
 			m.SelectedForumTopic = nil

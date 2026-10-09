@@ -58,9 +58,11 @@ func (m Manager) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				m.State = MainView
 				return m, nil
 			}
-			return m, tea.Quit
 		case "q":
 			if m.State == MainView {
+				if bg, ok := m.Background.(Model); ok && bg.FocusedOn == Input {
+					break
+				}
 				return m, tea.Quit
 			}
 		case "ctrl+k":
