@@ -749,3 +749,99 @@ func TestManager_ModalView_GlobalHotkeys(t *testing.T) {
 		t.Errorf("expected ActiveCallUserID 0 after Alt+H in ModalView, got %d", updatedBg.ActiveCallUserID)
 	}
 }
+
+func TestModel_OutgoingCall_PrivacyRestricted_Immediate(t *testing.T) {
+	m := newTestModel(80, 24)
+	m.Mode = ModeUsers
+	m.SelectedUser = types.UserInfo{
+		PeerID:            "999888",
+		FirstName:         "Alice",
+		PhoneCallsPrivate: true,
+	}
+
+	// Trigger Ctrl+P to call Alice whose PhoneCallsPrivate is true
+	resModel, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
+	m = resModel.(Model)
+
+	// Call overlay must NOT transition to Dialing
+	if m.CallOverlay.State != CallOverlayNone {
+		t.Errorf("expected CallOverlayNone when calling user with PhoneCallsPrivate, got %v", m.CallOverlay.State)
+	}
+
+	// An alert command should be returned
+	if cmd == nil {
+		t.Fatalf("expected alert command when call is privacy restricted")
+	}
+
+	alertMsg := cmd()
+	resModel, _ = m.Update(alertMsg)
+	m = resModel.(Model)
+	rendered := m.Alert.Render(strings.Repeat("\n", 10))
+	if !strings.Contains(rendered, "Cannot call Alice due to their privacy settings.") {
+		t.Errorf("expected rendered alert to contain privacy message, got %q", rendered)
+	}
+}
+
+func TestModel_OutgoingCall_CallUserResponse_PrivacyRestricted(t *testing.T) {
+	m := newTestModel(80, 24)
+	uID := int64(444555)
+	m.CallOverlay.SetDialing("Bob", uID)
+	m.ActiveCallUserID = uID
+
+	// CallUserResponse arrives with ErrPrivacyRestricted
+	resModel, cmd := m.Update(types.CallUserResponse{
+		UserID: &uID,
+		Err:    types.ErrPrivacyRestricted,
+	})
+	m = resModel.(Model)
+
+	// Dialing overlay must be reset and active user cleared
+	if m.CallOverlay.State != CallOverlayNone {
+		t.Errorf("expected CallOverlayNone after privacy restricted response, got %v", m.CallOverlay.State)
+	}
+	if m.ActiveCallUserID != 0 {
+		t.Errorf("expected ActiveCallUserID 0 after privacy restricted response, got %d", m.ActiveCallUserID)
+	}
+
+	if cmd == nil {
+		t.Fatalf("expected alert cmd when CallUserResponse returns ErrPrivacyRestricted")
+	}
+
+	alertMsg := cmd()
+	resModel, _ = m.Update(alertMsg)
+	m = resModel.(Model)
+	rendered := m.Alert.Render(strings.Repeat("\n", 10))
+	if !strings.Contains(rendered, "Cannot call Bob due to their privacy settings.") {
+		t.Errorf("expected alert 'Cannot call Bob due to their privacy settings.', got %q", rendered)
+	}
+}
+
+func TestModel_OutgoingCall_CallUserResponse_RawRPC_PrivacyRestricted(t *testing.T) {
+	m := newTestModel(80, 24)
+	uID := int64(444555)
+	m.CallOverlay.SetDialing("Charlie", uID)
+	m.ActiveCallUserID = uID
+
+	// CallUserResponse arrives with raw MTProto RPC error string
+	resModel, cmd := m.Update(types.CallUserResponse{
+		UserID: &uID,
+		Err:    errors.New("rpc error: code 400: USER_PRIVACY_RESTRICTED"),
+	})
+	m = resModel.(Model)
+
+	if m.CallOverlay.State != CallOverlayNone {
+		t.Errorf("expected CallOverlayNone after USER_PRIVACY_RESTRICTED, got %v", m.CallOverlay.State)
+	}
+
+	if cmd == nil {
+		t.Fatalf("expected alert cmd for USER_PRIVACY_RESTRICTED")
+	}
+
+	alertMsg := cmd()
+	resModel, _ = m.Update(alertMsg)
+	m = resModel.(Model)
+	rendered := m.Alert.Render(strings.Repeat("\n", 10))
+	if !strings.Contains(rendered, "Cannot call Charlie due to their privacy settings.") {
+		t.Errorf("expected alert 'Cannot call Charlie due to their privacy settings.', got %q", rendered)
+	}
+}

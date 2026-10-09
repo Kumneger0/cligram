@@ -78,9 +78,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case types.CallUserResponse:
 		if msg.Err != nil {
 			slog.Error("call initiation failed", "error", msg.Err)
+			targetName := m.CallOverlay.UserName
+			if targetName == "" && (m.Mode == ModeUsers || m.Mode == ModeAll) {
+				targetName = m.SelectedUser.FirstName
+			}
+			if targetName == "" {
+				targetName = "this user"
+			}
 			m.CallOverlay.SetNone()
 			m.ActiveCallUserID = 0
-			alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, "Call failed: "+msg.Err.Error())
+			var alertCmd tea.Cmd
+			if types.IsPrivacyRestricted(msg.Err) {
+				alertCmd = m.Alert.NewAlertCmd(bubbleup.ErrorKey, "Cannot call "+targetName+" due to their privacy settings.")
+			} else {
+				alertCmd = m.Alert.NewAlertCmd(bubbleup.ErrorKey, "Call failed: "+msg.Err.Error())
+			}
 			return m, alertCmd
 		}
 		slog.Info("call initiated", "userID", msg.UserID)
@@ -1079,6 +1091,10 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if canCall && m.CallOverlay.State == CallOverlayNone {
+			if userToCall.PhoneCallsPrivate {
+				alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, "Cannot call "+userToCall.FirstName+" due to their privacy settings.")
+				return m, alertCmd
+			}
 			pInfo := peerFromItem(userToCall)
 			uID, err := strconv.ParseInt(pInfo.ID, 10, 64)
 			if err != nil {

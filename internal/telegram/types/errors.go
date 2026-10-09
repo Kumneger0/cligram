@@ -1,6 +1,16 @@
 package types // nolint:revive
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+	"strings"
+
+	"github.com/gotd/td/tg"
+)
+
+var (
+	ErrPrivacyRestricted = errors.New("user privacy restricted")
+)
 
 type TelegramError struct {
 	Code    int    `json:"code"`
@@ -20,18 +30,38 @@ func (e *TelegramError) Unwrap() error {
 }
 
 const (
-	ErrorCodeAuthFailed        = 1001
-	ErrorCodeSendFailed        = 1002
-	ErrorCodeGetMessagesFailed = 1003
-	ErrorCodeDeleteFailed      = 1004
-	ErrorCodeEditFailed        = 1005
-	ErrorCodeForwardFailed     = 1006
-	ErrorCodeUserNotFound      = 1007
-	ErrorCodeInvalidPeer       = 1008
-	ErrorCodeSessionFailed     = 1009
-	ErrorCodeUploadFailed      = 1010
-	ErrorCodeInvalidFile       = 1011
+	ErrorCodeAuthFailed            = 1001
+	ErrorCodeSendFailed            = 1002
+	ErrorCodeGetMessagesFailed     = 1003
+	ErrorCodeDeleteFailed          = 1004
+	ErrorCodeEditFailed            = 1005
+	ErrorCodeForwardFailed         = 1006
+	ErrorCodeUserNotFound          = 1007
+	ErrorCodeInvalidPeer           = 1008
+	ErrorCodeSessionFailed         = 1009
+	ErrorCodeUploadFailed          = 1010
+	ErrorCodeInvalidFile           = 1011
+	ErrorCodeCallPrivacyRestricted = 1012
 )
+
+// IsPrivacyRestricted returns true if the error indicates peer call privacy restriction or protocol incompatibility.
+func IsPrivacyRestricted(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, ErrPrivacyRestricted) {
+		return true
+	}
+	if tg.IsUserPrivacyRestricted(err) {
+		return true
+	}
+	errStr := strings.ToUpper(err.Error())
+	return strings.Contains(errStr, "USER_PRIVACY_RESTRICTED") ||
+		strings.Contains(errStr, "PHONECALLSPRIVATE") ||
+		strings.Contains(errStr, "PRIVACY SETTINGS") ||
+		strings.Contains(errStr, "PARTICIPANT_VERSION_OUTDATED") ||
+		strings.Contains(errStr, "CALL_PROTOCOL_FLAGS_INVALID")
+}
 
 func NewTelegramError(code int, message string, cause error) *TelegramError {
 	return &TelegramError{

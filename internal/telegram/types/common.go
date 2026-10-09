@@ -22,21 +22,23 @@ type Peer struct {
 }
 
 type UserInfo struct {
-	FirstName       string                 `json:"firstName"`
-	LastName        string                 `json:"lastName,omitempty"`
-	Username        string                 `json:"username,omitempty"`
-	IsBot           bool                   `json:"isBot"`
-	PeerID          string                 `json:"peerId"`
-	AccessHash      string                 `json:"accessHash"`
-	UnreadCount     int                    `json:"unreadCount"`
-	LastSeen        *string                `json:"lastSeen,omitempty"`
-	IsOnline        bool                   `json:"isOnline"`
-	IsTyping        bool                   `json:"isTyping"`
-	HasStories      bool                   `json:"hasStories"`
-	NotifySettings  *tg.PeerNotifySettings `json:"notifySettings,omitempty"`
-	Premium         bool                   `json:"premium"`
-	ReadInboxMaxID  int                    `json:"readInboxMaxId"`
-	ReadOutboxMaxID int                    `json:"readOutboxMaxId"`
+	FirstName           string                 `json:"firstName"`
+	LastName            string                 `json:"lastName,omitempty"`
+	Username            string                 `json:"username,omitempty"`
+	IsBot               bool                   `json:"isBot"`
+	PeerID              string                 `json:"peerId"`
+	AccessHash          string                 `json:"accessHash"`
+	UnreadCount         int                    `json:"unreadCount"`
+	LastSeen            *string                `json:"lastSeen,omitempty"`
+	IsOnline            bool                   `json:"isOnline"`
+	IsTyping            bool                   `json:"isTyping"`
+	HasStories          bool                   `json:"hasStories"`
+	NotifySettings      *tg.PeerNotifySettings `json:"notifySettings,omitempty"`
+	Premium             bool                   `json:"premium"`
+	ReadInboxMaxID      int                    `json:"readInboxMaxId"`
+	ReadOutboxMaxID     int                    `json:"readOutboxMaxId"`
+	PhoneCallsPrivate   bool                   `json:"phoneCallsPrivate"`
+	PhoneCallsAvailable bool                   `json:"phoneCallsAvailable"`
 }
 
 type ChannelInfo struct {

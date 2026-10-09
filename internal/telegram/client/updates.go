@@ -50,10 +50,31 @@ var (
 	waitConnect   = make(map[int64]chan error)
 	waitConnectMu sync.Mutex
 
-	callMuted   bool
-	callMutedMu sync.Mutex
-
+	callMuted         bool
+	callMutedMu       sync.Mutex
 	findSidecarBinary = voip.FindSidecarBinary
+
+	checkPeerCallPrivacy = func(ctx context.Context, userID int64, accessHash int64) error {
+		if Cligram == nil || Cligram.API() == nil {
+			return nil
+		}
+		res, err := Cligram.API().UsersGetFullUser(ctx, &tg.InputUser{
+			UserID:     userID,
+			AccessHash: accessHash,
+		})
+		if err != nil {
+			if types.IsPrivacyRestricted(err) {
+				return types.ErrPrivacyRestricted
+			}
+			return fmt.Errorf("users.getFullUser: %w", err)
+		}
+		if res != nil {
+			if res.FullUser.PhoneCallsPrivate || !res.FullUser.PhoneCallsAvailable {
+				return types.ErrPrivacyRestricted
+			}
+		}
+		return nil
+	}
 )
 
 func getVoipBridge(ctx context.Context) (voip.SignalingBridge, error) {
@@ -580,6 +601,12 @@ func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64, update
 		updateChannel = GetGlobalUpdateChannel()
 	}
 
+	// Pre-flight check: verify peer call privacy before allocating VoIP sidecar processes or DH keys
+	if err := checkPeerCallPrivacy(ctx, userID, accessHash); err != nil {
+		slog.Warn("pre-flight call privacy check blocked call", "userID", userID, "error", err)
+		return err
+	}
+
 	bridge, err := getVoipBridge(ctx)
 	if err != nil {
 		if errors.Is(err, voip.ErrHelperNotFound) {
@@ -613,6 +640,9 @@ func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64, update
 			if bridge != nil {
 				if stopErr := bridge.StopCall(context.Background(), voip.StopCallParams{UserID: userID}); stopErr != nil {
 					slog.Warn("failed to stop call during cleanup", "userID", userID, "error", stopErr)
+				}
+				if len(p2pStates) == 0 {
+					voipSupervisor.ResetIdleTimer(30 * time.Second)
 				}
 			}
 
@@ -676,6 +706,9 @@ func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64, update
 		Protocol: protocol,
 	})
 	if err != nil {
+		if types.IsPrivacyRestricted(err) {
+			return types.ErrPrivacyRestricted
+		}
 		return fmt.Errorf("phone.requestCall: %w", err)
 	}
 
