@@ -495,3 +495,201 @@ func TestMessageStream_PeerIsolationOnSwitch(t *testing.T) {
 		t.Fatalf("expected outgoing message to user-x not to be added to user-y conversations, got %d messages", len(mAfterOutX.Conversations))
 	}
 }
+
+func TestVariableHeightMessageRendering(t *testing.T) {
+	m := newTestModel(80, 24)
+	m.Mode = ModeUsers
+
+	shortMsg := types.FormattedMessage{
+		ID:      1,
+		Sender:  "Alice",
+		Content: "Hi",
+		Date:    time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC),
+	}
+	multiLineMsg := types.FormattedMessage{
+		ID:      2,
+		Sender:  "Alice",
+		Content: "This is a very long message that is guaranteed to wrap across multiple lines in the chat bubble UI because it exceeds the standard bubble width. Here is line two and line three of the multiline message content.",
+		Date:    time.Date(2026, 1, 1, 10, 1, 0, 0, time.UTC),
+	}
+	replyMsg := types.FormattedMessage{
+		ID:      3,
+		Sender:  "Bob",
+		Content: "Replying to earlier context",
+		Date:    time.Date(2026, 1, 1, 10, 2, 0, 0, time.UTC),
+		ReplyTo: &types.FormattedMessage{
+			ID:      1,
+			Sender:  "Alice",
+			Content: "Hi",
+		},
+	}
+
+	shortCard := m.renderMessageBubble(shortMsg, 0, 40, 80, 0)
+	multiCard := m.renderMessageBubble(multiLineMsg, 1, 40, 80, 0)
+	replyCard := m.renderMessageBubble(replyMsg, 2, 40, 80, 0)
+
+	shortLines := len(strings.Split(shortCard, "\n"))
+	multiLines := len(strings.Split(multiCard, "\n"))
+	replyLines := len(strings.Split(replyCard, "\n"))
+
+	if multiLines <= shortLines {
+		t.Errorf("expected multiline message to have more lines than short message, got multi=%d, short=%d", multiLines, shortLines)
+	}
+	if replyLines <= shortLines {
+		t.Errorf("expected reply message to have more lines than short message, got reply=%d, short=%d", replyLines, shortLines)
+	}
+	if !strings.Contains(replyCard, "Hi") {
+		t.Errorf("expected reply bubble to include quoted content 'Hi', got:\n%s", replyCard)
+	}
+}
+
+func TestScrollingBoundaries_AndClamping(t *testing.T) {
+	m := newTestModel(80, 20)
+	m.Mode = ModeUsers
+	m.viewport.Height = 10
+
+	var messages []types.FormattedMessage
+	baseTime := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	for i := 0; i < 15; i++ {
+		messages = append(messages, types.FormattedMessage{
+			ID:      i + 1,
+			Content: fmt.Sprintf("Message item %d with multi-line detail\nSecond line of item %d", i+1, i+1),
+			Date:    baseTime.Add(time.Duration(i) * time.Minute),
+		})
+	}
+	m.Conversations = messages
+	m.renderMessagesViewport(80, 10)
+
+	// Boundary clamping in SelectedMessage
+	m.SelectedMessageIndex = -10
+	if m.SelectedMessage().ID != 1 {
+		t.Errorf("expected clamped to index 0 (ID 1), got %d", m.SelectedMessage().ID)
+	}
+	m.SelectedMessageIndex = 100
+	if m.SelectedMessage().ID != 15 {
+		t.Errorf("expected clamped to index 14 (ID 15), got %d", m.SelectedMessage().ID)
+	}
+
+	// Scroll into view when target card is below viewport
+	m.viewport.SetYOffset(0)
+	m.SelectedMessageIndex = 12
+	m.scrollSelectedMessageIntoView()
+	target := m.messageLineRanges[12]
+	if m.viewport.YOffset+m.viewport.Height <= target.endLine {
+		t.Errorf("expected target card 12 end line (%d) to be within visible viewport [YOffset %d, %d]",
+			target.endLine, m.viewport.YOffset, m.viewport.YOffset+m.viewport.Height)
+	}
+
+	// Scroll into view when target card is above viewport
+	m.SelectedMessageIndex = 1
+	m.scrollSelectedMessageIntoView()
+	target1 := m.messageLineRanges[1]
+	if m.viewport.YOffset > target1.startLine {
+		t.Errorf("expected viewport to scroll up to target card start line %d, got YOffset %d",
+			target1.startLine, m.viewport.YOffset)
+	}
+}
+
+func TestReadReceipts_ModeAll(t *testing.T) {
+	m := newTestModel(80, 24)
+	m.Mode = ModeAll
+
+	user := types.UserInfo{
+		PeerID:          "user-all-1",
+		FirstName:       "Diana",
+		ReadOutboxMaxID: 100,
+	}
+	m.All.SetItems([]list.Item{user})
+	m.All.Select(0)
+
+	if m.ActiveReadOutboxMaxID() != 100 {
+		t.Fatalf("expected ActiveReadOutboxMaxID in ModeAll to be 100, got %d", m.ActiveReadOutboxMaxID())
+	}
+
+	m.Conversations = []types.FormattedMessage{
+		{
+			ID:       50,
+			Content:  "Read outgoing message",
+			Sender:   "You",
+			IsFromMe: true,
+			Date:     time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC),
+		},
+		{
+			ID:       150,
+			Content:  "Unread outgoing message",
+			Sender:   "You",
+			IsFromMe: true,
+			Date:     time.Date(2026, 1, 1, 12, 1, 0, 0, time.UTC),
+		},
+	}
+
+	view := m.renderMessagesViewport(80, 20)
+	if !strings.Contains(view, "✓✓") {
+		t.Errorf("expected double checkmark '✓✓' for read message in ModeAll, got view:\n%s", view)
+	}
+	if !strings.Contains(view, "✓") {
+		t.Errorf("expected checkmark '✓' for unread message in ModeAll, got view:\n%s", view)
+	}
+}
+
+func TestWindowResize_PreservesScrollOffset(t *testing.T) {
+	m := newTestModel(80, 24)
+	m.Mode = ModeUsers
+
+	var messages []types.FormattedMessage
+	baseTime := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	for i := 0; i < 30; i++ {
+		messages = append(messages, types.FormattedMessage{
+			ID:      i + 1,
+			Content: fmt.Sprintf("Message item %d with plenty of text to allow scrollback", i+1),
+			Date:    baseTime.Add(time.Duration(i) * time.Minute),
+		})
+	}
+	m.Conversations = messages
+	m.renderMessagesViewport(80, 20)
+
+	m.viewport.SetYOffset(15)
+
+	res, _ := m.handleWindowSize(tea.WindowSizeMsg{Width: 100, Height: 35})
+	mAfter := res.(Model)
+
+	if mAfter.viewport.YOffset != 15 {
+		t.Errorf("expected resize to preserve scroll offset 15, got %d", mAfter.viewport.YOffset)
+	}
+	if mAfter.viewport.Width <= 0 || mAfter.viewport.Height <= 0 {
+		t.Errorf("expected valid viewport dimensions after resize, got %dx%d", mAfter.viewport.Width, mAfter.viewport.Height)
+	}
+}
+
+func TestMainFocus_KeysDoNotTriggerViewportPageScroll(t *testing.T) {
+	m := newTestModel(80, 24)
+	m.Mode = ModeUsers
+	m.FocusedOn = Main
+	m.Conversations = []types.FormattedMessage{
+		{ID: 1, Content: "Msg 1"},
+		{ID: 2, Content: "Msg 2"},
+	}
+	m.SelectedMessageIndex = 0
+	m.renderMessagesViewport(80, 20)
+	m.viewport.SetYOffset(0)
+
+	// Press 'd' (delete message)
+	dRes, dCmd := m.handleKeyPress(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	mAfterD := dRes.(Model)
+	if dCmd == nil {
+		t.Fatalf("expected delete modal cmd from 'd'")
+	}
+	if mAfterD.viewport.YOffset != 0 {
+		t.Errorf("expected 'd' not to scroll viewport half-page, got YOffset %d", mAfterD.viewport.YOffset)
+	}
+
+	// Press 'f' (forward message)
+	fRes, fCmd := m.handleKeyPress(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	mAfterF := fRes.(Model)
+	if fCmd == nil {
+		t.Fatalf("expected forward modal cmd from 'f'")
+	}
+	if mAfterF.viewport.YOffset != 0 {
+		t.Errorf("expected 'f' not to scroll viewport page-down, got YOffset %d", mAfterF.viewport.YOffset)
+	}
+}

@@ -527,12 +527,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var peer types.Peer
 		if m.SelectedUser.PeerID != "" {
 			peer = peerFromItem(m.SelectedUser)
-			var message *types.FormattedMessage = m.SelectedMessage()
-			if message == nil {
-				if sel, ok := m.ChatUI.SelectedItem().(types.FormattedMessage); ok {
-					message = &sel
-				}
-			}
+			message := m.SelectedMessage()
 			if message != nil {
 				alreadyReacted := false
 				if message.Reactions != nil {
@@ -911,8 +906,6 @@ func (m Model) handleMessageDeletion(msg MessageDeletionConfirmResponseMsg) (tea
 	var selectedID int
 	if msgPtr := m.SelectedMessage(); msgPtr != nil {
 		selectedID = msgPtr.ID
-	} else if selectedItemInChat, ok := m.ChatUI.SelectedItem().(types.FormattedMessage); ok {
-		selectedID = selectedItemInChat.ID
 	}
 	if selectedID == 0 {
 		return m, nil
@@ -1323,12 +1316,7 @@ func (m Model) handleListPagination() (Model, tea.Cmd) {
 
 func (m Model) handleEditKey() (tea.Model, tea.Cmd) {
 	if m.FocusedOn == Main {
-		var selectedItem *types.FormattedMessage = m.SelectedMessage()
-		if selectedItem == nil {
-			if sel, ok := m.ChatUI.SelectedItem().(types.FormattedMessage); ok {
-				selectedItem = &sel
-			}
-		}
+		selectedItem := m.SelectedMessage()
 		if selectedItem != nil && (selectedItem.IsFromMe || strings.ToLower(selectedItem.Sender) == "you") {
 			sentDate := selectedItem.Date
 			now := time.Now()
@@ -1395,12 +1383,7 @@ func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
 	}
 
 	if m.FocusedOn == Main {
-		var selectedMessage *types.FormattedMessage = m.SelectedMessage()
-		if selectedMessage == nil {
-			if sel, ok := m.ChatUI.SelectedItem().(types.FormattedMessage); ok {
-				selectedMessage = &sel
-			}
-		}
+		selectedMessage := m.SelectedMessage()
 		if selectedMessage != nil && selectedMessage.MessageMediaWebPage != nil {
 			if webPage, ok := selectedMessage.MessageMediaWebPage.Webpage.(*tg.WebPage); ok {
 				if entity := getEntityName(webPage.URL); entity != nil {
@@ -1465,12 +1448,7 @@ func (m Model) handleReplyKey() (tea.Model, tea.Cmd) {
 	if m.FocusedOn == Main {
 		canWrite := (m.Mode == ModeUsers || m.Mode == ModeGroups) || (m.Mode == ModeChannels && m.SelectedChannel.IsCreator)
 		if canWrite {
-			var selectedMessage *types.FormattedMessage = m.SelectedMessage()
-			if selectedMessage == nil {
-				if sel, ok := m.ChatUI.SelectedItem().(types.FormattedMessage); ok {
-					selectedMessage = &sel
-				}
-			}
+			selectedMessage := m.SelectedMessage()
 			if selectedMessage != nil {
 				m.IsReply = true
 				m.FocusedOn = Input
@@ -1484,12 +1462,7 @@ func (m Model) handleReplyKey() (tea.Model, tea.Cmd) {
 
 func (m Model) handleDeleteKey() (tea.Model, tea.Cmd) {
 	if m.FocusedOn == Main {
-		var selectedItem *types.FormattedMessage = m.SelectedMessage()
-		if selectedItem == nil {
-			if sel, ok := m.ChatUI.SelectedItem().(types.FormattedMessage); ok {
-				selectedItem = &sel
-			}
-		}
+		selectedItem := m.SelectedMessage()
 		if selectedItem != nil {
 			itemCopy := *selectedItem
 			return m, func() tea.Msg {
@@ -1504,12 +1477,7 @@ func (m Model) handleForwardKey() (tea.Model, tea.Cmd) {
 	if m.FocusedOn != Main {
 		return m, nil
 	}
-	var selectedMessage *types.FormattedMessage = m.SelectedMessage()
-	if selectedMessage == nil {
-		if sel, ok := m.ChatUI.SelectedItem().(types.FormattedMessage); ok {
-			selectedMessage = &sel
-		}
-	}
+	selectedMessage := m.SelectedMessage()
 	if selectedMessage == nil {
 		return m, nil
 	}
@@ -1517,7 +1485,9 @@ func (m Model) handleForwardKey() (tea.Model, tea.Cmd) {
 
 	var from list.Item
 	switch m.Mode {
-	case ModeUsers:
+	case ModeAll:
+		from = m.All.SelectedItem()
+	case ModeUsers, ModeBots:
 		from = m.SelectedUser
 	case ModeChannels:
 		from = m.SelectedChannel
@@ -1735,11 +1705,23 @@ func extractPeerInfo(fromPeer, receiver list.Item) (from, toPeer types.Peer) {
 func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	m.Width = msg.Width
 	m.Height = msg.Height
-	headerHeight := 7
-	footerHeight := 7
-	m.viewport = viewport.New(msg.Width, msg.Height-(headerHeight+footerHeight))
-	m.viewport.YPosition = headerHeight
-	return m, m.updateConversations()
+	d := calculateLayoutDimensions(&m)
+	updateListDimensions(&m, d)
+	availWidth := max(10, d.mainWidth-6)
+	availHeight := max(4, d.contentHeight-8)
+	oldOffset := m.viewport.YOffset
+	if m.viewport.Width == 0 && m.viewport.Height == 0 {
+		m.viewport = viewport.New(availWidth, availHeight)
+		m.viewport.KeyMap = viewport.KeyMap{}
+	} else {
+		m.viewport.Width = availWidth
+		m.viewport.Height = availHeight
+	}
+	cmd := m.updateConversations()
+	if oldOffset > 0 {
+		m.viewport.SetYOffset(oldOffset)
+	}
+	return m, cmd
 }
 
 func (m Model) handleSearchedUserResult(msg SelectSearchedUserResult) (tea.Model, tea.Cmd) {

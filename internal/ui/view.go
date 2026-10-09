@@ -318,8 +318,10 @@ func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (M
 			m.SelectedGroupForumTopics, cmd = m.SelectedGroupForumTopics.Update(msg)
 			cmds = append(cmds, cmd)
 		} else {
-			m.viewport, cmd = m.viewport.Update(msg)
-			cmds = append(cmds, cmd)
+			if _, isKey := msg.(tea.KeyMsg); !isKey {
+				m.viewport, cmd = m.viewport.Update(msg)
+				cmds = append(cmds, cmd)
+			}
 		}
 	}
 	m.SkipNextInput = false
@@ -505,9 +507,6 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 func (m *Model) getMessageSenderUserInfo() *types.UserInfo {
 	if msg := m.SelectedMessage(); msg != nil {
 		return msg.SenderUserInfo
-	}
-	if selectedItem, ok := m.ChatUI.SelectedItem().(types.FormattedMessage); ok {
-		return selectedItem.SenderUserInfo
 	}
 	return nil
 }

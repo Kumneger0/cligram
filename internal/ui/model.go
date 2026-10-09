@@ -171,20 +171,6 @@ func (m *Model) renderWebPagePreview(webPageMedia *tg.MessageMediaWebPage, width
 	return "\n" + linkPreviewBorderStyle.Render(content)
 }
 
-func (d MessagesDelegate) renderReactions(tgReactions *tg.MessageReactions) string {
-	if d.Model != nil {
-		return d.Model.renderReactions(tgReactions)
-	}
-	return ""
-}
-
-func (d MessagesDelegate) renderWebPagePreview(webPageMedia *tg.MessageMediaWebPage, width int) string {
-	if d.Model != nil {
-		return d.Model.renderWebPagePreview(webPageMedia, width)
-	}
-	return ""
-}
-
 func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	var title string
 
@@ -206,14 +192,8 @@ func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list
 	}
 
 	var readMaxOutboxID int
-
-	switch d.Model.Mode {
-	case ModeUsers, ModeBots:
-		readMaxOutboxID = d.Model.SelectedUser.ReadOutboxMaxID
-	case ModeChannels:
-		readMaxOutboxID = d.Model.SelectedChannel.ReadOutboxMaxID
-	case ModeGroups:
-		readMaxOutboxID = d.Model.SelectedGroup.ReadOutboxMaxID
+	if d.Model != nil {
+		readMaxOutboxID = d.Model.ActiveReadOutboxMaxID()
 	}
 
 	var readState string
@@ -224,13 +204,13 @@ func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list
 	}
 
 	var reactions string
-	if entry.Reactions != nil {
-		reactions = d.renderReactions(entry.Reactions)
+	if entry.Reactions != nil && d.Model != nil {
+		reactions = d.Model.renderReactions(entry.Reactions)
 	}
 
 	var preview string
-	if entry.MessageMediaWebPage != nil {
-		preview = d.renderWebPagePreview(entry.MessageMediaWebPage, m.Width())
+	if entry.MessageMediaWebPage != nil && d.Model != nil {
+		preview = d.Model.renderWebPagePreview(entry.MessageMediaWebPage, m.Width())
 	}
 
 	if entry.IsFromMe {
@@ -682,17 +662,51 @@ func (m *Model) CurrentPeerID() string {
 	return ""
 }
 
+func (m *Model) ActiveReadOutboxMaxID() int {
+	if m.ActivePeerID != "" {
+		if m.SelectedUser.PeerID == m.ActivePeerID {
+			return m.SelectedUser.ReadOutboxMaxID
+		}
+		if m.SelectedChannel.ID == m.ActivePeerID {
+			return m.SelectedChannel.ReadOutboxMaxID
+		}
+		if m.SelectedGroup.ID == m.ActivePeerID {
+			return m.SelectedGroup.ReadOutboxMaxID
+		}
+	}
+	switch m.Mode {
+	case ModeAll:
+		selected := m.All.SelectedItem()
+		switch it := selected.(type) {
+		case types.UserInfo:
+			return it.ReadOutboxMaxID
+		case types.ChannelInfo:
+			return it.ReadOutboxMaxID
+		}
+	case ModeUsers, ModeBots:
+		return m.SelectedUser.ReadOutboxMaxID
+	case ModeChannels:
+		return m.SelectedChannel.ReadOutboxMaxID
+	case ModeGroups:
+		return m.SelectedGroup.ReadOutboxMaxID
+	}
+	return 0
+}
+
 func (m *Model) SelectedMessage() *types.FormattedMessage {
-	if len(m.Conversations) == 0 {
-		return nil
+	if len(m.Conversations) > 0 {
+		if m.SelectedMessageIndex < 0 {
+			m.SelectedMessageIndex = 0
+		}
+		if m.SelectedMessageIndex >= len(m.Conversations) {
+			m.SelectedMessageIndex = len(m.Conversations) - 1
+		}
+		return &m.Conversations[m.SelectedMessageIndex]
 	}
-	if m.SelectedMessageIndex < 0 {
-		m.SelectedMessageIndex = 0
+	if sel, ok := m.ChatUI.SelectedItem().(types.FormattedMessage); ok {
+		return &sel
 	}
-	if m.SelectedMessageIndex >= len(m.Conversations) {
-		m.SelectedMessageIndex = len(m.Conversations) - 1
-	}
-	return &m.Conversations[m.SelectedMessageIndex]
+	return nil
 }
 
 func (m *Model) scrollSelectedMessageIntoView() {
@@ -742,15 +756,7 @@ func (m *Model) renderMessagesViewport(width, height int) string {
 		return m.viewport.View()
 	}
 
-	var readMaxOutboxID int
-	switch m.Mode {
-	case ModeUsers, ModeBots:
-		readMaxOutboxID = m.SelectedUser.ReadOutboxMaxID
-	case ModeChannels:
-		readMaxOutboxID = m.SelectedChannel.ReadOutboxMaxID
-	case ModeGroups:
-		readMaxOutboxID = m.SelectedGroup.ReadOutboxMaxID
-	}
+	readMaxOutboxID := m.ActiveReadOutboxMaxID()
 
 	bubbleWidth := max(24, int(float64(width)*0.80))
 	if bubbleWidth > width-2 {
