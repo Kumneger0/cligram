@@ -12,9 +12,11 @@ type GetAllChatsResponseMSG struct {
 	Err   error
 }
 type AllChats struct {
-	PrivateChats         []UserInfo    `json:"chats"`
-	Channels             []ChannelInfo `json:"channels"`
-	Groups               []ChannelInfo `json:"groups"`
+	All                  []FilterableItem `json:"all,omitempty"`
+	PrivateChats         []UserInfo       `json:"chats"`
+	Bots                 []UserInfo       `json:"bots,omitempty"`
+	Channels             []ChannelInfo    `json:"channels"`
+	Groups               []ChannelInfo    `json:"groups"`
 	OffsetDate, OffsetID int
 }
 
@@ -105,6 +107,7 @@ type GetMessagesMsg struct {
 type UserChatsMsg struct {
 	Response *GetUserChatsResult `json:"response,omitempty"`
 	Err      error               `json:"error,omitempty"`
+	IsBot    bool                `json:"isBot,omitempty"`
 }
 
 type ChannelsMsg struct {

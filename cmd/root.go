@@ -61,6 +61,12 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 				model := &ui.Model{}
 				model.Alert = *bubbleup.NewAlertModel(80, true, 10*time.Second)
 				model.CustomEmojis = make(map[int64]*tg.Document)
+				allList := list.New([]list.Item{}, ui.CustomDelegate{Model: model}, 10, 20)
+				allList.SetShowPagination(false)
+				allList.SetShowHelp(false)
+				allList.SetShowTitle(false)
+				allList.SetShowStatusBar(false)
+
 				userList := list.New([]list.Item{}, ui.CustomDelegate{Model: model}, 10, 20)
 				userList.SetShowPagination(false)
 				channels := list.New([]list.Item{}, ui.CustomDelegate{Model: model}, 10, 20)
@@ -99,6 +105,7 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 
 				model.Filepicker = fp
 				model.Input = input
+				model.All = allList
 				model.Users = userList
 				model.Groups = groups
 				model.ModalContent = ""
@@ -106,7 +113,7 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 				model.Width = width - 4
 				model.Channels = channels
 				model.IsModalVisible = false
-				model.Mode = ui.ModeUsers
+				model.Mode = ui.ModeAll
 				model.FocusedOn = ui.SideBar
 				model.ChatUI = chatList
 				model.SelectedFile = ""

@@ -11,6 +11,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/filepicker"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -275,6 +276,7 @@ func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list
 type Mode string
 
 const (
+	ModeAll         Mode = "all"
 	ModeUsers       Mode = "users"
 	ModeChannels    Mode = "channels"
 	ModeGroups      Mode = "groups"
@@ -300,6 +302,9 @@ type Model struct {
 	Filepicker               filepicker.Model
 	IsFilepickerVisible      bool
 	SelectedFile             string
+	All                      list.Model
+	AllLoaded                bool
+	AllLoading               bool
 	Users                    list.Model
 	Bots                     list.Model
 	SelectedUser             types.UserInfo
@@ -325,6 +330,22 @@ type Model struct {
 	SkipNextInput            bool
 	OffsetDate, OffsetID     int
 	OnPagination             bool
+	UsersLoaded              bool
+	UsersLoading             bool
+	UsersOffsetDate          int
+	UsersOffsetID            int
+	BotsLoaded               bool
+	BotsLoading              bool
+	BotsOffsetDate           int
+	BotsOffsetID             int
+	ChannelsLoaded           bool
+	ChannelsLoading          bool
+	ChannelsOffsetDate       int
+	ChannelsOffsetID         int
+	GroupsLoaded             bool
+	GroupsLoading            bool
+	GroupsOffsetDate         int
+	GroupsOffsetID           int
 	Stories                  []types.Stories
 	StoriesLoading           bool
 	CurrentUser              *types.UserInfo
@@ -336,6 +357,7 @@ type Model struct {
 	SelectedForumTopic       *types.ForumTopicInfo
 	CallOverlay              CallOverlayModel
 	ActiveCallUserID         int64
+	SidebarSpinner           spinner.Model
 }
 
 type CustomEmojiDocumentMsg struct {
@@ -441,8 +463,11 @@ func calculateLayoutDimensions(m *Model) layoutDimensions {
 }
 
 func updateListDimensions(m *Model, d layoutDimensions) {
-	listHeight := max(0, d.contentHeight-4)
+	tabBarHeight := lipgloss.Height(m.renderSidebarTabBar(max(0, d.sidebarWidth-4)))
+	listHeight := max(0, d.contentHeight-(tabBarHeight+4))
 	listWidth := max(0, d.sidebarWidth-4)
+	m.All.SetHeight(listHeight)
+	m.All.SetWidth(listWidth)
 	m.Users.SetHeight(listHeight)
 	m.Users.SetWidth(listWidth)
 	m.Bots.SetHeight(listHeight)
@@ -470,6 +495,19 @@ func renderModal(m *Model) string {
 
 func getUserOrChannelName(m *Model) string {
 	switch m.Mode {
+	case ModeAll:
+		selected := m.All.SelectedItem()
+		switch it := selected.(type) {
+		case types.UserInfo:
+			return formatUserName(it)
+		case types.ChannelInfo:
+			if it.IsBroadcast {
+				return formatChannelName(it)
+			}
+			return formatGroupName(it)
+		default:
+			return ""
+		}
 	case ModeUsers, ModeBots:
 		return formatUserName(m.SelectedUser)
 	case ModeChannels:
@@ -599,42 +637,122 @@ func prepareFilepickerView(m *Model) string {
 	return s.String()
 }
 
-func prepareSidebarContent(m *Model, d layoutDimensions) string {
-	if m.SideBarLoading {
-		loadingText := lipgloss.NewStyle().
-			Foreground(DefaultTheme.PrimaryText).
-			Bold(true).
-			Align(lipgloss.Center).
-			Render("⏳ Loading chats")
-
-		spinner := lipgloss.NewStyle().
-			Foreground(DefaultTheme.AccentColor).
-			Bold(true).
-			Render("◐")
-
-		content := lipgloss.JoinVertical(
-			lipgloss.Center,
-			spinner,
-			loadingText,
-		)
-
-		return lipgloss.NewStyle().
-			Width(d.sidebarWidth).
-			Height(d.contentHeight).
-			Align(lipgloss.Center, lipgloss.Center).
-			Padding(2, 1).
-			Render(content)
+func (m *Model) ensureSidebarSpinner() {
+	if len(m.SidebarSpinner.Spinner.Frames) == 0 {
+		s := spinner.New()
+		s.Spinner = spinner.Dot
+		s.Style = lipgloss.NewStyle().Foreground(DefaultTheme.AccentColor).Bold(true)
+		m.SidebarSpinner = s
 	}
-	var content string
+}
+
+func (m *Model) isCurrentCategoryLoading() bool {
 	switch m.Mode {
-	case ModeBots:
-		content = m.Bots.View()
+	case ModeAll:
+		return m.AllLoading || m.SideBarLoading
 	case ModeUsers:
-		content = m.Users.View()
+		return m.UsersLoading
 	case ModeChannels:
-		content = m.Channels.View()
+		return m.ChannelsLoading
 	case ModeGroups:
-		content = m.Groups.View()
+		return m.GroupsLoading
+	case ModeBots:
+		return m.BotsLoading
+	}
+	return false
+}
+
+func (m *Model) isAnyCategoryLoading() bool {
+	return m.AllLoading || m.UsersLoading || m.ChannelsLoading || m.GroupsLoading || m.BotsLoading || m.SideBarLoading
+}
+
+func (m *Model) currentCategoryItemCount() int {
+	switch m.Mode {
+	case ModeAll:
+		return len(m.All.Items())
+	case ModeUsers:
+		return len(m.Users.Items())
+	case ModeChannels:
+		return len(m.Channels.Items())
+	case ModeGroups:
+		return len(m.Groups.Items())
+	case ModeBots:
+		return len(m.Bots.Items())
+	}
+	return 0
+}
+
+func (m *Model) setCategoryLoading(mode Mode, loading bool) {
+	switch mode {
+	case ModeAll:
+		m.AllLoading = loading
+	case ModeUsers:
+		m.UsersLoading = loading
+	case ModeChannels:
+		m.ChannelsLoading = loading
+	case ModeGroups:
+		m.GroupsLoading = loading
+	case ModeBots:
+		m.BotsLoading = loading
+	}
+}
+
+func (m *Model) checkThresholdAndBackfill(mode Mode) (Model, tea.Cmd) {
+	m.ensureSidebarSpinner()
+	if m.currentCategoryItemCount() < 10 && m.OffsetDate != -1 && m.OffsetID != -1 && !m.isCurrentCategoryLoading() && !m.SideBarLoading && !m.OnPagination {
+		m.setCategoryLoading(mode, true)
+		if telegram.Cligram != nil {
+			return *m, tea.Batch(
+				telegram.Cligram.GetAllChats(telegram.Cligram.Context(), m.OffsetDate, m.OffsetID, 100),
+				m.SidebarSpinner.Tick,
+			)
+		}
+		return *m, m.SidebarSpinner.Tick
+	}
+	return *m, nil
+}
+
+func prepareSidebarContent(m *Model, d layoutDimensions) string {
+	m.ensureSidebarSpinner()
+
+	var content string
+	if (m.isCurrentCategoryLoading() || m.SideBarLoading) && m.currentCategoryItemCount() == 0 {
+		catName := "dialogs"
+		switch m.Mode {
+		case ModeAll:
+			catName = "all dialogs"
+		case ModeChannels:
+			catName = "channels"
+		case ModeGroups:
+			catName = "groups"
+		case ModeBots:
+			catName = "bots"
+		case ModeUsers:
+			catName = "chats"
+		}
+		spinView := m.SidebarSpinner.View()
+		spinText := lipgloss.NewStyle().
+			Foreground(DefaultTheme.SecondaryText).
+			Render(fmt.Sprintf("Loading %s...", catName))
+		spinBlock := lipgloss.JoinHorizontal(lipgloss.Center, spinView, " ", spinText)
+		content = lipgloss.NewStyle().
+			Width(max(0, d.sidebarWidth-4)).
+			Height(max(0, d.contentHeight-8)).
+			Align(lipgloss.Center, lipgloss.Center).
+			Render(spinBlock)
+	} else {
+		switch m.Mode {
+		case ModeAll:
+			content = m.All.View()
+		case ModeBots:
+			content = m.Bots.View()
+		case ModeUsers:
+			content = m.Users.View()
+		case ModeChannels:
+			content = m.Channels.View()
+		case ModeGroups:
+			content = m.Groups.View()
+		}
 	}
 
 	storiesIndicatorText := fmt.Sprintf("📖 Stories (%d)", len(m.Stories))
@@ -642,19 +760,102 @@ func prepareSidebarContent(m *Model, d layoutDimensions) string {
 		storiesIndicatorText = "📖 Stories (⠋ Loading...)"
 	}
 	storiesIndicator := sidebarHeaderStyle.Render(storiesIndicatorText)
-	itemsCount := sidebarHeaderStyle.Render(fmt.Sprintf("💬 Chats (%d)", len(m.Users.Items())))
-	switch m.Mode {
-	case ModeChannels:
-		itemsCount = sidebarHeaderStyle.Render(fmt.Sprintf("📢 Channels (%d)", len(m.Channels.Items())))
-	case ModeGroups:
-		itemsCount = sidebarHeaderStyle.Render(fmt.Sprintf("👥 Groups (%d)", len(m.Groups.Items())))
-	case ModeBots:
-		itemsCount = sidebarHeaderStyle.Render(fmt.Sprintf("🤖 Bots (%d)", len(m.Bots.Items())))
-	}
+	tabBar := m.renderSidebarTabBar(max(0, d.sidebarWidth-4))
 
-	header := lipgloss.JoinVertical(lipgloss.Left, storiesIndicator, "", itemsCount)
+	header := lipgloss.JoinVertical(lipgloss.Left, storiesIndicator, "", tabBar, "")
 	joinedView := lipgloss.JoinVertical(lipgloss.Top, header, content)
 	return getSideBarStyles(d.sidebarWidth, d.contentHeight, m).Render(joinedView)
+}
+
+func (m *Model) categoryUnreadCount(mode Mode) int {
+	var count int
+	var items []list.Item
+	switch mode {
+	case ModeAll:
+		items = m.All.Items()
+	case ModeUsers:
+		items = m.Users.Items()
+	case ModeGroups:
+		items = m.Groups.Items()
+	case ModeChannels:
+		items = m.Channels.Items()
+	case ModeBots:
+		items = m.Bots.Items()
+	}
+	for _, item := range items {
+		switch v := item.(type) {
+		case types.UserInfo:
+			count += v.UnreadCount
+		case types.ChannelInfo:
+			count += v.UnreadCount
+		}
+	}
+	return count
+}
+
+func (m *Model) renderSidebarTabBar(width int) string {
+	m.ensureSidebarSpinner()
+
+	type tabInfo struct {
+		mode     Mode
+		shortcut string
+		name     string
+	}
+	tabs := []tabInfo{
+		{mode: ModeAll, shortcut: "a", name: "All"},
+		{mode: ModeUsers, shortcut: "u", name: "Chats"},
+		{mode: ModeGroups, shortcut: "g", name: "Groups"},
+		{mode: ModeChannels, shortcut: "c", name: "Channels"},
+		{mode: ModeBots, shortcut: "b", name: "Bots"},
+	}
+
+	renderedTabs := make([]string, len(tabs))
+	for i, t := range tabs {
+		isLoading := false
+		switch t.mode {
+		case ModeAll:
+			isLoading = m.AllLoading
+		case ModeUsers:
+			isLoading = m.UsersLoading
+		case ModeChannels:
+			isLoading = m.ChannelsLoading
+		case ModeGroups:
+			isLoading = m.GroupsLoading
+		case ModeBots:
+			isLoading = m.BotsLoading
+		}
+
+		unread := m.categoryUnreadCount(t.mode)
+		badge := ""
+		if unread > 0 {
+			badge = fmt.Sprintf(" (%d)", unread)
+		}
+		if isLoading {
+			badge += " " + m.SidebarSpinner.View()
+		}
+		label := fmt.Sprintf("[%s] %s%s", t.shortcut, t.name, badge)
+		if m.Mode == t.mode {
+			renderedTabs[i] = activeTabStyle.Render(label)
+		} else {
+			renderedTabs[i] = inactiveTabStyle.Render(label)
+		}
+	}
+
+	// Try single line if it fits width
+	singleLine := strings.Join(renderedTabs, " ")
+	if width <= 0 || lipgloss.Width(singleLine) <= width {
+		return singleLine
+	}
+
+	// 2 rows: 3 tabs on row1, 2 on row2
+	row1 := strings.Join(renderedTabs[:3], " ")
+	row2 := strings.Join(renderedTabs[3:], " ")
+	if lipgloss.Width(row1) <= width && lipgloss.Width(row2) <= width {
+		return lipgloss.JoinVertical(lipgloss.Left, row1, row2)
+	}
+
+	// Fallback to vertical stack
+	return lipgloss.JoinVertical(lipgloss.Left, renderedTabs...)
 }
 
 func prepareInputView(m *Model, d layoutDimensions) string {
@@ -714,6 +915,39 @@ func Debounce(fn func(args ...any) tea.Msg, delay time.Duration) func(args ...an
 func getMessageParams(m *Model) types.Peer {
 	var cType types.ChatType
 	var pInfo types.Peer
+	if m.Mode == ModeAll {
+		selected := m.All.SelectedItem()
+		switch it := selected.(type) {
+		case types.UserInfo:
+			m.SelectedUser = it
+			if it.IsBot {
+				cType = types.BotChat
+			} else {
+				cType = types.UserChat
+			}
+			pInfo = types.Peer{
+				AccessHash: it.AccessHash,
+				ID:         it.PeerID,
+				ChatType:   cType,
+			}
+		case types.ChannelInfo:
+			if it.IsBroadcast {
+				m.SelectedChannel = it
+				cType = types.ChannelChat
+			} else {
+				m.SelectedGroup = it
+				cType = types.GroupChat
+			}
+			pInfo = types.Peer{
+				AccessHash: it.AccessHash,
+				ID:         it.ID,
+				ChatType:   cType,
+			}
+			if it.IsBroadcast && it.IsCreator {
+				m.Input.Reset()
+			}
+		}
+	}
 	if m.Mode == ModeUsers || m.Mode == ModeBots {
 		if m.Mode == ModeUsers {
 			m.SelectedUser = m.Users.SelectedItem().(types.UserInfo)
