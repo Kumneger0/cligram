@@ -159,6 +159,7 @@ type ForumTopicInfo struct {
 type NewMessageNotification struct {
 	ID      int         `json:"id"`
 	FromID  string      `json:"fromId"`
+	PeerID  string      `json:"peerId,omitempty"`
 	Message *tg.Message `json:"message"`
 }
 

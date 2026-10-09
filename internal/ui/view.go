@@ -232,10 +232,19 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 		WebPage:              nil,
 		Document:             nil,
 		FromID:               nil,
+		PeerID:               &peerInfo.ID,
 	}
-	firstOneRemoved := m.Conversations[1:]
-	firstOneRemoved = append(firstOneRemoved, newMessage)
-	copy(m.Conversations[:], firstOneRemoved)
+	if m.IsReply && m.ReplyTo != nil {
+		replyCopy := *m.ReplyTo
+		newMessage.ReplyTo = &replyCopy
+	}
+	m.ActivePeerID = peerInfo.ID
+	m.Conversations = append(m.Conversations, newMessage)
+	if len(m.Conversations) > 250 {
+		m.Conversations = m.Conversations[len(m.Conversations)-250:]
+	}
+	m.SelectedMessageIndex = len(m.Conversations) - 1
+	m.viewport.GotoBottom()
 	if *cligramConfig.Chat.ReadReceiptMode == "default" {
 		cmd := telegram.Cligram.MarkMessagesAsRead(telegram.Cligram.Context(), types.MarkAsReadRequest{
 			Peer: peerInfo,
@@ -308,12 +317,15 @@ func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (M
 			}
 		}
 	default:
+		m.Input.Blur()
 		if m.ShowForumTopics && m.SelectedForumTopic == nil {
 			m.SelectedGroupForumTopics, cmd = m.SelectedGroupForumTopics.Update(msg)
 			cmds = append(cmds, cmd)
 		} else {
-			m.ChatUI, cmd = m.ChatUI.Update(msg)
-			cmds = append(cmds, cmd)
+			if _, isKey := msg.(tea.KeyMsg); !isKey {
+				m.viewport, cmd = m.viewport.Update(msg)
+				cmds = append(cmds, cmd)
+			}
 		}
 	}
 	m.SkipNextInput = false
@@ -325,12 +337,15 @@ func handleUserChange(m *Model, offsetID *int, afterMessagesCmd tea.Cmd) (Model,
 	m.SelectedForumTopic = nil
 
 	pInfo := getMessageParams(m)
+	m.ActivePeerID = pInfo.ID
 
 	isGroupForum := (m.Mode == ModeGroups && m.SelectedGroup.IsForum) ||
 		(m.Mode == ModeAll && m.SelectedGroup.IsForum && pInfo.ChatType == types.GroupChat)
 	if isGroupForum {
 		m.ForumTopicLoading = true
-		m.Conversations = [50]types.FormattedMessage{}
+		m.Conversations = nil
+		m.SelectedMessageIndex = -1
+		m.viewport.SetContent("")
 		m.ChatUI.SetItems([]list.Item{})
 		return *m, telegram.Cligram.GetChannelForums(pInfo)
 	}
@@ -347,7 +362,9 @@ func handleUserChange(m *Model, offsetID *int, afterMessagesCmd tea.Cmd) (Model,
 		})
 		return *m, tea.Batch(cmd, markAsReadCmd)
 	}
-	m.Conversations = [50]types.FormattedMessage{}
+	m.Conversations = nil
+	m.SelectedMessageIndex = -1
+	m.viewport.SetContent("")
 	m.MainViewLoading = true
 	m.ChatUI.ResetSelected()
 	m.ChatUI.SetItems([]list.Item{})
@@ -363,6 +380,8 @@ func isReadOnlyBroadcast(m *Model) bool {
 			if ch, ok := selected.(types.ChannelInfo); ok && ch.IsBroadcast && !ch.IsCreator {
 				return true
 			}
+		} else if m.SelectedChannel.IsBroadcast && !m.SelectedChannel.IsCreator {
+			return true
 		}
 	}
 	return false
@@ -373,27 +392,47 @@ func changeFocusMode(m *Model, msg string, shift bool) (Model, tea.Cmd) {
 	currentlyFocusedOn := m.FocusedOn
 	canWrite := !isReadOnlyBroadcast(m)
 	if currentlyFocusedOn == SideBar {
+		pInfo := getMessageParams(m)
+		if pInfo.ID != "" && pInfo.ID != m.ActivePeerID {
+			mUpdated, changeCmd := handleUserChange(m, nil, nil)
+			*m = mUpdated
+			if changeCmd != nil {
+				cmds = append(cmds, changeCmd)
+			}
+		}
 		if shift {
-			m.FocusedOn = Input
+			if canWrite {
+				m.FocusedOn = Input
+			} else {
+				m.FocusedOn = Main
+			}
 		} else {
 			m.FocusedOn = Main
-			chatListLastIndex := len(m.ChatUI.Items()) - 1
-			m.ChatUI.Select(chatListLastIndex)
 		}
-	} else if currentlyFocusedOn == Main && canWrite {
+	} else if currentlyFocusedOn == Main {
 		if shift {
 			m.FocusedOn = SideBar
 		} else {
-			m.FocusedOn = Input
+			if canWrite {
+				m.FocusedOn = Input
+			} else {
+				m.FocusedOn = SideBar
+			}
 		}
-	} else {
+	} else { // currentlyFocusedOn == Input
 		if shift {
 			m.FocusedOn = Main
-			chatListLastIndex := len(m.ChatUI.Items()) - 1
-			m.ChatUI.Select(chatListLastIndex)
 		} else {
 			m.FocusedOn = SideBar
 		}
+	}
+	if m.FocusedOn == Main && len(m.Conversations) > 0 {
+		if m.SelectedMessageIndex < 0 {
+			m.SelectedMessageIndex = len(m.Conversations) - 1
+		} else if m.SelectedMessageIndex >= len(m.Conversations) {
+			m.SelectedMessageIndex = len(m.Conversations) - 1
+		}
+		m.scrollSelectedMessageIntoView()
 	}
 	return updateFocusedComponent(m, msg, &cmds)
 }
@@ -472,16 +511,17 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 }
 
 func (m *Model) getMessageSenderUserInfo() *types.UserInfo {
-	if selectedItem, ok := m.ChatUI.SelectedItem().(types.FormattedMessage); ok {
-		return selectedItem.SenderUserInfo
+	if msg := m.SelectedMessage(); msg != nil {
+		return msg.SenderUserInfo
 	}
 	return nil
 }
 
 func (m *Model) updateConversations() tea.Cmd {
 	cmd := m.ChatUI.SetItems(formatMessages(m.Conversations))
-	m.viewport.SetContent(m.ChatUI.View())
-	m.viewport.GotoBottom()
+	if m.viewport.Width > 0 && m.viewport.Height > 0 {
+		m.renderMessagesViewport(m.viewport.Width, m.viewport.Height)
+	}
 	return cmd
 }
 
