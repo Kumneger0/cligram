@@ -234,6 +234,10 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 		FromID:               nil,
 		PeerID:               &peerInfo.ID,
 	}
+	if m.IsReply && m.ReplyTo != nil {
+		replyCopy := *m.ReplyTo
+		newMessage.ReplyTo = &replyCopy
+	}
 	m.ActivePeerID = peerInfo.ID
 	m.Conversations = append(m.Conversations, newMessage)
 	if len(m.Conversations) > 250 {
@@ -376,6 +380,8 @@ func isReadOnlyBroadcast(m *Model) bool {
 			if ch, ok := selected.(types.ChannelInfo); ok && ch.IsBroadcast && !ch.IsCreator {
 				return true
 			}
+		} else if m.SelectedChannel.IsBroadcast && !m.SelectedChannel.IsCreator {
+			return true
 		}
 	}
 	return false

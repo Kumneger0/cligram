@@ -709,3 +709,104 @@ func TestHandleWindowSize_NoPanicOnUninitializedForumTopics(t *testing.T) {
 		t.Fatalf("expected non-nil model response from handleWindowSize")
 	}
 }
+
+func TestReplyFeature_ModeAllAndPeers(t *testing.T) {
+	m := newTestModel(80, 24)
+	m.FocusedOn = Main
+	m.Mode = ModeAll
+
+	user := types.UserInfo{PeerID: "123", FirstName: "Alice"}
+	m.All.SetItems([]list.Item{user})
+	m.ActivePeerID = "123"
+	m.Conversations = []types.FormattedMessage{
+		{ID: 101, Sender: "Alice", Content: "Hello there", Date: time.Now()},
+		{ID: 102, Sender: "you", IsFromMe: true, Content: "Hi Alice", Date: time.Now()},
+	}
+	m.SelectedMessageIndex = 0
+
+	// 1. Reply to Alice's message in ModeAll
+	res, _ := m.handleKeyPress(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	mReply := res.(Model)
+	if !mReply.IsReply {
+		t.Fatalf("expected IsReply=true in ModeAll with user chat")
+	}
+	if mReply.ReplyTo == nil || mReply.ReplyTo.ID != 101 {
+		t.Fatalf("expected ReplyTo targeting message 101, got %+v", mReply.ReplyTo)
+	}
+	if mReply.FocusedOn != Input {
+		t.Fatalf("expected FocusedOn=Input after 'r', got %v", mReply.FocusedOn)
+	}
+
+	// 2. Cancel reply on Esc
+	resEsc, _ := mReply.handleKeyPress(tea.KeyMsg{Type: tea.KeyEsc})
+	mCanceled := resEsc.(Model)
+	if mCanceled.IsReply {
+		t.Errorf("expected IsReply=false after Esc, got true")
+	}
+	if mCanceled.ReplyTo != nil {
+		t.Errorf("expected ReplyTo=nil after Esc, got %+v", mCanceled.ReplyTo)
+	}
+	if mCanceled.FocusedOn != Main {
+		t.Errorf("expected FocusedOn=Main after Esc from Input, got %v", mCanceled.FocusedOn)
+	}
+
+	// 3. Test read-only broadcast channel in ModeAll
+	readOnlyCh := types.ChannelInfo{ID: "ch456", ChannelTitle: "Announcements", IsBroadcast: true, IsCreator: false}
+	mROModel := newTestModel(80, 24)
+	mROModel.FocusedOn = Main
+	mROModel.Mode = ModeAll
+	mROModel.All.SetItems([]list.Item{readOnlyCh})
+	mROModel.ActivePeerID = "ch456"
+	mROModel.Conversations = []types.FormattedMessage{
+		{ID: 301, Sender: "Admin", Content: "Broadcast", Date: time.Now()},
+	}
+	mROModel.SelectedMessageIndex = 0
+
+	resRO, _ := mROModel.handleKeyPress(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	mRO := resRO.(Model)
+	if mRO.IsReply {
+		t.Errorf("expected IsReply=false in read-only broadcast channel, got true")
+	}
+
+	// 4. Test reply from SideBar focus
+	mSide := newTestModel(80, 24)
+	mSide.FocusedOn = SideBar
+	mSide.Mode = ModeAll
+	mSide.All.SetItems([]list.Item{user})
+	mSide.ActivePeerID = "123"
+	mSide.Conversations = []types.FormattedMessage{
+		{ID: 201, Sender: "Alice", Content: "Msg 1", Date: time.Now()},
+		{ID: 202, Sender: "Alice", Content: "Msg 2", Date: time.Now()},
+	}
+	mSide.SelectedMessageIndex = -1
+
+	resSide, _ := mSide.handleKeyPress(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	mSideReply := resSide.(Model)
+	if !mSideReply.IsReply {
+		t.Fatalf("expected IsReply=true from SideBar with active conversation")
+	}
+	if mSideReply.ReplyTo == nil || mSideReply.ReplyTo.ID != 202 {
+		t.Fatalf("expected reply targeting latest message 202, got %+v", mSideReply.ReplyTo)
+	}
+	if mSideReply.FocusedOn != Input {
+		t.Fatalf("expected FocusedOn=Input after reply from SideBar, got %v", mSideReply.FocusedOn)
+	}
+}
+
+func TestPrepareInputView_ReplyBanner(t *testing.T) {
+	m := newTestModel(80, 24)
+	m.IsReply = true
+	m.ReplyTo = &types.FormattedMessage{
+		ID:      50,
+		Sender:  "Charlie",
+		Content: "This is a long message to test snippet rendering in the reply context bar",
+	}
+
+	view := prepareInputView(&m, layoutDimensions{inputHeight: 3})
+	if !strings.Contains(view, "Replying to Charlie") {
+		t.Errorf("expected input view to contain 'Replying to Charlie', got:\n%s", view)
+	}
+	if !strings.Contains(view, "Esc to cancel") {
+		t.Errorf("expected input view to contain 'Esc to cancel', got:\n%s", view)
+	}
+}

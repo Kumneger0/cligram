@@ -1130,8 +1130,31 @@ func prepareInputView(m *Model, d layoutDimensions) string {
 	inputView := getInputStyle(m, d.inputHeight).Render(m.Input.View())
 
 	if m.IsReply && m.ReplyTo != nil {
-		replyContext := fmt.Sprintf("Reply to \n%s", strings.Split(m.ReplyTo.Content, "\n")[0])
-		inputView = lipgloss.JoinVertical(lipgloss.Top, replyContext, inputView)
+		sender := m.ReplyTo.Sender
+		if sender == "" {
+			sender = "message"
+		}
+		snippet := strings.TrimSpace(strings.Split(m.ReplyTo.Content, "\n")[0])
+		if snippet == "" {
+			snippet = "message"
+		} else if len(snippet) > 50 {
+			snippet = snippet[:47] + "..."
+		}
+		replyHeader := lipgloss.NewStyle().
+			Foreground(DefaultTheme.AccentColor).
+			Bold(true).
+			Render("↩ Replying to " + sender)
+		replySnippet := lipgloss.NewStyle().
+			Foreground(DefaultTheme.SecondaryText).
+			Italic(true).
+			Render(": " + snippet)
+		cancelHint := lipgloss.NewStyle().
+			Foreground(DefaultTheme.SecondaryText).
+			Render(" (Esc to cancel)")
+		replyBar := lipgloss.NewStyle().
+			Padding(0, 1).
+			Render(replyHeader + replySnippet + cancelHint)
+		inputView = lipgloss.JoinVertical(lipgloss.Top, replyBar, inputView)
 	}
 
 	if m.SelectedFile != "" {
@@ -1207,7 +1230,7 @@ func getMessageParams(m *Model) types.Peer {
 				ID:         it.ID,
 				ChatType:   cType,
 			}
-			if it.IsBroadcast && it.IsCreator {
+			if it.IsBroadcast && it.IsCreator && m.Input.Value() == "Not Allowed To Type" {
 				m.Input.Reset()
 			}
 		}
@@ -1245,7 +1268,7 @@ func getMessageParams(m *Model) types.Peer {
 				ID:         m.SelectedChannel.ID,
 				ChatType:   cType,
 			}
-			if m.SelectedChannel.IsCreator {
+			if m.SelectedChannel.IsCreator && m.Input.Value() == "Not Allowed To Type" {
 				m.Input.Reset()
 			}
 		}
@@ -1270,30 +1293,18 @@ func SendUserIsTyping(m *Model) tea.Cmd {
 		return nil
 	}
 
-	if (m.Mode == ModeUsers || m.Mode == ModeGroups) && m.FocusedOn == Input {
-		var pInfo types.Peer
-		if m.Mode == ModeUsers {
-			pInfo = types.Peer{
-				ID:         m.SelectedUser.PeerID,
-				AccessHash: m.SelectedUser.AccessHash,
-				ChatType:   types.UserChat,
-			}
+	if m.FocusedOn == Input && !isReadOnlyBroadcast(m) {
+		pInfo := getMessageParams(m)
+		if pInfo.ID != "" {
+			go func() {
+				err := telegram.Cligram.SetUserTyping(telegram.Cligram.Context(), types.SetTypingRequest{
+					Peer: pInfo,
+				})
+				if err != nil {
+					slog.Error(err.Error())
+				}
+			}()
 		}
-		if m.Mode == ModeGroups {
-			pInfo = types.Peer{
-				ID:         m.SelectedGroup.ID,
-				AccessHash: m.SelectedGroup.AccessHash,
-				ChatType:   types.GroupChat,
-			}
-		}
-		go func() {
-			err := telegram.Cligram.SetUserTyping(telegram.Cligram.Context(), types.SetTypingRequest{
-				Peer: pInfo,
-			})
-			if err != nil {
-				slog.Error(err.Error())
-			}
-		}()
 	}
 	return nil
 }

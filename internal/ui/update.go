@@ -1166,6 +1166,10 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "esc":
 		if m.FocusedOn == Input {
+			if m.IsReply {
+				m.IsReply = false
+				m.ReplyTo = nil
+			}
 			m.FocusedOn = Main
 			m.Input.Blur()
 			if len(m.Conversations) > 0 {
@@ -1179,6 +1183,11 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.FocusedOn == Main {
+			if m.IsReply {
+				m.IsReply = false
+				m.ReplyTo = nil
+				return m, nil
+			}
 			m.FocusedOn = SideBar
 			return m, nil
 		}
@@ -1445,17 +1454,32 @@ func getEntityName(link string) *types.EntityPreviewInfo {
 }
 
 func (m Model) handleReplyKey() (tea.Model, tea.Cmd) {
-	if m.FocusedOn == Main {
-		canWrite := (m.Mode == ModeUsers || m.Mode == ModeGroups) || (m.Mode == ModeChannels && m.SelectedChannel.IsCreator)
-		if canWrite {
-			selectedMessage := m.SelectedMessage()
-			if selectedMessage != nil {
-				m.IsReply = true
-				m.FocusedOn = Input
-				m.SkipNextInput = true
-				m.ReplyTo = selectedMessage
-			}
+	if m.FocusedOn != Main && m.FocusedOn != SideBar {
+		return m, nil
+	}
+	if isReadOnlyBroadcast(&m) {
+		return m, nil
+	}
+	if len(m.Conversations) == 0 {
+		return m, nil
+	}
+	if m.FocusedOn == SideBar {
+		pInfo := getMessageParams(&m)
+		if pInfo.ID != "" && pInfo.ID != m.ActivePeerID {
+			return m, nil
 		}
+	}
+	if m.SelectedMessageIndex < 0 || m.SelectedMessageIndex >= len(m.Conversations) {
+		m.SelectedMessageIndex = len(m.Conversations) - 1
+		m.scrollSelectedMessageIntoView()
+	}
+	selectedMessage := m.SelectedMessage()
+	if selectedMessage != nil {
+		m.IsReply = true
+		m.FocusedOn = Input
+		m.SkipNextInput = true
+		m.ReplyTo = selectedMessage
+		m.Input.Focus()
 	}
 	return m, nil
 }
