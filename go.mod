@@ -12,7 +12,7 @@ require (
 	github.com/go-critic/go-critic v0.15.0
 	github.com/gofrs/flock v0.13.1
 	github.com/golangci/golangci-lint v1.59.1
-	github.com/gotd/contrib v0.21.1
+	github.com/gotd/contrib v0.25.0
 	github.com/gotd/td v0.162.0
 	github.com/gotesttools/gotestfmt/v2 v2.5.0
 	github.com/hashicorp/go-version v1.9.0
@@ -257,8 +257,8 @@ require (
 	golang.org/x/text v0.41.0 // indirect
 	golang.org/x/tools/go/expect v0.1.1-deprecated // indirect
 	golang.org/x/tools/go/packages/packagestest v0.1.1-deprecated // indirect
-	google.golang.org/protobuf v1.36.8 // indirect
-	gopkg.in/ini.v1 v1.67.0 // indirect
+	google.golang.org/protobuf v1.36.10 // indirect
+	gopkg.in/ini.v1 v1.67.2 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	honnef.co/go/tools v0.4.7 // indirect
