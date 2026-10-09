@@ -155,15 +155,17 @@ func ConvertTGUserToUserInfo(tgUser *tg.User) *types.UserInfo {
 	}
 
 	userInfo := &types.UserInfo{
-		FirstName:  firstName,
-		LastName:   lastName,
-		Username:   tgUser.Username,
-		IsBot:      tgUser.Bot,
-		PeerID:     strconv.FormatInt(tgUser.ID, 10),
-		AccessHash: strconv.FormatInt(tgUser.AccessHash, 10),
-		IsTyping:   false,
-		IsOnline:   false,
-		Premium:    tgUser.Premium,
+		FirstName:           firstName,
+		LastName:            lastName,
+		Username:            tgUser.Username,
+		IsBot:               tgUser.Bot,
+		PeerID:              strconv.FormatInt(tgUser.ID, 10),
+		AccessHash:          strconv.FormatInt(tgUser.AccessHash, 10),
+		IsTyping:            false,
+		IsOnline:            false,
+		Premium:             tgUser.Premium,
+		PhoneCallsPrivate:   false,
+		PhoneCallsAvailable: !tgUser.Bot,
 	}
 
 	if status := getUserOnlineStatus(tgUser.Status); status != nil {
