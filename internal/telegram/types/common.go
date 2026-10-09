@@ -63,6 +63,7 @@ type FormattedMessage struct {
 	Content              string                  `json:"content"`
 	IsFromMe             bool                    `json:"isFromMe"`
 	Media                *string                 `json:"media,omitempty"`
+	MediaAttachment      *MediaAttachment        `json:"mediaAttachment,omitempty"`
 	Date                 time.Time               `json:"date"`
 	IsUnsupportedMessage bool                    `json:"isUnsupportedMessage"`
 	WebPage              *WebPage                `json:"webPage,omitempty"`
@@ -75,6 +76,54 @@ type FormattedMessage struct {
 	Views                int                     `json:"view"`
 	HasWebPagePreview    bool                    `json:"hasWebPagePreview"`
 	MessageMediaWebPage  *tg.MessageMediaWebPage `json:"messageMediaWebPage"`
+}
+
+type MediaType string
+
+const (
+	MediaTypePhoto    MediaType = "photo"
+	MediaTypeVideo    MediaType = "video"
+	MediaTypeAudio    MediaType = "audio"
+	MediaTypeVoice    MediaType = "voice"
+	MediaTypeDocument MediaType = "document"
+)
+
+type MediaStatus string
+
+const (
+	MediaStatusIdle        MediaStatus = "idle"
+	MediaStatusDownloading MediaStatus = "downloading"
+	MediaStatusDownloaded  MediaStatus = "downloaded"
+	MediaStatusFailed      MediaStatus = "failed"
+)
+
+type MediaAttachment struct {
+	Type          MediaType                 `json:"type"`
+	FileName      string                    `json:"fileName,omitempty"`
+	Title         string                    `json:"title,omitempty"`
+	Performer     string                    `json:"performer,omitempty"`
+	FileSize      int64                     `json:"fileSize,omitempty"`
+	MimeType      string                    `json:"mimeType,omitempty"`
+	Duration      int                       `json:"duration,omitempty"`
+	Width         int                       `json:"width,omitempty"`
+	Height        int                       `json:"height,omitempty"`
+	Status        MediaStatus               `json:"status"`
+	LocalPath     string                    `json:"localPath,omitempty"`
+	InputLocation tg.InputFileLocationClass `json:"-"`
+}
+
+type DownloadMediaCompleteMsg struct {
+	MessageID int
+	PeerID    string
+	LocalPath string
+	Err       error
+}
+
+type DownloadMediaProgressMsg struct {
+	MessageID int
+	PeerID    string
+	Status    MediaStatus
+	Progress  float64
 }
 
 type ShouldHighlightSpecificMessageMsg struct {

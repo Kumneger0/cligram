@@ -1244,3 +1244,25 @@ func (c *Client) GetLastMessage(ctx context.Context, peer types.Peer) tea.Cmd {
 		return types.SingleMessageMsg{Message: &messages[0]}
 	}
 }
+
+func (c *Client) DownloadMedia(ctx context.Context, peerID string, msgID int, att types.MediaAttachment) tea.Cmd {
+	return func() tea.Msg {
+		if c == nil || c.Client == nil {
+			return types.DownloadMediaCompleteMsg{
+				MessageID: msgID,
+				PeerID:    peerID,
+				Err:       errors.New("client not initialized"),
+			}
+		}
+		downloadCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+		defer cancel()
+
+		path, err := shared.DownloadMessageMedia(downloadCtx, c.Client.API(), peerID, msgID, &att)
+		return types.DownloadMediaCompleteMsg{
+			MessageID: msgID,
+			PeerID:    peerID,
+			LocalPath: path,
+			Err:       err,
+		}
+	}
+}

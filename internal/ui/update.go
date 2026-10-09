@@ -19,6 +19,7 @@ import (
 	"github.com/kumneger0/cligram/internal/notification"
 	"github.com/kumneger0/cligram/internal/telegram"
 	"github.com/kumneger0/cligram/internal/telegram/client"
+	"github.com/kumneger0/cligram/internal/telegram/shared"
 	"github.com/kumneger0/cligram/internal/telegram/types"
 	"go.dalton.dog/bubbleup"
 )
@@ -470,6 +471,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd := m.handleGetMessages(msg)
 		m = model.(Model)
 		cmds = append(cmds, cmd)
+	case types.DownloadMediaCompleteMsg:
+		for i := range m.Conversations {
+			if m.Conversations[i].ID == msg.MessageID && m.Conversations[i].MediaAttachment != nil {
+				if msg.Err != nil {
+					m.Conversations[i].MediaAttachment.Status = types.MediaStatusFailed
+					m.Alert = m.Alert.WithAllowEscToClose().WithPosition(bubbleup.TopLeftPosition)
+					alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, "Media download failed: "+msg.Err.Error())
+					return m, alertCmd
+				}
+				m.Conversations[i].MediaAttachment.Status = types.MediaStatusDownloaded
+				m.Conversations[i].MediaAttachment.LocalPath = msg.LocalPath
+				m.Alert = m.Alert.WithAllowEscToClose().WithPosition(bubbleup.TopLeftPosition)
+				alertCmd := m.Alert.NewAlertCmd(bubbleup.InfoKey, "Opened media file")
+				return m, alertCmd
+			}
+		}
+		return m, nil
 	case spinner.TickMsg:
 		m.ensureSidebarSpinner()
 		var spinCmd tea.Cmd
@@ -855,38 +873,27 @@ type GetFormattedMessageArg struct {
 }
 
 func getFormattedMessageFunc(arg GetFormattedMessageArg) types.FormattedMessage {
-	var sender string
-	var fromID *string
-
+	var formatted *types.FormattedMessage
 	if (arg.ChatType == types.UserChat || arg.ChatType == types.BotChat) && arg.UserInfo != nil {
-		sender = arg.UserInfo.FirstName
-		fromID = &arg.UserInfo.PeerID
+		formatted = shared.FormatMessage(arg.Message, arg.UserInfo, nil)
 	} else if arg.ChannelOrGroupInfo != nil {
-		sender = arg.ChannelOrGroupInfo.ChannelTitle
-		fromID = &arg.ChannelOrGroupInfo.ID
+		formatted = shared.FormatMessage(arg.Message, arg.ChannelOrGroupInfo, nil)
+	} else if arg.UserInfo != nil {
+		formatted = shared.FormatMessage(arg.Message, arg.UserInfo, nil)
+	} else {
+		var nilUser *types.UserInfo
+		formatted = shared.FormatMessage(arg.Message, nilUser, nil)
 	}
 
-	if arg.Message.Out {
-		sender = "You"
-	}
-
-	var media *string
-	if arg.Message.Media != nil {
-		mediaStr := fmt.Sprintf("%T", arg.Message.Media)
-		media = &mediaStr
+	if formatted != nil {
+		return *formatted
 	}
 
 	return types.FormattedMessage{
-		ID:                   arg.Message.ID,
-		Sender:               sender,
-		Content:              arg.Message.Message,
-		IsFromMe:             arg.Message.GetOut(),
-		Media:                media,
-		IsUnsupportedMessage: media != nil,
-		Date:                 time.Unix(int64(arg.Message.Date), 0),
-		FromID:               fromID,
-		ReplyTo:              nil,
-		SenderUserInfo:       arg.UserInfo,
+		ID:       arg.Message.ID,
+		Content:  arg.Message.Message,
+		IsFromMe: arg.Message.GetOut(),
+		Date:     time.Unix(int64(arg.Message.Date), 0),
 	}
 }
 
@@ -1413,6 +1420,44 @@ func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
 
 	if m.FocusedOn == Main {
 		selectedMessage := m.SelectedMessage()
+		if selectedMessage != nil && selectedMessage.MediaAttachment != nil {
+			if selectedMessage.MediaAttachment.Status == types.MediaStatusDownloaded && selectedMessage.MediaAttachment.LocalPath != "" {
+				err := shared.OpenFileInDefaultApp(selectedMessage.MediaAttachment.LocalPath)
+				if err != nil {
+					m.Alert = m.Alert.WithAllowEscToClose().WithPosition(bubbleup.TopLeftPosition)
+					alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, "Failed to open file: "+err.Error())
+					return m, alertCmd
+				}
+				m.Alert = m.Alert.WithAllowEscToClose().WithPosition(bubbleup.TopLeftPosition)
+				alertCmd := m.Alert.NewAlertCmd(bubbleup.InfoKey, "Opened media file")
+				return m, alertCmd
+			}
+			if selectedMessage.MediaAttachment.Status != types.MediaStatusDownloading {
+				for i := range m.Conversations {
+					if m.Conversations[i].ID == selectedMessage.ID && m.Conversations[i].MediaAttachment != nil {
+						m.Conversations[i].MediaAttachment.Status = types.MediaStatusDownloading
+						break
+					}
+				}
+				peerID := m.CurrentPeerID()
+				att := *selectedMessage.MediaAttachment
+				msgID := selectedMessage.ID
+				var cmd tea.Cmd
+				if telegram.Cligram != nil {
+					cmd = telegram.Cligram.DownloadMedia(telegram.Cligram.Context(), peerID, msgID, att)
+				} else {
+					cmd = func() tea.Msg {
+						return types.DownloadMediaCompleteMsg{
+							MessageID: msgID,
+							PeerID:    peerID,
+							Err:       nil,
+						}
+					}
+				}
+				return m, tea.Batch(cmd, m.SidebarSpinner.Tick)
+			}
+			return m, nil
+		}
 		if selectedMessage != nil && selectedMessage.MessageMediaWebPage != nil {
 			if webPage, ok := selectedMessage.MessageMediaWebPage.Webpage.(*tg.WebPage); ok {
 				if entity := getEntityName(webPage.URL); entity != nil {
