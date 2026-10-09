@@ -693,3 +693,19 @@ func TestMainFocus_KeysDoNotTriggerViewportPageScroll(t *testing.T) {
 		t.Errorf("expected 'f' not to scroll viewport page-down, got YOffset %d", mAfterF.viewport.YOffset)
 	}
 }
+
+func TestHandleWindowSize_NoPanicOnUninitializedForumTopics(t *testing.T) {
+	m := newTestModel(80, 24)
+	m.SelectedGroupForumTopics = list.Model{}
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("handleWindowSize panicked on uninitialized SelectedGroupForumTopics: %v", r)
+		}
+	}()
+
+	res, _ := m.handleWindowSize(tea.WindowSizeMsg{Width: 100, Height: 35})
+	if res == nil {
+		t.Fatalf("expected non-nil model response from handleWindowSize")
+	}
+}

@@ -98,6 +98,13 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 				chatList.SetShowTitle(false)
 				chatList.SetShowStatusBar(false)
 
+				forumTopics := list.New([]list.Item{}, ui.ForumTopicsDelegate{Model: model}, 10, 20)
+				forumTopics.SetShowPagination(false)
+				forumTopics.SetShowHelp(false)
+				forumTopics.SetShowFilter(false)
+				forumTopics.SetShowTitle(false)
+				forumTopics.SetShowStatusBar(false)
+
 				fp := filepicker.New()
 				fp.AllowedTypes = []string{}
 				fp.DirAllowed = false
@@ -116,6 +123,7 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 				model.Mode = ui.ModeAll
 				model.FocusedOn = ui.SideBar
 				model.ChatUI = chatList
+				model.SelectedGroupForumTopics = forumTopics
 				model.SelectedFile = ""
 				model.OnPagination = false
 				model.Bots = botsList

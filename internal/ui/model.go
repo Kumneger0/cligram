@@ -481,10 +481,12 @@ func updateListDimensions(m *Model, d layoutDimensions) {
 	m.Groups.SetWidth(listWidth)
 	m.Groups.SetHeight(listHeight)
 	// Forum topics are displayed in the main view area
-	mainListHeight := max(0, d.contentHeight-8)
-	mainListWidth := max(0, d.mainWidth-4)
-	m.SelectedGroupForumTopics.SetHeight(mainListHeight)
-	m.SelectedGroupForumTopics.SetWidth(mainListWidth)
+	if m.ShowForumTopics && len(m.SelectedGroupForumTopics.Items()) > 0 {
+		mainListHeight := max(0, d.contentHeight-8)
+		mainListWidth := max(0, d.mainWidth-4)
+		m.SelectedGroupForumTopics.SetHeight(mainListHeight)
+		m.SelectedGroupForumTopics.SetWidth(mainListWidth)
+	}
 }
 
 func renderModal(m *Model) string {
