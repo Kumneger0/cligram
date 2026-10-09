@@ -19,7 +19,7 @@ require (
 	github.com/muesli/mango-cobra v1.3.0
 	github.com/muesli/reflow v0.3.0
 	github.com/muesli/roff v0.1.0
-	github.com/rmhubbert/bubbletea-overlay v0.6.7
+	github.com/rmhubbert/bubbletea-overlay v0.6.9
 	github.com/schollz/progressbar/v3 v3.19.1
 	github.com/spf13/cobra v1.10.2
 	go.dalton.dog/bubbleup v1.4.0
@@ -69,7 +69,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/charithe/durationcheck v0.0.10 // indirect
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect
-	github.com/charmbracelet/x/ansi v0.11.7 // indirect
+	github.com/charmbracelet/x/ansi v0.11.8 // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.16-0.20260602025815-df92a5806f7e // indirect
 	github.com/chavacava/garif v0.1.0 // indirect
 	github.com/ckaznocha/intrange v0.1.2 // indirect
