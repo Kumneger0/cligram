@@ -56,5 +56,22 @@ _Avoid_: Call alert, ringing popup
 A persistent single-line bar pinned at the top of the TUI layout throughout an active Call Session, displaying peer identity, live duration timer (`MM:SS`), Connection Badge, and audio controls.
 _Avoid_: Call header, active call indicator
 
+**Call Privacy Guard**:
+Pre-flight verification of peer privacy flags (`PhoneCallsPrivate`, `PhoneCallsAvailable`) and interception of MTProto privacy errors (`USER_PRIVACY_RESTRICTED`) that halts call initiation prior to allocating VoIP sidecar resources.
+_Avoid_: Call permission check, privacy blocker
+
+**Live Modal Compositor**:
+The frame-by-frame overlay rendering architecture that composites dialog modals directly onto the current background view rather than caching stale framebuffer state.
+_Avoid_: Stale overlay, modal snapshot
+
+**Message Stream**:
+The scrollable TUI viewport rendering conversation history as styled message cards with active message selection, independent of the sidebar dialog list.
+_Avoid_: Chat list, message table, conversation list
+
+**Sidebar Tab Bar**:
+The category selector at the top of the sidebar partitioning dialogs into Direct Chats, Groups, Channels, and Bots with unread counters and lazy on-demand fetching.
+_Avoid_: Folder bar, category menu
+
+
 
 
