@@ -72,6 +72,23 @@ _Avoid_: Chat list, message table, conversation list
 The category selector at the top of the sidebar partitioning dialogs into Direct Chats, Groups, Channels, and Bots with unread counters and lazy on-demand fetching.
 _Avoid_: Folder bar, category menu
 
+**Media Attachment**:
+A rich payload (photo, video, audio, voice note, or document) associated with a message, presented in the terminal as an actionable metadata badge.
+_Avoid_: File blob, attachment object
+
+**Sender Attribution**:
+The visual assignment and display of an individual author's identity and color badge on messages within a group chat instead of the container group title.
+_Avoid_: Author tag, sender header, user label
+
+**Member Roster**:
+An interactive modal list displaying participants of a group or supergroup, supporting search, presence indicators, and direct chat initiation.
+_Avoid_: Participant list, member table, group users
+
+**Message Coalescing**:
+The visual grouping of consecutive messages from the same participant within a short time threshold, suppressing redundant author headers.
+_Avoid_: Bubble merging, message collapsing, consecutive grouping
+
+
 
 
 

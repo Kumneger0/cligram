@@ -35,7 +35,7 @@ func FormatMessage[T ChannelOrUser](msg *tg.Message, userOrChannel *T, allMessag
 	var FromID *string
 	var SenderUserInfo *types.UserInfo
 	if msg.Out {
-		sender = "you"
+		sender = "You"
 	} else {
 		if userOrChannel == nil {
 			sender = "unknown"
@@ -70,9 +70,17 @@ func FormatMessage[T ChannelOrUser](msg *tg.Message, userOrChannel *T, allMessag
 		}
 	}
 
+	var mediaAttachment *types.MediaAttachment
 	isUnsupportedMessage := false
 	if msg.Media != nil {
-		if _, ok := msg.Media.(*tg.MessageMediaWebPage); !ok {
+		switch m := msg.Media.(type) {
+		case *tg.MessageMediaWebPage, *tg.MessageMediaEmpty:
+			// Handled separately or no attachment
+		case *tg.MessageMediaPhoto:
+			mediaAttachment = parsePhotoMedia(m)
+		case *tg.MessageMediaDocument:
+			mediaAttachment = parseDocumentMedia(m)
+		default:
 			isUnsupportedMessage = true
 		}
 	}
@@ -95,6 +103,7 @@ func FormatMessage[T ChannelOrUser](msg *tg.Message, userOrChannel *T, allMessag
 		Content:              content,
 		IsFromMe:             msg.Out,
 		Media:                nil,
+		MediaAttachment:      mediaAttachment,
 		Date:                 time.Unix(int64(msg.Date), 0),
 		IsUnsupportedMessage: isUnsupportedMessage,
 		WebPage:              nil,
@@ -106,6 +115,137 @@ func FormatMessage[T ChannelOrUser](msg *tg.Message, userOrChannel *T, allMessag
 		Views:                view,
 		HasWebPagePreview:    webPageMedia != nil,
 		MessageMediaWebPage:  webPageMedia,
+	}
+}
+
+func parsePhotoMedia(media *tg.MessageMediaPhoto) *types.MediaAttachment {
+	if media == nil {
+		return nil
+	}
+	photo, ok := media.Photo.(*tg.Photo)
+	if !ok || photo == nil {
+		return nil
+	}
+
+	var bestSize *tg.PhotoSize
+	var thumbType string = "y"
+	for _, sizeClass := range photo.Sizes {
+		if ps, ok := sizeClass.(*tg.PhotoSize); ok {
+			if bestSize == nil || ps.Size > bestSize.Size {
+				bestSize = ps
+				thumbType = ps.Type
+			}
+		}
+	}
+
+	var width, height int
+	var fileSize int64
+	if bestSize != nil {
+		width = bestSize.W
+		height = bestSize.H
+		fileSize = int64(bestSize.Size)
+	}
+
+	inputLoc := &tg.InputPhotoFileLocation{
+		ID:            photo.ID,
+		AccessHash:    photo.AccessHash,
+		FileReference: photo.FileReference,
+		ThumbSize:     thumbType,
+	}
+
+	return &types.MediaAttachment{
+		Type:          types.MediaTypePhoto,
+		FileSize:      fileSize,
+		Width:         width,
+		Height:        height,
+		Status:        types.MediaStatusIdle,
+		InputLocation: inputLoc,
+	}
+}
+
+func parseDocumentMedia(media *tg.MessageMediaDocument) *types.MediaAttachment {
+	if media == nil {
+		return nil
+	}
+	doc, ok := media.Document.(*tg.Document)
+	if !ok || doc == nil {
+		return nil
+	}
+
+	mType := types.MediaTypeDocument
+	var fileName string
+	var title, performer string
+	var duration int
+	var width, height int
+
+	for _, attrClass := range doc.Attributes {
+		switch attr := attrClass.(type) {
+		case *tg.DocumentAttributeFilename:
+			fileName = attr.FileName
+		case *tg.DocumentAttributeAudio:
+			if attr.Voice {
+				mType = types.MediaTypeVoice
+			} else {
+				mType = types.MediaTypeAudio
+			}
+			duration = attr.Duration
+			title = attr.Title
+			performer = attr.Performer
+			if fileName == "" && attr.Title != "" {
+				if attr.Performer != "" {
+					fileName = attr.Performer + " - " + attr.Title
+				} else {
+					fileName = attr.Title
+				}
+			}
+		case *tg.DocumentAttributeVideo:
+			mType = types.MediaTypeVideo
+			duration = int(attr.Duration)
+			width = attr.W
+			height = attr.H
+		case *tg.DocumentAttributeImageSize:
+			width = attr.W
+			height = attr.H
+		}
+	}
+
+	if fileName == "" {
+		fileName = DefaultMediaFileName(mType)
+	}
+
+	inputLoc := &tg.InputDocumentFileLocation{
+		ID:            doc.ID,
+		AccessHash:    doc.AccessHash,
+		FileReference: doc.FileReference,
+	}
+
+	return &types.MediaAttachment{
+		Type:          mType,
+		FileName:      fileName,
+		Title:         title,
+		Performer:     performer,
+		FileSize:      doc.Size,
+		MimeType:      doc.MimeType,
+		Duration:      duration,
+		Width:         width,
+		Height:        height,
+		Status:        types.MediaStatusIdle,
+		InputLocation: inputLoc,
+	}
+}
+
+func DefaultMediaFileName(mType types.MediaType) string {
+	switch mType {
+	case types.MediaTypePhoto:
+		return "photo.jpg"
+	case types.MediaTypeVideo:
+		return "video.mp4"
+	case types.MediaTypeAudio:
+		return "audio.mp3"
+	case types.MediaTypeVoice:
+		return "voice_message.ogg"
+	default:
+		return "document"
 	}
 }
 
@@ -361,6 +501,40 @@ func DownloadStoryMedia(ctx context.Context, client *telegram.Client, story *tg.
 	return nil, errors.New("i have no idea for some fucking reason we are not able to get the type of story")
 }
 
+func DownloadMessageMedia(ctx context.Context, client *tg.Client, peerID string, msgID int, att *types.MediaAttachment) (string, error) {
+	if att == nil || att.InputLocation == nil {
+		return "", errors.New("no media attachment or input location found")
+	}
+
+	cacheDir, err := os.UserCacheDir()
+	if err != nil || cacheDir == "" {
+		home, homeErr := os.UserHomeDir()
+		if homeErr == nil && home != "" {
+			cacheDir = filepath.Join(home, ".cache")
+		} else {
+			cacheDir = os.TempDir()
+		}
+	}
+	mediaDir := filepath.Join(cacheDir, "cligram", "media")
+	if err := os.MkdirAll(mediaDir, 0755); err != nil {
+		return "", err
+	}
+
+	fileName := att.FileName
+	if fileName == "" {
+		fileName = DefaultMediaFileName(att.Type)
+	}
+
+	sanitizedFile := filepath.Base(fileName)
+	targetPath := filepath.Join(mediaDir, fmt.Sprintf("%s_%d_%s", peerID, msgID, sanitizedFile))
+
+	err = saveMediaToFileSystem(ctx, client, targetPath, att.InputLocation)
+	if err != nil {
+		return "", err
+	}
+	return targetPath, nil
+}
+
 func saveMediaToFileSystem(ctx context.Context, client *tg.Client, filePath string, inputFileLocation tg.InputFileLocationClass) error {
 	dl := downloader.NewDownloader()
 	if fileInfo, err := os.Stat(filePath); err == nil {
@@ -395,6 +569,7 @@ func OpenFileInDefaultApp(path string) error {
 	case "darwin":
 		cmd = exec.Command("open", path)
 	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", path)
 	default:
 		return fmt.Errorf("unsupported platform")
 	}

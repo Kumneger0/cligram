@@ -832,6 +832,13 @@ func (m *Model) renderMessageBubble(entry types.FormattedMessage, idx int, bubbl
 		cardElements = append(cardElements, body)
 	}
 
+	if entry.MediaAttachment != nil {
+		mediaCard := m.renderMediaAttachment(entry.MediaAttachment, isSelected, max(10, bubbleWidth-6))
+		if mediaCard != "" {
+			cardElements = append(cardElements, mediaCard)
+		}
+	}
+
 	if entry.MessageMediaWebPage != nil {
 		preview := m.renderWebPagePreview(entry.MessageMediaWebPage, max(10, bubbleWidth-6))
 		if preview != "" {
@@ -886,6 +893,139 @@ func (m *Model) renderMessageBubble(entry types.FormattedMessage, idx int, bubbl
 	return style.MarginLeft(1).Render(innerContent)
 }
 
+func formatFileSize(bytes int64) string {
+	if bytes <= 0 {
+		return ""
+	}
+	const (
+		kb = 1024
+		mb = 1024 * kb
+		gb = 1024 * mb
+	)
+	switch {
+	case bytes >= gb:
+		return fmt.Sprintf("%.1f GB", float64(bytes)/float64(gb))
+	case bytes >= mb:
+		return fmt.Sprintf("%.1f MB", float64(bytes)/float64(mb))
+	case bytes >= kb:
+		return fmt.Sprintf("%.1f KB", float64(bytes)/float64(kb))
+	default:
+		return fmt.Sprintf("%d B", bytes)
+	}
+}
+
+func formatDuration(seconds int) string {
+	if seconds <= 0 {
+		return ""
+	}
+	m := seconds / 60
+	s := seconds % 60
+	if m >= 60 {
+		h := m / 60
+		m = m % 60
+		return fmt.Sprintf("%d:%02d:%02d", h, m, s)
+	}
+	return fmt.Sprintf("%d:%02d", m, s)
+}
+
+func (m *Model) renderMediaAttachment(att *types.MediaAttachment, isSelected bool, maxCardWidth int) string {
+	if att == nil {
+		return ""
+	}
+
+	var iconAndLabel string
+	var details []string
+
+	switch att.Type {
+	case types.MediaTypePhoto:
+		iconAndLabel = "📷 Photo"
+		if att.Width > 0 && att.Height > 0 {
+			details = append(details, fmt.Sprintf("%dx%d", att.Width, att.Height))
+		}
+	case types.MediaTypeVideo:
+		iconAndLabel = "📹 Video"
+		if att.FileName != "" && att.FileName != "video.mp4" {
+			details = append(details, att.FileName)
+		}
+		if att.Duration > 0 {
+			details = append(details, formatDuration(att.Duration))
+		}
+		if att.Width > 0 && att.Height > 0 {
+			details = append(details, fmt.Sprintf("%dx%d", att.Width, att.Height))
+		}
+	case types.MediaTypeAudio:
+		iconAndLabel = "🎵 Audio"
+		if att.Performer != "" && att.Title != "" {
+			details = append(details, att.Performer+" - "+att.Title)
+		} else if att.Title != "" {
+			details = append(details, att.Title)
+		} else if att.FileName != "" {
+			details = append(details, att.FileName)
+		}
+		if att.Duration > 0 {
+			details = append(details, formatDuration(att.Duration))
+		}
+	case types.MediaTypeVoice:
+		iconAndLabel = "🎤 Voice Note"
+		if att.Duration > 0 {
+			details = append(details, formatDuration(att.Duration))
+		}
+	case types.MediaTypeDocument:
+		iconAndLabel = "📄 Document"
+		if att.FileName != "" {
+			details = append(details, att.FileName)
+		}
+	default:
+		iconAndLabel = "📎 File"
+		if att.FileName != "" {
+			details = append(details, att.FileName)
+		}
+	}
+
+	if att.FileSize > 0 {
+		details = append(details, formatFileSize(att.FileSize))
+	}
+
+	detailStr := strings.Join(details, " • ")
+	var statusStr string
+	switch att.Status {
+	case types.MediaStatusDownloading:
+		spin := m.SidebarSpinner.View()
+		if spin == "" {
+			spin = "⏳"
+		}
+		statusStr = spin + " Downloading..."
+	case types.MediaStatusDownloaded:
+		statusStr = "✓ Downloaded"
+	case types.MediaStatusFailed:
+		statusStr = "⚠️ Failed"
+	default:
+		if isSelected {
+			statusStr = "↵ Open"
+		}
+	}
+
+	var line string
+	if detailStr != "" {
+		line = fmt.Sprintf("[%s: %s]", iconAndLabel, detailStr)
+	} else {
+		line = fmt.Sprintf("[%s]", iconAndLabel)
+	}
+
+	if statusStr != "" {
+		line += " " + statusStr
+	}
+
+	cardStyle := lipgloss.NewStyle().
+		Foreground(DefaultTheme.AccentColor).
+		Bold(true)
+	if isSelected {
+		cardStyle = cardStyle.Underline(true)
+	}
+
+	return cardStyle.Render(wordwrap.String(line, maxCardWidth))
+}
+
 func prepareFilepickerView(m *Model) string {
 	var s strings.Builder
 	s.WriteString("\n  ")
@@ -927,7 +1067,16 @@ func (m *Model) isCurrentCategoryLoading() bool {
 }
 
 func (m *Model) isAnyCategoryLoading() bool {
-	return m.AllLoading || m.UsersLoading || m.ChannelsLoading || m.GroupsLoading || m.BotsLoading || m.SideBarLoading
+	return m.AllLoading || m.UsersLoading || m.ChannelsLoading || m.GroupsLoading || m.BotsLoading || m.SideBarLoading || m.isAnyMediaDownloading()
+}
+
+func (m *Model) isAnyMediaDownloading() bool {
+	for _, c := range m.Conversations {
+		if c.MediaAttachment != nil && c.MediaAttachment.Status == types.MediaStatusDownloading {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Model) currentCategoryItemCount() int {

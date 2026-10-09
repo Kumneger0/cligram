@@ -810,3 +810,130 @@ func TestPrepareInputView_ReplyBanner(t *testing.T) {
 		t.Errorf("expected input view to contain 'Esc to cancel', got:\n%s", view)
 	}
 }
+
+func TestMessageStream_MediaAttachment_Rendering(t *testing.T) {
+	m := newTestModel(80, 24)
+	m.Conversations = []types.FormattedMessage{
+		{
+			ID:      201,
+			Sender:  "Alice",
+			Content: "Vacation snapshot",
+			Date:    time.Now(),
+			MediaAttachment: &types.MediaAttachment{
+				Type:     types.MediaTypePhoto,
+				Width:    1920,
+				Height:   1080,
+				FileSize: 204800,
+				Status:   types.MediaStatusIdle,
+			},
+		},
+		{
+			ID:      202,
+			Sender:  "Bob",
+			Content: "Quarterly review",
+			Date:    time.Now(),
+			MediaAttachment: &types.MediaAttachment{
+				Type:     types.MediaTypeDocument,
+				FileName: "review.pdf",
+				FileSize: 1048576,
+				Status:   types.MediaStatusDownloading,
+			},
+		},
+		{
+			ID:      203,
+			Sender:  "Dave",
+			Content: "Classic track",
+			Date:    time.Now(),
+			MediaAttachment: &types.MediaAttachment{
+				Type:      types.MediaTypeAudio,
+				Title:     "Bohemian Rhapsody",
+				Performer: "Queen",
+				Duration:  354,
+				FileSize:  8000000,
+				Status:    types.MediaStatusIdle,
+			},
+		},
+	}
+
+	bubble0 := m.renderMessageBubble(m.Conversations[0], 0, 60, 80, 0)
+	if !strings.Contains(bubble0, "📷 Photo") {
+		t.Errorf("expected bubble0 to contain '📷 Photo', got:\n%s", bubble0)
+	}
+	if !strings.Contains(bubble0, "1920x1080") {
+		t.Errorf("expected bubble0 to contain '1920x1080', got:\n%s", bubble0)
+	}
+	if !strings.Contains(bubble0, "Vacation snapshot") {
+		t.Errorf("expected bubble0 to contain caption 'Vacation snapshot', got:\n%s", bubble0)
+	}
+
+	bubble1 := m.renderMessageBubble(m.Conversations[1], 1, 60, 80, 0)
+	if !strings.Contains(bubble1, "review.pdf") {
+		t.Errorf("expected bubble1 to contain 'review.pdf', got:\n%s", bubble1)
+	}
+	if !strings.Contains(bubble1, "Downloading") {
+		t.Errorf("expected bubble1 to contain downloading indicator, got:\n%s", bubble1)
+	}
+
+	bubble2 := m.renderMessageBubble(m.Conversations[2], 2, 60, 80, 0)
+	if !strings.Contains(bubble2, "Queen - Bohemian Rhapsody") {
+		t.Errorf("expected bubble2 to contain 'Queen - Bohemian Rhapsody', got:\n%s", bubble2)
+	}
+	if !strings.Contains(bubble2, "5:54") {
+		t.Errorf("expected bubble2 to contain duration '5:54', got:\n%s", bubble2)
+	}
+}
+
+func TestMessageStream_MediaAttachment_EnterDownloads(t *testing.T) {
+	m := newTestModel(80, 24)
+	m.FocusedOn = Main
+	m.Conversations = []types.FormattedMessage{
+		{
+			ID:      301,
+			Sender:  "Alice",
+			Content: "Photo",
+			Date:    time.Now(),
+			MediaAttachment: &types.MediaAttachment{
+				Type:     types.MediaTypePhoto,
+				FileName: "sample.jpg",
+				FileSize: 50000,
+				Status:   types.MediaStatusIdle,
+			},
+		},
+	}
+	m.SelectedMessageIndex = 0
+
+	updatedModel, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updatedModel.(Model)
+
+	if cmd == nil {
+		t.Fatalf("expected non-nil cmd when pressing Enter on media attachment")
+	}
+	if m.Conversations[0].MediaAttachment.Status != types.MediaStatusDownloading {
+		t.Errorf("expected status MediaStatusDownloading, got %v", m.Conversations[0].MediaAttachment.Status)
+	}
+
+	completeMsg := types.DownloadMediaCompleteMsg{
+		MessageID: 301,
+		LocalPath: "/tmp/sample.jpg",
+		Err:       nil,
+	}
+	updatedAfterComplete, _ := m.Update(completeMsg)
+	m = updatedAfterComplete.(Model)
+
+	if m.Conversations[0].MediaAttachment.Status != types.MediaStatusDownloaded {
+		t.Errorf("expected status MediaStatusDownloaded, got %v", m.Conversations[0].MediaAttachment.Status)
+	}
+	if m.Conversations[0].MediaAttachment.LocalPath != "/tmp/sample.jpg" {
+		t.Errorf("expected LocalPath '/tmp/sample.jpg', got %q", m.Conversations[0].MediaAttachment.LocalPath)
+	}
+
+	// Pressing Enter again on already-downloaded media should NOT transition back to downloading
+	updatedReopen, reopenCmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updatedReopen.(Model)
+	if m.Conversations[0].MediaAttachment.Status != types.MediaStatusDownloaded {
+		t.Errorf("expected status to stay MediaStatusDownloaded, got %v", m.Conversations[0].MediaAttachment.Status)
+	}
+	if reopenCmd == nil {
+		t.Errorf("expected alert toast command on instant re-open")
+	}
+}
