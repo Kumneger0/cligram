@@ -954,8 +954,11 @@ func (c *Client) GetAllStories(ctx context.Context) tea.Cmd {
 				if !ok {
 					continue
 				}
+				var fileRef []byte
+				mediaType := "photo"
 				switch item := storyItem.Media.(type) {
 				case *tg.MessageMediaDocument:
+					mediaType = "video"
 					documentClass, ok := item.GetDocument()
 					if !ok {
 						continue
@@ -964,8 +967,9 @@ func (c *Client) GetAllStories(ctx context.Context) tea.Cmd {
 					if !ok {
 						continue
 					}
-					AllStories = append(AllStories, types.Stories{UserInfo: *userInfo, ID: storyItem.ID, Data: document.FileReference})
+					fileRef = document.FileReference
 				case *tg.MessageMediaPhoto:
+					mediaType = "photo"
 					photoClass, ok := item.GetPhoto()
 					if !ok {
 						continue
@@ -974,8 +978,27 @@ func (c *Client) GetAllStories(ctx context.Context) tea.Cmd {
 					if !ok {
 						continue
 					}
-					AllStories = append(AllStories, types.Stories{UserInfo: *userInfo, ID: storyItem.ID, Data: photo.FileReference})
+					fileRef = photo.FileReference
 				}
+
+				var storyDate, expireDate time.Time
+				if storyItem.Date > 0 {
+					storyDate = time.Unix(int64(storyItem.Date), 0)
+				}
+				if storyItem.ExpireDate > 0 {
+					expireDate = time.Unix(int64(storyItem.ExpireDate), 0)
+				}
+
+				AllStories = append(AllStories, types.Stories{
+					UserInfo:   *userInfo,
+					ID:         storyItem.ID,
+					Data:       fileRef,
+					Date:       storyDate,
+					ExpireDate: expireDate,
+					Caption:    storyItem.Caption,
+					MediaType:  mediaType,
+					IsPinned:   storyItem.Pinned,
+				})
 			}
 		}
 

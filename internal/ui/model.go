@@ -326,6 +326,7 @@ type Model struct {
 	OffsetDate, OffsetID     int
 	OnPagination             bool
 	Stories                  []types.Stories
+	StoriesLoading           bool
 	CurrentUser              *types.UserInfo
 	Error                    error
 	CustomEmojis             map[int64]*tg.Document
@@ -636,7 +637,11 @@ func prepareSidebarContent(m *Model, d layoutDimensions) string {
 		content = m.Groups.View()
 	}
 
-	storiesIndicator := sidebarHeaderStyle.Render(fmt.Sprintf("📖 Stories (%d)", len(m.Stories)))
+	storiesIndicatorText := fmt.Sprintf("📖 Stories (%d)", len(m.Stories))
+	if m.StoriesLoading && len(m.Stories) == 0 {
+		storiesIndicatorText = "📖 Stories (⠋ Loading...)"
+	}
+	storiesIndicator := sidebarHeaderStyle.Render(storiesIndicatorText)
 	itemsCount := sidebarHeaderStyle.Render(fmt.Sprintf("💬 Chats (%d)", len(m.Users.Items())))
 	switch m.Mode {
 	case ModeChannels:

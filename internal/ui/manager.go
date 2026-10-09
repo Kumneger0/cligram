@@ -2,6 +2,9 @@ package ui
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/kumneger0/cligram/internal/telegram"
+	"github.com/kumneger0/cligram/internal/telegram/types"
+	overlay "github.com/rmhubbert/bubbletea-overlay"
 )
 
 type SessionState int
@@ -48,12 +51,18 @@ func (m Manager) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.State = ModalView
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "q", "ctrl+c", "esc":
+		case "ctrl+c":
+			return m, tea.Quit
+		case "esc":
+			if m.State == ModalView {
+				m.State = MainView
+				return m, nil
+			}
+			return m, tea.Quit
+		case "q":
 			if m.State == MainView {
 				return m, tea.Quit
 			}
-			m.State = MainView
-			return m, nil
 		case "ctrl+k":
 			if m.State == MainView {
 				m.State = ModalView
@@ -80,13 +89,21 @@ func (m Manager) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		case "alt+s":
 			m.State = ModalView
 			bgModel, cmd := m.Background.Update(message)
+			m.Background = bgModel
+			var stories []types.Stories
+			if bg, ok := m.Background.(Model); ok {
+				stories = bg.Stories
+			}
 			openModalMsg := func() tea.Msg {
 				return OpenModalMsg{
 					ModalMode: ModalModeShowStories,
+					Stories:   stories,
 				}
 			}
-			m.Background = bgModel
 			cmds = append(cmds, cmd, openModalMsg)
+			if len(stories) == 0 && telegram.Cligram != nil && telegram.Cligram.Context() != nil {
+				cmds = append(cmds, telegram.Cligram.GetAllStories(telegram.Cligram.Context()))
+			}
 			return m, tea.Batch(cmds...)
 		case "alt+m", "alt+h":
 			bg, bgCmd := m.Background.Update(message)
@@ -113,7 +130,9 @@ func (m Manager) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 }
 func (m Manager) View() string {
 	if m.State == ModalView {
-		return m.Overlay.View()
+		fg := m.Foreground.View()
+		bg := m.Background.View()
+		return overlay.Composite(fg, bg, overlay.Center, overlay.Center, 0, 0)
 	}
 	return m.Background.View()
 }

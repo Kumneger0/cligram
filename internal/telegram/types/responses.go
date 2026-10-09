@@ -2,6 +2,7 @@ package types // nolint:revive
 
 import (
 	"math/big"
+	"time"
 
 	"github.com/gotd/td/tg"
 )
@@ -131,6 +132,11 @@ type Stories struct {
 	ID         int
 	Data       []byte
 	IsSelected bool
+	Date       time.Time
+	ExpireDate time.Time
+	Caption    string
+	MediaType  string
+	IsPinned   bool
 }
 
 // will move it to better place in the future let's keep it here for now
