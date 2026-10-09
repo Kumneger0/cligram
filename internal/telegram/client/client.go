@@ -421,11 +421,11 @@ func (c *Client) GetChatHistoryCmd(ctx context.Context, peer types.Peer, limit i
 	return func() tea.Msg {
 		messages, err := c.GetChatHistory(ctx, peer, limit, offsetID, topMsgID)
 		if err != nil {
-			return types.GetMessagesMsg{Messages: [50]types.FormattedMessage{}, Err: err}
+			return types.GetMessagesMsg{PeerID: peer.ID, Messages: [50]types.FormattedMessage{}, Err: err}
 		}
 		var msgArray [50]types.FormattedMessage
 		copy(msgArray[:], messages)
-		return types.GetMessagesMsg{Messages: msgArray}
+		return types.GetMessagesMsg{PeerID: peer.ID, Messages: msgArray}
 	}
 }
 

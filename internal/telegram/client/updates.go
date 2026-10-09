@@ -379,17 +379,28 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 			return nil
 		}
 		var peerClass tg.PeerClass
-		if p, ok := msg.GetFromID(); ok {
-			peerClass = p
-		} else if msg.Out {
+		if msg.Out {
+			// For outgoing messages, PeerID is the recipient/destination dialog peer
 			if p := msg.GetPeerID(); p != nil {
+				peerClass = p
+			} else if p, ok := msg.GetFromID(); ok {
 				peerClass = p
 			}
-		}
-
-		if peerClass == nil {
+		} else {
+			// For incoming messages in channels or groups, PeerID is the conversation container
 			if p := msg.GetPeerID(); p != nil {
-				peerClass = p
+				switch p.(type) {
+				case *tg.PeerChannel, *tg.PeerChat:
+					peerClass = p
+				}
+			}
+			// In private chats, FromID is the sender
+			if peerClass == nil {
+				if p, ok := msg.GetFromID(); ok {
+					peerClass = p
+				} else if p := msg.GetPeerID(); p != nil {
+					peerClass = p
+				}
 			}
 		}
 
@@ -411,6 +422,7 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 				NewMessage: &types.NewMessageNotification{
 					ID:      msg.GetID(),
 					FromID:  fromID,
+					PeerID:  fromID,
 					Message: msg,
 				},
 			}

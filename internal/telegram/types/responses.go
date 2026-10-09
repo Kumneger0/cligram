@@ -100,6 +100,7 @@ type SendMessageMsg struct {
 }
 
 type GetMessagesMsg struct {
+	PeerID   string               `json:"peerId,omitempty"`
 	Messages [50]FormattedMessage `json:"messages"`
 	Err      error                `json:"error,omitempty"`
 }

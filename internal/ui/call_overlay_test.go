@@ -31,6 +31,8 @@ func newTestModel(width, height int) Model {
 	m.Bots = list.New([]list.Item{}, CustomDelegate{Model: &m}, 10, 20)
 	m.ChatUI = list.New([]list.Item{}, MessagesDelegate{Model: &m}, 10, 20)
 	m.SelectedGroupForumTopics = list.New([]list.Item{}, ForumTopicsDelegate{Model: &m}, 10, 20)
+	m.Conversations = []types.FormattedMessage{}
+	m.SelectedMessageIndex = -1
 	return m
 }
 

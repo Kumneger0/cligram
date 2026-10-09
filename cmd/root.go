@@ -122,6 +122,8 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 				model.SideBarLoading = true
 				model.Stories = []types.Stories{}
 				model.StoriesLoading = true
+				model.Conversations = []types.FormattedMessage{}
+				model.SelectedMessageIndex = -1
 
 				background := model
 				foreground := &ui.Foreground{}

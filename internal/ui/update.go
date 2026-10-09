@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"runtime"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -356,28 +357,36 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			slog.Error("Failed to send message", "error", msg.Err.Error())
 			m.IsModalVisible = true
 			m.ModalContent = GetModalContent(msg.Err.Error())
-			var updatedConversations [50]types.FormattedMessage
-			j := 0
+			var updatedConversations []types.FormattedMessage
+			removed := false
 			for _, v := range m.Conversations {
 				if v.ID != msg.RandID {
-					updatedConversations[j] = v
-					j++
+					updatedConversations = append(updatedConversations, v)
+				} else {
+					removed = true
 				}
 			}
-			m.Conversations = updatedConversations
+			if removed {
+				m.Conversations = updatedConversations
+				cmds = append(cmds, m.updateConversations())
+			}
 
 			m.Alert = m.Alert.WithAllowEscToClose().WithPosition(bubbleup.TopLeftPosition)
 			alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, msg.Err.Error())
 			cmds = append(cmds, alertCmd)
 		} else if msg.Response != nil && msg.Response.MessageID != nil {
+			found := false
 			for i, conv := range m.Conversations {
 				if conv.ID == msg.RandID {
 					m.Conversations[i].ID = *msg.Response.MessageID
+					found = true
 					break
 				}
 			}
+			if found {
+				cmds = append(cmds, m.updateConversations())
+			}
 		}
-		cmds = append(cmds, m.updateConversations())
 		if m.SelectedFile == "uploading..." {
 			m.SelectedFile = ""
 		}
@@ -518,7 +527,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var peer types.Peer
 		if m.SelectedUser.PeerID != "" {
 			peer = peerFromItem(m.SelectedUser)
-			if message, ok := m.ChatUI.SelectedItem().(types.FormattedMessage); ok {
+			var message *types.FormattedMessage = m.SelectedMessage()
+			if message == nil {
+				if sel, ok := m.ChatUI.SelectedItem().(types.FormattedMessage); ok {
+					message = &sel
+				}
+			}
+			if message != nil {
 				alreadyReacted := false
 				if message.Reactions != nil {
 					for _, r := range message.Reactions.Results {
@@ -692,6 +707,10 @@ func (m Model) handleReadHistoryOutbox(msg types.ReadHistoryOutboxNotification) 
 
 func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, tea.Cmd) {
 	peerID := msg.FromID
+	if msg.PeerID != "" {
+		peerID = msg.PeerID
+	}
+
 	var userInfo *types.UserInfo
 	for _, v := range slices.Concat(m.Users.Items(), m.Bots.Items()) {
 		if user, ok := v.(types.UserInfo); ok && user.PeerID == peerID {
@@ -718,79 +737,106 @@ func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, te
 		sendNewMessageNotification(*channelOrGroupInfo, msg.Message)
 	}
 
-	if channelOrGroupInfo != nil {
-		if m.Mode != ModeGroups && m.Mode != ModeChannels {
-			return m, nil
-		}
-
-		chatType := types.GroupChat
-		if m.Mode == ModeChannels {
-			chatType = types.ChannelChat
-		}
-
-		if m.SelectedChannel.ID == channelOrGroupInfo.ID || m.SelectedGroup.ID == channelOrGroupInfo.ID {
-			formattedMessage := getFormattedMessageFunc(GetFormattedMessageArg{
-				ChatType:           chatType,
-				ChannelOrGroupInfo: channelOrGroupInfo,
-				Message:            msg.Message,
-			})
-
-			filled := len(filterEmptyMessages(m.Conversations))
-			if filled < len(m.Conversations) {
-				m.Conversations[filled] = formattedMessage
-			} else {
-				copy(m.Conversations[:], m.Conversations[1:])
-				m.Conversations[len(m.Conversations)-1] = formattedMessage
+	currentPeerID := m.CurrentPeerID()
+	// If message does not belong to currently open chat:
+	if currentPeerID == "" || peerID != currentPeerID {
+		if !msg.Message.Out {
+			var unreadCmds []tea.Cmd
+			if userInfo != nil {
+				l := listForUser(&m, *userInfo)
+				if userIndex := getUserIndex(*l, *userInfo); userIndex != -1 {
+					user := l.Items()[userIndex].(types.UserInfo)
+					user.UnreadCount++
+					unreadCmds = append(unreadCmds, l.SetItem(userIndex, user))
+				}
+				for allIdx, item := range m.All.Items() {
+					if u, ok := item.(types.UserInfo); ok && u.PeerID == userInfo.PeerID {
+						u.UnreadCount++
+						unreadCmds = append(unreadCmds, m.All.SetItem(allIdx, u))
+						break
+					}
+				}
 			}
-			return m, m.updateConversations()
-		}
-
-		if groupIndex := getGroupIndex(m, *channelOrGroupInfo); groupIndex != -1 && !msg.Message.Out {
-			group := m.Groups.Items()[groupIndex].(types.ChannelInfo)
-			group.UnreadCount++
-			m.Groups.SetItem(groupIndex, group)
+			if channelOrGroupInfo != nil {
+				if groupIndex := getGroupIndex(m, *channelOrGroupInfo); groupIndex != -1 {
+					group := m.Groups.Items()[groupIndex].(types.ChannelInfo)
+					group.UnreadCount++
+					unreadCmds = append(unreadCmds, m.Groups.SetItem(groupIndex, group))
+				}
+				if channelIndex := getChannelIndex(m, *channelOrGroupInfo); channelIndex != -1 {
+					channel := m.Channels.Items()[channelIndex].(types.ChannelInfo)
+					channel.UnreadCount++
+					unreadCmds = append(unreadCmds, m.Channels.SetItem(channelIndex, channel))
+				}
+				for allIdx, item := range m.All.Items() {
+					if cg, ok := item.(types.ChannelInfo); ok && cg.ID == channelOrGroupInfo.ID {
+						cg.UnreadCount++
+						unreadCmds = append(unreadCmds, m.All.SetItem(allIdx, cg))
+						break
+					}
+				}
+			}
+			return m, tea.Batch(unreadCmds...)
 		}
 		return m, nil
 	}
 
-	if userInfo == nil || (m.Mode != ModeUsers && m.Mode != ModeBots) {
-		return m, nil
-	}
-
-	if m.SelectedUser.PeerID != userInfo.PeerID && !msg.Message.Out {
-		l := listForUser(&m, *userInfo)
-		if userIndex := getUserIndex(*l, *userInfo); userIndex != -1 {
-			user := l.Items()[userIndex].(types.UserInfo)
-			user.UnreadCount++
-			return m, l.SetItem(userIndex, user)
+	// Message belongs to currently open chat!
+	var chatType types.ChatType
+	if channelOrGroupInfo != nil {
+		if channelOrGroupInfo.IsBroadcast {
+			chatType = types.ChannelChat
+		} else {
+			chatType = types.GroupChat
 		}
-		return m, nil
+	} else if userInfo != nil {
+		if userInfo.IsBot {
+			chatType = types.BotChat
+		} else {
+			chatType = types.UserChat
+		}
+	} else {
+		chatType = types.UserChat
 	}
 
-	chatType := types.UserChat
-	if userInfo.IsBot {
-		chatType = types.BotChat
-	}
-
-	if !msg.Message.Out {
+	if !msg.Message.Out && userInfo != nil {
 		m.SelectedUser.UnreadCount++
 	}
 
-	formattedMessage := getFormattedMessageFunc(GetFormattedMessageArg{
-		ChatType: chatType,
-		UserInfo: userInfo,
-		Message:  msg.Message,
-	})
-
-	filled := len(filterEmptyMessages(m.Conversations))
-	if filled < len(m.Conversations) {
-		m.Conversations[filled] = formattedMessage
-	} else {
-		copy(m.Conversations[:], m.Conversations[1:])
-		m.Conversations[len(m.Conversations)-1] = formattedMessage
+	// Check if this message was already added (e.g. optimistic send or duplicate update)
+	alreadyPresent := false
+	for i, c := range m.Conversations {
+		if c.ID == msg.Message.ID || (msg.Message.Out && c.IsFromMe && c.Content == msg.Message.Message) {
+			m.Conversations[i].ID = msg.Message.ID
+			alreadyPresent = true
+			break
+		}
 	}
+
+	if !alreadyPresent {
+		formattedMessage := getFormattedMessageFunc(GetFormattedMessageArg{
+			ChatType:           chatType,
+			ChannelOrGroupInfo: channelOrGroupInfo,
+			UserInfo:           userInfo,
+			Message:            msg.Message,
+		})
+		formattedMessage.PeerID = &peerID
+
+		wasAtBottom := m.viewport.AtBottom()
+		m.Conversations = append(m.Conversations, formattedMessage)
+		if len(m.Conversations) > 250 {
+			m.Conversations = m.Conversations[len(m.Conversations)-250:]
+		}
+		if wasAtBottom {
+			m.SelectedMessageIndex = len(m.Conversations) - 1
+			m.viewport.GotoBottom()
+		} else if m.SelectedMessageIndex >= len(m.Conversations) {
+			m.SelectedMessageIndex = len(m.Conversations) - 1
+		}
+	}
+
 	cmd := m.updateConversations()
-	fetchCmd := m.checkAndFetchCustomEmojis([]types.FormattedMessage{formattedMessage})
+	fetchCmd := m.checkAndFetchCustomEmojis(m.Conversations)
 	return m, tea.Batch(fetchCmd, cmd)
 }
 
@@ -862,10 +908,18 @@ func (m Model) handleMessageDeletion(msg MessageDeletionConfirmResponseMsg) (tea
 		return m, nil
 	}
 	peer := getMessageParams(&m)
-	selectedItemInChat := m.ChatUI.SelectedItem().(types.FormattedMessage)
+	var selectedID int
+	if msgPtr := m.SelectedMessage(); msgPtr != nil {
+		selectedID = msgPtr.ID
+	} else if selectedItemInChat, ok := m.ChatUI.SelectedItem().(types.FormattedMessage); ok {
+		selectedID = selectedItemInChat.ID
+	}
+	if selectedID == 0 {
+		return m, nil
+	}
 	response, err := telegram.Cligram.DeleteMessage(telegram.Cligram.Context(), types.DeleteMessageRequest{
 		Peer:      peer,
-		MessageID: int(selectedItemInChat.ID),
+		MessageID: selectedID,
 	})
 	if err != nil {
 		m.IsModalVisible = true
@@ -873,14 +927,17 @@ func (m Model) handleMessageDeletion(msg MessageDeletionConfirmResponseMsg) (tea
 		return m, nil
 	}
 	if response.Status == "success" {
-		var updatedConversations [50]types.FormattedMessage
-		for i, v := range m.Conversations {
-			if v.ID != selectedItemInChat.ID {
-				updatedConversations[i] = v
+		var updatedConversations []types.FormattedMessage
+		for _, v := range m.Conversations {
+			if v.ID != selectedID {
+				updatedConversations = append(updatedConversations, v)
 			}
 		}
 		m.Conversations = updatedConversations
-		cmd := m.ChatUI.SetItems(formatMessages(updatedConversations))
+		if m.SelectedMessageIndex >= len(m.Conversations) {
+			m.SelectedMessageIndex = len(m.Conversations) - 1
+		}
+		cmd := m.updateConversations()
 		return m, cmd
 	}
 	return m, nil
@@ -895,41 +952,63 @@ func (m Model) handleGetMessages(msg types.GetMessagesMsg) (tea.Model, tea.Cmd) 
 		return m, nil
 	}
 
-	messagesWeGot := len(filterEmptyMessages(msg.Messages))
-	if messagesWeGot < 1 {
+	currentPeer := m.CurrentPeerID()
+	if msg.PeerID != "" && currentPeer != "" && msg.PeerID != currentPeer {
+		slog.Debug("discarding stale GetMessagesMsg for different peer", "msgPeer", msg.PeerID, "currentPeer", currentPeer)
+		return m, nil
+	}
+
+	nonEmpty := filterEmptyMessages(msg.Messages[:])
+	if len(nonEmpty) < 1 {
 		if selectedChat, ok := m.Users.SelectedItem().(types.UserInfo); ok && selectedChat.IsBot {
 			m.Input.SetValue("/start")
 		}
 		return m, nil
 	}
 
-	m.Conversations = m.mergeConversations(msg.Messages, messagesWeGot)
+	wasAtBottom := m.viewport.AtBottom() || len(m.Conversations) == 0
+	m.Conversations = m.mergeConversations(nonEmpty)
 	cmd := m.updateConversations()
-	m.ChatUI.Select(len(m.Conversations) - 1)
+
+	if wasAtBottom {
+		m.SelectedMessageIndex = len(m.Conversations) - 1
+		m.viewport.GotoBottom()
+	} else if m.SelectedMessageIndex >= len(m.Conversations) {
+		m.SelectedMessageIndex = len(m.Conversations) - 1
+	}
 
 	fetchCmd := m.checkAndFetchCustomEmojis(filterEmptyMessages(m.Conversations))
 	return m, tea.Batch(fetchCmd, cmd)
 }
 
-func (m Model) mergeConversations(newMessages [50]types.FormattedMessage, messagesWeGot int) [50]types.FormattedMessage {
-	if messagesWeGot >= 50 {
-		return newMessages
-	}
-	var oldMessages []types.FormattedMessage
-	for _, v := range m.ChatUI.Items() {
-		if msg, ok := v.(types.FormattedMessage); ok && msg.ID != 0 {
-			oldMessages = append(oldMessages, msg)
+func (m Model) mergeConversations(newMessages []types.FormattedMessage) []types.FormattedMessage {
+	seen := make(map[int]bool, len(m.Conversations)+len(newMessages))
+	var combined []types.FormattedMessage
+
+	for _, msg := range m.Conversations {
+		if msg.ID != 0 && !seen[msg.ID] {
+			seen[msg.ID] = true
+			combined = append(combined, msg)
 		}
 	}
-	var updatedConversations [50]types.FormattedMessage
-	if (messagesWeGot + len(oldMessages)) <= 50 {
-		updatedConversations = newMessages
-	} else {
-		take := 50 - messagesWeGot
-		combined := append(m.Conversations[:take], newMessages[:]...)
-		copy(updatedConversations[:], combined)
+	for _, msg := range newMessages {
+		if msg.ID != 0 && !seen[msg.ID] {
+			seen[msg.ID] = true
+			combined = append(combined, msg)
+		}
 	}
-	return updatedConversations
+
+	sort.SliceStable(combined, func(i, j int) bool {
+		if combined[i].Date.Equal(combined[j].Date) {
+			return combined[i].ID < combined[j].ID
+		}
+		return combined[i].Date.Before(combined[j].Date)
+	})
+
+	if len(combined) > 250 {
+		combined = combined[len(combined)-250:]
+	}
+	return combined
 }
 
 func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -1020,7 +1099,95 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "shift+down":
 		if m.FocusedOn == Main {
-			m.ChatUI.Select(len(m.ChatUI.Items()) - 1)
+			if len(m.Conversations) > 0 {
+				m.SelectedMessageIndex = len(m.Conversations) - 1
+				m.scrollSelectedMessageIntoView()
+			}
+			m.viewport.GotoBottom()
+		}
+	case "up", "k":
+		if m.FocusedOn == Main {
+			if m.ShowForumTopics && m.SelectedForumTopic == nil {
+				return m, nil
+			}
+			if len(m.Conversations) > 0 {
+				if m.SelectedMessageIndex < 0 {
+					m.SelectedMessageIndex = len(m.Conversations) - 1
+				} else if m.SelectedMessageIndex > 0 {
+					m.SelectedMessageIndex--
+				}
+				m.scrollSelectedMessageIntoView()
+			}
+			return m, nil
+		}
+	case "down", "j":
+		if m.FocusedOn == Main {
+			if m.ShowForumTopics && m.SelectedForumTopic == nil {
+				return m, nil
+			}
+			if len(m.Conversations) > 0 {
+				if m.SelectedMessageIndex < 0 {
+					m.SelectedMessageIndex = 0
+				} else if m.SelectedMessageIndex < len(m.Conversations)-1 {
+					m.SelectedMessageIndex++
+				}
+				m.scrollSelectedMessageIntoView()
+			}
+			return m, nil
+		}
+	case "pgup":
+		if m.FocusedOn == Main && len(m.Conversations) > 0 {
+			m.SelectedMessageIndex -= 10
+			if m.SelectedMessageIndex < 0 {
+				m.SelectedMessageIndex = 0
+			}
+			m.scrollSelectedMessageIntoView()
+			return m, nil
+		}
+	case "pgdown":
+		if m.FocusedOn == Main && len(m.Conversations) > 0 {
+			m.SelectedMessageIndex += 10
+			if m.SelectedMessageIndex >= len(m.Conversations) {
+				m.SelectedMessageIndex = len(m.Conversations) - 1
+			}
+			m.scrollSelectedMessageIntoView()
+			return m, nil
+		}
+	case "home":
+		if m.FocusedOn == Main && len(m.Conversations) > 0 {
+			m.SelectedMessageIndex = 0
+			m.scrollSelectedMessageIntoView()
+			return m, nil
+		}
+	case "end":
+		if m.FocusedOn == Main && len(m.Conversations) > 0 {
+			m.SelectedMessageIndex = len(m.Conversations) - 1
+			m.scrollSelectedMessageIntoView()
+			return m, nil
+		}
+	case "i":
+		if m.FocusedOn == Main && !isReadOnlyBroadcast(&m) {
+			m.FocusedOn = Input
+			m.Input.Focus()
+			return m, nil
+		}
+	case "esc":
+		if m.FocusedOn == Input {
+			m.FocusedOn = Main
+			m.Input.Blur()
+			if len(m.Conversations) > 0 {
+				if m.SelectedMessageIndex < 0 {
+					m.SelectedMessageIndex = len(m.Conversations) - 1
+				} else if m.SelectedMessageIndex >= len(m.Conversations) {
+					m.SelectedMessageIndex = len(m.Conversations) - 1
+				}
+				m.scrollSelectedMessageIntoView()
+			}
+			return m, nil
+		}
+		if m.FocusedOn == Main {
+			m.FocusedOn = SideBar
+			return m, nil
 		}
 	case "ctrl+a":
 		m, cmd := m.handleCtrlA()
@@ -1032,7 +1199,9 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.FocusedOn == Main && m.ShowForumTopics && m.SelectedForumTopic != nil {
 			m.SelectedForumTopic = nil
 			m.MainViewLoading = false
-			m.Conversations = [50]types.FormattedMessage{}
+			m.Conversations = nil
+			m.SelectedMessageIndex = -1
+			m.viewport.SetContent("")
 			m.ChatUI.SetItems([]list.Item{})
 			m.ChatUI.ResetSelected()
 			return m, nil
@@ -1094,14 +1263,16 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 		return m, tea.Batch(cmds...)
 	case "ctrl+r":
-		cmds := []tea.Cmd{telegram.Cligram.GetAvailableReactions(telegram.Cligram.Context())}
-		if m.CurrentUser == nil {
-			cmds = append(cmds, func() tea.Msg {
-				user, err := telegram.Cligram.GetMe(telegram.Cligram.Context())
-				return types.CurrentUserMsg{User: user, Err: err}
-			})
+		if m.FocusedOn == Main && m.SelectedMessage() != nil {
+			cmds := []tea.Cmd{telegram.Cligram.GetAvailableReactions(telegram.Cligram.Context())}
+			if m.CurrentUser == nil {
+				cmds = append(cmds, func() tea.Msg {
+					user, err := telegram.Cligram.GetMe(telegram.Cligram.Context())
+					return types.CurrentUserMsg{User: user, Err: err}
+				})
+			}
+			return m, tea.Batch(cmds...)
 		}
-		return m, tea.Batch(cmds...)
 	case "alt+s":
 		return m, func() tea.Msg { return m.Stories }
 	}
@@ -1152,7 +1323,13 @@ func (m Model) handleListPagination() (Model, tea.Cmd) {
 
 func (m Model) handleEditKey() (tea.Model, tea.Cmd) {
 	if m.FocusedOn == Main {
-		if selectedItem, ok := m.ChatUI.SelectedItem().(types.FormattedMessage); ok && strings.ToLower(selectedItem.Sender) == "you" {
+		var selectedItem *types.FormattedMessage = m.SelectedMessage()
+		if selectedItem == nil {
+			if sel, ok := m.ChatUI.SelectedItem().(types.FormattedMessage); ok {
+				selectedItem = &sel
+			}
+		}
+		if selectedItem != nil && (selectedItem.IsFromMe || strings.ToLower(selectedItem.Sender) == "you") {
 			sentDate := selectedItem.Date
 			now := time.Now()
 			diff := now.Sub(sentDate)
@@ -1163,7 +1340,7 @@ func (m Model) handleEditKey() (tea.Model, tea.Cmd) {
 			}
 			m.FocusedOn = Input
 			m.Input.SetValue(selectedItem.Content)
-			m.EditMessage = &selectedItem
+			m.EditMessage = selectedItem
 			m.SkipNextInput = true
 		}
 	}
@@ -1201,7 +1378,9 @@ func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
 		}
 		m.SelectedForumTopic = &forumTopic
 		m.MainViewLoading = true
-		m.Conversations = [50]types.FormattedMessage{}
+		m.Conversations = nil
+		m.SelectedMessageIndex = -1
+		m.viewport.SetContent("")
 		m.ChatUI.SetItems([]list.Item{})
 		m.ChatUI.ResetSelected()
 
@@ -1215,8 +1394,14 @@ func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	if m.FocusedOn == Main && m.ChatUI.SelectedItem() != nil {
-		if selectedMessage, ok := m.ChatUI.SelectedItem().(types.FormattedMessage); ok && selectedMessage.MessageMediaWebPage != nil {
+	if m.FocusedOn == Main {
+		var selectedMessage *types.FormattedMessage = m.SelectedMessage()
+		if selectedMessage == nil {
+			if sel, ok := m.ChatUI.SelectedItem().(types.FormattedMessage); ok {
+				selectedMessage = &sel
+			}
+		}
+		if selectedMessage != nil && selectedMessage.MessageMediaWebPage != nil {
 			if webPage, ok := selectedMessage.MessageMediaWebPage.Webpage.(*tg.WebPage); ok {
 				if entity := getEntityName(webPage.URL); entity != nil {
 					return m, func() tea.Msg {
@@ -1280,11 +1465,17 @@ func (m Model) handleReplyKey() (tea.Model, tea.Cmd) {
 	if m.FocusedOn == Main {
 		canWrite := (m.Mode == ModeUsers || m.Mode == ModeGroups) || (m.Mode == ModeChannels && m.SelectedChannel.IsCreator)
 		if canWrite {
-			m.IsReply = true
-			if selectedMessage, ok := m.ChatUI.SelectedItem().(types.FormattedMessage); ok {
+			var selectedMessage *types.FormattedMessage = m.SelectedMessage()
+			if selectedMessage == nil {
+				if sel, ok := m.ChatUI.SelectedItem().(types.FormattedMessage); ok {
+					selectedMessage = &sel
+				}
+			}
+			if selectedMessage != nil {
+				m.IsReply = true
 				m.FocusedOn = Input
 				m.SkipNextInput = true
-				m.ReplyTo = &selectedMessage
+				m.ReplyTo = selectedMessage
 			}
 		}
 	}
@@ -1293,9 +1484,17 @@ func (m Model) handleReplyKey() (tea.Model, tea.Cmd) {
 
 func (m Model) handleDeleteKey() (tea.Model, tea.Cmd) {
 	if m.FocusedOn == Main {
-		selectedItem := m.ChatUI.SelectedItem().(types.FormattedMessage)
-		return m, func() tea.Msg {
-			return OpenModalMsg{ModalMode: ModalModeDeleteMessage, Message: &selectedItem}
+		var selectedItem *types.FormattedMessage = m.SelectedMessage()
+		if selectedItem == nil {
+			if sel, ok := m.ChatUI.SelectedItem().(types.FormattedMessage); ok {
+				selectedItem = &sel
+			}
+		}
+		if selectedItem != nil {
+			itemCopy := *selectedItem
+			return m, func() tea.Msg {
+				return OpenModalMsg{ModalMode: ModalModeDeleteMessage, Message: &itemCopy}
+			}
 		}
 	}
 	return m, nil
@@ -1305,10 +1504,16 @@ func (m Model) handleForwardKey() (tea.Model, tea.Cmd) {
 	if m.FocusedOn != Main {
 		return m, nil
 	}
-	selectedMessage, ok := m.ChatUI.SelectedItem().(types.FormattedMessage)
-	if !ok {
+	var selectedMessage *types.FormattedMessage = m.SelectedMessage()
+	if selectedMessage == nil {
+		if sel, ok := m.ChatUI.SelectedItem().(types.FormattedMessage); ok {
+			selectedMessage = &sel
+		}
+	}
+	if selectedMessage == nil {
 		return m, nil
 	}
+	msgCopy := *selectedMessage
 
 	var from list.Item
 	switch m.Mode {
@@ -1323,7 +1528,7 @@ func (m Model) handleForwardKey() (tea.Model, tea.Cmd) {
 	return m, func() tea.Msg {
 		return OpenModalMsg{
 			ModalMode:    ModalModeForwardMessage,
-			Message:      &selectedMessage,
+			Message:      &msgCopy,
 			UsersList:    &m.Users,
 			ChannelsList: &m.Channels,
 			GroupsList:   &m.Groups,

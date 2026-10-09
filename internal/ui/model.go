@@ -94,7 +94,7 @@ func (d MessagesDelegate) Height() int                               { return 1 
 func (d MessagesDelegate) Spacing() int                              { return 0 }
 func (d MessagesDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd { return nil }
 
-func (d MessagesDelegate) renderReactions(tgReactions *tg.MessageReactions) string {
+func (m *Model) renderReactions(tgReactions *tg.MessageReactions) string {
 	var reactions string
 	if tgReactions != nil {
 		if len(tgReactions.Results) > 0 {
@@ -109,10 +109,12 @@ func (d MessagesDelegate) renderReactions(tgReactions *tg.MessageReactions) stri
 				case *tg.ReactionPaid:
 					content = "⭐" + " " + strconv.Itoa(int(r.Count))
 				case *tg.ReactionCustomEmoji:
-					if doc, found := d.Model.CustomEmojis[reaction.DocumentID]; found {
-						if len(doc.Thumbs) > 0 {
-							thumb := doc.Thumbs[len(doc.Thumbs)-1]
-							_ = thumb
+					if m != nil && m.CustomEmojis != nil {
+						if doc, found := m.CustomEmojis[reaction.DocumentID]; found {
+							if len(doc.Thumbs) > 0 {
+								thumb := doc.Thumbs[len(doc.Thumbs)-1]
+								_ = thumb
+							}
 						}
 					}
 				}
@@ -133,7 +135,7 @@ func (d MessagesDelegate) renderReactions(tgReactions *tg.MessageReactions) stri
 	return reactions
 }
 
-func (d MessagesDelegate) renderWebPagePreview(webPageMedia *tg.MessageMediaWebPage, width int) string {
+func (m *Model) renderWebPagePreview(webPageMedia *tg.MessageMediaWebPage, width int) string {
 	if webPageMedia == nil {
 		return ""
 	}
@@ -167,6 +169,20 @@ func (d MessagesDelegate) renderWebPagePreview(webPageMedia *tg.MessageMediaWebP
 	}
 
 	return "\n" + linkPreviewBorderStyle.Render(content)
+}
+
+func (d MessagesDelegate) renderReactions(tgReactions *tg.MessageReactions) string {
+	if d.Model != nil {
+		return d.Model.renderReactions(tgReactions)
+	}
+	return ""
+}
+
+func (d MessagesDelegate) renderWebPagePreview(webPageMedia *tg.MessageMediaWebPage, width int) string {
+	if d.Model != nil {
+		return d.Model.renderWebPagePreview(webPageMedia, width)
+	}
+	return ""
 }
 
 func (d MessagesDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
@@ -296,6 +312,11 @@ type PhoneCallDghConfigs struct {
 	Configs map[int64]*types.DHConfig
 }
 
+type messageLineRange struct {
+	startLine int
+	endLine   int
+}
+
 type Model struct {
 	PhoneCallDhConfigs       *PhoneCallDghConfigs
 	Alert                    bubbleup.AlertModel
@@ -323,7 +344,10 @@ type Model struct {
 	viewport                 viewport.Model
 	FocusedOn                FocusedOn
 	ChatUI                   list.Model
-	Conversations            [50]types.FormattedMessage
+	Conversations            []types.FormattedMessage
+	ActivePeerID             string
+	SelectedMessageIndex     int
+	messageLineRanges        []messageLineRange
 	IsReply                  bool
 	ReplyTo                  *types.FormattedMessage
 	EditMessage              *types.FormattedMessage
@@ -382,7 +406,7 @@ func FetchCustomEmojiDocumentCmd(documentID int64) tea.Cmd {
 	}
 }
 
-func filterEmptyMessages(msgs [50]types.FormattedMessage) []types.FormattedMessage {
+func filterEmptyMessages(msgs []types.FormattedMessage) []types.FormattedMessage {
 	var filteredMsgs []types.FormattedMessage
 	for _, m := range msgs {
 		if m.ID != 0 {
@@ -392,7 +416,7 @@ func filterEmptyMessages(msgs [50]types.FormattedMessage) []types.FormattedMessa
 	return filteredMsgs
 }
 
-func formatMessages(msgs [50]types.FormattedMessage) []list.Item {
+func formatMessages(msgs []types.FormattedMessage) []list.Item {
 	filteredMsgs := filterEmptyMessages(msgs)
 	var lines []list.Item
 	for _, m := range filteredMsgs {
@@ -494,6 +518,25 @@ func renderModal(m *Model) string {
 }
 
 func getUserOrChannelName(m *Model) string {
+	if m.ActivePeerID != "" {
+		if m.SelectedUser.PeerID == m.ActivePeerID {
+			return formatUserName(m.SelectedUser)
+		}
+		if m.SelectedChannel.ID == m.ActivePeerID {
+			return formatChannelName(m.SelectedChannel)
+		}
+		if m.SelectedGroup.ID == m.ActivePeerID {
+			groupName := formatGroupName(m.SelectedGroup)
+			if m.SelectedForumTopic != nil {
+				return groupName + " > " + m.SelectedForumTopic.TopicTitle
+			}
+			if m.ShowForumTopics {
+				return groupName + " (Forum)"
+			}
+			return groupName
+		}
+	}
+
 	switch m.Mode {
 	case ModeAll:
 		selected := m.All.SelectedItem()
@@ -566,12 +609,6 @@ func prepareMainContent(m *Model, d layoutDimensions) string {
 		return mainStyle.Render("Loading forum topics...")
 	}
 
-	m.ChatUI.SetWidth(d.mainWidth - 4)
-	//the terminal height is determined by charater
-	// one list items takes one 1 charater space since we are showing extra info on chats like times
-	// using the d.contentHeight will make the content out of view
-	m.ChatUI.SetHeight(int(d.contentHeight / 5))
-
 	userNameOrChannelName := getUserOrChannelName(m)
 	title := lipgloss.NewStyle().
 		Foreground(DefaultTheme.PrimaryText).
@@ -603,14 +640,14 @@ func prepareMainContent(m *Model, d layoutDimensions) string {
 		return mainStyle.Render(mainContent)
 	}
 
-	chatsView := m.ChatUI.View()
-
-	if len(m.ChatUI.Items()) > 0 {
-		m.ChatUI.Select(len(m.ChatUI.Items()) - 1)
-	}
-
+	var chatsView string
 	if m.IsFilepickerVisible {
 		chatsView = prepareFilepickerView(m)
+	} else {
+		headerHeight := lipgloss.Height(headerView)
+		availHeight := max(4, d.contentHeight-4-headerHeight)
+		availWidth := max(10, d.mainWidth-6)
+		chatsView = m.renderMessagesViewport(availWidth, availHeight)
 	}
 
 	mainContent := lipgloss.JoinVertical(
@@ -620,6 +657,225 @@ func prepareMainContent(m *Model, d layoutDimensions) string {
 	)
 
 	return mainStyle.Render(mainContent)
+}
+
+func (m *Model) CurrentPeerID() string {
+	if m.ActivePeerID != "" {
+		return m.ActivePeerID
+	}
+	switch m.Mode {
+	case ModeAll:
+		selected := m.All.SelectedItem()
+		switch it := selected.(type) {
+		case types.UserInfo:
+			return it.PeerID
+		case types.ChannelInfo:
+			return it.ID
+		}
+	case ModeUsers, ModeBots:
+		return m.SelectedUser.PeerID
+	case ModeChannels:
+		return m.SelectedChannel.ID
+	case ModeGroups:
+		return m.SelectedGroup.ID
+	}
+	return ""
+}
+
+func (m *Model) SelectedMessage() *types.FormattedMessage {
+	if len(m.Conversations) == 0 {
+		return nil
+	}
+	if m.SelectedMessageIndex < 0 {
+		m.SelectedMessageIndex = 0
+	}
+	if m.SelectedMessageIndex >= len(m.Conversations) {
+		m.SelectedMessageIndex = len(m.Conversations) - 1
+	}
+	return &m.Conversations[m.SelectedMessageIndex]
+}
+
+func (m *Model) scrollSelectedMessageIntoView() {
+	if len(m.Conversations) == 0 || m.SelectedMessageIndex < 0 || m.SelectedMessageIndex >= len(m.messageLineRanges) {
+		return
+	}
+	target := m.messageLineRanges[m.SelectedMessageIndex]
+	viewportHeight := m.viewport.Height
+	if viewportHeight <= 0 {
+		return
+	}
+
+	// Card taller than viewport: align top
+	if (target.endLine - target.startLine + 1) >= viewportHeight {
+		m.viewport.SetYOffset(target.startLine)
+		return
+	}
+
+	// If card starts above viewport, scroll up so start is visible
+	if target.startLine < m.viewport.YOffset {
+		m.viewport.SetYOffset(target.startLine)
+		return
+	}
+
+	// If card ends below viewport, scroll down so end is visible
+	if target.endLine >= m.viewport.YOffset+viewportHeight {
+		m.viewport.SetYOffset(target.endLine - viewportHeight + 1)
+	}
+}
+
+func (m *Model) renderMessagesViewport(width, height int) string {
+	if width <= 0 || height <= 0 {
+		return ""
+	}
+	m.viewport.Width = width
+	m.viewport.Height = height
+
+	if len(m.Conversations) == 0 {
+		m.messageLineRanges = nil
+		emptyView := lipgloss.NewStyle().
+			Width(width).
+			Height(height).
+			Align(lipgloss.Center, lipgloss.Center).
+			Foreground(DefaultTheme.SecondaryText).
+			Render("No messages yet")
+		m.viewport.SetContent(emptyView)
+		return m.viewport.View()
+	}
+
+	var readMaxOutboxID int
+	switch m.Mode {
+	case ModeUsers, ModeBots:
+		readMaxOutboxID = m.SelectedUser.ReadOutboxMaxID
+	case ModeChannels:
+		readMaxOutboxID = m.SelectedChannel.ReadOutboxMaxID
+	case ModeGroups:
+		readMaxOutboxID = m.SelectedGroup.ReadOutboxMaxID
+	}
+
+	bubbleWidth := max(24, int(float64(width)*0.80))
+	if bubbleWidth > width-2 {
+		bubbleWidth = width - 2
+	}
+
+	var renderedCards []string
+	m.messageLineRanges = make([]messageLineRange, len(m.Conversations))
+	currentLine := 0
+
+	for i, entry := range m.Conversations {
+		cardStr := m.renderMessageBubble(entry, i, bubbleWidth, width, readMaxOutboxID)
+		lines := strings.Split(cardStr, "\n")
+		cardLines := len(lines)
+
+		m.messageLineRanges[i] = messageLineRange{
+			startLine: currentLine,
+			endLine:   currentLine + cardLines - 1,
+		}
+		currentLine += cardLines + 1 // +1 for spacing between cards
+		renderedCards = append(renderedCards, cardStr)
+	}
+
+	content := strings.Join(renderedCards, "\n\n")
+	m.viewport.SetContent(content)
+	return m.viewport.View()
+}
+
+func (m *Model) renderMessageBubble(entry types.FormattedMessage, idx int, bubbleWidth int, viewportWidth int, readMaxOutboxID int) string {
+	isSelected := (m.FocusedOn == Main && idx == m.SelectedMessageIndex)
+
+	var handle string
+	if entry.IsFromMe {
+		handle = lipgloss.NewStyle().
+			Foreground(DefaultTheme.AccentColor).
+			Bold(true).
+			Render("You")
+	} else {
+		name := entry.Sender
+		if entry.SenderUserInfo != nil && entry.SenderUserInfo.FirstName != "" {
+			name = entry.SenderUserInfo.FirstName
+		}
+		handle = lipgloss.NewStyle().
+			Foreground(senderColor(name)).
+			Bold(true).
+			Render(name)
+	}
+
+	if isSelected {
+		handle = selectedIndicatorStyle.Render("▎ ") + handle
+	}
+
+	var cardElements []string
+	cardElements = append(cardElements, handle)
+
+	if entry.ReplyTo != nil {
+		replyText := entry.ReplyTo.Content
+		if len(replyText) > 60 {
+			replyText = replyText[:57] + "..."
+		}
+		replyQuote := lipgloss.NewStyle().
+			Foreground(DefaultTheme.SecondaryText).
+			Italic(true).
+			Render("┌ " + wordwrap.String(replyText, max(10, bubbleWidth-6)))
+		cardElements = append(cardElements, replyQuote)
+	}
+
+	rawTitle := entry.Title()
+	if rawTitle != "" {
+		body := wordwrap.String(rawTitle, max(10, bubbleWidth-6))
+		cardElements = append(cardElements, body)
+	}
+
+	if entry.MessageMediaWebPage != nil {
+		preview := m.renderWebPagePreview(entry.MessageMediaWebPage, max(10, bubbleWidth-6))
+		if preview != "" {
+			cardElements = append(cardElements, preview)
+		}
+	}
+
+	var badges []string
+	if entry.Reactions != nil {
+		if rStr := m.renderReactions(entry.Reactions); rStr != "" {
+			badges = append(badges, rStr)
+		}
+	}
+	if entry.Views != 0 {
+		badges = append(badges, viewCountStyle.Render(fmt.Sprintf("👁️ %d", entry.Views)))
+	}
+	if len(badges) > 0 {
+		cardElements = append(cardElements, strings.Join(badges, " "))
+	}
+
+	timeStr := entry.Date.Format("03:04 PM")
+	var receiptStr string
+	if entry.IsFromMe {
+		if entry.ID > 0 && entry.ID <= readMaxOutboxID {
+			receiptStr = " " + readStateStyleDouble.Render("✓✓")
+		} else {
+			receiptStr = " " + readStateStyleSingle.Render("✓")
+		}
+	}
+	footer := timestampStyle.Render(timeStr) + receiptStr
+	footerLine := lipgloss.NewStyle().
+		Width(max(10, bubbleWidth-4)).
+		Align(lipgloss.Right).
+		Render(footer)
+	cardElements = append(cardElements, footerLine)
+
+	innerContent := strings.Join(cardElements, "\n")
+
+	if entry.IsFromMe {
+		style := outgoingBubbleStyle.Width(bubbleWidth)
+		if isSelected {
+			style = outgoingBubbleSelectedStyle.Width(bubbleWidth)
+		}
+		indent := max(0, viewportWidth-bubbleWidth-4)
+		return style.MarginLeft(indent).Render(innerContent)
+	}
+
+	style := incomingBubbleStyle.Width(bubbleWidth)
+	if isSelected {
+		style = incomingBubbleSelectedStyle.Width(bubbleWidth)
+	}
+	return style.MarginLeft(1).Render(innerContent)
 }
 
 func prepareFilepickerView(m *Model) string {
@@ -950,38 +1206,51 @@ func getMessageParams(m *Model) types.Peer {
 	}
 	if m.Mode == ModeUsers || m.Mode == ModeBots {
 		if m.Mode == ModeUsers {
-			m.SelectedUser = m.Users.SelectedItem().(types.UserInfo)
-			cType = types.UserChat
+			if item, ok := m.Users.SelectedItem().(types.UserInfo); ok {
+				m.SelectedUser = item
+				cType = types.UserChat
+				pInfo = types.Peer{
+					AccessHash: m.SelectedUser.AccessHash,
+					ID:         m.SelectedUser.PeerID,
+					ChatType:   cType,
+				}
+			}
 		}
 		if m.Mode == ModeBots {
-			m.SelectedUser = m.Bots.SelectedItem().(types.UserInfo)
-			cType = types.BotChat
-		}
-		pInfo = types.Peer{
-			AccessHash: m.SelectedUser.AccessHash,
-			ID:         m.SelectedUser.PeerID,
-			ChatType:   cType,
+			if item, ok := m.Bots.SelectedItem().(types.UserInfo); ok {
+				m.SelectedUser = item
+				cType = types.BotChat
+				pInfo = types.Peer{
+					AccessHash: m.SelectedUser.AccessHash,
+					ID:         m.SelectedUser.PeerID,
+					ChatType:   cType,
+				}
+			}
 		}
 	}
 	if m.Mode == ModeChannels {
-		m.SelectedChannel = m.Channels.SelectedItem().(types.ChannelInfo)
-		cType = types.ChannelChat
-		pInfo = types.Peer{
-			AccessHash: m.SelectedChannel.AccessHash,
-			ID:         m.SelectedChannel.ID,
-			ChatType:   cType,
-		}
-		if m.SelectedChannel.IsCreator {
-			m.Input.Reset()
+		if item, ok := m.Channels.SelectedItem().(types.ChannelInfo); ok {
+			m.SelectedChannel = item
+			cType = types.ChannelChat
+			pInfo = types.Peer{
+				AccessHash: m.SelectedChannel.AccessHash,
+				ID:         m.SelectedChannel.ID,
+				ChatType:   cType,
+			}
+			if m.SelectedChannel.IsCreator {
+				m.Input.Reset()
+			}
 		}
 	}
 	if m.Mode == ModeGroups {
-		m.SelectedGroup = m.Groups.SelectedItem().(types.ChannelInfo)
-		cType = types.ChatType(types.GroupChat)
-		pInfo = types.Peer{
-			AccessHash: m.SelectedGroup.AccessHash,
-			ID:         m.SelectedGroup.ID,
-			ChatType:   cType,
+		if item, ok := m.Groups.SelectedItem().(types.ChannelInfo); ok {
+			m.SelectedGroup = item
+			cType = types.GroupChat
+			pInfo = types.Peer{
+				AccessHash: m.SelectedGroup.AccessHash,
+				ID:         m.SelectedGroup.ID,
+				ChatType:   cType,
+			}
 		}
 	}
 	return pInfo

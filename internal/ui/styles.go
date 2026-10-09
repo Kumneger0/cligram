@@ -151,7 +151,49 @@ var (
 	selectedIndicatorStyle = lipgloss.NewStyle().
 				Foreground(DefaultTheme.AccentColor).
 				Bold(true)
+
+	incomingBubbleStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(DefaultTheme.BorderColor).
+				Padding(0, 1)
+
+	incomingBubbleSelectedStyle = lipgloss.NewStyle().
+					Border(lipgloss.RoundedBorder()).
+					BorderForeground(DefaultTheme.AccentColor).
+					Padding(0, 1)
+
+	outgoingBubbleStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color("#334155")).
+				Padding(0, 1)
+
+	outgoingBubbleSelectedStyle = lipgloss.NewStyle().
+					Border(lipgloss.RoundedBorder()).
+					BorderForeground(DefaultTheme.AccentColor).
+					Padding(0, 1)
+
+	senderHandleColors = []lipgloss.Color{
+		lipgloss.Color("#38BDF8"), // Sky
+		lipgloss.Color("#818CF8"), // Indigo
+		lipgloss.Color("#F472B6"), // Pink
+		lipgloss.Color("#34D399"), // Emerald
+		lipgloss.Color("#FBBF24"), // Amber
+		lipgloss.Color("#A78BFA"), // Violet
+		lipgloss.Color("#FB923C"), // Orange
+		lipgloss.Color("#4ADE80"), // Green
+	}
 )
+
+func senderColor(name string) lipgloss.Color {
+	if len(senderHandleColors) == 0 {
+		return DefaultTheme.AccentColor
+	}
+	var hash uint
+	for i := 0; i < len(name); i++ {
+		hash = hash*31 + uint(name[i])
+	}
+	return senderHandleColors[hash%uint(len(senderHandleColors))]
+}
 
 func getSideBarStyles(sidebarWidth int, contentHeight int, m *Model) lipgloss.Style {
 	sideBarStyle := lipgloss.NewStyle().
