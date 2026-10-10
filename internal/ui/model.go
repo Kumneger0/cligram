@@ -739,6 +739,39 @@ func (m *Model) scrollSelectedMessageIntoView() {
 	}
 }
 
+func shouldCoalesceMessages(curr, prev types.FormattedMessage) bool {
+	if curr.IsFromMe != prev.IsFromMe {
+		return false
+	}
+	if curr.Date.IsZero() || prev.Date.IsZero() {
+		return false
+	}
+	diff := curr.Date.Sub(prev.Date)
+	if diff < 0 {
+		diff = -diff
+	}
+	if diff > 5*time.Minute {
+		return false
+	}
+	if curr.IsFromMe {
+		return true
+	}
+	if curr.FromID != nil && prev.FromID != nil && *curr.FromID != "" && *prev.FromID != "" {
+		return *curr.FromID == *prev.FromID
+	}
+	if curr.Sender == "" || curr.Sender == "unknown" || curr.Sender != prev.Sender {
+		return false
+	}
+	return true
+}
+
+func (m *Model) shouldCoalesce(idx int) bool {
+	if idx <= 0 || idx >= len(m.Conversations) {
+		return false
+	}
+	return shouldCoalesceMessages(m.Conversations[idx], m.Conversations[idx-1])
+}
+
 func (m *Model) renderMessagesViewport(width, height int) string {
 	if width <= 0 || height <= 0 {
 		return ""
@@ -774,45 +807,78 @@ func (m *Model) renderMessagesViewport(width, height int) string {
 		lines := strings.Split(cardStr, "\n")
 		cardLines := len(lines)
 
+		if i > 0 && !m.shouldCoalesce(i) {
+			currentLine++
+		}
+
 		m.messageLineRanges[i] = messageLineRange{
 			startLine: currentLine,
 			endLine:   currentLine + cardLines - 1,
 		}
-		currentLine += cardLines + 1 // +1 for spacing between cards
+		currentLine += cardLines
 		renderedCards = append(renderedCards, cardStr)
 	}
 
-	content := strings.Join(renderedCards, "\n\n")
-	m.viewport.SetContent(content)
+	var contentBuilder strings.Builder
+	for i, card := range renderedCards {
+		if i > 0 {
+			if m.shouldCoalesce(i) {
+				contentBuilder.WriteString("\n")
+			} else {
+				contentBuilder.WriteString("\n\n")
+			}
+		}
+		contentBuilder.WriteString(card)
+	}
+	m.viewport.SetContent(contentBuilder.String())
 	return m.viewport.View()
 }
 
 func (m *Model) renderMessageBubble(entry types.FormattedMessage, idx int, bubbleWidth int, viewportWidth int, readMaxOutboxID int) string {
 	isSelected := (m.FocusedOn == Main && idx == m.SelectedMessageIndex)
-
-	var handle string
-	if entry.IsFromMe {
-		handle = lipgloss.NewStyle().
-			Foreground(DefaultTheme.AccentColor).
-			Bold(true).
-			Render("You")
-	} else {
-		name := entry.Sender
-		if entry.SenderUserInfo != nil && entry.SenderUserInfo.FirstName != "" {
-			name = entry.SenderUserInfo.FirstName
-		}
-		handle = lipgloss.NewStyle().
-			Foreground(senderColor(name)).
-			Bold(true).
-			Render(name)
-	}
-
-	if isSelected {
-		handle = selectedIndicatorStyle.Render("▎ ") + handle
-	}
+	isCoalesced := m.shouldCoalesce(idx)
 
 	var cardElements []string
-	cardElements = append(cardElements, handle)
+	if !isCoalesced {
+		var handle string
+		if entry.IsFromMe {
+			handle = lipgloss.NewStyle().
+				Foreground(DefaultTheme.AccentColor).
+				Bold(true).
+				Render("You")
+		} else if strings.HasPrefix(entry.Sender, "🛡️ Anonymous Admin") {
+			handle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#E2E8F0")).
+				Bold(true).
+				Render(entry.Sender)
+		} else if strings.HasPrefix(entry.Sender, "📢") {
+			handle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#38BDF8")).
+				Bold(true).
+				Render(entry.Sender)
+		} else {
+			name := entry.Sender
+			if entry.SenderUserInfo != nil {
+				fullName := strings.TrimSpace(entry.SenderUserInfo.FirstName + " " + entry.SenderUserInfo.LastName)
+				if fullName != "" {
+					name = fullName
+				}
+			}
+			colorKey := name
+			if entry.FromID != nil && *entry.FromID != "" {
+				colorKey = *entry.FromID
+			}
+			handle = lipgloss.NewStyle().
+				Foreground(senderColor(colorKey)).
+				Bold(true).
+				Render(name)
+		}
+
+		if isSelected {
+			handle = selectedIndicatorStyle.Render("▎ ") + handle
+		}
+		cardElements = append(cardElements, handle)
+	}
 
 	if entry.ReplyTo != nil {
 		replyText := entry.ReplyTo.Content
@@ -874,6 +940,10 @@ func (m *Model) renderMessageBubble(entry types.FormattedMessage, idx int, bubbl
 		Align(lipgloss.Right).
 		Render(footer)
 	cardElements = append(cardElements, footerLine)
+
+	if isCoalesced && isSelected && len(cardElements) > 0 {
+		cardElements[0] = selectedIndicatorStyle.Render("▎ ") + cardElements[0]
+	}
 
 	innerContent := strings.Join(cardElements, "\n")
 
