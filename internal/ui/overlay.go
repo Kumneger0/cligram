@@ -243,6 +243,67 @@ func (r ReactionsDelegate) Render(w io.Writer, m list.Model, index int, item lis
 	}
 }
 
+type GroupMembersDelegate struct {
+	*Foreground
+}
+
+func (d GroupMembersDelegate) Height() int                               { return 1 }
+func (d GroupMembersDelegate) Spacing() int                              { return 0 }
+func (d GroupMembersDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd { return nil }
+
+func (d GroupMembersDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+	member, ok := item.(types.GroupMemberInfo)
+	if !ok {
+		return
+	}
+
+	var roleBadge string
+	switch member.Role {
+	case types.MemberRoleOwner:
+		roleBadge = lipgloss.NewStyle().Foreground(lipgloss.Color("#EAB308")).Bold(true).Render("[Owner]") + " "
+		if member.CustomTitle != "" {
+			roleBadge += lipgloss.NewStyle().Foreground(lipgloss.Color("#EAB308")).Italic(true).Render("("+member.CustomTitle+")") + " "
+		}
+	case types.MemberRoleAdmin:
+		roleBadge = lipgloss.NewStyle().Foreground(lipgloss.Color("#06B6D4")).Bold(true).Render("[Admin]") + " "
+		if member.CustomTitle != "" {
+			roleBadge += lipgloss.NewStyle().Foreground(lipgloss.Color("#06B6D4")).Italic(true).Render("("+member.CustomTitle+")") + " "
+		}
+	default:
+		if member.CustomTitle != "" {
+			roleBadge = lipgloss.NewStyle().Foreground(DefaultTheme.SecondaryText).Italic(true).Render("("+member.CustomTitle+")") + " "
+		}
+	}
+
+	name := member.User.DisplayName()
+
+	var usernameStr string
+	if member.User.Username != "" {
+		usernameStr = lipgloss.NewStyle().Foreground(DefaultTheme.SecondaryText).Render(" @" + member.User.Username)
+	}
+
+	var presenceStr string
+	if member.User.IsOnline {
+		presenceStr = " " + lipgloss.NewStyle().Foreground(lipgloss.Color("#22C55E")).Render("Online")
+	} else if member.User.LastSeen != nil && *member.User.LastSeen != "" {
+		presenceStr = " " + lipgloss.NewStyle().Foreground(DefaultTheme.SecondaryText).Render(*member.User.LastSeen)
+	}
+
+	fullLine := roleBadge + name + usernameStr + presenceStr
+
+	width := 60
+	if d.Foreground != nil {
+		width = max(50, min(80, d.Foreground.windowWidth-6))
+	}
+
+	str := lipgloss.NewStyle().MaxWidth(width).Width(width).Render(fullLine)
+	if index == m.Index() {
+		fmt.Fprint(w, selectedStyle.Render(" "+str+" "))
+	} else {
+		fmt.Fprint(w, normalStyle.Render(" "+str+" "))
+	}
+}
+
 type SearchResult struct {
 	Name              string
 	IsBot             bool
@@ -277,6 +338,7 @@ const (
 	ModalModeDeleteMessage  ModalMode = "DELETE_MESSAGE"
 	ModalModeShowStories    ModalMode = "SHOW_STORIES"
 	ModalModeSendReaction   ModalMode = "SEND_REACTION"
+	ModalModeGroupMembers   ModalMode = "GROUP_MEMBERS"
 )
 
 type OpenModalMsg struct {
@@ -289,6 +351,9 @@ type OpenModalMsg struct {
 	BotsList     *list.Model
 	Stories      []types.Stories
 	Entity       *types.EntityPreviewInfo
+	GroupPeer    *types.Peer
+	GroupTitle   string
+	TotalMembers int
 }
 
 type ForwardMsg struct {
@@ -326,6 +391,19 @@ type Foreground struct {
 	storiesLoading         bool
 	isDownloadingStory     bool
 	downloadingStoryPeer   string
+	membersList            *list.Model
+	allMembers             []types.GroupMemberInfo
+	membersInput           textinput.Model
+	membersLoading         bool
+	groupTitle             string
+	groupMembersError      error
+	groupPeer              *types.Peer
+	membersOffset          int
+	hasMoreMembers         bool
+	isPaginatingMembers    bool
+	totalMembers           int
+	isSearchingMembers     bool
+	membersSearchSeq       int
 }
 
 func (f *Foreground) ensureSpinner() {
@@ -448,6 +526,101 @@ func (f *Foreground) View() string {
 		footerHints := footerStyle.Render(footerText)
 
 		layout := lipgloss.JoinVertical(lipgloss.Left, title, divider, listContent, "", footerHints)
+		return foreStyle.Width(contentWidth + 2).Render(layout)
+	}
+
+	if f.ModalMode == ModalModeGroupMembers {
+		contentWidth := max(50, min(80, f.windowWidth-6))
+		count := 0
+		if f.membersList != nil {
+			count = len(f.membersList.Items())
+		}
+		spinView := f.spinner.View()
+		if spinView == "" {
+			spinView = "⠋"
+		}
+
+		titleName := f.groupTitle
+		if titleName == "" {
+			titleName = "Group"
+		}
+
+		var titleText string
+		if f.membersInput.Value() != "" {
+			if f.isSearchingMembers {
+				titleText = fmt.Sprintf("👥 %s Members (%d found) — %s Loading...", titleName, count, spinView)
+			} else if f.totalMembers > 0 {
+				titleText = fmt.Sprintf("👥 %s Members (%d found of %d)", titleName, count, f.totalMembers)
+			} else {
+				titleText = fmt.Sprintf("👥 %s Members (%d found)", titleName, count)
+			}
+		} else {
+			displayCount := f.totalMembers
+			if displayCount == 0 {
+				displayCount = count
+			}
+			if (f.membersLoading && count == 0) || f.isPaginatingMembers {
+				if displayCount > 0 {
+					titleText = fmt.Sprintf("👥 %s Members (%d) — %s Loading...", titleName, displayCount, spinView)
+				} else {
+					titleText = fmt.Sprintf("👥 %s Members — %s Loading...", titleName, spinView)
+				}
+			} else {
+				titleText = fmt.Sprintf("👥 %s Members (%d)", titleName, displayCount)
+			}
+		}
+		title := lipgloss.NewStyle().
+			Foreground(DefaultTheme.PrimaryText).
+			Bold(true).
+			Render(titleText)
+
+		f.membersInput.Width = contentWidth - 4
+		inputLine := lipgloss.NewStyle().
+			Width(contentWidth).
+			Background(DefaultTheme.InputBg).
+			Padding(0, 1).
+			Render(f.membersInput.View())
+
+		divider := lipgloss.NewStyle().
+			Foreground(DefaultTheme.BorderColor).
+			Render(strings.Repeat("─", contentWidth))
+
+		var listContent string
+		if f.groupMembersError != nil && count == 0 {
+			listContent = lipgloss.NewStyle().
+				Foreground(DefaultTheme.ErrorColor).
+				Padding(1, 2).
+				Render(fmt.Sprintf("Failed to fetch members: %v", f.groupMembersError))
+		} else if f.membersList == nil || count == 0 {
+			if f.membersLoading || f.isSearchingMembers {
+				listContent = lipgloss.NewStyle().
+					Foreground(DefaultTheme.SecondaryText).
+					Padding(2, 2).
+					Render(fmt.Sprintf("%s Loading...", spinView))
+			} else {
+				listContent = lipgloss.NewStyle().
+					Foreground(DefaultTheme.SecondaryText).
+					Italic(true).
+					Padding(2, 2).
+					Render("No members found")
+			}
+		} else {
+			f.membersList.SetWidth(contentWidth)
+			f.membersList.SetHeight(min(12, max(5, f.windowHeight/2)))
+			listContent = f.membersList.View()
+		}
+
+		footerText := "[Tab] Search/List  [↑/↓/j/k] Navigate  [Enter] Direct Message  [Esc] Close"
+		footerStyle := lipgloss.NewStyle().Foreground(DefaultTheme.SecondaryText).Padding(0, 1)
+		if f.groupMembersError != nil && count > 0 {
+			footerStyle = lipgloss.NewStyle().Foreground(DefaultTheme.ErrorColor).Padding(0, 1)
+			footerText = fmt.Sprintf("⚠️ %v  [Esc] Close", f.groupMembersError)
+		} else if f.isSearchingMembers || (f.membersLoading && count == 0) || f.isPaginatingMembers {
+			footerText = fmt.Sprintf("%s Loading...  [Esc] Close", spinView)
+		}
+		footerHints := footerStyle.Render(footerText)
+
+		layout := lipgloss.JoinVertical(lipgloss.Left, title, "", inputLine, divider, listContent, "", footerHints)
 		return foreStyle.Width(contentWidth + 2).Render(layout)
 	}
 

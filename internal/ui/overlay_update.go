@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -13,12 +14,18 @@ import (
 	"github.com/kumneger0/cligram/internal/telegram/types"
 )
 
+type MemberSearchTickMsg struct {
+	Peer  types.Peer
+	Query string
+	Seq   int
+}
+
 func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	m.ensureSpinner()
 	var cmds []tea.Cmd
 	switch msg := message.(type) {
 	case spinner.TickMsg:
-		if m.storiesLoading || m.isDownloadingStory {
+		if m.storiesLoading || m.isDownloadingStory || m.membersLoading || m.isPaginatingMembers || m.isSearchingMembers {
 			var spinCmd tea.Cmd
 			m.spinner, spinCmd = m.spinner.Update(msg)
 			return m, spinCmd
@@ -61,6 +68,97 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.allReactions = msg.Reactions
 		m.selectedReactionIndex = 0
+
+	case MemberSearchTickMsg:
+		if m.ModalMode == ModalModeGroupMembers && msg.Seq == m.membersSearchSeq && strings.TrimSpace(m.membersInput.Value()) == msg.Query {
+			m.isSearchingMembers = true
+			if telegram.Cligram != nil && telegram.Cligram.Context() != nil {
+				searchCmd := telegram.Cligram.SearchGroupMembers(telegram.Cligram.Context(), msg.Peer, msg.Query)
+				return m, tea.Batch(searchCmd, m.spinner.Tick)
+			}
+		}
+		return m, nil
+
+	case types.SearchGroupMembersMsg:
+		if m.ModalMode != ModalModeGroupMembers || msg.Query != strings.TrimSpace(m.membersInput.Value()) {
+			return m, nil
+		}
+		m.isSearchingMembers = false
+		if msg.Err != nil {
+			slog.Error("failed to search group members", "peerID", msg.PeerID, "query", msg.Query, "error", msg.Err.Error())
+			return m, nil
+		}
+		seen := make(map[string]bool)
+		var combined []list.Item
+		for _, member := range msg.Members {
+			if !seen[member.User.PeerID] {
+				seen[member.User.PeerID] = true
+				combined = append(combined, member)
+			}
+		}
+		for _, member := range m.allMembers {
+			val := strings.ToLower(member.FilterValue())
+			qLower := strings.ToLower(msg.Query)
+			if strings.Contains(val, qLower) && !seen[member.User.PeerID] {
+				seen[member.User.PeerID] = true
+				combined = append(combined, member)
+			}
+		}
+
+		if m.membersList != nil {
+			m.membersList.SetItems(combined)
+		} else {
+			mList := list.New(combined, GroupMembersDelegate{Foreground: m}, 10, 10)
+			mList.SetShowFilter(false)
+			mList.SetShowPagination(false)
+			mList.SetShowTitle(false)
+			mList.SetShowHelp(false)
+			mList.SetShowStatusBar(false)
+			m.membersList = &mList
+		}
+		return m, nil
+
+	case types.GetGroupMembersMsg:
+		m.membersLoading = false
+		m.isPaginatingMembers = false
+		if msg.Err != nil {
+			slog.Error("failed to get group members", "peerID", msg.PeerID, "offset", msg.Offset, "error", msg.Err.Error())
+			if msg.Offset == 0 {
+				m.groupMembersError = msg.Err
+			} else {
+				m.groupMembersError = fmt.Errorf("failed to load more members: %w", msg.Err)
+			}
+			return m, nil
+		}
+		if m.totalMembers == 0 && msg.TotalCount > 0 {
+			m.totalMembers = msg.TotalCount
+		} else if msg.TotalCount > m.totalMembers {
+			m.totalMembers = msg.TotalCount
+		}
+		if msg.Offset == 0 {
+			m.allMembers = msg.Members
+			m.membersOffset = len(msg.Members)
+			m.hasMoreMembers = len(msg.Members) == 200
+			items := m.filterMembers(m.membersInput.Value())
+			mList := list.New(items, GroupMembersDelegate{Foreground: m}, 10, 10)
+			mList.SetShowFilter(false)
+			mList.SetShowPagination(false)
+			mList.SetShowTitle(false)
+			mList.SetShowHelp(false)
+			mList.SetShowStatusBar(false)
+			m.membersList = &mList
+			return m, nil
+		}
+
+		// Subsequent page pagination
+		m.allMembers = append(m.allMembers, msg.Members...)
+		m.membersOffset += len(msg.Members)
+		m.hasMoreMembers = len(msg.Members) == 200
+		if m.membersList != nil {
+			items := m.filterMembers(m.membersInput.Value())
+			m.membersList.SetItems(items)
+		}
+		return m, nil
 	case tea.WindowSizeMsg:
 		m.searchResultCombined = list.New([]list.Item{}, SearchDelegate{Foreground: m}, 10, 10)
 		m.searchResultCombined.Title = "Search User Result"
@@ -109,6 +207,28 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				m.stories = nil
 				cmds = append(cmds, m.spinner.Tick)
 			}
+		} else if msg.ModalMode == ModalModeGroupMembers {
+			m.ensureSpinner()
+			m.groupTitle = msg.GroupTitle
+			m.groupPeer = msg.GroupPeer
+			m.totalMembers = msg.TotalMembers
+			m.membersOffset = 0
+			m.hasMoreMembers = true
+			m.isPaginatingMembers = false
+			m.isSearchingMembers = false
+			m.membersSearchSeq = 0
+			m.membersLoading = true
+			m.groupMembersError = nil
+			m.allMembers = nil
+			m.membersList = nil
+			m.focusedOn = SEARCH
+			membersInput := textinput.New()
+			membersInput.Placeholder = "Filter members..."
+			membersInput.Prompt = "🔍 "
+			membersInput.CharLimit = 128
+			membersInput.Focus()
+			m.membersInput = membersInput
+			cmds = append(cmds, m.spinner.Tick)
 		}
 	case types.CurrentUserMsg:
 		if msg.Err != nil {
@@ -136,6 +256,45 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			m.forwardDestinations.SetItems(filtered)
+		}
+	} else if m.ModalMode == ModalModeGroupMembers {
+		if m.focusedOn == SEARCH {
+			prevVal := m.membersInput.Value()
+			mInput, mCmd := m.membersInput.Update(message)
+			m.membersInput = mInput
+			cmds = append(cmds, mCmd)
+
+			if m.membersInput.Value() != prevVal {
+				query := m.membersInput.Value()
+				filtered := m.filterMembers(query)
+				if m.membersList != nil {
+					m.membersList.SetItems(filtered)
+				} else {
+					mList := list.New(filtered, GroupMembersDelegate{Foreground: m}, 10, 10)
+					mList.SetShowFilter(false)
+					mList.SetShowPagination(false)
+					mList.SetShowTitle(false)
+					mList.SetShowHelp(false)
+					mList.SetShowStatusBar(false)
+					m.membersList = &mList
+				}
+
+				trimmed := strings.TrimSpace(query)
+				if trimmed == "" {
+					m.isSearchingMembers = false
+				} else if m.groupPeer != nil {
+					m.membersSearchSeq++
+					seq := m.membersSearchSeq
+					peer := *m.groupPeer
+					cmds = append(cmds, tea.Tick(300*time.Millisecond, func(t time.Time) tea.Msg {
+						return MemberSearchTickMsg{
+							Peer:  peer,
+							Query: trimmed,
+							Seq:   seq,
+						}
+					}))
+				}
+			}
 		}
 	} else {
 		input, cmd := m.input.Update(message)
@@ -209,6 +368,9 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 		} else if m.ModalMode == ModalModeShowStories && m.stories != nil {
 			m.stories.CursorUp()
 			return m, nil
+		} else if m.ModalMode == ModalModeGroupMembers && m.membersList != nil {
+			m.membersList.CursorUp()
+			return m, nil
 		}
 	case "down", "ctrl+n":
 		if m.ModalMode == ModalModeSendReaction {
@@ -224,6 +386,9 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 		} else if m.ModalMode == ModalModeShowStories && m.stories != nil {
 			m.stories.CursorDown()
 			return m, nil
+		} else if m.ModalMode == ModalModeGroupMembers && m.membersList != nil {
+			m.membersList.CursorDown()
+			return m.checkMembersPagination()
 		}
 	case "left":
 		if m.ModalMode == ModalModeSendReaction {
@@ -238,6 +403,16 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 			}
 		}
 	case "tab":
+		if m.ModalMode == ModalModeGroupMembers {
+			if m.focusedOn == SEARCH {
+				m.focusedOn = LIST
+				m.membersInput.Blur()
+			} else {
+				m.focusedOn = SEARCH
+				m.membersInput.Focus()
+			}
+			return m, nil
+		}
 		if m.focusedOn == SEARCH {
 			m.focusedOn = LIST
 			m.input.Blur()
@@ -245,7 +420,22 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 			m.focusedOn = SEARCH
 			m.input.Focus()
 		}
+	case "j":
+		if m.ModalMode == ModalModeGroupMembers && m.focusedOn == LIST && m.membersList != nil {
+			m.membersList.CursorDown()
+			return m.checkMembersPagination()
+		}
+	case "k":
+		if m.ModalMode == ModalModeGroupMembers && m.focusedOn == LIST && m.membersList != nil {
+			m.membersList.CursorUp()
+			return m, nil
+		}
 	case "esc":
+		if m.ModalMode == ModalModeGroupMembers {
+			m.membersLoading = false
+			m.isPaginatingMembers = false
+			m.isSearchingMembers = false
+		}
 		if m.ModalMode == ModalModeShowStories {
 			m.storiesLoading = false
 			m.isDownloadingStory = false
@@ -333,8 +523,57 @@ func handleEnterKey(m *Foreground) (tea.Model, tea.Cmd) {
 	if m.ModalMode == ModalModeSendReaction {
 		return handleSendReaction(m)
 	}
+	if m.ModalMode == ModalModeGroupMembers {
+		return handleGroupMemberSelection(m)
+	}
 	if m.ModalMode == ModalModeSearch || m.focusedOn == LIST {
 		return handleListSelection(m)
+	}
+	return m, nil
+}
+
+func handleGroupMemberSelection(m *Foreground) (tea.Model, tea.Cmd) {
+	if m.membersList == nil || len(m.membersList.Items()) == 0 {
+		return m, nil
+	}
+	selectedItem := m.membersList.SelectedItem()
+	if selectedItem == nil {
+		return m, nil
+	}
+	member, ok := selectedItem.(types.GroupMemberInfo)
+	if !ok {
+		return m, nil
+	}
+	userCopy := member.User
+	return m, tea.Batch(
+		func() tea.Msg { return CloseOverlay{} },
+		func() tea.Msg { return SelectSearchedUserResult{user: &userCopy} },
+	)
+}
+
+func (m *Foreground) filterMembers(query string) []list.Item {
+	trimmed := strings.ToLower(strings.TrimSpace(query))
+	var filtered []list.Item
+	for _, item := range m.allMembers {
+		val := strings.ToLower(item.FilterValue())
+		if trimmed == "" || strings.Contains(val, trimmed) {
+			filtered = append(filtered, item)
+		}
+	}
+	return filtered
+}
+
+func (m *Foreground) checkMembersPagination() (tea.Model, tea.Cmd) {
+	if !m.hasMoreMembers || m.isPaginatingMembers || m.groupPeer == nil || m.membersInput.Value() != "" {
+		return m, nil
+	}
+	if m.membersList != nil && m.membersList.Index() >= len(m.membersList.Items())-5 {
+		m.isPaginatingMembers = true
+		m.groupMembersError = nil
+		if telegram.Cligram != nil && telegram.Cligram.Context() != nil {
+			fetchCmd := telegram.Cligram.GetGroupMembers(telegram.Cligram.Context(), *m.groupPeer, m.membersOffset)
+			return m, tea.Batch(fetchCmd, m.spinner.Tick)
+		}
 	}
 	return m, nil
 }

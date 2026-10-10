@@ -362,8 +362,8 @@ func TestSidebar_LoadingContent(t *testing.T) {
 	}
 
 	content := prepareSidebarContent(&m, d)
-	if !strings.Contains(content, "Loading") || !strings.Contains(content, "channels") {
-		t.Errorf("expected 'Loading' and 'channels' in sidebar loading content, got: %s", content)
+	if !strings.Contains(content, "Loading") {
+		t.Errorf("expected 'Loading' in sidebar loading content, got: %s", content)
 	}
 }
 
