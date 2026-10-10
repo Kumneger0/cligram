@@ -77,18 +77,14 @@ A rich payload (photo, video, audio, voice note, or document) associated with a 
 _Avoid_: File blob, attachment object
 
 **Sender Attribution**:
-The visual assignment and display of an individual author's identity and color badge on messages within a group chat instead of the container group title.
-_Avoid_: Author tag, sender header, user label
+The explicit resolution of message author identities (`msg.FromID`) into individual participant display names, channel tags (`📢 ChannelTitle`), or administrative badges (`🛡️ Anonymous Admin`) rendered with deterministic user colors in group chats.
+_Avoid_: User tag, author label, sender string
 
 **Member Roster**:
 An interactive modal list displaying participants of a group or supergroup, supporting search, presence indicators, and direct chat initiation.
 _Avoid_: Participant list, member table, group users
 
 **Message Coalescing**:
-The visual grouping of consecutive messages from the same participant within a short time threshold, suppressing redundant author headers.
-_Avoid_: Bubble merging, message collapsing, consecutive grouping
-
-
-
-
+The visual grouping of consecutive messages sent by the same author within a 5-minute sliding window by omitting redundant author handles and tightening vertical spacing between bubbles.
+_Avoid_: Message grouping, message merging, bubble combining
 

@@ -249,6 +249,161 @@ func DefaultMediaFileName(mType types.MediaType) string {
 	}
 }
 
+type GroupSenderResolution struct {
+	Sender         string
+	FromID         *string
+	SenderUserInfo *types.UserInfo
+}
+
+func ResolveGroupMessageSender(msg *tg.Message, groupID string, users []tg.UserClass, chats []tg.ChatClass) GroupSenderResolution {
+	if msg == nil {
+		return GroupSenderResolution{Sender: "unknown"}
+	}
+	if msg.Out {
+		return GroupSenderResolution{Sender: "You"}
+	}
+
+	if msg.FromID == nil {
+		return GroupSenderResolution{
+			Sender: "🛡️ Anonymous Admin",
+			FromID: &groupID,
+		}
+	}
+
+	switch p := msg.FromID.(type) {
+	case *tg.PeerUser:
+		for _, userClass := range users {
+			if u, ok := userClass.(*tg.User); ok && u.ID == p.UserID {
+				ui := ConvertTGUserToUserInfo(u)
+				name := strings.TrimSpace(ui.FirstName + " " + ui.LastName)
+				if name == "" {
+					name = ui.Username
+				}
+				if name == "" {
+					name = "User"
+				}
+				return GroupSenderResolution{
+					Sender:         name,
+					FromID:         &ui.PeerID,
+					SenderUserInfo: ui,
+				}
+			}
+		}
+		userIDStr := strconv.FormatInt(p.UserID, 10)
+		return GroupSenderResolution{
+			Sender: fmt.Sprintf("User %d", p.UserID),
+			FromID: &userIDStr,
+		}
+	case *tg.PeerChannel:
+		chIDStr := strconv.FormatInt(p.ChannelID, 10)
+		if chIDStr == groupID {
+			return GroupSenderResolution{
+				Sender: "🛡️ Anonymous Admin",
+				FromID: &chIDStr,
+			}
+		}
+		for _, chatClass := range chats {
+			if ch, ok := chatClass.(*tg.Channel); ok && ch.ID == p.ChannelID {
+				return GroupSenderResolution{
+					Sender: "📢 " + ch.Title,
+					FromID: &chIDStr,
+				}
+			}
+		}
+		return GroupSenderResolution{
+			Sender: "📢 Channel",
+			FromID: &chIDStr,
+		}
+	case *tg.PeerChat:
+		chatIDStr := strconv.FormatInt(p.ChatID, 10)
+		if chatIDStr == groupID {
+			return GroupSenderResolution{
+				Sender: "🛡️ Anonymous Admin",
+				FromID: &chatIDStr,
+			}
+		}
+		for _, chatClass := range chats {
+			if ch, ok := chatClass.(*tg.Chat); ok && ch.ID == p.ChatID {
+				return GroupSenderResolution{
+					Sender: "📢 " + ch.Title,
+					FromID: &chatIDStr,
+				}
+			}
+		}
+		return GroupSenderResolution{
+			Sender: "📢 Group",
+			FromID: &chatIDStr,
+		}
+	default:
+		return GroupSenderResolution{
+			Sender: "unknown",
+		}
+	}
+}
+
+func FormatGroupMessage(msg *tg.Message, groupID string, users []tg.UserClass, chats []tg.ChatClass, allMessages []tg.MessageClass) *types.FormattedMessage {
+	if msg == nil {
+		return nil
+	}
+
+	resolution := ResolveGroupMessageSender(msg, groupID, users, chats)
+
+	var reply *types.FormattedMessage
+	if replyTo, ok := msg.GetReplyTo(); ok {
+		if messageReply, ok := replyTo.(*tg.MessageReplyHeader); ok && len(allMessages) > 0 {
+			replyMessage := getRelyMessage(allMessages, messageReply.ReplyToMsgID)
+			reply = FormatGroupMessage(replyMessage, groupID, users, chats, allMessages)
+		}
+	}
+
+	var mediaAttachment *types.MediaAttachment
+	isUnsupportedMessage := false
+	if msg.Media != nil {
+		switch m := msg.Media.(type) {
+		case *tg.MessageMediaWebPage, *tg.MessageMediaEmpty:
+			// Handled separately or no attachment
+		case *tg.MessageMediaPhoto:
+			mediaAttachment = parsePhotoMedia(m)
+		case *tg.MessageMediaDocument:
+			mediaAttachment = parseDocumentMedia(m)
+		default:
+			isUnsupportedMessage = true
+		}
+	}
+
+	var content = msg.Message
+	if isUnsupportedMessage {
+		content = "This Message is not supported by this Telegram client."
+	}
+
+	var view int
+	if result, ok := msg.GetViews(); ok {
+		view = result
+	}
+
+	webPageMedia, _ := msg.Media.(*tg.MessageMediaWebPage)
+
+	return &types.FormattedMessage{
+		ID:                   msg.ID,
+		Sender:               resolution.Sender,
+		Content:              content,
+		IsFromMe:             msg.Out,
+		Media:                nil,
+		MediaAttachment:      mediaAttachment,
+		Date:                 time.Unix(int64(msg.Date), 0),
+		IsUnsupportedMessage: isUnsupportedMessage,
+		WebPage:              nil,
+		Document:             nil,
+		FromID:               resolution.FromID,
+		SenderUserInfo:       resolution.SenderUserInfo,
+		ReplyTo:              reply,
+		Reactions:            &msg.Reactions,
+		Views:                view,
+		HasWebPagePreview:    webPageMedia != nil,
+		MessageMediaWebPage:  webPageMedia,
+	}
+}
+
 func getRelyMessage(allMessages []tg.MessageClass, messageID int) *tg.Message {
 	var message *tg.Message
 	for _, msg := range allMessages {

@@ -490,17 +490,9 @@ func (c *Client) GetChatHistory(ctx context.Context, peer types.Peer, limit int,
 			formattedMessage.PeerID = &peer.ID
 			formattedMessages = append(formattedMessages, *formattedMessage)
 		} else if peer.ChatType == types.GroupChat {
-			fromID, ok := msg.FromID.(*tg.PeerUser)
-			if ok {
-				ui := getUserFromClasses(entities.Users, fromID.UserID)
-				formattedMessage := shared.FormatMessage(msg, ui, entities.Messages)
-				formattedMessage.PeerID = &peer.ID
-				formattedMessages = append(formattedMessages, *formattedMessage)
-			} else {
-				formattedMessage := shared.FormatMessage(msg, channel, entities.Messages)
-				formattedMessage.PeerID = &peer.ID
-				formattedMessages = append(formattedMessages, *formattedMessage)
-			}
+			formattedMessage := shared.FormatGroupMessage(msg, peer.ID, entities.Users, entities.Chats, entities.Messages)
+			formattedMessage.PeerID = &peer.ID
+			formattedMessages = append(formattedMessages, *formattedMessage)
 		} else {
 			formattedMessage := shared.FormatMessage(msg, channel, entities.Messages)
 			formattedMessage.PeerID = &peer.ID
@@ -1218,14 +1210,22 @@ func (c *Client) GetSingleMessage(ctx context.Context, peer types.Peer, messageI
 			return types.SingleMessageMsg{Err: errors.New("unexpected message type")}
 		}
 
-		var userInfo *types.UserInfo
-		if peer.ChatType == types.UserChat || peer.ChatType == types.BotChat {
+		var formatted *types.FormattedMessage
+		if peer.ChatType == types.GroupChat {
+			formatted = shared.FormatGroupMessage(msg, peer.ID, entities.Users, entities.Chats, entities.Messages)
+		} else if peer.ChatType == types.ChannelChat {
+			var channel *types.ChannelInfo
+			if id, err := strconv.ParseInt(peer.ID, 10, 64); err == nil {
+				channel = getChannelFromClasses(entities.Chats, id)
+			}
+			formatted = shared.FormatMessage(msg, channel, entities.Messages)
+		} else {
+			var userInfo *types.UserInfo
 			if id, err := strconv.ParseInt(peer.ID, 10, 64); err == nil {
 				userInfo = getUserFromClasses(entities.Users, id)
 			}
+			formatted = shared.FormatMessage(msg, userInfo, entities.Messages)
 		}
-
-		formatted := shared.FormatMessage(msg, userInfo, entities.Messages)
 		formatted.PeerID = &peer.ID
 
 		return types.SingleMessageMsg{Message: formatted}

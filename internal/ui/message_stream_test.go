@@ -937,3 +937,409 @@ func TestMessageStream_MediaAttachment_EnterDownloads(t *testing.T) {
 		t.Errorf("expected alert toast command on instant re-open")
 	}
 }
+
+func TestMessageCoalescing_SameUserWithin5Minutes(t *testing.T) {
+	aliceID := "user-alice"
+	t1 := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	t2 := time.Date(2026, 1, 1, 12, 4, 30, 0, time.UTC)
+
+	msg1 := types.FormattedMessage{
+		ID:       1,
+		Sender:   "Alice",
+		FromID:   &aliceID,
+		Date:     t1,
+		IsFromMe: false,
+	}
+	msg2 := types.FormattedMessage{
+		ID:       2,
+		Sender:   "Alice",
+		FromID:   &aliceID,
+		Date:     t2,
+		IsFromMe: false,
+	}
+
+	if !shouldCoalesceMessages(msg2, msg1) {
+		t.Fatalf("expected messages within 5 minutes from Alice to coalesce")
+	}
+}
+
+func TestMessageCoalescing_SameUserExceeds5Minutes(t *testing.T) {
+	aliceID := "user-alice"
+	t1 := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	t2 := time.Date(2026, 1, 1, 12, 5, 1, 0, time.UTC)
+
+	msg1 := types.FormattedMessage{
+		ID:       1,
+		Sender:   "Alice",
+		FromID:   &aliceID,
+		Date:     t1,
+		IsFromMe: false,
+	}
+	msg2 := types.FormattedMessage{
+		ID:       2,
+		Sender:   "Alice",
+		FromID:   &aliceID,
+		Date:     t2,
+		IsFromMe: false,
+	}
+
+	if shouldCoalesceMessages(msg2, msg1) {
+		t.Fatalf("expected messages spaced > 5 minutes to NOT coalesce")
+	}
+}
+
+func TestMessageCoalescing_DifferentUsers(t *testing.T) {
+	aliceID := "user-alice"
+	bobID := "user-bob"
+	t1 := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	t2 := time.Date(2026, 1, 1, 12, 1, 0, 0, time.UTC)
+
+	msg1 := types.FormattedMessage{
+		ID:       1,
+		Sender:   "Alice",
+		FromID:   &aliceID,
+		Date:     t1,
+		IsFromMe: false,
+	}
+	msg2 := types.FormattedMessage{
+		ID:       2,
+		Sender:   "Bob",
+		FromID:   &bobID,
+		Date:     t2,
+		IsFromMe: false,
+	}
+
+	if shouldCoalesceMessages(msg2, msg1) {
+		t.Fatalf("expected messages from different users to NOT coalesce")
+	}
+}
+
+func TestMessageCoalescing_OutgoingMessages(t *testing.T) {
+	t1 := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	t2 := time.Date(2026, 1, 1, 12, 3, 0, 0, time.UTC)
+	t3 := time.Date(2026, 1, 1, 12, 8, 0, 0, time.UTC)
+
+	out1 := types.FormattedMessage{
+		ID:       10,
+		Sender:   "You",
+		Date:     t1,
+		IsFromMe: true,
+	}
+	out2 := types.FormattedMessage{
+		ID:       11,
+		Sender:   "You",
+		Date:     t2,
+		IsFromMe: true,
+	}
+	out3 := types.FormattedMessage{
+		ID:       12,
+		Sender:   "You",
+		Date:     t3,
+		IsFromMe: true,
+	}
+
+	if !shouldCoalesceMessages(out2, out1) {
+		t.Fatalf("expected outgoing messages within 5m to coalesce")
+	}
+	if shouldCoalesceMessages(out3, out1) {
+		t.Fatalf("expected outgoing messages > 5m apart to NOT coalesce")
+	}
+}
+
+func TestMessageCoalescing_AnonymousAdminAndLinkedChannel(t *testing.T) {
+	t1 := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	t2 := time.Date(2026, 1, 1, 12, 2, 0, 0, time.UTC)
+
+	anon1 := types.FormattedMessage{
+		ID:       20,
+		Sender:   "🛡️ Anonymous Admin",
+		Date:     t1,
+		IsFromMe: false,
+	}
+	anon2 := types.FormattedMessage{
+		ID:       21,
+		Sender:   "🛡️ Anonymous Admin",
+		Date:     t2,
+		IsFromMe: false,
+	}
+	if !shouldCoalesceMessages(anon2, anon1) {
+		t.Fatalf("expected anonymous admin messages within 5m to coalesce")
+	}
+
+	chan1 := types.FormattedMessage{
+		ID:       30,
+		Sender:   "📢 TechNews",
+		Date:     t1,
+		IsFromMe: false,
+	}
+	chan2 := types.FormattedMessage{
+		ID:       31,
+		Sender:   "📢 TechNews",
+		Date:     t2,
+		IsFromMe: false,
+	}
+	if !shouldCoalesceMessages(chan2, chan1) {
+		t.Fatalf("expected linked channel messages within 5m to coalesce")
+	}
+}
+
+func TestRenderMessagesViewport_CoalescingTightSpacing(t *testing.T) {
+	m := newTestModel(80, 24)
+	aliceID := "user-alice"
+	t1 := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	t2 := time.Date(2026, 1, 1, 12, 2, 0, 0, time.UTC)
+
+	m.Conversations = []types.FormattedMessage{
+		{
+			ID:       1,
+			Sender:   "Alice",
+			FromID:   &aliceID,
+			Content:  "First thought",
+			Date:     t1,
+			IsFromMe: false,
+		},
+		{
+			ID:       2,
+			Sender:   "Alice",
+			FromID:   &aliceID,
+			Content:  "Second thought",
+			Date:     t2,
+			IsFromMe: false,
+		},
+	}
+
+	card0 := m.renderMessageBubble(m.Conversations[0], 0, 40, 80, 0)
+	card1 := m.renderMessageBubble(m.Conversations[1], 1, 40, 80, 0)
+
+	if !strings.Contains(card0, "Alice") {
+		t.Fatalf("expected card 0 to contain sender 'Alice'")
+	}
+	if strings.Contains(card1, "Alice") {
+		t.Fatalf("expected coalesced card 1 to suppress redundant sender 'Alice'")
+	}
+
+	m.renderMessagesViewport(80, 20)
+	if len(m.messageLineRanges) != 2 {
+		t.Fatalf("expected 2 line ranges, got %d", len(m.messageLineRanges))
+	}
+
+	// Tight vertical spacing: Card 1 starts immediately at Card 0 endLine + 1 (0 blank lines)
+	expectedStart := m.messageLineRanges[0].endLine + 1
+	if m.messageLineRanges[1].startLine != expectedStart {
+		t.Fatalf("expected tight vertical spacing: card 1 startLine=%d, got %d", expectedStart, m.messageLineRanges[1].startLine)
+	}
+}
+
+func TestRenderMessagesViewport_PauseRestoresHeader(t *testing.T) {
+	m := newTestModel(80, 24)
+	aliceID := "user-alice"
+	t1 := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	t2 := time.Date(2026, 1, 1, 12, 6, 0, 0, time.UTC)
+
+	m.Conversations = []types.FormattedMessage{
+		{
+			ID:       1,
+			Sender:   "Alice",
+			FromID:   &aliceID,
+			Content:  "First thought",
+			Date:     t1,
+			IsFromMe: false,
+		},
+		{
+			ID:       2,
+			Sender:   "Alice",
+			FromID:   &aliceID,
+			Content:  "After pause",
+			Date:     t2,
+			IsFromMe: false,
+		},
+	}
+
+	card0 := m.renderMessageBubble(m.Conversations[0], 0, 40, 80, 0)
+	card1 := m.renderMessageBubble(m.Conversations[1], 1, 40, 80, 0)
+
+	if !strings.Contains(card0, "Alice") {
+		t.Fatalf("expected card 0 to contain 'Alice'")
+	}
+	if !strings.Contains(card1, "Alice") {
+		t.Fatalf("expected card 1 to restore 'Alice' header after pause")
+	}
+
+	m.renderMessagesViewport(80, 20)
+	// Normal spacing: Card 1 starts at Card 0 endLine + 2 (1 blank line between cards)
+	expectedStart := m.messageLineRanges[0].endLine + 2
+	if m.messageLineRanges[1].startLine != expectedStart {
+		t.Fatalf("expected normal spacing: card 1 startLine=%d, got %d", expectedStart, m.messageLineRanges[1].startLine)
+	}
+}
+
+func TestRenderMessagesViewport_OutgoingCoalesced_PreservesReceipts(t *testing.T) {
+	m := newTestModel(80, 24)
+	t1 := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	t2 := time.Date(2026, 1, 1, 12, 2, 0, 0, time.UTC)
+
+	m.Conversations = []types.FormattedMessage{
+		{
+			ID:       10,
+			Sender:   "You",
+			Content:  "Outgoing 1",
+			Date:     t1,
+			IsFromMe: true,
+		},
+		{
+			ID:       11,
+			Sender:   "You",
+			Content:  "Outgoing 2",
+			Date:     t2,
+			IsFromMe: true,
+		},
+	}
+
+	card0 := m.renderMessageBubble(m.Conversations[0], 0, 40, 80, 100)
+	card1 := m.renderMessageBubble(m.Conversations[1], 1, 40, 80, 100)
+
+	if !strings.Contains(card0, "You") {
+		t.Fatalf("expected card 0 to contain 'You'")
+	}
+	if strings.Contains(card1, "You") {
+		t.Fatalf("expected coalesced card 1 to suppress 'You'")
+	}
+	if !strings.Contains(card1, "✓✓") {
+		t.Fatalf("expected coalesced card 1 to preserve receipt check '✓✓'")
+	}
+}
+
+func TestRenderMessagesViewport_CoalescedCardSelection(t *testing.T) {
+	m := newTestModel(80, 24)
+	aliceID := "user-alice"
+	t1 := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	t2 := time.Date(2026, 1, 1, 12, 2, 0, 0, time.UTC)
+
+	m.Conversations = []types.FormattedMessage{
+		{
+			ID:       1,
+			Sender:   "Alice",
+			FromID:   &aliceID,
+			Content:  "First thought",
+			Date:     t1,
+			IsFromMe: false,
+		},
+		{
+			ID:       2,
+			Sender:   "Alice",
+			FromID:   &aliceID,
+			Content:  "Second thought",
+			Date:     t2,
+			IsFromMe: false,
+		},
+	}
+
+	m.FocusedOn = Main
+	m.SelectedMessageIndex = 1
+
+	card1 := m.renderMessageBubble(m.Conversations[1], 1, 40, 80, 0)
+	if !strings.Contains(card1, "▎") {
+		t.Fatalf("expected coalesced selected card to contain selection indicator '▎'")
+	}
+}
+
+func TestGroupMessageStream_SenderAttributionAndCoalescing(t *testing.T) {
+	m := newTestModel(90, 30)
+	groupTitle := "Golang Developers Group"
+	m.SelectedGroup = types.ChannelInfo{
+		ID:           "999",
+		ChannelTitle: groupTitle,
+		IsBroadcast:  false,
+	}
+
+	aliceID := "101"
+	bobID := "102"
+	adminID := "999"
+	chanID := "888"
+
+	t0 := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+
+	m.Conversations = []types.FormattedMessage{
+		{
+			ID:       1,
+			Sender:   "Alice Smith",
+			FromID:   &aliceID,
+			Content:  "Hello everyone!",
+			Date:     t0,
+			IsFromMe: false,
+		},
+		{
+			ID:       2,
+			Sender:   "Alice Smith",
+			FromID:   &aliceID,
+			Content:  "Any updates on Go 1.25?",
+			Date:     t0.Add(2 * time.Minute),
+			IsFromMe: false,
+		},
+		{
+			ID:       3,
+			Sender:   "Bob",
+			FromID:   &bobID,
+			Content:  "Yes, it was just tagged.",
+			Date:     t0.Add(3 * time.Minute),
+			IsFromMe: false,
+		},
+		{
+			ID:       4,
+			Sender:   "🛡️ Anonymous Admin",
+			FromID:   &adminID,
+			Content:  "Please keep discussions on-topic.",
+			Date:     t0.Add(5 * time.Minute),
+			IsFromMe: false,
+		},
+		{
+			ID:       5,
+			Sender:   "📢 Linux Foundation",
+			FromID:   &chanID,
+			Content:  "New kernel release announced.",
+			Date:     t0.Add(7 * time.Minute),
+			IsFromMe: false,
+		},
+		{
+			ID:       6,
+			Sender:   "You",
+			Content:  "Thanks for the info!",
+			Date:     t0.Add(8 * time.Minute),
+			IsFromMe: true,
+		},
+	}
+
+	viewportOutput := m.renderMessagesViewport(90, 30)
+
+	// 1. Author display names must be present (not group container title)
+	if !strings.Contains(viewportOutput, "Alice Smith") {
+		t.Errorf("expected stream to contain author 'Alice Smith', got:\n%s", viewportOutput)
+	}
+	if !strings.Contains(viewportOutput, "Bob") {
+		t.Errorf("expected stream to contain author 'Bob', got:\n%s", viewportOutput)
+	}
+	if !strings.Contains(viewportOutput, "🛡️ Anonymous Admin") {
+		t.Errorf("expected stream to contain '🛡️ Anonymous Admin', got:\n%s", viewportOutput)
+	}
+	if !strings.Contains(viewportOutput, "📢 Linux Foundation") {
+		t.Errorf("expected stream to contain '📢 Linux Foundation', got:\n%s", viewportOutput)
+	}
+	if !strings.Contains(viewportOutput, "You") {
+		t.Errorf("expected stream to contain 'You', got:\n%s", viewportOutput)
+	}
+
+	// 2. The group title must NOT appear as sender
+	if strings.Contains(viewportOutput, groupTitle) {
+		t.Errorf("stream should NOT attribute messages to group title '%s', got:\n%s", groupTitle, viewportOutput)
+	}
+
+	// 3. Alice's second message should be coalesced (only 1 occurrence of "Alice Smith" header in rendered cards)
+	card0 := m.renderMessageBubble(m.Conversations[0], 0, 45, 90, 0)
+	card1 := m.renderMessageBubble(m.Conversations[1], 1, 45, 90, 0)
+	if !strings.Contains(card0, "Alice Smith") {
+		t.Errorf("card 0 must contain sender 'Alice Smith'")
+	}
+	if strings.Contains(card1, "Alice Smith") {
+		t.Errorf("coalesced card 1 must suppress redundant sender 'Alice Smith'")
+	}
+}

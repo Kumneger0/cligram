@@ -876,6 +876,23 @@ func getFormattedMessageFunc(arg GetFormattedMessageArg) types.FormattedMessage 
 	var formatted *types.FormattedMessage
 	if (arg.ChatType == types.UserChat || arg.ChatType == types.BotChat) && arg.UserInfo != nil {
 		formatted = shared.FormatMessage(arg.Message, arg.UserInfo, nil)
+	} else if arg.ChatType == types.GroupChat {
+		var groupID string
+		if arg.ChannelOrGroupInfo != nil {
+			groupID = arg.ChannelOrGroupInfo.ID
+		}
+		var users []tg.UserClass
+		if arg.UserInfo != nil {
+			if uid, err := strconv.ParseInt(arg.UserInfo.PeerID, 10, 64); err == nil {
+				users = []tg.UserClass{&tg.User{
+					ID:        uid,
+					FirstName: arg.UserInfo.FirstName,
+					LastName:  arg.UserInfo.LastName,
+					Username:  arg.UserInfo.Username,
+				}}
+			}
+		}
+		formatted = shared.FormatGroupMessage(arg.Message, groupID, users, nil, nil)
 	} else if arg.ChannelOrGroupInfo != nil {
 		formatted = shared.FormatMessage(arg.Message, arg.ChannelOrGroupInfo, nil)
 	} else if arg.UserInfo != nil {
