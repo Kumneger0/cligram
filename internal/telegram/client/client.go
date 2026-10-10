@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"errors"
+	"fmt"
 	"log/slog"
 	"math/big"
 	mathRand "math/rand"
@@ -13,6 +14,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -1015,6 +1017,247 @@ func (c *Client) GetPeerStories(ctx context.Context, peer types.Peer) tea.Cmd {
 			Peer: peer,
 		}
 	}
+}
+
+func (c *Client) GetGroupMembers(ctx context.Context, peer types.Peer, offset int) tea.Cmd {
+	return func() tea.Msg {
+		members, totalCount, err := c.fetchGroupMembers(ctx, peer, offset)
+		return types.GetGroupMembersMsg{
+			PeerID:     peer.ID,
+			Offset:     offset,
+			Members:    members,
+			TotalCount: totalCount,
+			Err:        err,
+		}
+	}
+}
+
+func (c *Client) fetchGroupMembers(ctx context.Context, peer types.Peer, offset int) ([]types.GroupMemberInfo, int, error) {
+	chatID, err := strconv.ParseInt(peer.ID, 10, 64)
+	if err != nil {
+		return nil, 0, fmt.Errorf("invalid peer ID: %w", err)
+	}
+
+	callCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+
+	// Supergroups and channels
+	if peer.ChatType == types.ChannelChat || peer.AccessHash != "" {
+		var accessHash int64
+		if peer.AccessHash != "" {
+			accessHash, err = strconv.ParseInt(peer.AccessHash, 10, 64)
+			if err != nil {
+				return nil, 0, fmt.Errorf("invalid access hash: %w", err)
+			}
+		}
+		req := &tg.ChannelsGetParticipantsRequest{
+			Channel: &tg.InputChannel{
+				ChannelID:  chatID,
+				AccessHash: accessHash,
+			},
+			Filter: &tg.ChannelParticipantsRecent{},
+			Offset: offset,
+			Limit:  200,
+		}
+		res, err := c.GetAPI().ChannelsGetParticipants(callCtx, req)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		participants, ok := res.(*tg.ChannelsChannelParticipants)
+		if !ok {
+			return []types.GroupMemberInfo{}, 0, nil
+		}
+		return parseChannelParticipants(participants), participants.Count, nil
+	}
+
+	// Basic groups
+	if offset > 0 {
+		return []types.GroupMemberInfo{}, 0, nil
+	}
+	res, err := c.GetAPI().MessagesGetFullChat(callCtx, chatID)
+	if err != nil {
+		return nil, 0, err
+	}
+	members := parseBasicChatParticipants(res)
+	return members, len(members), nil
+}
+
+func (c *Client) SearchGroupMembers(ctx context.Context, peer types.Peer, searchQuery string) tea.Cmd {
+	return func() tea.Msg {
+		members, totalCount, err := c.searchGroupMembers(ctx, peer, searchQuery)
+		return types.SearchGroupMembersMsg{
+			PeerID:     peer.ID,
+			Query:      searchQuery,
+			Members:    members,
+			TotalCount: totalCount,
+			Err:        err,
+		}
+	}
+}
+
+func (c *Client) searchGroupMembers(ctx context.Context, peer types.Peer, searchQuery string) ([]types.GroupMemberInfo, int, error) {
+	chatID, err := strconv.ParseInt(peer.ID, 10, 64)
+	if err != nil {
+		return nil, 0, fmt.Errorf("invalid peer ID: %w", err)
+	}
+
+	callCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+
+	// Supergroups and channels
+	if peer.ChatType == types.ChannelChat || peer.AccessHash != "" {
+		var accessHash int64
+		if peer.AccessHash != "" {
+			accessHash, err = strconv.ParseInt(peer.AccessHash, 10, 64)
+			if err != nil {
+				return nil, 0, fmt.Errorf("invalid access hash: %w", err)
+			}
+		}
+		req := &tg.ChannelsGetParticipantsRequest{
+			Channel: &tg.InputChannel{
+				ChannelID:  chatID,
+				AccessHash: accessHash,
+			},
+			Filter: &tg.ChannelParticipantsSearch{
+				Q: searchQuery,
+			},
+			Offset: 0,
+			Limit:  200,
+		}
+		res, err := c.GetAPI().ChannelsGetParticipants(callCtx, req)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		participants, ok := res.(*tg.ChannelsChannelParticipants)
+		if !ok {
+			return []types.GroupMemberInfo{}, 0, nil
+		}
+		return parseChannelParticipants(participants), participants.Count, nil
+	}
+
+	// Basic groups: fetch from MessagesGetFullChat and filter in-memory
+	res, err := c.GetAPI().MessagesGetFullChat(callCtx, chatID)
+	if err != nil {
+		return nil, 0, err
+	}
+	allMembers := parseBasicChatParticipants(res)
+	queryLower := strings.ToLower(strings.TrimSpace(searchQuery))
+	var filtered []types.GroupMemberInfo
+	for _, m := range allMembers {
+		if strings.Contains(strings.ToLower(m.FilterValue()), queryLower) {
+			filtered = append(filtered, m)
+		}
+	}
+	return filtered, len(allMembers), nil
+}
+
+func buildUserMap(users []tg.UserClass) map[int64]*tg.User {
+	userMap := make(map[int64]*tg.User, len(users))
+	for _, uClass := range users {
+		if u, ok := uClass.(*tg.User); ok {
+			userMap[u.ID] = u
+		}
+	}
+	return userMap
+}
+
+func parseChannelParticipants(participants *tg.ChannelsChannelParticipants) []types.GroupMemberInfo {
+	if participants == nil {
+		return []types.GroupMemberInfo{}
+	}
+
+	userMap := buildUserMap(participants.Users)
+
+	var members []types.GroupMemberInfo
+	for _, pClass := range participants.Participants {
+		var userID int64
+		var role types.GroupMemberRole
+		var customTitle string
+
+		switch p := pClass.(type) {
+		case *tg.ChannelParticipantCreator:
+			userID = p.UserID
+			role = types.MemberRoleOwner
+			customTitle = p.Rank
+		case *tg.ChannelParticipantAdmin:
+			userID = p.UserID
+			role = types.MemberRoleAdmin
+			customTitle = p.Rank
+		case *tg.ChannelParticipant:
+			userID = p.UserID
+			role = types.MemberRoleMember
+		case *tg.ChannelParticipantSelf:
+			userID = p.UserID
+			role = types.MemberRoleMember
+		default:
+			continue
+		}
+
+		u, exists := userMap[userID]
+		if !exists {
+			continue
+		}
+		userInfo := shared.ConvertTGUserToUserInfo(u)
+		members = append(members, types.GroupMemberInfo{
+			User:        *userInfo,
+			Role:        role,
+			CustomTitle: customTitle,
+		})
+	}
+	return members
+}
+
+func parseBasicChatParticipants(res *tg.MessagesChatFull) []types.GroupMemberInfo {
+	if res == nil {
+		return []types.GroupMemberInfo{}
+	}
+
+	fullChat, ok := res.FullChat.(*tg.ChatFull)
+	if !ok || fullChat.Participants == nil {
+		return []types.GroupMemberInfo{}
+	}
+
+	chatParticipants, ok := fullChat.Participants.(*tg.ChatParticipants)
+	if !ok {
+		return []types.GroupMemberInfo{}
+	}
+
+	userMap := buildUserMap(res.Users)
+
+	var members []types.GroupMemberInfo
+	for _, pClass := range chatParticipants.Participants {
+		var userID int64
+		var role types.GroupMemberRole
+		var customTitle string
+
+		switch p := pClass.(type) {
+		case *tg.ChatParticipantCreator:
+			userID = p.UserID
+			role = types.MemberRoleOwner
+		case *tg.ChatParticipantAdmin:
+			userID = p.UserID
+			role = types.MemberRoleAdmin
+		case *tg.ChatParticipant:
+			userID = p.UserID
+			role = types.MemberRoleMember
+		default:
+			continue
+		}
+
+		u, exists := userMap[userID]
+		if !exists {
+			continue
+		}
+		userInfo := shared.ConvertTGUserToUserInfo(u)
+		members = append(members, types.GroupMemberInfo{
+			User:        *userInfo,
+			Role:        role,
+			CustomTitle: customTitle,
+		})
+	}
+	return members
 }
 
 type dialogsResult struct {

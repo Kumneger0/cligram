@@ -588,7 +588,7 @@ func prepareMainContent(m *Model, d layoutDimensions) string {
 	}
 
 	if m.ForumTopicLoading {
-		return mainStyle.Render("Loading forum topics...")
+		return mainStyle.Render("Loading...")
 	}
 
 	userNameOrChannelName := getUserOrChannelName(m)
@@ -1200,23 +1200,10 @@ func prepareSidebarContent(m *Model, d layoutDimensions) string {
 
 	var content string
 	if (m.isCurrentCategoryLoading() || m.SideBarLoading) && m.currentCategoryItemCount() == 0 {
-		catName := "dialogs"
-		switch m.Mode {
-		case ModeAll:
-			catName = "all dialogs"
-		case ModeChannels:
-			catName = "channels"
-		case ModeGroups:
-			catName = "groups"
-		case ModeBots:
-			catName = "bots"
-		case ModeUsers:
-			catName = "chats"
-		}
 		spinView := m.SidebarSpinner.View()
 		spinText := lipgloss.NewStyle().
 			Foreground(DefaultTheme.SecondaryText).
-			Render(fmt.Sprintf("Loading %s...", catName))
+			Render("Loading...")
 		spinBlock := lipgloss.JoinHorizontal(lipgloss.Center, spinView, " ", spinText)
 		content = lipgloss.NewStyle().
 			Width(max(0, d.sidebarWidth-4)).

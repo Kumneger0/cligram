@@ -1308,6 +1308,12 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m, cmd := m.handleEditKey()
 		cmds = append(cmds, cmd)
 		return m, tea.Batch(cmds...)
+	case "m":
+		m, cmd := m.handleMemberRosterKey()
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+			return m, tea.Batch(cmds...)
+		}
 	case "ctrl+r":
 		if m.FocusedOn == Main && m.SelectedMessage() != nil {
 			cmds := []tea.Cmd{telegram.Cligram.GetAvailableReactions(telegram.Cligram.Context())}
@@ -1612,6 +1618,51 @@ func (m Model) handleForwardKey() (tea.Model, tea.Cmd) {
 			FromPeer:     &from,
 		}
 	}
+}
+
+func (m Model) handleMemberRosterKey() (tea.Model, tea.Cmd) {
+	if m.FocusedOn != Main {
+		return m, nil
+	}
+	pInfo := getMessageParams(&m)
+	if pInfo.ID == "" {
+		return m, nil
+	}
+	isGroup := pInfo.ChatType == types.GroupChat || (pInfo.ChatType == types.ChannelChat && !m.SelectedChannel.IsBroadcast)
+	if !isGroup {
+		return m, nil
+	}
+
+	title := m.SelectedGroup.ChannelTitle
+	if title == "" {
+		title = m.SelectedChannel.ChannelTitle
+	}
+
+	totalMembers := 0
+	if m.SelectedGroup.ParticipantsCount != nil {
+		totalMembers = *m.SelectedGroup.ParticipantsCount
+	} else if m.SelectedChannel.ParticipantsCount != nil {
+		totalMembers = *m.SelectedChannel.ParticipantsCount
+	}
+
+	openModalMsg := func() tea.Msg {
+		return OpenModalMsg{
+			ModalMode:    ModalModeGroupMembers,
+			GroupPeer:    &pInfo,
+			GroupTitle:   title,
+			TotalMembers: totalMembers,
+		}
+	}
+
+	var fetchCmd tea.Cmd
+	if telegram.Cligram != nil && telegram.Cligram.Context() != nil {
+		fetchCmd = telegram.Cligram.GetGroupMembers(telegram.Cligram.Context(), pInfo, 0)
+	}
+
+	if fetchCmd != nil {
+		return m, tea.Batch(openModalMsg, fetchCmd)
+	}
+	return m, openModalMsg
 }
 
 func itemUniqueKey(item list.Item) string {

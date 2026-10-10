@@ -244,6 +244,17 @@ func (u UserInfo) Title() string {
 	return u.FirstName
 }
 
+func (u UserInfo) DisplayName() string {
+	name := u.FirstName
+	if u.LastName != "" {
+		name += " " + u.LastName
+	}
+	if name == "" {
+		return "Deleted Account"
+	}
+	return name
+}
+
 func (u UserInfo) FilterValue() string {
 	return u.FirstName
 }
@@ -277,4 +288,49 @@ type AccountsOnDeviceInfo struct {
 	PhoneNumber string
 	Path        string
 	ModTime     int64
+}
+
+type GroupMemberRole string
+
+const (
+	MemberRoleOwner  GroupMemberRole = "Owner"
+	MemberRoleAdmin  GroupMemberRole = "Admin"
+	MemberRoleMember GroupMemberRole = "Member"
+)
+
+type GroupMemberInfo struct {
+	User        UserInfo        `json:"user"`
+	Role        GroupMemberRole `json:"role"`
+	CustomTitle string          `json:"customTitle,omitempty"`
+}
+
+func (g GroupMemberInfo) Title() string {
+	return g.User.Title()
+}
+
+func (g GroupMemberInfo) FilterValue() string {
+	val := g.User.FirstName
+	if g.User.LastName != "" {
+		val += " " + g.User.LastName
+	}
+	if g.User.Username != "" {
+		val += " @" + g.User.Username
+	}
+	return val
+}
+
+type GetGroupMembersMsg struct {
+	PeerID     string            `json:"peerId"`
+	Offset     int               `json:"offset"`
+	Members    []GroupMemberInfo `json:"members"`
+	TotalCount int               `json:"totalCount"`
+	Err        error             `json:"err,omitempty"`
+}
+
+type SearchGroupMembersMsg struct {
+	PeerID     string            `json:"peerId"`
+	Query      string            `json:"query"`
+	Members    []GroupMemberInfo `json:"members"`
+	TotalCount int               `json:"totalCount"`
+	Err        error             `json:"err,omitempty"`
 }
