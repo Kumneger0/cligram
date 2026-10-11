@@ -1368,6 +1368,14 @@ func getChannelFromClasses(chats []tg.ChatClass, peerID int64) *types.ChannelInf
 func convertToChannelInfo[T *tg.Channel | *tg.Chat](channel T) *types.ChannelInfo {
 	switch v := any(channel).(type) {
 	case *tg.Channel:
+		var isMuted bool
+		if banned, ok := v.GetBannedRights(); ok && banned.SendMessages {
+			isMuted = true
+		} else if defBanned, ok := v.GetDefaultBannedRights(); ok && defBanned.SendMessages && !v.Creator {
+			if admin, ok := v.GetAdminRights(); !ok || !admin.PostMessages {
+				isMuted = true
+			}
+		}
 		return &types.ChannelInfo{
 			ChannelTitle:      v.Title,
 			Username:          &v.Username,
@@ -1379,8 +1387,15 @@ func convertToChannelInfo[T *tg.Channel | *tg.Chat](channel T) *types.ChannelInf
 			ParticipantsCount: &v.ParticipantsCount,
 			IsLeft:            v.Left,
 			JoinRequest:       v.JoinRequest,
+			IsMuted:           isMuted,
 		}
 	case *tg.Chat:
+		var isMuted bool
+		if defBanned, ok := v.GetDefaultBannedRights(); ok && defBanned.SendMessages && !v.Creator {
+			if _, ok := v.GetAdminRights(); !ok {
+				isMuted = true
+			}
+		}
 		return &types.ChannelInfo{
 			ChannelTitle:      v.Title,
 			ID:                strconv.FormatInt(v.ID, 10),
@@ -1391,6 +1406,7 @@ func convertToChannelInfo[T *tg.Channel | *tg.Chat](channel T) *types.ChannelInf
 			ParticipantsCount: &v.ParticipantsCount,
 			IsLeft:            v.Left,
 			JoinRequest:       false,
+			IsMuted:           isMuted,
 		}
 	}
 	return nil
@@ -1833,4 +1849,184 @@ func extractChatFromUpdates(updates tg.UpdatesClass) *types.ChannelInfo {
 		}
 	}
 	return nil
+}
+
+// GetDiscussionMessage fetches the associated discussion group message for a channel post.
+func (c *Client) GetDiscussionMessage(ctx context.Context, channelID, accessHash int64, msgID int) tea.Cmd {
+	return func() tea.Msg {
+		if c == nil || c.Client == nil || channelID == 0 || msgID == 0 {
+			return types.DiscussionMessageMsg{
+				MessageID: msgID,
+				Err:       errors.New("invalid client, channel ID, or message ID"),
+			}
+		}
+
+		callCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		defer cancel()
+
+		req := &tg.MessagesGetDiscussionMessageRequest{
+			Peer: &tg.InputPeerChannel{
+				ChannelID:  channelID,
+				AccessHash: accessHash,
+			},
+			MsgID: msgID,
+		}
+
+		res, err := c.GetAPI().MessagesGetDiscussionMessage(callCtx, req)
+		if err != nil {
+			// Try fallback to MessagesGetReplies directly on the channel
+			repliesReq := &tg.MessagesGetRepliesRequest{
+				Peer: &tg.InputPeerChannel{
+					ChannelID:  channelID,
+					AccessHash: accessHash,
+				},
+				MsgID: msgID,
+				Limit: 100,
+			}
+			repliesRes, repliesErr := c.GetAPI().MessagesGetReplies(callCtx, repliesReq)
+			if repliesErr != nil {
+				return types.DiscussionMessageMsg{
+					MessageID: msgID,
+					Err:       err,
+				}
+			}
+			var formattedComments []types.FormattedMessage
+			if mod, ok := repliesRes.AsModified(); ok {
+				for _, msgClass := range mod.GetMessages() {
+					if tgMsg, ok := msgClass.(*tg.Message); ok {
+						if tgMsg.ID == msgID {
+							continue
+						}
+						fmtMsg := shared.FormatGroupMessage(tgMsg, strconv.FormatInt(channelID, 10), mod.GetUsers(), mod.GetChats(), mod.GetMessages())
+						if fmtMsg != nil {
+							formattedComments = append(formattedComments, *fmtMsg)
+						}
+					}
+				}
+			}
+			for i, j := 0, len(formattedComments)-1; i < j; i, j = i+1, j-1 {
+				formattedComments[i], formattedComments[j] = formattedComments[j], formattedComments[i]
+			}
+			return types.DiscussionMessageMsg{
+				Chat:      nil,
+				MessageID: msgID,
+				TopMsgID:  msgID,
+				Comments:  formattedComments,
+			}
+		}
+
+		var discChat *types.ChannelInfo
+		for _, chatClass := range res.Chats {
+			switch ch := chatClass.(type) {
+			case *tg.Channel:
+				discChat = convertToChannelInfo(ch)
+			case *tg.Chat:
+				discChat = convertToChannelInfo(ch)
+			}
+			if discChat != nil {
+				break
+			}
+		}
+
+		var rootMsgID int
+		for _, msgClass := range res.Messages {
+			if tgMsg, ok := msgClass.(*tg.Message); ok {
+				if rootMsgID == 0 || tgMsg.ID < rootMsgID {
+					rootMsgID = tgMsg.ID
+				}
+			}
+		}
+		topMsgID := rootMsgID
+
+		// Fetch thread replies via MessagesGetReplies
+		var repliesRes tg.MessagesMessagesClass
+		repliesReq := &tg.MessagesGetRepliesRequest{
+			Peer: &tg.InputPeerChannel{
+				ChannelID:  channelID,
+				AccessHash: accessHash,
+			},
+			MsgID: msgID,
+			Limit: 100,
+		}
+		repliesRes, _ = c.GetAPI().MessagesGetReplies(callCtx, repliesReq)
+
+		// If channel peer returned no replies and discussion group is linked, attempt with discussion chat peer
+		if repliesRes == nil && discChat != nil && rootMsgID > 0 {
+			discChanID, _ := strconv.ParseInt(discChat.ID, 10, 64)
+			discAccessHash, _ := strconv.ParseInt(discChat.AccessHash, 10, 64)
+			if discChanID != 0 {
+				discRepliesReq := &tg.MessagesGetRepliesRequest{
+					Peer: &tg.InputPeerChannel{
+						ChannelID:  discChanID,
+						AccessHash: discAccessHash,
+					},
+					MsgID: rootMsgID,
+					Limit: 100,
+				}
+				repliesRes, _ = c.GetAPI().MessagesGetReplies(callCtx, discRepliesReq)
+			}
+		}
+
+		var rawCommentMessages []tg.MessageClass
+		allUsers := res.Users
+		allChats := res.Chats
+
+		if repliesRes != nil {
+			if mod, ok := repliesRes.AsModified(); ok {
+				rawCommentMessages = mod.GetMessages()
+				allUsers = append(allUsers, mod.GetUsers()...)
+				allChats = append(allChats, mod.GetChats()...)
+			}
+		}
+
+		// Fall back to res.Messages if no replies were returned from MessagesGetReplies
+		if len(rawCommentMessages) == 0 {
+			rawCommentMessages = res.Messages
+		}
+
+		var formattedComments []types.FormattedMessage
+		var groupIDStr string
+		if discChat != nil {
+			groupIDStr = discChat.ID
+		}
+
+		seenIDs := make(map[int]bool)
+		for _, msgClass := range rawCommentMessages {
+			if tgMsg, ok := msgClass.(*tg.Message); ok {
+				if seenIDs[tgMsg.ID] {
+					continue
+				}
+				seenIDs[tgMsg.ID] = true
+
+				// Skip the thread root message (forwarded post from channel into the discussion group)
+				if rootMsgID > 0 && tgMsg.ID == rootMsgID {
+					_, hasFwd := tgMsg.GetFwdFrom()
+					if len(rawCommentMessages) > 1 || hasFwd || tgMsg.ReplyTo == nil {
+						continue
+					}
+				}
+				if tgMsg.ID == msgID && discChat == nil {
+					continue
+				}
+
+				fmtMsg := shared.FormatGroupMessage(tgMsg, groupIDStr, allUsers, allChats, rawCommentMessages)
+				if fmtMsg != nil {
+					formattedComments = append(formattedComments, *fmtMsg)
+				}
+			}
+		}
+
+		// Reverse so comments are in chronological order (oldest to newest)
+		for i, j := 0, len(formattedComments)-1; i < j; i, j = i+1, j-1 {
+			formattedComments[i], formattedComments[j] = formattedComments[j], formattedComments[i]
+		}
+
+		return types.DiscussionMessageMsg{
+			Chat:      discChat,
+			MaxID:     res.MaxID,
+			MessageID: msgID,
+			TopMsgID:  topMsgID,
+			Comments:  formattedComments,
+		}
+	}
 }

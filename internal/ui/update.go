@@ -373,6 +373,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case CloseOverlay:
 		m.IsModalVisible = false
 		m.ModalContent = ""
+		m.CommentsModalOpen = false
 		return m, nil
 	case types.SendMessageMsg:
 		if msg.Err != nil {
@@ -689,6 +690,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg { return CloseOverlay{} }
 	case types.JoinChannelMsg:
 		m.IsJoiningChannel = false
+		if m.CommentsModalOpen {
+			return m, nil
+		}
 		var closeOverlayCmd tea.Cmd = func() tea.Msg { return CloseOverlay{} }
 		if msg.Err != nil {
 			slog.Error("Failed to join channel", "channelID", msg.ChannelID, "error", msg.Err.Error())
@@ -726,6 +730,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Alert = m.Alert.WithAllowEscToClose().WithPosition(bubbleup.TopLeftPosition)
 		alertCmd := m.Alert.NewAlertCmd(bubbleup.InfoKey, "Joined "+title+" successfully!")
 		return m, tea.Batch(alertCmd, closeOverlayCmd)
+	case types.DiscussionMessageMsg:
+		// ModalModeComments in overlay handles displaying comments and write access.
+		// Never navigate background away from the active channel.
+		return m, nil
 	}
 	outAlert, outCmd := m.Alert.Update(msg)
 	m.Alert = outAlert.(bubbleup.AlertModel)
@@ -1336,7 +1344,7 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 	case "i":
-		if m.FocusedOn == Main && !isReadOnlyBroadcast(&m) {
+		if m.FocusedOn == Main && m.CanSendMessages() {
 			m.FocusedOn = Input
 			m.Input.Focus()
 			return m, nil
@@ -1432,6 +1440,11 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 		return m, tea.Batch(cmds...)
 	case "c":
+		if m.FocusedOn == Main && m.CurrentInputState() == InputStateBroadcastReadOnly {
+			if hasComments, _, _ := m.SelectedMessageHasComments(); hasComments {
+				return m.openCommentsForSelectedMessage()
+			}
+		}
 		m, cmd := changeSideBarMode(&m, "c")
 		cmds = append(cmds, cmd)
 		return m, tea.Batch(cmds...)
@@ -1706,6 +1719,13 @@ func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
 				}
 				return m, cmd
 			}
+
+			// 5. If broadcast channel and selected post has comments, open comments
+			if m.CurrentInputState() == InputStateBroadcastReadOnly {
+				if hasComments, _, _ := m.SelectedMessageHasComments(); hasComments {
+					return m.openCommentsForSelectedMessage()
+				}
+			}
 		}
 		if m.isUnjoinedChat() {
 			return m.joinCurrentChannel()
@@ -1713,6 +1733,40 @@ func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	return m, nil
+}
+
+func (m *Model) openCommentsForSelectedMessage() (Model, tea.Cmd) {
+	if m.SelectedMessageIndex < 0 || m.SelectedMessageIndex >= len(m.Conversations) {
+		return *m, nil
+	}
+	msg := m.Conversations[m.SelectedMessageIndex]
+	if !msg.HasComments && msg.RepliesCount == 0 && msg.RepliesChannelID == 0 {
+		return *m, nil
+	}
+
+	ch := m.SelectedChannel
+	channelID, err := strconv.ParseInt(ch.ID, 10, 64)
+	if err != nil || channelID == 0 {
+		return *m, nil
+	}
+	accessHash, _ := strconv.ParseInt(ch.AccessHash, 10, 64)
+
+	m.CommentsModalOpen = true
+
+	openModalCmd := func() tea.Msg {
+		return OpenModalMsg{
+			ModalMode:    ModalModeComments,
+			Message:      &msg,
+			CommentsPost: &msg,
+		}
+	}
+
+	var fetchCmd tea.Cmd
+	if telegram.Cligram != nil && telegram.Cligram.Context() != nil {
+		fetchCmd = telegram.Cligram.GetDiscussionMessage(telegram.Cligram.Context(), channelID, accessHash, msg.ID)
+	}
+
+	return *m, tea.Batch(openModalCmd, fetchCmd)
 }
 
 func getEntityName(link string) *types.EntityPreviewInfo {
@@ -1796,7 +1850,7 @@ func (m Model) handleReplyKey() (tea.Model, tea.Cmd) {
 	if m.FocusedOn != Main && m.FocusedOn != SideBar {
 		return m, nil
 	}
-	if isReadOnlyBroadcast(&m) {
+	if !m.CanSendMessages() {
 		return m, nil
 	}
 	if len(m.Conversations) == 0 {

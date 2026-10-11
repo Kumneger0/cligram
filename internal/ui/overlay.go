@@ -9,6 +9,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -342,6 +343,7 @@ const (
 	ModalModeGroupMembers   ModalMode = "GROUP_MEMBERS"
 	ModalModeAlert          ModalMode = "ALERT"
 	ModalModeJoinPreview    ModalMode = "JOIN_PREVIEW"
+	ModalModeComments       ModalMode = "COMMENTS"
 )
 
 type OpenModalMsg struct {
@@ -350,6 +352,7 @@ type OpenModalMsg struct {
 	AlertMessage string
 	FromPeer     *list.Item
 	Message      *types.FormattedMessage
+	CommentsPost *types.FormattedMessage
 	UsersList    *list.Model
 	ChannelsList *list.Model
 	GroupsList   *list.Model
@@ -415,6 +418,19 @@ type Foreground struct {
 	JoinPreview            *types.ChatInvitePreview
 	isJoining              bool
 	joinError              error
+
+	// Comments modal fields
+	commentsPost           *types.FormattedMessage
+	commentsDiscussionChat *types.ChannelInfo
+	commentsTopMsgID       int
+	comments               []types.FormattedMessage
+	commentsReplyTo        *types.FormattedMessage
+	commentsLoading        bool
+	commentsError          error
+	commentInput           textarea.Model
+	isPostingComment       bool
+	commentsScrollOffset   int
+	commentsCursor         int
 }
 
 func (f *Foreground) ensureSpinner() {
@@ -830,6 +846,394 @@ func (f *Foreground) View() string {
 		}
 		layout := lipgloss.JoinVertical(lipgloss.Left, title, content)
 		return foreStyle.Render(layout)
+	}
+
+	if f.ModalMode == ModalModeComments {
+		contentWidth := 80
+		if f.windowWidth > 0 {
+			contentWidth = min(120, max(50, f.windowWidth-4))
+		}
+
+		spinView := f.spinner.View()
+		if spinView == "" {
+			spinView = "⠋"
+		}
+
+		titleText := "💬 Comments"
+		if f.commentsPost != nil {
+			snippet := strings.ReplaceAll(f.commentsPost.Content, "\n", " ")
+			snippet = strings.TrimSpace(snippet)
+			if len(snippet) > 50 {
+				snippet = snippet[:50] + "…"
+			}
+			if snippet != "" {
+				titleText = fmt.Sprintf("💬 Comments • %s", snippet)
+			}
+		}
+		if f.commentsLoading && len(f.comments) == 0 {
+			titleText += fmt.Sprintf(" — %s Loading...", spinView)
+		} else if len(f.comments) > 0 {
+			titleText += fmt.Sprintf(" (%d)", len(f.comments))
+		}
+
+		title := lipgloss.NewStyle().
+			Foreground(DefaultTheme.PrimaryText).
+			Bold(true).
+			Render(titleText)
+
+		divider := lipgloss.NewStyle().
+			Foreground(DefaultTheme.BorderColor).
+			Render(strings.Repeat("─", contentWidth))
+
+		var listContent string
+		if f.commentsError != nil && len(f.comments) == 0 {
+			listContent = lipgloss.NewStyle().
+				Width(contentWidth-2).
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(DefaultTheme.ErrorColor).
+				Background(DefaultTheme.SubtleBg).
+				Padding(1, 2).
+				Align(lipgloss.Center).
+				Foreground(DefaultTheme.ErrorColor).
+				Render(fmt.Sprintf("⚠️ Failed to load comments: %v", f.commentsError))
+		} else if len(f.comments) == 0 {
+			if f.commentsLoading {
+				listContent = lipgloss.NewStyle().
+					Width(contentWidth-2).
+					Border(lipgloss.RoundedBorder()).
+					BorderForeground(DefaultTheme.BorderColor).
+					Background(DefaultTheme.SubtleBg).
+					Padding(2, 2).
+					Align(lipgloss.Center).
+					Foreground(DefaultTheme.SecondaryText).
+					Render(fmt.Sprintf("%s Fetching comments...", spinView))
+			} else {
+				listContent = lipgloss.NewStyle().
+					Width(contentWidth-2).
+					Border(lipgloss.RoundedBorder()).
+					BorderForeground(DefaultTheme.BorderColor).
+					Background(DefaultTheme.SubtleBg).
+					Padding(2, 2).
+					Align(lipgloss.Center).
+					Foreground(DefaultTheme.SecondaryText).
+					Italic(true).
+					Render("💭 No comments yet\n\nBe the first to leave a comment below!")
+			}
+		} else {
+			if f.commentsCursor < 0 {
+				f.commentsCursor = 0
+			}
+			if f.commentsCursor >= len(f.comments) {
+				f.commentsCursor = len(f.comments) - 1
+			}
+
+			// Pre-render and measure all comment cards
+			type renderedCardInfo struct {
+				rendered string
+				height   int
+			}
+			allCards := make([]renderedCardInfo, len(f.comments))
+
+			for i, c := range f.comments {
+				isSelected := (f.focusedOn == LIST && i == f.commentsCursor)
+
+				senderName := c.Sender
+				if senderName == "" {
+					senderName = "Unknown"
+				}
+				if c.IsFromMe {
+					senderName = "You"
+				}
+
+				timeStr := ""
+				if !c.Date.IsZero() {
+					timeStr = c.Date.Format("15:04 • Jan 02")
+				}
+
+				wrappedBody := wordwrap.String(c.Content, contentWidth-8)
+
+				// Header: pointer + avatar + sender name + (You) badge + timestamp
+				var nameBadge string
+				if isSelected {
+					nameBadge = lipgloss.NewStyle().Foreground(DefaultTheme.AccentColor).Bold(true).Render("▸ 👤 " + senderName)
+				} else {
+					nameBadge = lipgloss.NewStyle().Foreground(DefaultTheme.PrimaryText).Bold(true).Render("  👤 " + senderName)
+				}
+
+				if c.IsFromMe {
+					youBadge := lipgloss.NewStyle().
+						Foreground(DefaultTheme.OnlineStatus).
+						Bold(true).
+						Render(" (You)")
+					nameBadge += youBadge
+				}
+
+				var timeBadge string
+				if timeStr != "" {
+					timeBadge = lipgloss.NewStyle().
+						Foreground(DefaultTheme.SecondaryText).
+						Render("   " + timeStr)
+				}
+				headerLine := nameBadge + timeBadge
+
+				var bodyStyled string
+				if isSelected {
+					bodyStyled = lipgloss.NewStyle().Foreground(DefaultTheme.SelectedFg).Render(wrappedBody)
+				} else {
+					bodyStyled = lipgloss.NewStyle().Foreground(DefaultTheme.PrimaryText).Render(wrappedBody)
+				}
+
+				var replyLine string
+				if c.ReplyTo != nil {
+					replySender := c.ReplyTo.Sender
+					if replySender == "" {
+						replySender = "Someone"
+					}
+					replySnippet := strings.TrimSpace(strings.ReplaceAll(c.ReplyTo.Content, "\n", " "))
+					if len(replySnippet) > 40 {
+						replySnippet = replySnippet[:37] + "..."
+					}
+					replyLine = lipgloss.NewStyle().
+						Foreground(DefaultTheme.AccentColor).
+						Italic(true).
+						Render("  ┌─ Replying to " + replySender + ": \"" + replySnippet + "\"")
+				}
+
+				var cardElements []string
+				cardElements = append(cardElements, headerLine)
+				if replyLine != "" {
+					cardElements = append(cardElements, replyLine)
+				}
+				cardElements = append(cardElements, "", "    "+bodyStyled)
+				cardInner := lipgloss.JoinVertical(lipgloss.Left, cardElements...)
+
+				cardStyle := lipgloss.NewStyle().
+					Width(contentWidth-2).
+					Padding(0, 1)
+
+				if isSelected {
+					cardStyle = cardStyle.
+						Border(lipgloss.RoundedBorder()).
+						BorderForeground(DefaultTheme.AccentColor).
+						Background(DefaultTheme.SelectedBg)
+				} else {
+					cardStyle = cardStyle.
+						Border(lipgloss.RoundedBorder()).
+						BorderForeground(DefaultTheme.BorderColor).
+						Background(DefaultTheme.SubtleBg)
+				}
+
+				rendered := cardStyle.Render(cardInner)
+				allCards[i] = renderedCardInfo{
+					rendered: rendered,
+					height:   lipgloss.Height(rendered),
+				}
+			}
+
+			// Viewport height calculation
+			inputHeight := 4
+			if f.windowHeight > 0 && f.windowHeight <= 26 {
+				inputHeight = 3
+			}
+			availableHeight := 14
+			if f.windowHeight > 0 {
+				availableHeight = max(8, min(30, f.windowHeight-inputHeight-10))
+			}
+
+			startIdx := f.commentsCursor
+			endIdx := f.commentsCursor + 1
+			usedHeight := allCards[f.commentsCursor].height
+
+			for {
+				expanded := false
+				if endIdx < len(allCards) && usedHeight+allCards[endIdx].height <= availableHeight {
+					usedHeight += allCards[endIdx].height
+					endIdx++
+					expanded = true
+				}
+				if startIdx > 0 && usedHeight+allCards[startIdx-1].height <= availableHeight {
+					usedHeight += allCards[startIdx-1].height
+					startIdx--
+					expanded = true
+				}
+				if !expanded {
+					break
+				}
+			}
+
+			var commentItems []string
+			if startIdx > 0 {
+				moreAbove := lipgloss.NewStyle().
+					Foreground(DefaultTheme.SecondaryText).
+					Italic(true).
+					Padding(0, 1).
+					Render(fmt.Sprintf("▲ %d older comments...", startIdx))
+				commentItems = append(commentItems, moreAbove)
+			}
+
+			for i := startIdx; i < endIdx; i++ {
+				commentItems = append(commentItems, allCards[i].rendered)
+			}
+
+			if endIdx < len(allCards) {
+				moreBelow := lipgloss.NewStyle().
+					Foreground(DefaultTheme.SecondaryText).
+					Italic(true).
+					Padding(0, 1).
+					Render(fmt.Sprintf("▼ %d newer comments...", len(allCards)-endIdx))
+				commentItems = append(commentItems, moreBelow)
+			}
+
+			listContent = lipgloss.JoinVertical(lipgloss.Left, commentItems...)
+		}
+
+		var bottomSection string
+		if f.commentsDiscussionChat != nil && f.commentsDiscussionChat.IsLeft {
+			var joinPrompt string
+			if f.isJoining {
+				joinPrompt = lipgloss.NewStyle().
+					Foreground(DefaultTheme.AccentColor).
+					Bold(true).
+					Render(fmt.Sprintf("%s Joining...", spinView))
+			} else if f.commentsError != nil {
+				joinPrompt = lipgloss.NewStyle().
+					Foreground(DefaultTheme.ErrorColor).
+					Render(fmt.Sprintf("⚠️ %v — Press [Enter] to retry", f.commentsError))
+			} else {
+				enterKey := lipgloss.NewStyle().
+					Foreground(DefaultTheme.PrimaryText).
+					Bold(true).
+					Render("[Enter] ")
+
+				btnStyle := lipgloss.NewStyle().
+					Foreground(lipgloss.Color("#FFFFFF")).
+					Background(DefaultTheme.AccentColor).
+					Bold(true).
+					Padding(0, 2).
+					Render("Join")
+
+				joinPrompt = enterKey + btnStyle
+			}
+
+			bottomSection = lipgloss.NewStyle().
+				Width(contentWidth-2).
+				Background(DefaultTheme.SubtleBg).
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(DefaultTheme.AccentColor).
+				Padding(1, 1).
+				Align(lipgloss.Center).
+				Render(joinPrompt)
+		} else if f.commentsDiscussionChat != nil && f.commentsDiscussionChat.IsMuted {
+			mutedText := lipgloss.NewStyle().
+				Foreground(DefaultTheme.ErrorColor).
+				Bold(true).
+				Render("🔇 Muted by admin") + "\n" +
+				lipgloss.NewStyle().
+					Foreground(DefaultTheme.SecondaryText).
+					Render("You cannot write comments in this group")
+
+			bottomSection = lipgloss.NewStyle().
+				Width(contentWidth-2).
+				Background(DefaultTheme.SubtleBg).
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(DefaultTheme.ErrorColor).
+				Padding(1, 2).
+				Align(lipgloss.Center).
+				Render(mutedText)
+		} else {
+			inputHeight := 4
+			if f.windowHeight > 0 && f.windowHeight <= 26 {
+				inputHeight = 3
+			}
+			f.commentInput.SetWidth(contentWidth - 6)
+			f.commentInput.SetHeight(inputHeight)
+
+			borderColor := DefaultTheme.BorderColor
+			if f.focusedOn == SEARCH {
+				borderColor = DefaultTheme.AccentColor
+			}
+
+			inputBoxStyle := lipgloss.NewStyle().
+				Width(contentWidth-2).
+				Background(DefaultTheme.InputBg).
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(borderColor).
+				Padding(0, 1)
+
+			var inputView string
+			if f.isPostingComment {
+				inputView = lipgloss.NewStyle().
+					Foreground(DefaultTheme.AccentColor).
+					Bold(true).
+					Render(fmt.Sprintf("%s Sending comment...", spinView))
+			} else {
+				inputView = f.commentInput.View()
+			}
+
+			var replyBar string
+			if f.commentsReplyTo != nil {
+				sender := f.commentsReplyTo.Sender
+				if sender == "" {
+					sender = "Someone"
+				}
+				snippet := strings.TrimSpace(strings.ReplaceAll(f.commentsReplyTo.Content, "\n", " "))
+				if len(snippet) > 40 {
+					snippet = snippet[:37] + "..."
+				}
+				replyHeader := lipgloss.NewStyle().
+					Foreground(DefaultTheme.AccentColor).
+					Bold(true).
+					Render("↩ Replying to " + sender)
+				replySnippet := lipgloss.NewStyle().
+					Foreground(DefaultTheme.SecondaryText).
+					Italic(true).
+					Render(": \"" + snippet + "\"")
+				cancelHint := lipgloss.NewStyle().
+					Foreground(DefaultTheme.SecondaryText).
+					Render("  [Esc to cancel]")
+				replyBar = lipgloss.NewStyle().
+					Padding(0, 1).
+					Render(replyHeader + replySnippet + cancelHint)
+			}
+
+			if replyBar != "" {
+				bottomSection = lipgloss.JoinVertical(lipgloss.Top, replyBar, inputBoxStyle.Render(inputView))
+			} else {
+				bottomSection = inputBoxStyle.Render(inputView)
+			}
+		}
+
+		var footerText string
+		if f.commentsDiscussionChat != nil && f.commentsDiscussionChat.IsLeft {
+			footerText = "[Enter] Join    [Esc] Close"
+		} else if f.commentsDiscussionChat != nil && f.commentsDiscussionChat.IsMuted {
+			footerText = "[↑/↓/j/k] Navigate Comments    [Esc] Close"
+		} else if f.focusedOn == LIST {
+			footerText = "[↑/↓/j/k] Navigate    [r/Enter] Reply to comment    [i] Write comment    [Esc] Close"
+		} else {
+			if f.commentsReplyTo != nil {
+				footerText = "[Enter] Send reply    [Esc] Cancel reply    [Tab] Browse comments"
+			} else {
+				footerText = "[Enter] Send comment    [↑/Tab] Browse comments    [Esc] Close"
+			}
+		}
+		footerHints := lipgloss.NewStyle().
+			Foreground(DefaultTheme.SecondaryText).
+			Padding(0, 1).
+			Render(footerText)
+
+		layout := lipgloss.JoinVertical(
+			lipgloss.Left,
+			title,
+			divider,
+			"",
+			listContent,
+			"",
+			bottomSection,
+			"",
+			footerHints,
+		)
+		return foreStyle.Width(contentWidth + 2).Render(layout)
 	}
 
 	title := lipgloss.NewStyle().Foreground(DefaultTheme.PrimaryText).Bold(true).Render("Search")

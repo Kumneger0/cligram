@@ -3,13 +3,16 @@ package ui
 import (
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/kumneger0/cligram/internal/telegram"
 	"github.com/kumneger0/cligram/internal/telegram/types"
 )
@@ -25,7 +28,7 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	switch msg := message.(type) {
 	case spinner.TickMsg:
-		if m.storiesLoading || m.isDownloadingStory || m.membersLoading || m.isPaginatingMembers || m.isSearchingMembers {
+		if m.storiesLoading || m.isDownloadingStory || m.membersLoading || m.isPaginatingMembers || m.isSearchingMembers || m.isJoining || (m.ModalMode == ModalModeComments && (m.commentsLoading || m.isPostingComment)) {
 			var spinCmd tea.Cmd
 			m.spinner, spinCmd = m.spinner.Update(msg)
 			return m, spinCmd
@@ -237,6 +240,88 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.JoinPreview = msg.JoinPreview
 			m.isJoining = false
 			m.joinError = nil
+		} else if msg.ModalMode == ModalModeComments {
+			m.ensureSpinner()
+			m.ModalMode = ModalModeComments
+			m.commentsPost = msg.CommentsPost
+			if m.commentsPost == nil {
+				m.commentsPost = msg.Message
+			}
+			m.comments = nil
+			m.commentsDiscussionChat = nil
+			m.commentsTopMsgID = 0
+			m.commentsLoading = true
+			m.commentsError = nil
+			m.isPostingComment = false
+			m.isJoining = false
+			m.commentsScrollOffset = 0
+			m.commentsCursor = 0
+			m.commentsReplyTo = nil
+			m.focusedOn = SEARCH
+
+			ta := textarea.New()
+			ta.Placeholder = "Write a comment... (Enter to send)"
+			ta.Prompt = ""
+			ta.ShowLineNumbers = false
+			ta.CharLimit = 4096
+			ta.SetHeight(4)
+			ta.FocusedStyle.CursorLine = lipgloss.NewStyle()
+			ta.BlurredStyle.CursorLine = lipgloss.NewStyle()
+			ta.Focus()
+			m.commentInput = ta
+			cmds = append(cmds, m.spinner.Tick)
+		}
+	case types.DiscussionMessageMsg:
+		if m.ModalMode == ModalModeComments {
+			m.commentsLoading = false
+			if msg.Err != nil {
+				m.commentsError = msg.Err
+				return m, nil
+			}
+			m.commentsDiscussionChat = msg.Chat
+			m.commentsTopMsgID = msg.TopMsgID
+			m.comments = msg.Comments
+			m.commentsScrollOffset = 0
+			m.commentsCursor = 0
+			if m.commentsDiscussionChat == nil {
+				m.commentsError = fmt.Errorf("no linked discussion group found")
+				return m, nil
+			}
+			if len(m.comments) > 0 {
+				m.focusedOn = LIST
+				m.commentInput.Blur()
+			} else if !m.commentsDiscussionChat.IsLeft && !m.commentsDiscussionChat.IsMuted {
+				m.focusedOn = SEARCH
+				m.commentInput.Focus()
+			} else {
+				m.focusedOn = LIST
+				m.commentInput.Blur()
+			}
+			return m, nil
+		}
+	case types.JoinChannelMsg:
+		if m.ModalMode == ModalModeComments {
+			m.isJoining = false
+			if msg.Err != nil && !strings.Contains(msg.Err.Error(), "USER_ALREADY_PARTICIPANT") {
+				m.commentsError = msg.Err
+				return m, nil
+			}
+			if m.commentsDiscussionChat != nil {
+				m.commentsDiscussionChat.IsLeft = false
+				if !m.commentsDiscussionChat.IsMuted {
+					m.focusedOn = SEARCH
+					m.commentInput.Focus()
+				}
+			}
+			return m, nil
+		}
+	case types.SendMessageMsg:
+		if m.ModalMode == ModalModeComments {
+			m.isPostingComment = false
+			if msg.Err != nil {
+				m.commentsError = msg.Err
+			}
+			return m, nil
 		}
 	case types.CurrentUserMsg:
 		if msg.Err != nil {
@@ -304,6 +389,18 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
+	} else if m.ModalMode == ModalModeComments {
+		if m.focusedOn == SEARCH && (m.commentsDiscussionChat == nil || (!m.commentsDiscussionChat.IsLeft && !m.commentsDiscussionChat.IsMuted)) {
+			isEnter := false
+			if kMsg, ok := message.(tea.KeyMsg); ok && kMsg.String() == "enter" {
+				isEnter = true
+			}
+			if !isEnter {
+				cInput, cCmd := m.commentInput.Update(message)
+				m.commentInput = cInput
+				cmds = append(cmds, cCmd)
+			}
+		}
 	} else {
 		input, cmd := m.input.Update(message)
 		m.input = input
@@ -316,7 +413,7 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, userListCmd)
 	}
 
-	if m.focusedOn == LIST {
+	if m.ModalMode == ModalModeSearch && m.focusedOn == LIST {
 		users, userCmd := m.searchResultCombined.Update(message)
 		m.searchResultCombined = users
 		cmds = append(cmds, userCmd)
@@ -379,6 +476,19 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 		} else if m.ModalMode == ModalModeGroupMembers && m.membersList != nil {
 			m.membersList.CursorUp()
 			return m, nil
+		} else if m.ModalMode == ModalModeComments {
+			if m.focusedOn == LIST {
+				if m.commentsCursor > 0 {
+					m.commentsCursor--
+				}
+				return m, nil
+			}
+			if m.focusedOn == SEARCH && len(m.comments) > 0 && m.commentInput.Line() == 0 {
+				m.focusedOn = LIST
+				m.commentInput.Blur()
+				m.commentsCursor = len(m.comments) - 1
+				return m, nil
+			}
 		}
 	case "down", "ctrl+n":
 		if m.ModalMode == ModalModeSendReaction {
@@ -397,6 +507,14 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 		} else if m.ModalMode == ModalModeGroupMembers && m.membersList != nil {
 			m.membersList.CursorDown()
 			return m.checkMembersPagination()
+		} else if m.ModalMode == ModalModeComments && m.focusedOn == LIST {
+			if m.commentsCursor < len(m.comments)-1 {
+				m.commentsCursor++
+			} else if m.commentsDiscussionChat != nil && !m.commentsDiscussionChat.IsLeft && !m.commentsDiscussionChat.IsMuted {
+				m.focusedOn = SEARCH
+				m.commentInput.Focus()
+			}
+			return m, nil
 		}
 	case "left":
 		if m.ModalMode == ModalModeSendReaction {
@@ -411,6 +529,18 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 			}
 		}
 	case "tab":
+		if m.ModalMode == ModalModeComments {
+			if m.commentsDiscussionChat != nil && !m.commentsDiscussionChat.IsLeft && !m.commentsDiscussionChat.IsMuted {
+				if m.focusedOn == SEARCH {
+					m.focusedOn = LIST
+					m.commentInput.Blur()
+				} else {
+					m.focusedOn = SEARCH
+					m.commentInput.Focus()
+				}
+			}
+			return m, nil
+		}
 		if m.ModalMode == ModalModeGroupMembers {
 			if m.focusedOn == SEARCH {
 				m.focusedOn = LIST
@@ -429,16 +559,62 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 			m.input.Focus()
 		}
 	case "j":
+		if m.ModalMode == ModalModeComments && m.focusedOn == LIST {
+			if m.commentsCursor < len(m.comments)-1 {
+				m.commentsCursor++
+			} else if m.commentsDiscussionChat != nil && !m.commentsDiscussionChat.IsLeft && !m.commentsDiscussionChat.IsMuted {
+				m.focusedOn = SEARCH
+				m.commentInput.Focus()
+			}
+			return m, nil
+		}
 		if m.ModalMode == ModalModeGroupMembers && m.focusedOn == LIST && m.membersList != nil {
 			m.membersList.CursorDown()
 			return m.checkMembersPagination()
 		}
 	case "k":
+		if m.ModalMode == ModalModeComments && m.focusedOn == LIST {
+			if m.commentsCursor > 0 {
+				m.commentsCursor--
+			}
+			return m, nil
+		}
 		if m.ModalMode == ModalModeGroupMembers && m.focusedOn == LIST && m.membersList != nil {
 			m.membersList.CursorUp()
 			return m, nil
 		}
+	case "i":
+		if m.ModalMode == ModalModeComments && m.focusedOn == LIST {
+			if m.commentsDiscussionChat != nil && !m.commentsDiscussionChat.IsLeft && !m.commentsDiscussionChat.IsMuted {
+				m.focusedOn = SEARCH
+				m.commentInput.Focus()
+				return m, nil
+			}
+		}
+	case "r":
+		if m.ModalMode == ModalModeComments && m.focusedOn == LIST {
+			if len(m.comments) > 0 && m.commentsCursor >= 0 && m.commentsCursor < len(m.comments) {
+				if m.commentsDiscussionChat != nil && !m.commentsDiscussionChat.IsLeft && !m.commentsDiscussionChat.IsMuted {
+					repCopy := m.comments[m.commentsCursor]
+					m.commentsReplyTo = &repCopy
+					m.focusedOn = SEARCH
+					m.commentInput.Focus()
+					return m, nil
+				}
+			}
+		}
 	case "esc":
+		if m.ModalMode == ModalModeComments {
+			if m.focusedOn == SEARCH && m.commentsReplyTo != nil {
+				m.commentsReplyTo = nil
+				return m, nil
+			}
+			m.commentsLoading = false
+			m.isPostingComment = false
+			m.isJoining = false
+			m.commentsReplyTo = nil
+			return m, func() tea.Msg { return CloseOverlay{} }
+		}
 		if m.ModalMode == ModalModeAlert {
 			m.AlertTitle = ""
 			m.AlertMessage = ""
@@ -571,9 +747,101 @@ func handleEnterKey(m *Foreground) (tea.Model, tea.Cmd) {
 	if m.ModalMode == ModalModeGroupMembers {
 		return handleGroupMemberSelection(m)
 	}
+	if m.ModalMode == ModalModeComments {
+		return handleCommentsEnterKey(m)
+	}
 	if m.ModalMode == ModalModeSearch || m.focusedOn == LIST {
 		return handleListSelection(m)
 	}
+	return m, nil
+}
+
+func handleCommentsEnterKey(m *Foreground) (tea.Model, tea.Cmd) {
+	if m.commentsDiscussionChat != nil && m.commentsDiscussionChat.IsLeft {
+		if m.isJoining {
+			return m, nil
+		}
+		m.ensureSpinner()
+		m.isJoining = true
+		m.commentsError = nil
+		channelID, _ := strconv.ParseInt(m.commentsDiscussionChat.ID, 10, 64)
+		accessHash, _ := strconv.ParseInt(m.commentsDiscussionChat.AccessHash, 10, 64)
+		var joinCmd tea.Cmd
+		if telegram.Cligram != nil && telegram.Cligram.Context() != nil {
+			joinCmd = telegram.Cligram.JoinChannel(telegram.Cligram.Context(), channelID, accessHash)
+		}
+		return m, tea.Batch(joinCmd, m.spinner.Tick)
+	}
+
+	if m.focusedOn == LIST {
+		if m.commentsDiscussionChat != nil && !m.commentsDiscussionChat.IsLeft && !m.commentsDiscussionChat.IsMuted {
+			if len(m.comments) > 0 && m.commentsCursor >= 0 && m.commentsCursor < len(m.comments) {
+				repCopy := m.comments[m.commentsCursor]
+				m.commentsReplyTo = &repCopy
+			}
+			m.focusedOn = SEARCH
+			m.commentInput.Focus()
+			return m, nil
+		}
+	}
+
+	if m.commentsDiscussionChat != nil && !m.commentsDiscussionChat.IsLeft && !m.commentsDiscussionChat.IsMuted {
+		text := strings.TrimSpace(m.commentInput.Value())
+		if text == "" || m.isPostingComment {
+			return m, nil
+		}
+		m.ensureSpinner()
+		m.isPostingComment = true
+		m.commentsError = nil
+
+		discChat := m.commentsDiscussionChat
+		peer := types.Peer{
+			ID:         discChat.ID,
+			AccessHash: discChat.AccessHash,
+			ChatType:   types.GroupChat,
+		}
+		if discChat.IsBroadcast {
+			peer.ChatType = types.ChannelChat
+		}
+		topMsgID := m.commentsTopMsgID
+		randID := int(time.Now().UnixNano() & 0x7FFFFFFF)
+
+		replyToID := topMsgID
+		var replyObj *types.FormattedMessage
+		if m.commentsReplyTo != nil {
+			replyToID = m.commentsReplyTo.ID
+			replyCopy := *m.commentsReplyTo
+			replyObj = &replyCopy
+		}
+
+		req := types.SendMessageRequest{
+			Peer:             peer,
+			Message:          text,
+			IsReply:          topMsgID != 0 || replyToID != 0,
+			ReplyToMessageID: strconv.Itoa(replyToID),
+			TopMsgID:         &topMsgID,
+			RandID:           randID,
+		}
+
+		m.comments = append(m.comments, types.FormattedMessage{
+			ID:       randID,
+			Sender:   "You",
+			Content:  text,
+			Date:     time.Now(),
+			IsFromMe: true,
+			ReplyTo:  replyObj,
+		})
+		m.commentsCursor = len(m.comments) - 1
+		m.commentInput.Reset()
+		m.commentsReplyTo = nil
+
+		var sendCmd tea.Cmd
+		if telegram.Cligram != nil && telegram.Cligram.Context() != nil {
+			sendCmd = telegram.Cligram.SendMessage(telegram.Cligram.Context(), req)
+		}
+		return m, tea.Batch(sendCmd, m.spinner.Tick)
+	}
+
 	return m, nil
 }
 
