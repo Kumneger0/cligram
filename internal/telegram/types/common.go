@@ -334,3 +334,14 @@ type SearchGroupMembersMsg struct {
 	TotalCount int               `json:"totalCount"`
 	Err        error             `json:"err,omitempty"`
 }
+
+type BotCommand struct {
+	Command     string `json:"command"`
+	Description string `json:"description"`
+}
+
+type PeerBotCommandsMsg struct {
+	PeerID   string       `json:"peerId"`
+	Commands []BotCommand `json:"commands"`
+	Err      error        `json:"err,omitempty"`
+}

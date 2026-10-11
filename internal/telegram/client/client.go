@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -1508,4 +1509,155 @@ func (c *Client) DownloadMedia(ctx context.Context, peerID string, msgID int, at
 			Err:       err,
 		}
 	}
+}
+
+var (
+	botCommandsCache   = make(map[string][]types.BotCommand)
+	botCommandsCacheMu sync.RWMutex
+)
+
+// SetCachedBotCommands overrides cached bot commands (useful for testing).
+func SetCachedBotCommands(peerID string, cmds []types.BotCommand) {
+	botCommandsCacheMu.Lock()
+	defer botCommandsCacheMu.Unlock()
+	botCommandsCache[peerID] = cmds
+}
+
+// ClearCachedBotCommands clears the cached bot commands (useful for testing).
+func ClearCachedBotCommands() {
+	botCommandsCacheMu.Lock()
+	defer botCommandsCacheMu.Unlock()
+	botCommandsCache = make(map[string][]types.BotCommand)
+}
+
+// GetPeerBotCommands retrieves registered bot commands for a peer, utilizing in-memory cache.
+func (c *Client) GetPeerBotCommands(ctx context.Context, peer types.Peer) tea.Cmd {
+	return func() tea.Msg {
+		commands, err := c.fetchPeerBotCommands(ctx, peer)
+		return types.PeerBotCommandsMsg{
+			PeerID:   peer.ID,
+			Commands: commands,
+			Err:      err,
+		}
+	}
+}
+
+func (c *Client) fetchPeerBotCommands(ctx context.Context, peer types.Peer) ([]types.BotCommand, error) {
+	if peer.ID == "" {
+		return nil, nil
+	}
+
+	botCommandsCacheMu.RLock()
+	if cached, ok := botCommandsCache[peer.ID]; ok {
+		botCommandsCacheMu.RUnlock()
+		return cached, nil
+	}
+	botCommandsCacheMu.RUnlock()
+
+	if c == nil || c.Client == nil {
+		return nil, nil
+	}
+
+	callCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	var commands []types.BotCommand
+	var fetchErr error
+
+	switch peer.ChatType {
+	case types.UserChat, types.BotChat:
+		userID, err := strconv.ParseInt(peer.ID, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid user peer ID: %w", err)
+		}
+		var accessHash int64
+		if peer.AccessHash != "" {
+			accessHash, _ = strconv.ParseInt(peer.AccessHash, 10, 64)
+		}
+		res, err := c.GetAPI().UsersGetFullUser(callCtx, &tg.InputUser{
+			UserID:     userID,
+			AccessHash: accessHash,
+		})
+		if err != nil {
+			fetchErr = err
+		} else if res != nil {
+			if bi, ok := res.FullUser.GetBotInfo(); ok {
+				for _, cmd := range bi.Commands {
+					commands = append(commands, types.BotCommand{
+						Command:     cmd.Command,
+						Description: cmd.Description,
+					})
+				}
+			}
+		}
+
+	case types.ChannelChat, types.GroupChat:
+		chatID, err := strconv.ParseInt(peer.ID, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid chat/channel peer ID: %w", err)
+		}
+		if peer.ChatType == types.ChannelChat || peer.AccessHash != "" {
+			var accessHash int64
+			if peer.AccessHash != "" {
+				accessHash, _ = strconv.ParseInt(peer.AccessHash, 10, 64)
+			}
+			res, err := c.GetAPI().ChannelsGetFullChannel(callCtx, &tg.InputChannel{
+				ChannelID:  chatID,
+				AccessHash: accessHash,
+			})
+			if err != nil {
+				fetchErr = err
+			} else if res != nil {
+				if fullChannel, ok := res.FullChat.(*tg.ChannelFull); ok {
+					for _, bi := range fullChannel.GetBotInfo() {
+						for _, cmd := range bi.Commands {
+							commands = append(commands, types.BotCommand{
+								Command:     cmd.Command,
+								Description: cmd.Description,
+							})
+						}
+					}
+				}
+			}
+		} else {
+			res, err := c.GetAPI().MessagesGetFullChat(callCtx, chatID)
+			if err != nil {
+				fetchErr = err
+			} else if res != nil {
+				if fullChat, ok := res.FullChat.(*tg.ChatFull); ok {
+					if bis, ok := fullChat.GetBotInfo(); ok {
+						for _, bi := range bis {
+							for _, cmd := range bi.Commands {
+								commands = append(commands, types.BotCommand{
+									Command:     cmd.Command,
+									Description: cmd.Description,
+								})
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if fetchErr != nil {
+		slog.Debug("failed to fetch bot commands for peer", "peerID", peer.ID, "err", fetchErr)
+		return nil, fetchErr
+	}
+
+	seen := make(map[string]bool)
+	var deduped []types.BotCommand
+	for _, cmd := range commands {
+		cmd.Command = strings.TrimPrefix(cmd.Command, "/")
+		if !seen[cmd.Command] && cmd.Command != "" {
+			seen[cmd.Command] = true
+			deduped = append(deduped, cmd)
+		}
+	}
+
+	botCommandsCacheMu.Lock()
+	botCommandsCache[peer.ID] = deduped
+	botCommandsCacheMu.Unlock()
+
+	return deduped, nil
 }
