@@ -431,8 +431,11 @@ func TestCommentsModal_Rendering_LoadingAndPopulated(t *testing.T) {
 	if !strings.Contains(viewPopulated, "Bob") || !strings.Contains(viewPopulated, "Has this been peer reviewed yet?") {
 		t.Errorf("expected Bob's comment in view, got:\n%s", viewPopulated)
 	}
-	if !strings.Contains(viewPopulated, "Navigate Comments") {
+	if !strings.Contains(viewPopulated, "Navigate") {
 		t.Errorf("expected navigate comments hint in view, got:\n%s", viewPopulated)
+	}
+	if !strings.Contains(viewPopulated, "Reply to comment") {
+		t.Errorf("expected reply to comment hint in view, got:\n%s", viewPopulated)
 	}
 	// Focus input and verify send comment hint is displayed
 	fg.focusedOn = SEARCH
@@ -704,7 +707,14 @@ func TestCommentsModal_PostCommentAndNavigation(t *testing.T) {
 		t.Errorf("expected focusedOn to be SEARCH after Enter on LIST, got %v", fg.focusedOn)
 	}
 
-	// 5. Test Esc closes overlay
+	// 5. Test Esc: first Esc cancels reply target armed by Enter on LIST
+	updatedFgModelEsc1, cmdEsc1 := fg.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	fg = updatedFgModelEsc1.(*Foreground)
+	if cmdEsc1 != nil {
+		t.Errorf("first Esc while replying should cancel reply, not close overlay")
+	}
+
+	// Second Esc closes overlay
 	updatedFgModel7, closeCmd := fg.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	if closeCmd == nil {
 		t.Fatalf("expected CloseOverlay cmd on Esc")
@@ -713,4 +723,133 @@ func TestCommentsModal_PostCommentAndNavigation(t *testing.T) {
 		t.Errorf("expected CloseOverlay msg on Esc, got %T", closeCmd())
 	}
 	_ = updatedFgModel7
+}
+
+func TestCommentsModal_ReplyingToComment(t *testing.T) {
+	post := types.FormattedMessage{
+		ID:          101,
+		Content:     "Original post announcing new release",
+		HasComments: true,
+	}
+
+	fg := &Foreground{
+		windowWidth:  90,
+		windowHeight: 30,
+	}
+
+	updatedFgModel, _ := fg.Update(OpenModalMsg{
+		ModalMode:    ModalModeComments,
+		CommentsPost: &post,
+	})
+	fg = updatedFgModel.(*Foreground)
+
+	discChat := types.ChannelInfo{
+		ID:           "9999",
+		AccessHash:   "987654321",
+		ChannelTitle: "Feedback Group",
+		IsBroadcast:  false,
+		IsLeft:       false,
+		IsMuted:      false,
+	}
+
+	commentA := types.FormattedMessage{
+		ID:      501,
+		Sender:  "Alice",
+		Content: "This looks fantastic!",
+		Date:    time.Now().Add(-10 * time.Minute),
+	}
+	commentB := types.FormattedMessage{
+		ID:      502,
+		Sender:  "Bob",
+		Content: "Agreed, great work team!",
+		Date:    time.Now().Add(-5 * time.Minute),
+		ReplyTo: &commentA,
+	}
+
+	updatedFgModel2, _ := fg.Update(types.DiscussionMessageMsg{
+		Chat:      &discChat,
+		MessageID: post.ID,
+		TopMsgID:  500,
+		Comments:  []types.FormattedMessage{commentA, commentB},
+	})
+	fg = updatedFgModel2.(*Foreground)
+
+	// 1. Verify that commentB renders the reply quote to Alice in the view
+	viewComments := fg.View()
+	if !strings.Contains(viewComments, "Replying to Alice") {
+		t.Errorf("expected comment card to render reply quote to Alice, got:\n%s", viewComments)
+	}
+
+	// 2. Focused on LIST; cursor is at 0 (commentA). Press 'r' to reply to Alice.
+	if fg.focusedOn != LIST {
+		t.Fatalf("expected focusedOn to be LIST initially")
+	}
+	updatedFgModel3, _ := fg.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	fg = updatedFgModel3.(*Foreground)
+
+	if fg.focusedOn != SEARCH {
+		t.Errorf("expected focusedOn to be SEARCH after 'r', got %v", fg.focusedOn)
+	}
+	if fg.commentsReplyTo == nil || fg.commentsReplyTo.ID != commentA.ID {
+		t.Fatalf("expected commentsReplyTo to target Alice (ID %d), got %+v", commentA.ID, fg.commentsReplyTo)
+	}
+
+	// 3. View should show reply preview bar above comment input
+	viewReplying := fg.View()
+	if !strings.Contains(viewReplying, "Replying to Alice") || !strings.Contains(viewReplying, "Esc to cancel") {
+		t.Errorf("expected reply preview bar in view, got:\n%s", viewReplying)
+	}
+
+	// 4. Test Esc in SEARCH cancels the reply preview without closing modal
+	updatedFgModelEsc, cmdEsc := fg.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	fg = updatedFgModelEsc.(*Foreground)
+	if fg.commentsReplyTo != nil {
+		t.Errorf("expected commentsReplyTo to be nil after Esc, got %+v", fg.commentsReplyTo)
+	}
+	if cmdEsc != nil {
+		t.Errorf("expected Esc while replying to cancel reply without closing modal, got cmd")
+	}
+
+	// 5. Navigate to Bob (index 1) with 'down' and press Enter to reply to Bob
+	fg.focusedOn = LIST
+	fg.commentInput.Blur()
+	updatedFgModelDown, _ := fg.Update(tea.KeyMsg{Type: tea.KeyDown})
+	fg = updatedFgModelDown.(*Foreground)
+	if fg.commentsCursor != 1 {
+		t.Fatalf("expected commentsCursor to be 1, got %d", fg.commentsCursor)
+	}
+
+	updatedFgModelEnter, _ := fg.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	fg = updatedFgModelEnter.(*Foreground)
+	if fg.focusedOn != SEARCH {
+		t.Errorf("expected focusedOn to be SEARCH after Enter on comment card, got %v", fg.focusedOn)
+	}
+	if fg.commentsReplyTo == nil || fg.commentsReplyTo.ID != commentB.ID {
+		t.Fatalf("expected commentsReplyTo to target Bob (ID %d), got %+v", commentB.ID, fg.commentsReplyTo)
+	}
+
+	// 6. Type reply text and send with Enter
+	fg.commentInput.SetValue("I have a question about this too!")
+	updatedFgModelSend, sendCmd := fg.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	fg = updatedFgModelSend.(*Foreground)
+
+	if sendCmd == nil {
+		t.Fatalf("expected send command after pressing Enter")
+	}
+	if len(fg.comments) != 3 {
+		t.Fatalf("expected 3 comments after sending reply, got %d", len(fg.comments))
+	}
+	newComment := fg.comments[2]
+	if newComment.ReplyTo == nil || newComment.ReplyTo.ID != commentB.ID {
+		t.Errorf("expected new comment ReplyTo to target Bob (ID %d), got %+v", commentB.ID, newComment.ReplyTo)
+	}
+	if fg.commentsReplyTo != nil {
+		t.Errorf("expected commentsReplyTo to be cleared after sending")
+	}
+
+	// 7. Verify newly posted comment renders reply quote to Bob
+	viewAfterSend := fg.View()
+	if !strings.Contains(viewAfterSend, "Replying to Bob") {
+		t.Errorf("expected view after send to display reply quote to Bob, got:\n%s", viewAfterSend)
+	}
 }

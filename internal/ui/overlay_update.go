@@ -256,6 +256,7 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.isJoining = false
 			m.commentsScrollOffset = 0
 			m.commentsCursor = 0
+			m.commentsReplyTo = nil
 			m.focusedOn = SEARCH
 
 			ta := textarea.New()
@@ -590,11 +591,28 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 				return m, nil
 			}
 		}
+	case "r":
+		if m.ModalMode == ModalModeComments && m.focusedOn == LIST {
+			if len(m.comments) > 0 && m.commentsCursor >= 0 && m.commentsCursor < len(m.comments) {
+				if m.commentsDiscussionChat != nil && !m.commentsDiscussionChat.IsLeft && !m.commentsDiscussionChat.IsMuted {
+					repCopy := m.comments[m.commentsCursor]
+					m.commentsReplyTo = &repCopy
+					m.focusedOn = SEARCH
+					m.commentInput.Focus()
+					return m, nil
+				}
+			}
+		}
 	case "esc":
 		if m.ModalMode == ModalModeComments {
+			if m.focusedOn == SEARCH && m.commentsReplyTo != nil {
+				m.commentsReplyTo = nil
+				return m, nil
+			}
 			m.commentsLoading = false
 			m.isPostingComment = false
 			m.isJoining = false
+			m.commentsReplyTo = nil
 			return m, func() tea.Msg { return CloseOverlay{} }
 		}
 		if m.ModalMode == ModalModeAlert {
@@ -757,6 +775,10 @@ func handleCommentsEnterKey(m *Foreground) (tea.Model, tea.Cmd) {
 
 	if m.focusedOn == LIST {
 		if m.commentsDiscussionChat != nil && !m.commentsDiscussionChat.IsLeft && !m.commentsDiscussionChat.IsMuted {
+			if len(m.comments) > 0 && m.commentsCursor >= 0 && m.commentsCursor < len(m.comments) {
+				repCopy := m.comments[m.commentsCursor]
+				m.commentsReplyTo = &repCopy
+			}
 			m.focusedOn = SEARCH
 			m.commentInput.Focus()
 			return m, nil
@@ -784,11 +806,19 @@ func handleCommentsEnterKey(m *Foreground) (tea.Model, tea.Cmd) {
 		topMsgID := m.commentsTopMsgID
 		randID := int(time.Now().UnixNano() & 0x7FFFFFFF)
 
+		replyToID := topMsgID
+		var replyObj *types.FormattedMessage
+		if m.commentsReplyTo != nil {
+			replyToID = m.commentsReplyTo.ID
+			replyCopy := *m.commentsReplyTo
+			replyObj = &replyCopy
+		}
+
 		req := types.SendMessageRequest{
 			Peer:             peer,
 			Message:          text,
-			IsReply:          topMsgID != 0,
-			ReplyToMessageID: strconv.Itoa(topMsgID),
+			IsReply:          topMsgID != 0 || replyToID != 0,
+			ReplyToMessageID: strconv.Itoa(replyToID),
 			TopMsgID:         &topMsgID,
 			RandID:           randID,
 		}
@@ -799,9 +829,11 @@ func handleCommentsEnterKey(m *Foreground) (tea.Model, tea.Cmd) {
 			Content:  text,
 			Date:     time.Now(),
 			IsFromMe: true,
+			ReplyTo:  replyObj,
 		})
 		m.commentsCursor = len(m.comments) - 1
 		m.commentInput.Reset()
+		m.commentsReplyTo = nil
 
 		var sendCmd tea.Cmd
 		if telegram.Cligram != nil && telegram.Cligram.Context() != nil {

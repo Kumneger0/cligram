@@ -424,6 +424,7 @@ type Foreground struct {
 	commentsDiscussionChat *types.ChannelInfo
 	commentsTopMsgID       int
 	comments               []types.FormattedMessage
+	commentsReplyTo        *types.FormattedMessage
 	commentsLoading        bool
 	commentsError          error
 	commentInput           textarea.Model
@@ -982,7 +983,29 @@ func (f *Foreground) View() string {
 					bodyStyled = lipgloss.NewStyle().Foreground(DefaultTheme.PrimaryText).Render(wrappedBody)
 				}
 
-				cardInner := lipgloss.JoinVertical(lipgloss.Left, headerLine, "", "    "+bodyStyled)
+				var replyLine string
+				if c.ReplyTo != nil {
+					replySender := c.ReplyTo.Sender
+					if replySender == "" {
+						replySender = "Someone"
+					}
+					replySnippet := strings.TrimSpace(strings.ReplaceAll(c.ReplyTo.Content, "\n", " "))
+					if len(replySnippet) > 40 {
+						replySnippet = replySnippet[:37] + "..."
+					}
+					replyLine = lipgloss.NewStyle().
+						Foreground(DefaultTheme.AccentColor).
+						Italic(true).
+						Render("  ┌─ Replying to " + replySender + ": \"" + replySnippet + "\"")
+				}
+
+				var cardElements []string
+				cardElements = append(cardElements, headerLine)
+				if replyLine != "" {
+					cardElements = append(cardElements, replyLine)
+				}
+				cardElements = append(cardElements, "", "    "+bodyStyled)
+				cardInner := lipgloss.JoinVertical(lipgloss.Left, cardElements...)
 
 				cardStyle := lipgloss.NewStyle().
 					Width(contentWidth-2).
@@ -1147,7 +1170,37 @@ func (f *Foreground) View() string {
 				inputView = f.commentInput.View()
 			}
 
-			bottomSection = inputBoxStyle.Render(inputView)
+			var replyBar string
+			if f.commentsReplyTo != nil {
+				sender := f.commentsReplyTo.Sender
+				if sender == "" {
+					sender = "Someone"
+				}
+				snippet := strings.TrimSpace(strings.ReplaceAll(f.commentsReplyTo.Content, "\n", " "))
+				if len(snippet) > 40 {
+					snippet = snippet[:37] + "..."
+				}
+				replyHeader := lipgloss.NewStyle().
+					Foreground(DefaultTheme.AccentColor).
+					Bold(true).
+					Render("↩ Replying to " + sender)
+				replySnippet := lipgloss.NewStyle().
+					Foreground(DefaultTheme.SecondaryText).
+					Italic(true).
+					Render(": \"" + snippet + "\"")
+				cancelHint := lipgloss.NewStyle().
+					Foreground(DefaultTheme.SecondaryText).
+					Render("  [Esc to cancel]")
+				replyBar = lipgloss.NewStyle().
+					Padding(0, 1).
+					Render(replyHeader + replySnippet + cancelHint)
+			}
+
+			if replyBar != "" {
+				bottomSection = lipgloss.JoinVertical(lipgloss.Top, replyBar, inputBoxStyle.Render(inputView))
+			} else {
+				bottomSection = inputBoxStyle.Render(inputView)
+			}
 		}
 
 		var footerText string
@@ -1156,9 +1209,13 @@ func (f *Foreground) View() string {
 		} else if f.commentsDiscussionChat != nil && f.commentsDiscussionChat.IsMuted {
 			footerText = "[↑/↓/j/k] Navigate Comments    [Esc] Close"
 		} else if f.focusedOn == LIST {
-			footerText = "[↑/↓/j/k] Navigate Comments    [Enter/i/Tab] Comment    [Esc] Close"
+			footerText = "[↑/↓/j/k] Navigate    [r/Enter] Reply to comment    [i] Write comment    [Esc] Close"
 		} else {
-			footerText = "[Enter] Send comment    [↑/Tab] Browse Comments    [Esc] Close"
+			if f.commentsReplyTo != nil {
+				footerText = "[Enter] Send reply    [Esc] Cancel reply    [Tab] Browse comments"
+			} else {
+				footerText = "[Enter] Send comment    [↑/Tab] Browse comments    [Esc] Close"
+			}
 		}
 		footerHints := lipgloss.NewStyle().
 			Foreground(DefaultTheme.SecondaryText).
