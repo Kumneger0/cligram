@@ -416,3 +416,175 @@ func TestModelUpdate_HandleEnterKey_ChatWindowTelegramLink(t *testing.T) {
 		t.Errorf("unexpected routed link: %+v", openMsg.Chat)
 	}
 }
+
+func TestUnjoinedChatPrompt_ViewRendering(t *testing.T) {
+	d := layoutDimensions{mainWidth: 80, inputHeight: 3}
+
+	// 1. Unjoined broadcast channel
+	mChan := Model{
+		Mode: ModeChannels,
+		SelectedChannel: types.ChannelInfo{
+			ID:           "1111",
+			ChannelTitle: "software_guy",
+			IsBroadcast:  true,
+			IsLeft:       true,
+		},
+	}
+	viewChan := prepareInputView(&mChan, d)
+	if !strings.Contains(viewChan, "[Enter]") || !strings.Contains(viewChan, "Join") {
+		t.Errorf("expected [Enter] Join prompt, got:\n%s", viewChan)
+	}
+	if strings.Contains(viewChan, "Channel Preview") {
+		t.Errorf("expected prompt NOT to contain 'Channel Preview', got:\n%s", viewChan)
+	}
+	if !strings.Contains(viewChan, "(Tab to focus)") {
+		t.Errorf("expected unfocused prompt to contain '(Tab to focus)', got:\n%s", viewChan)
+	}
+
+	// Verify focused prompt does not contain '(Tab to focus)'
+	mChanFocused := mChan
+	mChanFocused.FocusedOn = Input
+	viewChanFocused := prepareInputView(&mChanFocused, d)
+	if strings.Contains(viewChanFocused, "(Tab to focus)") {
+		t.Errorf("expected focused prompt NOT to contain '(Tab to focus)', got:\n%s", viewChanFocused)
+	}
+
+	// 2. Unjoined group
+	mGroup := Model{
+		Mode: ModeGroups,
+		SelectedGroup: types.ChannelInfo{
+			ID:           "2222",
+			ChannelTitle: "freelance_ethio",
+			IsBroadcast:  false,
+			IsLeft:       true,
+		},
+	}
+	viewGroup := prepareInputView(&mGroup, d)
+	if !strings.Contains(viewGroup, "[Enter]") || !strings.Contains(viewGroup, "Join") {
+		t.Errorf("expected [Enter] Join prompt, got:\n%s", viewGroup)
+	}
+	if strings.Contains(viewGroup, "Group Preview") {
+		t.Errorf("expected prompt NOT to contain 'Group Preview', got:\n%s", viewGroup)
+	}
+
+	// 3. Admin approval required (JoinRequest: true)
+	mReq := Model{
+		Mode: ModeChannels,
+		SelectedChannel: types.ChannelInfo{
+			ID:           "3333",
+			ChannelTitle: "Private Club",
+			IsBroadcast:  true,
+			IsLeft:       true,
+			JoinRequest:  true,
+		},
+	}
+	viewReq := prepareInputView(&mReq, d)
+	if !strings.Contains(viewReq, "Admin approval is required") || !strings.Contains(viewReq, "Request to Join") {
+		t.Errorf("expected admin approval join prompt, got:\n%s", viewReq)
+	}
+
+	// 4. Joining in progress
+	mJoining := mChan
+	mJoining.IsJoiningChannel = true
+	viewJoining := prepareInputView(&mJoining, d)
+	if !strings.Contains(viewJoining, "Joining...") {
+		t.Errorf("expected joining indicator in prompt, got:\n%s", viewJoining)
+	}
+
+	// 5. Join request sent
+	mSent := mReq
+	mSent.JoinRequestSent = true
+	viewSent := prepareInputView(&mSent, d)
+	if !strings.Contains(viewSent, "Join request sent to administrators") {
+		t.Errorf("expected join request sent notice in prompt, got:\n%s", viewSent)
+	}
+}
+
+func TestUnjoinedChatPrompt_EnterKeyJoins(t *testing.T) {
+	ch := types.ChannelInfo{
+		ID:           "123456",
+		ChannelTitle: "software_guy",
+		AccessHash:   "987654",
+		IsBroadcast:  true,
+		IsLeft:       true,
+	}
+
+	// 1. Enter on Input when unjoined
+	m := Model{
+		Mode:            ModeChannels,
+		FocusedOn:       Input,
+		SelectedChannel: ch,
+	}
+	newM, _ := m.handleEnterKey()
+	mod := newM.(Model)
+	if !mod.IsJoiningChannel {
+		t.Errorf("expected IsJoiningChannel to be true after pressing Enter on Input")
+	}
+
+	// 2. Enter on Main when unjoined
+	mMain := Model{
+		Mode:            ModeChannels,
+		FocusedOn:       Main,
+		SelectedChannel: ch,
+		Conversations:   []types.FormattedMessage{{ID: 1, Content: "Hello world"}},
+	}
+	newMMain, _ := mMain.handleEnterKey()
+	modMain := newMMain.(Model)
+	if !modMain.IsJoiningChannel {
+		t.Errorf("expected IsJoiningChannel to be true after pressing Enter on Main")
+	}
+}
+
+func TestUnjoinedChatPrompt_JoinChannelMsg_SuccessAndApproval(t *testing.T) {
+	ch := types.ChannelInfo{
+		ID:           "123456",
+		ChannelTitle: "software_guy",
+		IsBroadcast:  true,
+		IsLeft:       true,
+	}
+	m := Model{
+		Mode:             ModeChannels,
+		SelectedChannel:  ch,
+		Channels:         list.New([]list.Item{ch}, list.NewDefaultDelegate(), 30, 20),
+		All:              list.New([]list.Item{ch}, list.NewDefaultDelegate(), 30, 20),
+		IsJoiningChannel: true,
+	}
+
+	// 1. Normal join success
+	succMsg := types.JoinChannelMsg{
+		ChannelID: 123456,
+		Chat:      &types.ChannelInfo{ID: "123456", ChannelTitle: "software_guy"},
+	}
+	newM, _ := m.Update(succMsg)
+	mod := newM.(Model)
+	if mod.IsJoiningChannel {
+		t.Errorf("expected IsJoiningChannel to be false")
+	}
+	if mod.SelectedChannel.IsLeft {
+		t.Errorf("expected SelectedChannel.IsLeft to be false after joining")
+	}
+	if mod.isUnjoinedChat() {
+		t.Errorf("expected isUnjoinedChat to return false after joining")
+	}
+
+	// 2. Admin approval response (INVITE_REQUEST_SENT)
+	mReq := Model{
+		Mode:             ModeChannels,
+		SelectedChannel:  ch,
+		Channels:         list.New([]list.Item{ch}, list.NewDefaultDelegate(), 30, 20),
+		All:              list.New([]list.Item{ch}, list.NewDefaultDelegate(), 30, 20),
+		IsJoiningChannel: true,
+	}
+	errMsg := types.JoinChannelMsg{
+		ChannelID: 123456,
+		Err:       errors.New("INVITE_REQUEST_SENT"),
+	}
+	newMReq, _ := mReq.Update(errMsg)
+	modReq := newMReq.(Model)
+	if modReq.IsJoiningChannel {
+		t.Errorf("expected IsJoiningChannel to be false")
+	}
+	if !modReq.JoinRequestSent {
+		t.Errorf("expected JoinRequestSent to be true")
+	}
+}

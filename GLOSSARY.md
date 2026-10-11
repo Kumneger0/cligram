@@ -103,3 +103,7 @@ _Avoid_: Join dialog, channel popup, invite window
 **Link Router**:
 The in-app URI dispatcher resolving `t.me/+hash` invite links, `t.me/c/<id>/<mid>` private message deep links, and public handles directly within Cligram without opening an external browser.
 _Avoid_: URL handler, link opener, web forwarder
+
+**Public Channel Join Prompt**:
+A contextual action bar replacing the message input bar when viewing an unjoined public channel or supergroup, displaying single-key join (`[Enter] Join`) or admin approval request (`🔒 Admin approval is required • [Enter] Request to Join`) with real-time feedback.
+_Avoid_: Join banner, channel join box, subscription prompt

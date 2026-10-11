@@ -363,6 +363,8 @@ type Model struct {
 	SelectedBotCommandIndex  int
 	ShowBotCommands          bool
 	FetchingBotCommandsPeer  string
+	IsJoiningChannel         bool
+	JoinRequestSent          bool
 }
 
 type CustomEmojiDocumentMsg struct {
@@ -1384,6 +1386,10 @@ func (m *Model) renderSidebarTabBar(width int) string {
 }
 
 func prepareInputView(m *Model, d layoutDimensions) string {
+	if m.isUnjoinedChat() {
+		return renderUnjoinedChatPrompt(m, d)
+	}
+
 	if m.FocusedOn == Input {
 		m.Input.Focus()
 	}
@@ -1424,6 +1430,204 @@ func prepareInputView(m *Model, d layoutDimensions) string {
 	}
 
 	return inputView
+}
+
+func (m *Model) isUnjoinedChat() bool {
+	if m.Mode == ModeChannels {
+		return m.SelectedChannel.ID != "" && m.SelectedChannel.IsLeft
+	}
+	if m.Mode == ModeGroups {
+		return m.SelectedGroup.ID != "" && m.SelectedGroup.IsLeft
+	}
+	if m.Mode == ModeAll {
+		if sel := m.All.SelectedItem(); sel != nil {
+			if ch, ok := sel.(types.ChannelInfo); ok {
+				return ch.IsLeft
+			}
+		}
+		if m.SelectedChannel.ID != "" && m.SelectedChannel.IsLeft {
+			return true
+		}
+		if m.SelectedGroup.ID != "" && m.SelectedGroup.IsLeft {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *Model) currentChatRequiresJoinRequest() bool {
+	if m.Mode == ModeChannels {
+		return m.SelectedChannel.JoinRequest
+	}
+	if m.Mode == ModeGroups {
+		return m.SelectedGroup.JoinRequest
+	}
+	if m.Mode == ModeAll {
+		if sel := m.All.SelectedItem(); sel != nil {
+			if ch, ok := sel.(types.ChannelInfo); ok {
+				return ch.JoinRequest
+			}
+		}
+		if m.SelectedChannel.ID != "" {
+			return m.SelectedChannel.JoinRequest
+		}
+		if m.SelectedGroup.ID != "" {
+			return m.SelectedGroup.JoinRequest
+		}
+	}
+	return false
+}
+
+func (m *Model) currentUnjoinedChannelInfo() *types.ChannelInfo {
+	if m.Mode == ModeChannels && m.SelectedChannel.ID != "" && m.SelectedChannel.IsLeft {
+		return &m.SelectedChannel
+	}
+	if m.Mode == ModeGroups && m.SelectedGroup.ID != "" && m.SelectedGroup.IsLeft {
+		return &m.SelectedGroup
+	}
+	if m.Mode == ModeAll {
+		if sel := m.All.SelectedItem(); sel != nil {
+			if ch, ok := sel.(types.ChannelInfo); ok && ch.IsLeft {
+				return &ch
+			}
+		}
+		if m.SelectedChannel.ID != "" && m.SelectedChannel.IsLeft {
+			return &m.SelectedChannel
+		}
+		if m.SelectedGroup.ID != "" && m.SelectedGroup.IsLeft {
+			return &m.SelectedGroup
+		}
+	}
+	return nil
+}
+
+func renderUnjoinedChatPrompt(m *Model, d layoutDimensions) string {
+	boxWidth := max(0, d.mainWidth-2)
+	if boxWidth <= 0 {
+		boxWidth = max(0, m.Width-2)
+	}
+
+	var promptText string
+	isFocused := m.FocusedOn == Input
+
+	if m.IsJoiningChannel {
+		spinView := m.SidebarSpinner.View()
+		if spinView == "" {
+			spinView = "⠋"
+		}
+		promptText = lipgloss.NewStyle().
+			Foreground(DefaultTheme.AccentColor).
+			Bold(true).
+			Render(fmt.Sprintf("%s Joining...", spinView))
+	} else if m.JoinRequestSent {
+		promptText = lipgloss.NewStyle().
+			Foreground(DefaultTheme.OnlineStatus).
+			Bold(true).
+			Render("✓ Join request sent to administrators (pending approval)")
+	} else if m.currentChatRequiresJoinRequest() {
+		btnStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FFFFFF")).
+			Background(DefaultTheme.WarningColor).
+			Bold(true).
+			Padding(0, 1).
+			Render("Request to Join")
+
+		hint := lipgloss.NewStyle().
+			Foreground(DefaultTheme.WarningColor).
+			Render("🔒 Admin approval is required  •  [Enter] ")
+
+		promptText = hint + btnStyle
+	} else {
+		enterKey := lipgloss.NewStyle().
+			Foreground(DefaultTheme.PrimaryText).
+			Bold(true).
+			Render("[Enter] ")
+
+		btnStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FFFFFF")).
+			Background(DefaultTheme.AccentColor).
+			Bold(true).
+			Padding(0, 1).
+			Render("Join")
+
+		promptText = enterKey + btnStyle
+	}
+
+	if !isFocused && !m.IsJoiningChannel && !m.JoinRequestSent {
+		tabHint := lipgloss.NewStyle().
+			Foreground(DefaultTheme.SecondaryText).
+			Italic(true).
+			Render("  (Tab to focus)")
+		promptText += tabHint
+	}
+
+	promptBox := lipgloss.NewStyle().
+		Width(boxWidth).
+		Height(max(1, d.inputHeight-2)).
+		Align(lipgloss.Center, lipgloss.Center).
+		Border(getItemBorder(isFocused)).
+		BorderForeground(getBorderColor(isFocused)).
+		Background(DefaultTheme.InputBg).
+		Render(promptText)
+
+	return promptBox
+}
+
+func (m *Model) joinCurrentChannel() (Model, tea.Cmd) {
+	if m.IsJoiningChannel || m.JoinRequestSent {
+		return *m, nil
+	}
+	ch := m.currentUnjoinedChannelInfo()
+	if ch == nil {
+		return *m, nil
+	}
+	channelID, err := strconv.ParseInt(ch.ID, 10, 64)
+	if err != nil || channelID == 0 {
+		return *m, nil
+	}
+	accessHash, _ := strconv.ParseInt(ch.AccessHash, 10, 64)
+
+	m.IsJoiningChannel = true
+	var joinCmd tea.Cmd
+	if telegram.Cligram != nil && telegram.Cligram.Context() != nil {
+		joinCmd = telegram.Cligram.JoinChannel(telegram.Cligram.Context(), channelID, accessHash)
+	}
+	return *m, tea.Batch(joinCmd, m.SidebarSpinner.Tick)
+}
+
+func (m *Model) markCurrentChannelJoined() {
+	if m.Mode == ModeChannels {
+		m.SelectedChannel.IsLeft = false
+		items := m.Channels.Items()
+		for i, it := range items {
+			if ch, ok := it.(types.ChannelInfo); ok && ch.ID == m.SelectedChannel.ID {
+				ch.IsLeft = false
+				items[i] = ch
+				break
+			}
+		}
+		m.Channels.SetItems(items)
+	} else if m.Mode == ModeGroups {
+		m.SelectedGroup.IsLeft = false
+		items := m.Groups.Items()
+		for i, it := range items {
+			if ch, ok := it.(types.ChannelInfo); ok && ch.ID == m.SelectedGroup.ID {
+				ch.IsLeft = false
+				items[i] = ch
+				break
+			}
+		}
+		m.Groups.SetItems(items)
+	}
+	itemsAll := m.All.Items()
+	for i, it := range itemsAll {
+		if ch, ok := it.(types.ChannelInfo); ok && (ch.ID == m.SelectedChannel.ID || ch.ID == m.SelectedGroup.ID) {
+			ch.IsLeft = false
+			itemsAll[i] = ch
+			break
+		}
+	}
+	m.All.SetItems(itemsAll)
 }
 
 func Debounce(fn func(args ...any) tea.Msg, delay time.Duration) func(args ...any) tea.Cmd {

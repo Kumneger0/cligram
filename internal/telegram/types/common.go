@@ -55,6 +55,8 @@ type ChannelInfo struct {
 	ReadInboxMaxID    int                    `json:"readInboxMaxId"`
 	ReadOutboxMaxID   int                    `json:"readOutboxMaxId"`
 	IsForum           bool                   `json:"isForum"`
+	IsLeft            bool                   `json:"isLeft"`
+	JoinRequest       bool                   `json:"joinRequest"`
 }
 
 type FormattedMessage struct {

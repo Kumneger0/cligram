@@ -688,24 +688,44 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, func() tea.Msg { return CloseOverlay{} }
 	case types.JoinChannelMsg:
+		m.IsJoiningChannel = false
+		var closeOverlayCmd tea.Cmd = func() tea.Msg { return CloseOverlay{} }
 		if msg.Err != nil {
 			slog.Error("Failed to join channel", "channelID", msg.ChannelID, "error", msg.Err.Error())
-			if msg.Err.Error() == "USER_ALREADY_PARTICIPANT" {
+			if strings.Contains(msg.Err.Error(), "INVITE_REQUEST_SENT") {
+				m.JoinRequestSent = true
+				m.Alert = m.Alert.WithAllowEscToClose().WithPosition(bubbleup.TopLeftPosition)
+				alertCmd := m.Alert.NewAlertCmd(bubbleup.InfoKey, "Join request sent to administrators")
+				return m, tea.Batch(alertCmd, closeOverlayCmd)
+			}
+			if strings.Contains(msg.Err.Error(), "USER_ALREADY_PARTICIPANT") {
+				m.markCurrentChannelJoined()
 				m.Alert = m.Alert.WithAllowEscToClose().WithPosition(bubbleup.TopLeftPosition)
 				alertCmd := m.Alert.NewAlertCmd(bubbleup.InfoKey, "You are already a member of this channel")
-				return m, tea.Batch(alertCmd, func() tea.Msg { return CloseOverlay{} })
+				return m, tea.Batch(alertCmd, closeOverlayCmd)
 			}
 			m.Alert = m.Alert.WithAllowEscToClose().WithPosition(bubbleup.TopLeftPosition)
 			alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, "Join failed: "+msg.Err.Error())
-			return m, tea.Batch(alertCmd, func() tea.Msg { return CloseOverlay{} })
+			return m, tea.Batch(alertCmd, closeOverlayCmd)
 		}
+		m.JoinRequestSent = false
+		m.markCurrentChannelJoined()
 		if msg.Chat != nil {
 			return m, tea.Batch(
-				func() tea.Msg { return CloseOverlay{} },
+				closeOverlayCmd,
 				selectAndNavigateToChannel(&m, *msg.Chat, nil, "Joined "+msg.Chat.Title()+"!"),
 			)
 		}
-		return m, func() tea.Msg { return CloseOverlay{} }
+		title := ""
+		if ch := m.currentUnjoinedChannelInfo(); ch != nil {
+			title = ch.ChannelTitle
+		}
+		if title == "" {
+			title = m.SelectedChannel.ChannelTitle
+		}
+		m.Alert = m.Alert.WithAllowEscToClose().WithPosition(bubbleup.TopLeftPosition)
+		alertCmd := m.Alert.NewAlertCmd(bubbleup.InfoKey, "Joined "+title+" successfully!")
+		return m, tea.Batch(alertCmd, closeOverlayCmd)
 	}
 	outAlert, outCmd := m.Alert.Update(msg)
 	m.Alert = outAlert.(bubbleup.AlertModel)
@@ -1544,6 +1564,9 @@ func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if m.FocusedOn == Input {
+		if m.isUnjoinedChat() {
+			return m.joinCurrentChannel()
+		}
 		if m.ShowBotCommands && len(m.FilteredBotCommands) > 0 {
 			m.completeBotCommand()
 			m.SkipNextInput = true
@@ -1683,6 +1706,9 @@ func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
 				}
 				return m, cmd
 			}
+		}
+		if m.isUnjoinedChat() {
+			return m.joinCurrentChannel()
 		}
 		return m, nil
 	}

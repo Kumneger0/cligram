@@ -1377,6 +1377,8 @@ func convertToChannelInfo[T *tg.Channel | *tg.Chat](channel T) *types.ChannelInf
 			IsBroadcast:       v.Broadcast,
 			IsForum:           v.GetForum(),
 			ParticipantsCount: &v.ParticipantsCount,
+			IsLeft:            v.Left,
+			JoinRequest:       v.JoinRequest,
 		}
 	case *tg.Chat:
 		return &types.ChannelInfo{
@@ -1387,6 +1389,8 @@ func convertToChannelInfo[T *tg.Channel | *tg.Chat](channel T) *types.ChannelInf
 			IsForum:           false,
 			IsBroadcast:       false,
 			ParticipantsCount: &v.ParticipantsCount,
+			IsLeft:            v.Left,
+			JoinRequest:       false,
 		}
 	}
 	return nil
