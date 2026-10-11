@@ -107,3 +107,7 @@ _Avoid_: URL handler, link opener, web forwarder
 **Public Channel Join Prompt**:
 A contextual action bar replacing the message input bar when viewing an unjoined public channel or supergroup, displaying single-key join (`[Enter] Join`) or admin approval request (`🔒 Admin approval is required • [Enter] Request to Join`) with real-time feedback.
 _Avoid_: Join banner, channel join box, subscription prompt
+
+**Restricted Input Banner**:
+An un-focusable status bar replacing the message input area in read-only broadcast channels (`📢 Broadcast Channel (Read-Only)`) or muted groups (`🔇 Muted by admin`), optionally displaying a `[💬 View Comments]` action shortcut when linked discussion comments are available.
+_Avoid_: Disabled input box, read-only placeholder, locked text field

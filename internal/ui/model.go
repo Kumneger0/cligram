@@ -328,6 +328,7 @@ type Model struct {
 	ReplyTo                  *types.FormattedMessage
 	EditMessage              *types.FormattedMessage
 	SkipNextInput            bool
+	CommentsModalOpen        bool
 	OffsetDate, OffsetID     int
 	OnPagination             bool
 	UsersLoaded              bool
@@ -1386,8 +1387,11 @@ func (m *Model) renderSidebarTabBar(width int) string {
 }
 
 func prepareInputView(m *Model, d layoutDimensions) string {
-	if m.isUnjoinedChat() {
+	switch m.CurrentInputState() {
+	case InputStateUnjoined:
 		return renderUnjoinedChatPrompt(m, d)
+	case InputStateBroadcastReadOnly, InputStateMutedByAdmin:
+		return renderRestrictedInputBanner(m, d)
 	}
 
 	if m.FocusedOn == Input {
@@ -1695,9 +1699,6 @@ func getMessageParams(m *Model) types.Peer {
 				ID:         it.ID,
 				ChatType:   cType,
 			}
-			if it.IsBroadcast && it.IsCreator && m.Input.Value() == "Not Allowed To Type" {
-				m.Input.Reset()
-			}
 		}
 	}
 	if m.Mode == ModeUsers || m.Mode == ModeBots {
@@ -1733,9 +1734,6 @@ func getMessageParams(m *Model) types.Peer {
 				ID:         m.SelectedChannel.ID,
 				ChatType:   cType,
 			}
-			if m.SelectedChannel.IsCreator && m.Input.Value() == "Not Allowed To Type" {
-				m.Input.Reset()
-			}
 		}
 	}
 	if m.Mode == ModeGroups {
@@ -1758,7 +1756,7 @@ func SendUserIsTyping(m *Model) tea.Cmd {
 		return nil
 	}
 
-	if m.FocusedOn == Input && !isReadOnlyBroadcast(m) {
+	if m.FocusedOn == Input && m.CanSendMessages() {
 		pInfo := getMessageParams(m)
 		if pInfo.ID != "" {
 			go func() {

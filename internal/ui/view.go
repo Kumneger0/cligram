@@ -278,7 +278,7 @@ func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (M
 
 	switch m.FocusedOn {
 	case Input:
-		if m.isUnjoinedChat() {
+		if !m.CanFocusInput() || m.isUnjoinedChat() {
 			m.Input.Blur()
 			return *m, tea.Batch(cmds...)
 		}
@@ -411,7 +411,7 @@ func isReadOnlyBroadcast(m *Model) bool {
 func changeFocusMode(m *Model, msg string, shift bool) (Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	currentlyFocusedOn := m.FocusedOn
-	canWrite := !isReadOnlyBroadcast(m)
+	canFocus := m.CanFocusInput()
 	if currentlyFocusedOn == SideBar {
 		pInfo := getMessageParams(m)
 		if pInfo.ID != "" && pInfo.ID != m.ActivePeerID {
@@ -422,7 +422,7 @@ func changeFocusMode(m *Model, msg string, shift bool) (Model, tea.Cmd) {
 			}
 		}
 		if shift {
-			if canWrite {
+			if canFocus {
 				m.FocusedOn = Input
 			} else {
 				m.FocusedOn = Main
@@ -434,7 +434,7 @@ func changeFocusMode(m *Model, msg string, shift bool) (Model, tea.Cmd) {
 		if shift {
 			m.FocusedOn = SideBar
 		} else {
-			if canWrite {
+			if canFocus {
 				m.FocusedOn = Input
 			} else {
 				m.FocusedOn = SideBar
@@ -460,7 +460,9 @@ func changeFocusMode(m *Model, msg string, shift bool) (Model, tea.Cmd) {
 
 func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 	if m.FocusedOn == SideBar {
-		m.ChatUI.ResetSelected()
+		if m.ChatUI.Height() > 0 {
+			m.ChatUI.ResetSelected()
+		}
 		m.OnPagination = false
 	}
 	areWeInGroupMode := m.Mode == ModeGroups && m.FocusedOn == Main
@@ -472,11 +474,7 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 			return m.checkThresholdAndBackfill(ModeAll)
 		case "c":
 			m.Mode = ModeChannels
-			if !m.SelectedChannel.IsCreator {
-				m.Input.SetValue("Not Allowed To Type")
-			} else {
-				m.Input.Reset()
-			}
+			m.Input.Reset()
 			return m.checkThresholdAndBackfill(ModeChannels)
 		case "u":
 			m.Mode = ModeUsers

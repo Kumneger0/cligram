@@ -96,6 +96,15 @@ func FormatMessage[T ChannelOrUser](msg *tg.Message, userOrChannel *T, allMessag
 		view = result
 	}
 
+	var repliesCount int
+	var repliesChannelID int64
+	var hasComments bool
+	if replies, ok := msg.GetReplies(); ok {
+		repliesCount = replies.Replies
+		repliesChannelID = replies.ChannelID
+		hasComments = replies.Comments || replies.Replies > 0 || replies.ChannelID != 0
+	}
+
 	webPageMedia, _ := msg.Media.(*tg.MessageMediaWebPage)
 	return &types.FormattedMessage{
 		ID:                   msg.ID,
@@ -115,6 +124,9 @@ func FormatMessage[T ChannelOrUser](msg *tg.Message, userOrChannel *T, allMessag
 		Views:                view,
 		HasWebPagePreview:    webPageMedia != nil,
 		MessageMediaWebPage:  webPageMedia,
+		RepliesCount:         repliesCount,
+		RepliesChannelID:     repliesChannelID,
+		HasComments:          hasComments,
 	}
 }
 
@@ -381,6 +393,15 @@ func FormatGroupMessage(msg *tg.Message, groupID string, users []tg.UserClass, c
 		view = result
 	}
 
+	var repliesCount int
+	var repliesChannelID int64
+	var hasComments bool
+	if replies, ok := msg.GetReplies(); ok {
+		repliesCount = replies.Replies
+		repliesChannelID = replies.ChannelID
+		hasComments = replies.Comments || replies.Replies > 0 || replies.ChannelID != 0
+	}
+
 	webPageMedia, _ := msg.Media.(*tg.MessageMediaWebPage)
 
 	return &types.FormattedMessage{
@@ -401,6 +422,9 @@ func FormatGroupMessage(msg *tg.Message, groupID string, users []tg.UserClass, c
 		Views:                view,
 		HasWebPagePreview:    webPageMedia != nil,
 		MessageMediaWebPage:  webPageMedia,
+		RepliesCount:         repliesCount,
+		RepliesChannelID:     repliesChannelID,
+		HasComments:          hasComments,
 	}
 }
 

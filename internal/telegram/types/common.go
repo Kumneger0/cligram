@@ -57,6 +57,7 @@ type ChannelInfo struct {
 	IsForum           bool                   `json:"isForum"`
 	IsLeft            bool                   `json:"isLeft"`
 	JoinRequest       bool                   `json:"joinRequest"`
+	IsMuted           bool                   `json:"isMuted"`
 }
 
 type FormattedMessage struct {
@@ -78,6 +79,9 @@ type FormattedMessage struct {
 	Views                int                     `json:"view"`
 	HasWebPagePreview    bool                    `json:"hasWebPagePreview"`
 	MessageMediaWebPage  *tg.MessageMediaWebPage `json:"messageMediaWebPage"`
+	RepliesCount         int                     `json:"repliesCount,omitempty"`
+	RepliesChannelID     int64                   `json:"repliesChannelId,omitempty"`
+	HasComments          bool                    `json:"hasComments,omitempty"`
 }
 
 type MediaType string
@@ -397,4 +401,13 @@ type JoinChannelMsg struct {
 	ChannelID int64        `json:"channelId"`
 	Chat      *ChannelInfo `json:"chat,omitempty"`
 	Err       error        `json:"err,omitempty"`
+}
+
+type DiscussionMessageMsg struct {
+	Chat      *ChannelInfo       `json:"chat,omitempty"`
+	MaxID     int                `json:"maxId"`
+	MessageID int                `json:"messageId"`
+	TopMsgID  int                `json:"topMsgId"`
+	Comments  []FormattedMessage `json:"comments,omitempty"`
+	Err       error              `json:"err,omitempty"`
 }
