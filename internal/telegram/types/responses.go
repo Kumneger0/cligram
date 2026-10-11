@@ -12,12 +12,13 @@ type GetAllChatsResponseMSG struct {
 	Err   error
 }
 type AllChats struct {
-	All                  []FilterableItem `json:"all,omitempty"`
-	PrivateChats         []UserInfo       `json:"chats"`
-	Bots                 []UserInfo       `json:"bots,omitempty"`
-	Channels             []ChannelInfo    `json:"channels"`
-	Groups               []ChannelInfo    `json:"groups"`
-	OffsetDate, OffsetID int
+	All                   []FilterableItem       `json:"all,omitempty"`
+	PrivateChats          []UserInfo             `json:"chats"`
+	Bots                  []UserInfo             `json:"bots,omitempty"`
+	Channels              []ChannelInfo          `json:"channels"`
+	Groups                []ChannelInfo          `json:"groups"`
+	AccountNotifySettings *AccountNotifySettings `json:"accountNotifySettings,omitempty"`
+	OffsetDate, OffsetID  int
 }
 
 type GetChannelForumsResponseMsg struct {

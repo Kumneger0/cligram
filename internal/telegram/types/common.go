@@ -171,15 +171,28 @@ type UserStatus struct {
 	LastSeen time.Time `json:"lastSeen"`
 }
 
+type AccountNotifySettings struct {
+	Users      *tg.PeerNotifySettings `json:"users,omitempty"`
+	Chats      *tg.PeerNotifySettings `json:"chats,omitempty"`
+	Broadcasts *tg.PeerNotifySettings `json:"broadcasts,omitempty"`
+}
+
+type NotifySettingsUpdateNotification struct {
+	PeerID         string                 `json:"peerId,omitempty"`
+	SourceType     string                 `json:"sourceType"` // "users", "chats", "broadcasts", or "peer"
+	NotifySettings *tg.PeerNotifySettings `json:"notifySettings"`
+}
+
 type Notification struct {
-	NewMessage             *NewMessageNotification        `json:"newMessage,omitempty"`
-	UserStatus             *UserStatusNotification        `json:"userStatus,omitempty"`
-	UserTyping             *UserTypingNotification        `json:"userTyping,omitempty"`
-	Error                  *ErrorNotification             `json:"error,omitempty"`
-	SearchResult           *SearchUsersMsg                `json:"searchResult,omitempty"`
-	ReadHistoryOutbox      *ReadHistoryOutboxNotification `json:"readHistoryOutbox,omitempty"`
-	GetUserDHConfigRequest *GetUserDHConfigRequest        `json:"getUserDHConfigRequest,omitempty"`
-	CallEvent              *CallNotification              `json:"callEvent,omitempty"`
+	NewMessage             *NewMessageNotification           `json:"newMessage,omitempty"`
+	UserStatus             *UserStatusNotification           `json:"userStatus,omitempty"`
+	UserTyping             *UserTypingNotification           `json:"userTyping,omitempty"`
+	Error                  *ErrorNotification                `json:"error,omitempty"`
+	SearchResult           *SearchUsersMsg                   `json:"searchResult,omitempty"`
+	ReadHistoryOutbox      *ReadHistoryOutboxNotification    `json:"readHistoryOutbox,omitempty"`
+	GetUserDHConfigRequest *GetUserDHConfigRequest           `json:"getUserDHConfigRequest,omitempty"`
+	CallEvent              *CallNotification                 `json:"callEvent,omitempty"`
+	NotifySettingsUpdate   *NotifySettingsUpdateNotification `json:"notifySettingsUpdate,omitempty"`
 }
 
 type CallState string

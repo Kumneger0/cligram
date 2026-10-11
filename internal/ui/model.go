@@ -366,6 +366,7 @@ type Model struct {
 	FetchingBotCommandsPeer  string
 	IsJoiningChannel         bool
 	JoinRequestSent          bool
+	AccountNotifySettings    *types.AccountNotifySettings
 }
 
 type CustomEmojiDocumentMsg struct {

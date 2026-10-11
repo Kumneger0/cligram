@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -178,6 +177,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.CallOverlay.Muted = msg.Muted
 		return m, nil
+	case types.NotifySettingsUpdateNotification:
+		return m.handleNotifySettingsUpdate(msg)
 	case types.GetAllChatsResponseMSG:
 		if msg.Err != nil {
 			slog.Error("Failed to get all chats", "error", msg.Err.Error())
@@ -191,6 +192,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Alert = m.Alert.WithAllowEscToClose().WithPosition(bubbleup.TopLeftPosition)
 			alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, msg.Err.Error())
 			return m, alertCmd
+		}
+		if msg.Chats.AccountNotifySettings != nil {
+			m.AccountNotifySettings = msg.Chats.AccountNotifySettings
 		}
 		m.OffsetDate = msg.Chats.OffsetDate
 		m.OffsetID = msg.Chats.OffsetID
@@ -767,39 +771,90 @@ func (m Model) handleMarkMessagesAsRead(msg types.MarkMessagesAsReadMsg) (tea.Mo
 	return m, nil
 }
 
-func sendNewMessageNotification[T types.UserInfo | types.ChannelInfo](item T, message *tg.Message) {
-	switch v := any(item).(type) {
-	case types.UserInfo:
-		if v.NotifySettings != nil && (v.NotifySettings.Silent || (v.NotifySettings.MuteUntil != 0 && int64(v.NotifySettings.MuteUntil) > time.Now().Unix())) {
-			return
-		}
-
-		title := v.FirstName
-		if v.LastName != "" {
-			title = fmt.Sprintf("%s %s", v.FirstName, v.LastName)
-		}
-
-		content := "Sent you a new message"
-		if v.NotifySettings != nil && v.NotifySettings.ShowPreviews {
-			content = message.Message
-		}
-
-		notification.Notify(title, content)
-
-	case types.ChannelInfo:
-		if v.NotifySettings != nil && (v.NotifySettings.Silent || (v.NotifySettings.MuteUntil != 0 && int64(v.NotifySettings.MuteUntil) > time.Now().Unix())) {
-			return
-		}
-
-		title := v.ChannelTitle
-		content := "New message"
-
-		if v.NotifySettings != nil && v.NotifySettings.ShowPreviews {
-			content = message.Message
-		}
-
-		notification.Notify(title, content)
+func (m *Model) sendNewMessageNotification(item any, message *tg.Message) {
+	currentPeerID := m.CurrentPeerID()
+	decision := EvaluateNotificationCascade(item, message, currentPeerID, m.AccountNotifySettings)
+	if !decision.ShouldNotify {
+		return
 	}
+
+	title, content := FormatNotificationContent(item, message, decision.ShowPreview)
+	notification.Notify(title, content)
+}
+
+func (m Model) handleNotifySettingsUpdate(msg types.NotifySettingsUpdateNotification) (tea.Model, tea.Cmd) {
+	if msg.NotifySettings == nil {
+		return m, nil
+	}
+
+	if msg.SourceType != "peer" {
+		if m.AccountNotifySettings == nil {
+			m.AccountNotifySettings = &types.AccountNotifySettings{}
+		}
+		switch msg.SourceType {
+		case "users":
+			m.AccountNotifySettings.Users = msg.NotifySettings
+		case "chats":
+			m.AccountNotifySettings.Chats = msg.NotifySettings
+		case "broadcasts":
+			m.AccountNotifySettings.Broadcasts = msg.NotifySettings
+		}
+		return m, nil
+	}
+
+	peerID := msg.PeerID
+	if peerID == "" {
+		return m, nil
+	}
+
+	var cmds []tea.Cmd
+
+	if m.SelectedUser.PeerID == peerID {
+		m.SelectedUser.NotifySettings = msg.NotifySettings
+	}
+	if m.SelectedChannel.ID == peerID {
+		m.SelectedChannel.NotifySettings = msg.NotifySettings
+	}
+	if m.SelectedGroup.ID == peerID {
+		m.SelectedGroup.NotifySettings = msg.NotifySettings
+	}
+
+	for _, l := range []*list.Model{&m.Users, &m.Bots} {
+		for i, item := range l.Items() {
+			if u, ok := item.(types.UserInfo); ok && u.PeerID == peerID {
+				u.NotifySettings = msg.NotifySettings
+				cmds = append(cmds, l.SetItem(i, u))
+				break
+			}
+		}
+	}
+
+	for _, l := range []*list.Model{&m.Channels, &m.Groups} {
+		for i, item := range l.Items() {
+			if c, ok := item.(types.ChannelInfo); ok && c.ID == peerID {
+				c.NotifySettings = msg.NotifySettings
+				cmds = append(cmds, l.SetItem(i, c))
+				break
+			}
+		}
+	}
+
+	for i, item := range m.All.Items() {
+		switch it := item.(type) {
+		case types.UserInfo:
+			if it.PeerID == peerID {
+				it.NotifySettings = msg.NotifySettings
+				cmds = append(cmds, m.All.SetItem(i, it))
+			}
+		case types.ChannelInfo:
+			if it.ID == peerID {
+				it.NotifySettings = msg.NotifySettings
+				cmds = append(cmds, m.All.SetItem(i, it))
+			}
+		}
+	}
+
+	return m, tea.Batch(cmds...)
 }
 
 func (m Model) handleReadHistoryOutbox(msg types.ReadHistoryOutboxNotification) (tea.Model, tea.Cmd) {
@@ -879,12 +934,12 @@ func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, te
 		}
 	}
 
-	if userInfo != nil && !msg.Message.Out {
-		sendNewMessageNotification(*userInfo, msg.Message)
+	if userInfo != nil {
+		m.sendNewMessageNotification(*userInfo, msg.Message)
 	}
 
-	if channelOrGroupInfo != nil && !msg.Message.Out {
-		sendNewMessageNotification(*channelOrGroupInfo, msg.Message)
+	if channelOrGroupInfo != nil {
+		m.sendNewMessageNotification(*channelOrGroupInfo, msg.Message)
 	}
 
 	currentPeerID := m.CurrentPeerID()
