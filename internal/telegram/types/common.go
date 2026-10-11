@@ -55,6 +55,8 @@ type ChannelInfo struct {
 	ReadInboxMaxID    int                    `json:"readInboxMaxId"`
 	ReadOutboxMaxID   int                    `json:"readOutboxMaxId"`
 	IsForum           bool                   `json:"isForum"`
+	IsLeft            bool                   `json:"isLeft"`
+	JoinRequest       bool                   `json:"joinRequest"`
 }
 
 type FormattedMessage struct {
@@ -344,4 +346,55 @@ type PeerBotCommandsMsg struct {
 	PeerID   string       `json:"peerId"`
 	Commands []BotCommand `json:"commands"`
 	Err      error        `json:"err,omitempty"`
+}
+
+type ParsedLinkType string
+
+const (
+	LinkTypeInvite          ParsedLinkType = "INVITE"
+	LinkTypeInternalMessage ParsedLinkType = "INTERNAL_MESSAGE"
+	LinkTypePublic          ParsedLinkType = "PUBLIC"
+)
+
+type ParsedLink struct {
+	Type       ParsedLinkType `json:"type"`
+	Raw        string         `json:"raw"`
+	InviteHash string         `json:"inviteHash,omitempty"`
+	ChannelID  int64          `json:"channelId,omitempty"`
+	Username   string         `json:"username,omitempty"`
+	MessageID  int            `json:"messageId,omitempty"`
+}
+
+type ChatInvitePreview struct {
+	Hash              string `json:"hash"`
+	Title             string `json:"title"`
+	About             string `json:"about,omitempty"`
+	ParticipantsCount int    `json:"participantsCount"`
+	IsChannel         bool   `json:"isChannel"`
+	IsGroup           bool   `json:"isGroup"`
+	RequestNeeded     bool   `json:"requestNeeded"`
+	AlreadyJoined     bool   `json:"alreadyJoined"`
+	ChannelID         int64  `json:"channelId,omitempty"`
+	AccessHash        int64  `json:"accessHash,omitempty"`
+	Username          string `json:"username,omitempty"`
+}
+
+type CheckChatInviteMsg struct {
+	Hash          string             `json:"hash"`
+	Preview       *ChatInvitePreview `json:"preview,omitempty"`
+	AlreadyJoined bool               `json:"alreadyJoined"`
+	Chat          *ChannelInfo       `json:"chat,omitempty"`
+	Err           error              `json:"err,omitempty"`
+}
+
+type ImportChatInviteMsg struct {
+	Hash string       `json:"hash"`
+	Chat *ChannelInfo `json:"chat,omitempty"`
+	Err  error        `json:"err,omitempty"`
+}
+
+type JoinChannelMsg struct {
+	ChannelID int64        `json:"channelId"`
+	Chat      *ChannelInfo `json:"chat,omitempty"`
+	Err       error        `json:"err,omitempty"`
 }

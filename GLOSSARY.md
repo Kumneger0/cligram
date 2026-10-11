@@ -96,4 +96,14 @@ _Avoid_: File badge, attachment label, file box
 An ephemeral card composited directly above the message input bar in bot chats or groups with bots, displaying matched `/command - Description` pairs with `↑`/`↓` selection, `Tab`/`Enter` completion, and `Esc` dismissal.
 _Avoid_: Command popup, bot suggestion box, command menu
 
+**Join Preview Modal**:
+An interactive modal dialog composited over the live chat view displaying unjoined chat or channel metadata (icon, title, member count, description) and providing single-key action (`[Enter] Join`) to import an invite link or join a public channel.
+_Avoid_: Join dialog, channel popup, invite window
 
+**Link Router**:
+The in-app URI dispatcher resolving `t.me/+hash` invite links, `t.me/c/<id>/<mid>` private message deep links, and public handles directly within Cligram without opening an external browser.
+_Avoid_: URL handler, link opener, web forwarder
+
+**Public Channel Join Prompt**:
+A contextual action bar replacing the message input bar when viewing an unjoined public channel or supergroup, displaying single-key join (`[Enter] Join`) or admin approval request (`🔒 Admin approval is required • [Enter] Request to Join`) with real-time feedback.
+_Avoid_: Join banner, channel join box, subscription prompt

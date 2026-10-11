@@ -278,6 +278,10 @@ func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (M
 
 	switch m.FocusedOn {
 	case Input:
+		if m.isUnjoinedChat() {
+			m.Input.Blur()
+			return *m, tea.Batch(cmds...)
+		}
 		m.Input.Focus()
 		if !m.SkipNextInput {
 			m.Input, cmd = m.Input.Update(msg)
@@ -376,12 +380,19 @@ func handleUserChange(m *Model, offsetID *int, afterMessagesCmd tea.Cmd) (Model,
 	m.SelectedMessageIndex = -1
 	m.viewport.SetContent("")
 	m.MainViewLoading = true
-	m.ChatUI.ResetSelected()
-	m.ChatUI.SetItems([]list.Item{})
+	m.JoinRequestSent = false
+	m.IsJoiningChannel = false
+	if m.ChatUI.Height() > 0 {
+		m.ChatUI.ResetSelected()
+		m.ChatUI.SetItems([]list.Item{})
+	}
 	return *m, tea.Batch(cmd, afterMessagesCmd, prefetchBotCmds)
 }
 
 func isReadOnlyBroadcast(m *Model) bool {
+	if m.isUnjoinedChat() {
+		return false
+	}
 	if m.Mode == ModeChannels && !m.SelectedChannel.IsCreator {
 		return true
 	}

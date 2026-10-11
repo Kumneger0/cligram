@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kumneger0/cligram/internal/telegram"
 	"github.com/kumneger0/cligram/internal/telegram/types"
+	"github.com/muesli/reflow/wordwrap"
 )
 
 type focusState string
@@ -340,6 +341,7 @@ const (
 	ModalModeSendReaction   ModalMode = "SEND_REACTION"
 	ModalModeGroupMembers   ModalMode = "GROUP_MEMBERS"
 	ModalModeAlert          ModalMode = "ALERT"
+	ModalModeJoinPreview    ModalMode = "JOIN_PREVIEW"
 )
 
 type OpenModalMsg struct {
@@ -357,6 +359,7 @@ type OpenModalMsg struct {
 	GroupPeer    *types.Peer
 	GroupTitle   string
 	TotalMembers int
+	JoinPreview  *types.ChatInvitePreview
 }
 
 type ForwardMsg struct {
@@ -409,6 +412,9 @@ type Foreground struct {
 	totalMembers           int
 	isSearchingMembers     bool
 	membersSearchSeq       int
+	JoinPreview            *types.ChatInvitePreview
+	isJoining              bool
+	joinError              error
 }
 
 func (f *Foreground) ensureSpinner() {
@@ -504,6 +510,98 @@ func (f *Foreground) View() string {
 			Render("[Enter] or [Esc] to dismiss")
 
 		layout := lipgloss.JoinVertical(lipgloss.Left, title, divider, message, "", footerHints)
+		return foreStyle.Width(contentWidth + 2).Render(layout)
+	}
+
+	if f.ModalMode == ModalModeJoinPreview {
+		contentWidth := max(44, min(65, f.windowWidth-6))
+		if f.windowWidth <= 0 {
+			contentWidth = 50
+		}
+
+		icon := "👥"
+		typeLabel := "Group Preview"
+		countLabel := "members"
+		titleName := "Chat"
+		var memberCount int
+		var aboutText string
+		var reqNeeded bool
+
+		if f.JoinPreview != nil {
+			titleName = f.JoinPreview.Title
+			memberCount = f.JoinPreview.ParticipantsCount
+			aboutText = f.JoinPreview.About
+			reqNeeded = f.JoinPreview.RequestNeeded
+			if f.JoinPreview.IsChannel {
+				icon = "📢"
+				typeLabel = "Channel Preview"
+				countLabel = "subscribers"
+			}
+		}
+
+		header := lipgloss.NewStyle().
+			Foreground(DefaultTheme.AccentColor).
+			Bold(true).
+			Render(fmt.Sprintf("%s %s", icon, typeLabel))
+
+		divider := lipgloss.NewStyle().
+			Foreground(DefaultTheme.BorderColor).
+			Render(strings.Repeat("─", contentWidth))
+
+		title := lipgloss.NewStyle().
+			Foreground(DefaultTheme.PrimaryText).
+			Bold(true).
+			Render(titleName)
+
+		countStr := formatNumberWithCommas(memberCount)
+		memberInfo := lipgloss.NewStyle().
+			Foreground(DefaultTheme.SecondaryText).
+			Render(fmt.Sprintf("%s %s %s", icon, countStr, countLabel))
+
+		var elements []string
+		elements = append(elements, header, divider, title, memberInfo)
+
+		if aboutText != "" {
+			wrappedAbout := wordwrap.String(aboutText, contentWidth)
+			aboutStyled := lipgloss.NewStyle().
+				Foreground(DefaultTheme.PrimaryText).
+				Render(wrappedAbout)
+			elements = append(elements, "", aboutStyled)
+		}
+
+		if reqNeeded {
+			approvalNotice := lipgloss.NewStyle().
+				Foreground(DefaultTheme.WarningColor).
+				Render("🔒 Admin approval is required to join this chat")
+			elements = append(elements, "", approvalNotice)
+		}
+
+		if f.isJoining {
+			spinView := f.spinner.View()
+			if spinView == "" {
+				spinView = "⠋"
+			}
+			joiningStatus := lipgloss.NewStyle().
+				Foreground(DefaultTheme.AccentColor).
+				Bold(true).
+				Render(fmt.Sprintf("%s Joining...", spinView))
+			elements = append(elements, "", joiningStatus)
+		} else if f.joinError != nil {
+			errNotice := lipgloss.NewStyle().
+				Foreground(DefaultTheme.ErrorColor).
+				Render(fmt.Sprintf("⚠️ %v", f.joinError))
+			elements = append(elements, "", errNotice)
+		}
+
+		footerText := "[Enter] Join    [Esc] Cancel"
+		footer := lipgloss.NewStyle().
+			Foreground(DefaultTheme.SecondaryText).
+			Padding(0, 1).
+			Render(footerText)
+
+		elements = append(elements, "", footer)
+
+		layout := lipgloss.JoinVertical(lipgloss.Left, elements...)
 		return foreStyle.Width(contentWidth + 2).Render(layout)
 	}
 
@@ -872,4 +970,26 @@ func renderEntityInfo(f *Foreground) string {
 		info.WriteString(detailStyle.Render(fmt.Sprintf("ID: %s", c.ID)) + "\n")
 	}
 	return lipgloss.NewStyle().Padding(1, 0).Render(info.String())
+}
+
+func formatNumberWithCommas(n int) string {
+	in := strconv.Itoa(n)
+	if len(in) <= 3 {
+		return in
+	}
+	var b strings.Builder
+	remainder := len(in) % 3
+	if remainder > 0 {
+		b.WriteString(in[:remainder])
+		if len(in) > remainder {
+			b.WriteByte(',')
+		}
+	}
+	for i := remainder; i < len(in); i += 3 {
+		b.WriteString(in[i : i+3])
+		if i+3 < len(in) {
+			b.WriteByte(',')
+		}
+	}
+	return b.String()
 }
