@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -90,14 +91,31 @@ func TestTriggerFilePicker_NoPicker_ShowsActionableModal(t *testing.T) {
 
 	var m Model
 	updated, cmd := TriggerFilePicker(&m)
-	if cmd != nil {
-		t.Errorf("expected nil cmd when no picker found, got %v", cmd)
+	if cmd == nil {
+		t.Fatalf("expected non-nil cmd returning OpenModalMsg when no picker found")
+	}
+	raw := cmd()
+	modalMsg, ok := raw.(OpenModalMsg)
+	if !ok || modalMsg.ModalMode != ModalModeAlert {
+		t.Fatalf("expected OpenModalMsg with ModalModeAlert, got %+v", raw)
+	}
+	if !strings.Contains(modalMsg.AlertTitle, "File Picker") {
+		t.Errorf("expected alert title to mention File Picker, got %q", modalMsg.AlertTitle)
+	}
+	if !strings.Contains(modalMsg.AlertMessage, "zenity") || !strings.Contains(modalMsg.AlertMessage, "kdialog") {
+		t.Errorf("expected alert message to guide user on zenity/kdialog, got %q", modalMsg.AlertMessage)
 	}
 	if !updated.IsModalVisible {
 		t.Errorf("expected IsModalVisible to be true")
 	}
 	if !strings.Contains(updated.ModalContent, "zenity") || !strings.Contains(updated.ModalContent, "kdialog") {
 		t.Errorf("expected modal content to guide user on zenity/kdialog, got %q", updated.ModalContent)
+	}
+	if strings.Contains(updated.ModalContent, "ctrl + c") || strings.Contains(updated.ModalContent, "q to close") {
+		t.Errorf("modal content should not instruct user to press ctrl+c or q: got %q", updated.ModalContent)
+	}
+	if !strings.Contains(updated.ModalContent, "[Enter] or [Esc] to dismiss") {
+		t.Errorf("expected modal content to instruct [Enter] or [Esc] to dismiss: got %q", updated.ModalContent)
 	}
 }
 
@@ -294,5 +312,186 @@ func TestUpdate_Shortcuts_TriggerFilePicker(t *testing.T) {
 	updatedModelO := updatedO.(Model)
 	if !updatedModelO.IsModalVisible || !strings.Contains(updatedModelO.ModalContent, "zenity") {
 		t.Errorf("expected Ctrl+O to trigger file picker and show actionable modal when missing")
+	}
+}
+
+func TestForeground_AlertModal_RenderAndDismiss(t *testing.T) {
+	fg := &Foreground{
+		windowWidth:  80,
+		windowHeight: 24,
+	}
+
+	// Open Alert Modal
+	fgModel, _ := fg.Update(OpenModalMsg{
+		ModalMode:    ModalModeAlert,
+		AlertTitle:   "GUI File Picker Required",
+		AlertMessage: "Please install 'zenity' or 'kdialog' to attach files.",
+	})
+	fg = fgModel.(*Foreground)
+
+	view := fg.View()
+	if !strings.Contains(view, "GUI File Picker Required") {
+		t.Errorf("expected view to contain alert title, got:\n%s", view)
+	}
+	if !strings.Contains(view, "zenity") || !strings.Contains(view, "kdialog") {
+		t.Errorf("expected view to contain zenity/kdialog guide, got:\n%s", view)
+	}
+	if !strings.Contains(view, "[Enter] or [Esc] to dismiss") {
+		t.Errorf("expected view to have dismiss hint, got:\n%s", view)
+	}
+	if strings.Contains(view, "ctrl + c") || strings.Contains(view, "q to close") {
+		t.Errorf("view must not mention ctrl+c or q to close, got:\n%s", view)
+	}
+
+	// Dismiss with Esc
+	fgModel, cmd := fg.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	fg = fgModel.(*Foreground)
+	if cmd == nil {
+		t.Fatalf("expected non-nil cmd on Esc dismissal")
+	}
+	if _, ok := cmd().(CloseOverlay); !ok {
+		t.Errorf("expected CloseOverlay message on Esc, got %+v", cmd())
+	}
+
+	// Re-open and dismiss with Enter
+	fgModel, _ = fg.Update(OpenModalMsg{
+		ModalMode:    ModalModeAlert,
+		AlertTitle:   "GUI File Picker Required",
+		AlertMessage: "Please install 'zenity' or 'kdialog'.",
+	})
+	fg = fgModel.(*Foreground)
+	fgModel, cmd = fg.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	fg = fgModel.(*Foreground)
+	if cmd == nil {
+		t.Fatalf("expected non-nil cmd on Enter dismissal")
+	}
+	if _, ok := cmd().(CloseOverlay); !ok {
+		t.Errorf("expected CloseOverlay message on Enter, got %+v", cmd())
+	}
+
+	// Re-open and dismiss with q
+	fgModel, _ = fg.Update(OpenModalMsg{
+		ModalMode:    ModalModeAlert,
+		AlertTitle:   "GUI File Picker Required",
+		AlertMessage: "Please install 'zenity' or 'kdialog'.",
+	})
+	fg = fgModel.(*Foreground)
+	fgModel, cmd = fg.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	fg = fgModel.(*Foreground)
+	if cmd == nil {
+		t.Fatalf("expected non-nil cmd on 'q' dismissal")
+	}
+	if _, ok := cmd().(CloseOverlay); !ok {
+		t.Errorf("expected CloseOverlay message on 'q', got %+v", cmd())
+	}
+}
+
+func TestManager_FilePickerAlert_CompositesLiveBackground(t *testing.T) {
+	bg := dummyModel{text: "CHAT_MESSAGE_BACKGROUND_PRESERVED"}
+	fg := &Foreground{
+		windowWidth:  80,
+		windowHeight: 24,
+	}
+
+	mgr := Manager{
+		State:        MainView,
+		WindowWidth:  80,
+		WindowHeight: 24,
+		Foreground:   fg,
+		Background:   bg,
+	}
+
+	// Trigger alert modal message on Manager
+	openMsg := OpenModalMsg{
+		ModalMode:    ModalModeAlert,
+		AlertTitle:   "GUI File Picker Required",
+		AlertMessage: "Please install 'zenity' or 'kdialog'.",
+	}
+	updatedMgr, _ := mgr.Update(openMsg)
+	m := updatedMgr.(Manager)
+
+	if m.State != ModalView {
+		t.Fatalf("expected Manager state to be ModalView, got %v", m.State)
+	}
+
+	view := m.View()
+	// Background view must NOT be wiped or blocked!
+	if !strings.Contains(view, "CHAT_MESSAGE_BACKGROUND_PRESERVED") {
+		t.Errorf("expected live background chat view to be visible behind modal, got:\n%s", view)
+	}
+	// Modal card must be composited on top!
+	if !strings.Contains(view, "GUI File Picker Required") || !strings.Contains(view, "zenity") {
+		t.Errorf("expected modal card to be rendered on top of background, got:\n%s", view)
+	}
+
+	// Dismiss with Esc on Manager
+	updatedMgr, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = updatedMgr.(Manager)
+	if m.State != MainView {
+		t.Errorf("expected Manager state to return to MainView after Esc, got %v", m.State)
+	}
+
+	// Dismiss with Enter on Manager
+	updatedMgr, _ = m.Update(openMsg)
+	m = updatedMgr.(Manager)
+	updatedMgr, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updatedMgr.(Manager)
+	if cmd != nil {
+		msg := cmd()
+		updatedMgr, _ = m.Update(msg)
+		m = updatedMgr.(Manager)
+	}
+	if m.State != MainView {
+		t.Errorf("expected Manager state to return to MainView after Enter, got %v", m.State)
+	}
+}
+
+func createTestModel() Model {
+	return Model{
+		Width:     80,
+		Height:    24,
+		All:       list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0),
+		Users:     list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0),
+		Channels:  list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0),
+		Groups:    list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0),
+		Bots:      list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0),
+		ChatUI:    list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0),
+		Input:     textinput.New(),
+		FocusedOn: Input,
+	}
+}
+
+func TestModel_IsModalVisible_DismissalsAndOverlay(t *testing.T) {
+	m := createTestModel()
+	m.IsModalVisible = true
+	m.ModalContent = GetModalContent("Please install 'zenity' or 'kdialog'")
+
+	// Ensure view composites without panic
+	view := m.View()
+	if !strings.Contains(view, "zenity") {
+		t.Errorf("expected view to contain modal content, got:\n%s", view)
+	}
+
+	// Dismiss with Esc
+	updatedEsc, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	mEsc := updatedEsc.(Model)
+	if mEsc.IsModalVisible {
+		t.Errorf("expected IsModalVisible to be false after Esc")
+	}
+
+	// Dismiss with Enter
+	m.IsModalVisible = true
+	updatedEnter, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	mEnter := updatedEnter.(Model)
+	if mEnter.IsModalVisible {
+		t.Errorf("expected IsModalVisible to be false after Enter")
+	}
+
+	// Dismiss with q
+	m.IsModalVisible = true
+	updatedQ, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	mQ := updatedQ.(Model)
+	if mQ.IsModalVisible {
+		t.Errorf("expected IsModalVisible to be false after 'q'")
 	}
 }

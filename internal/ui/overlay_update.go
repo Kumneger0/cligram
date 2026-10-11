@@ -186,6 +186,8 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	case OpenModalMsg:
 		m.ModalMode = msg.ModalMode
+		m.AlertTitle = msg.AlertTitle
+		m.AlertMessage = msg.AlertMessage
 		m.Message = msg.Message
 		m.fromPeer = msg.FromPeer
 		m.UsersList = msg.UsersList
@@ -431,6 +433,10 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 			return m, nil
 		}
 	case "esc":
+		if m.ModalMode == ModalModeAlert {
+			m.AlertTitle = ""
+			m.AlertMessage = ""
+		}
 		if m.ModalMode == ModalModeGroupMembers {
 			m.membersLoading = false
 			m.isPaginatingMembers = false
@@ -450,8 +456,10 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 		}
 		return m, func() tea.Msg { return CloseOverlay{} }
 	case "q", "Q":
-		if m.Error != nil {
+		if m.ModalMode == ModalModeAlert || m.Error != nil {
 			m.Error = nil
+			m.AlertTitle = ""
+			m.AlertMessage = ""
 			return m, func() tea.Msg { return CloseOverlay{} }
 		}
 	case "enter":
@@ -492,6 +500,12 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 }
 
 func handleEnterKey(m *Foreground) (tea.Model, tea.Cmd) {
+	if m.ModalMode == ModalModeAlert || m.Error != nil {
+		m.Error = nil
+		m.AlertTitle = ""
+		m.AlertMessage = ""
+		return m, func() tea.Msg { return CloseOverlay{} }
+	}
 	if m.ModalMode == ModalModeShowStories {
 		if m.stories == nil || len(m.stories.Items()) == 0 {
 			return m, nil

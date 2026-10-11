@@ -13,21 +13,17 @@ import (
 )
 
 var (
-	// ErrNoGUIFilePicker is returned when neither zenity nor kdialog is installed.
 	ErrNoGUIFilePicker = errors.New("No GUI file picker found.\nPlease install 'zenity' (GNOME) or 'kdialog' (KDE) to attach files.")
 
-	// lookPath can be overridden in tests to simulate missing/present executables.
 	lookPath = exec.LookPath
 )
 
-// FilePickedMsg is emitted when the GUI file picker finishes.
 type FilePickedMsg struct {
 	Path     string
 	Err      error
 	Canceled bool
 }
 
-// FindGUIFilePicker checks for zenity or kdialog on the system PATH.
 func FindGUIFilePicker() (string, []string, error) {
 	if path, err := lookPath("zenity"); err == nil && path != "" {
 		return "zenity", []string{"--file-selection", "--title=Select File to Attach"}, nil
@@ -38,13 +34,11 @@ func FindGUIFilePicker() (string, []string, error) {
 	return "", nil, ErrNoGUIFilePicker
 }
 
-// PickFileCmd spawns the GUI file picker subprocess asynchronously.
 func PickFileCmd(picker string, args []string) tea.Cmd {
 	return func() tea.Msg {
 		cmd := exec.Command(picker, args...)
 		out, err := cmd.Output()
 		if err != nil {
-			// Non-zero exit code usually means user canceled or closed dialog.
 			return FilePickedMsg{Path: "", Err: err, Canceled: true}
 		}
 		selectedPath := strings.TrimSpace(string(out))
@@ -55,20 +49,23 @@ func PickFileCmd(picker string, args []string) tea.Cmd {
 	}
 }
 
-// TriggerFilePicker initiates file selection using zenity or kdialog,
-// or opens an actionable alert modal if neither is available.
 func TriggerFilePicker(m *Model) (Model, tea.Cmd) {
 	picker, args, err := FindGUIFilePicker()
 	if err != nil {
 		m.IsModalVisible = true
 		m.ModalContent = GetModalContent(err.Error())
-		return *m, nil
+		return *m, func() tea.Msg {
+			return OpenModalMsg{
+				ModalMode:    ModalModeAlert,
+				AlertTitle:   "GUI File Picker Required",
+				AlertMessage: err.Error(),
+			}
+		}
 	}
 
 	return *m, PickFileCmd(picker, args)
 }
 
-// FormatFileSize formats byte count into human-readable units.
 func FormatFileSize(bytes int64) string {
 	const (
 		kb = 1024
@@ -87,7 +84,6 @@ func FormatFileSize(bytes int64) string {
 	}
 }
 
-// renderAttachmentChip renders a styled badge above the input when a file is staged.
 func renderAttachmentChip(filePath string, maxBarWidth int) string {
 	if filePath == "" {
 		return ""

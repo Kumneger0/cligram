@@ -366,6 +366,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	case types.OpenNewChatWithPeerMsg:
 		return m, telegram.Cligram.GetEntityInfo(msg.Chat)
+	case OpenModalMsg:
+		m.IsModalVisible = false
+		m.ModalContent = ""
+		return m, nil
+	case CloseOverlay:
+		m.IsModalVisible = false
+		m.ModalContent = ""
+		return m, nil
 	case types.SendMessageMsg:
 		if msg.Err != nil {
 			slog.Error("Failed to send message", "error", msg.Err.Error())
@@ -1213,6 +1221,11 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 	case "esc":
+		if m.IsModalVisible {
+			m.IsModalVisible = false
+			m.ModalContent = ""
+			return m, nil
+		}
 		if m.SelectedFile != "" && m.SelectedFile != "uploading..." {
 			m.SelectedFile = ""
 			return m, nil
@@ -1250,6 +1263,11 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+c":
 		return m, tea.Quit
 	case "q":
+		if m.IsModalVisible {
+			m.IsModalVisible = false
+			m.ModalContent = ""
+			return m, nil
+		}
 		if m.FocusedOn != Input {
 			return m, tea.Quit
 		}
@@ -1408,6 +1426,11 @@ func (m Model) handleFileAttachKey() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
+	if m.IsModalVisible {
+		m.IsModalVisible = false
+		m.ModalContent = ""
+		return m, nil
+	}
 	if m.FocusedOn == Input {
 		return sendMessage(&m)
 	}
