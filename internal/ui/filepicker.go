@@ -62,7 +62,13 @@ func TriggerFilePicker(m *Model) (Model, tea.Cmd) {
 	if err != nil {
 		m.IsModalVisible = true
 		m.ModalContent = GetModalContent(err.Error())
-		return *m, nil
+		return *m, func() tea.Msg {
+			return OpenModalMsg{
+				ModalMode:    ModalModeAlert,
+				AlertTitle:   "GUI File Picker Required",
+				AlertMessage: err.Error(),
+			}
+		}
 	}
 
 	return *m, PickFileCmd(picker, args)

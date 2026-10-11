@@ -20,6 +20,7 @@ import (
 	"github.com/kumneger0/cligram/internal/telegram"
 	"github.com/kumneger0/cligram/internal/telegram/types"
 	"github.com/muesli/reflow/wordwrap"
+	overlay "github.com/rmhubbert/bubbletea-overlay"
 	"go.dalton.dog/bubbleup"
 )
 
@@ -401,21 +402,15 @@ func formatMessages(msgs []types.FormattedMessage) []list.Item {
 	return lines
 }
 
-// this is just temporary just to get things working
-// definitely i need to remove this
 func GetModalContent(errorMessage string) string {
 	var modalContent strings.Builder
 	modalContent.WriteString(errorMessage)
-	modalContent.WriteString("\n" + "press ctrl + c or q to close")
-	modalWidth := max(40, len(errorMessage)+4)
+	modalContent.WriteString("\n\n" + "[Enter] or [Esc] to dismiss")
+	modalWidth := max(44, min(65, len(errorMessage)+6))
 	return dialogBoxStyle.Width(modalWidth).Render(modalContent.String())
 }
 
 func setItemStyles(m *Model) string {
-	if m.IsModalVisible {
-		return renderModal(m)
-	}
-
 	dimensions := calculateLayoutDimensions(m)
 
 	updateListDimensions(m, dimensions)
@@ -436,7 +431,11 @@ func setItemStyles(m *Model) string {
 		fullLayout = lipgloss.JoinVertical(lipgloss.Top, row, inputView)
 	}
 
-	return lipgloss.NewStyle().Background(DefaultTheme.SubtleBg).Render(fullLayout)
+	bg := lipgloss.NewStyle().Background(DefaultTheme.SubtleBg).Render(fullLayout)
+	if m.IsModalVisible && m.ModalContent != "" {
+		return overlay.Composite(m.ModalContent, bg, overlay.Center, overlay.Center, 0, 0)
+	}
+	return bg
 }
 
 type layoutDimensions struct {
@@ -485,13 +484,7 @@ func updateListDimensions(m *Model, d layoutDimensions) {
 }
 
 func renderModal(m *Model) string {
-	return lipgloss.Place(
-		m.Width,
-		m.Height,
-		lipgloss.Center,
-		lipgloss.Center,
-		m.ModalContent,
-	)
+	return m.ModalContent
 }
 
 func getUserOrChannelName(m *Model) string {

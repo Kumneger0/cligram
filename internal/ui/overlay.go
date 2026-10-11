@@ -339,10 +339,13 @@ const (
 	ModalModeShowStories    ModalMode = "SHOW_STORIES"
 	ModalModeSendReaction   ModalMode = "SEND_REACTION"
 	ModalModeGroupMembers   ModalMode = "GROUP_MEMBERS"
+	ModalModeAlert          ModalMode = "ALERT"
 )
 
 type OpenModalMsg struct {
 	ModalMode    ModalMode
+	AlertTitle   string
+	AlertMessage string
 	FromPeer     *list.Item
 	Message      *types.FormattedMessage
 	UsersList    *list.Model
@@ -364,6 +367,8 @@ type ForwardMsg struct {
 
 type Foreground struct {
 	Error                  error
+	AlertTitle             string
+	AlertMessage           string
 	windowWidth            int
 	windowHeight           int
 	input                  textinput.Model
@@ -453,7 +458,7 @@ func (f *Foreground) View() string {
 		closeHint := lipgloss.NewStyle().
 			Foreground(DefaultTheme.SecondaryText).
 			Italic(true).
-			Render("Press ESC or Q to close")
+			Render("[Enter] or [Esc] to dismiss")
 
 		errorBox := lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
@@ -462,12 +467,45 @@ func (f *Foreground) View() string {
 			Align(lipgloss.Center).
 			Render(lipgloss.JoinVertical(lipgloss.Center, errorTitle, "", errorMessage, "", closeHint))
 
-		return lipgloss.Place(f.windowWidth, f.windowHeight, lipgloss.Center, lipgloss.Center, errorBox)
+		return errorBox
 	}
 	foreStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder(), true).
 		BorderForeground(DefaultTheme.AccentColor).
 		Padding(0, 1)
+
+	if f.ModalMode == ModalModeAlert {
+		titleText := f.AlertTitle
+		if titleText == "" {
+			titleText = "Notice"
+		}
+		title := lipgloss.NewStyle().
+			Foreground(DefaultTheme.WarningColor).
+			Bold(true).
+			Render("⚠️  " + titleText)
+
+		contentWidth := max(44, min(65, f.windowWidth-6))
+		if f.windowWidth <= 0 {
+			contentWidth = 50
+		}
+
+		divider := lipgloss.NewStyle().
+			Foreground(DefaultTheme.BorderColor).
+			Render(strings.Repeat("─", contentWidth))
+
+		message := lipgloss.NewStyle().
+			Foreground(DefaultTheme.PrimaryText).
+			Width(contentWidth).
+			Render(f.AlertMessage)
+
+		footerHints := lipgloss.NewStyle().
+			Foreground(DefaultTheme.SecondaryText).
+			Padding(0, 1).
+			Render("[Enter] or [Esc] to dismiss")
+
+		layout := lipgloss.JoinVertical(lipgloss.Left, title, divider, message, "", footerHints)
+		return foreStyle.Width(contentWidth + 2).Render(layout)
+	}
 
 	if f.ModalMode == ModalModeShowStories {
 		contentWidth := max(50, min(75, f.windowWidth-6))
