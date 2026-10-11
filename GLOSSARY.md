@@ -111,3 +111,7 @@ _Avoid_: Join banner, channel join box, subscription prompt
 **Restricted Input Banner**:
 An un-focusable status bar replacing the message input area in read-only broadcast channels (`📢 Broadcast Channel (Read-Only)`) or muted groups (`🔇 Muted by admin`), optionally displaying a `[💬 View Comments]` action shortcut when linked discussion comments are available.
 _Avoid_: Disabled input box, read-only placeholder, locked text field
+
+**Notification Cascade**:
+The tiered evaluation chain (Active Focus Suppression → Silent Flags → Peer NotifySettings → Account-Level Defaults) determining whether an incoming MTProto message triggers an OS desktop alert and whether message preview content is displayed.
+_Avoid_: Notification filter, alert pipeline, mute checker

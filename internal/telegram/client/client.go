@@ -36,8 +36,28 @@ import (
 
 type Client struct {
 	*telegram.Client
-	ctx           context.Context
-	updateChannel chan types.Notification
+	ctx                   context.Context
+	updateChannel         chan types.Notification
+	accountNotifySettings *types.AccountNotifySettings
+	accountNotifyMu       sync.RWMutex
+}
+
+func (c *Client) GetAccountNotifySettings() *types.AccountNotifySettings {
+	if c == nil {
+		return nil
+	}
+	c.accountNotifyMu.RLock()
+	defer c.accountNotifyMu.RUnlock()
+	return c.accountNotifySettings
+}
+
+func (c *Client) SetAccountNotifySettings(ans *types.AccountNotifySettings) {
+	if c == nil {
+		return
+	}
+	c.accountNotifyMu.Lock()
+	defer c.accountNotifyMu.Unlock()
+	c.accountNotifySettings = ans
 }
 
 type Config struct {
@@ -565,6 +585,35 @@ func (c *Client) GetChannelForums(peer types.Peer) tea.Cmd {
 	}
 }
 
+func (c *Client) FetchAccountNotifySettings(ctx context.Context) (*types.AccountNotifySettings, error) {
+	if c == nil || c.GetAPI() == nil {
+		return nil, errors.New("client or API is not initialized")
+	}
+
+	ans := &types.AccountNotifySettings{}
+
+	if res, err := c.GetAPI().AccountGetNotifySettings(ctx, &tg.InputNotifyUsers{}); err == nil {
+		ans.Users = res
+	} else {
+		slog.Warn("failed to fetch user account notify settings", "error", err)
+	}
+
+	if res, err := c.GetAPI().AccountGetNotifySettings(ctx, &tg.InputNotifyChats{}); err == nil {
+		ans.Chats = res
+	} else {
+		slog.Warn("failed to fetch chat account notify settings", "error", err)
+	}
+
+	if res, err := c.GetAPI().AccountGetNotifySettings(ctx, &tg.InputNotifyBroadcasts{}); err == nil {
+		ans.Broadcasts = res
+	} else {
+		slog.Warn("failed to fetch broadcast account notify settings", "error", err)
+	}
+
+	c.SetAccountNotifySettings(ans)
+	return ans, nil
+}
+
 func (c *Client) GetAllChats(ctx context.Context, offsetDate int, offsetID int, limit ...int) tea.Cmd {
 	return func() tea.Msg {
 		tCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -599,15 +648,18 @@ func (c *Client) GetAllChats(ctx context.Context, offsetDate int, offsetID int, 
 			}
 		}
 
+		ans, _ := c.FetchAccountNotifySettings(tCtx)
+
 		return types.GetAllChatsResponseMSG{
 			Chats: types.AllChats{
-				All:          ds.Ordered,
-				PrivateChats: users,
-				Bots:         bots,
-				Channels:     channels,
-				Groups:       groups,
-				OffsetDate:   ds.OffsetDate,
-				OffsetID:     ds.OffsetID,
+				All:                   ds.Ordered,
+				PrivateChats:          users,
+				Bots:                  bots,
+				Channels:              channels,
+				Groups:                groups,
+				AccountNotifySettings: ans,
+				OffsetDate:            ds.OffsetDate,
+				OffsetID:              ds.OffsetID,
 			},
 			Err: nil,
 		}

@@ -528,6 +528,50 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 		return nil
 	})
 
+	dispatcher.OnNotifySettings(func(ctx context.Context, e tg.Entities, update *tg.UpdateNotifySettings) error {
+		if update == nil {
+			return nil
+		}
+
+		sourceType := "peer"
+		peerID := ""
+
+		switch p := update.Peer.(type) {
+		case *tg.NotifyUsers:
+			sourceType = "users"
+		case *tg.NotifyChats:
+			sourceType = "chats"
+		case *tg.NotifyBroadcasts:
+			sourceType = "broadcasts"
+		case *tg.NotifyPeer:
+			switch peer := p.Peer.(type) {
+			case *tg.PeerUser:
+				peerID = strconv.FormatInt(peer.UserID, 10)
+			case *tg.PeerChat:
+				peerID = strconv.FormatInt(peer.ChatID, 10)
+			case *tg.PeerChannel:
+				peerID = strconv.FormatInt(peer.ChannelID, 10)
+			}
+		}
+
+		settingsCopy := update.NotifySettings
+
+		notification := types.Notification{
+			NotifySettingsUpdate: &types.NotifySettingsUpdateNotification{
+				PeerID:         peerID,
+				SourceType:     sourceType,
+				NotifySettings: &settingsCopy,
+			},
+		}
+
+		select {
+		case updateChannel <- notification:
+		default:
+			slog.Warn("update channel is full, dropping notify settings update")
+		}
+		return nil
+	})
+
 	return updates.New(updates.Config{
 		Handler: dispatcher,
 	})

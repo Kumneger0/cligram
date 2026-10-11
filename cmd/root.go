@@ -176,6 +176,9 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 							if msg.CallEvent != nil {
 								Program.Send(*msg.CallEvent)
 							}
+							if msg.NotifySettingsUpdate != nil {
+								Program.Send(*msg.NotifySettingsUpdate)
+							}
 						}
 					}
 				}()

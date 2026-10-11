@@ -17,10 +17,6 @@ type CliGramConfig struct {
 	Privacy     struct {
 		LastSeenVisibility *string `json:"lastSeenVisibility,omitempty"`
 	} `json:"privacy"`
-	Notifications struct {
-		Enabled            *bool `json:"enabled,omitempty"`
-		ShowMessagePreview *bool `json:"showMessagePreview,omitempty"`
-	} `json:"notifications"`
 	Calls CallsConfig `json:"calls"`
 }
 
