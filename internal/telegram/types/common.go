@@ -82,6 +82,9 @@ type FormattedMessage struct {
 	RepliesCount         int                     `json:"repliesCount,omitempty"`
 	RepliesChannelID     int64                   `json:"repliesChannelId,omitempty"`
 	HasComments          bool                    `json:"hasComments,omitempty"`
+	IsEdited             bool                    `json:"isEdited,omitempty"`
+	EditDate             *time.Time              `json:"editDate,omitempty"`
+	IsService            bool                    `json:"isService,omitempty"`
 }
 
 type MediaType string
@@ -183,6 +186,18 @@ type NotifySettingsUpdateNotification struct {
 	NotifySettings *tg.PeerNotifySettings `json:"notifySettings"`
 }
 
+type EditMessageNotification struct {
+	ID       int         `json:"id"`
+	PeerID   string      `json:"peerId"`
+	Message  *tg.Message `json:"message"`
+	EditDate time.Time   `json:"editDate"`
+}
+
+type DeleteMessagesNotification struct {
+	ChannelID int64 `json:"channelId,omitempty"`
+	Messages  []int `json:"messages"`
+}
+
 type Notification struct {
 	NewMessage             *NewMessageNotification           `json:"newMessage,omitempty"`
 	UserStatus             *UserStatusNotification           `json:"userStatus,omitempty"`
@@ -193,6 +208,8 @@ type Notification struct {
 	GetUserDHConfigRequest *GetUserDHConfigRequest           `json:"getUserDHConfigRequest,omitempty"`
 	CallEvent              *CallNotification                 `json:"callEvent,omitempty"`
 	NotifySettingsUpdate   *NotifySettingsUpdateNotification `json:"notifySettingsUpdate,omitempty"`
+	EditMessage            *EditMessageNotification          `json:"editMessage,omitempty"`
+	DeleteMessages         *DeleteMessagesNotification       `json:"deleteMessages,omitempty"`
 }
 
 type CallState string
@@ -227,10 +244,11 @@ type ForumTopicInfo struct {
 }
 
 type NewMessageNotification struct {
-	ID      int         `json:"id"`
-	FromID  string      `json:"fromId"`
-	PeerID  string      `json:"peerId,omitempty"`
-	Message *tg.Message `json:"message"`
+	ID        int               `json:"id"`
+	FromID    string            `json:"fromId"`
+	PeerID    string            `json:"peerId,omitempty"`
+	Message   *tg.Message       `json:"message"`
+	Formatted *FormattedMessage `json:"formatted,omitempty"`
 }
 
 type ReadHistoryOutboxNotification struct {

@@ -504,22 +504,26 @@ func (c *Client) GetChatHistory(ctx context.Context, peer types.Peer, limit int,
 
 	var formattedMessages []types.FormattedMessage
 	for _, msgClass := range entities.Messages {
-		msg, ok := msgClass.(*tg.Message)
-		if !ok {
-			continue
-		}
-		if areWeInUserModeOrBotMode {
-			formattedMessage := shared.FormatMessage(msg, userInfo, entities.Messages)
-			formattedMessage.PeerID = &peer.ID
-			formattedMessages = append(formattedMessages, *formattedMessage)
-		} else if peer.ChatType == types.GroupChat {
-			formattedMessage := shared.FormatGroupMessage(msg, peer.ID, entities.Users, entities.Chats, entities.Messages)
-			formattedMessage.PeerID = &peer.ID
-			formattedMessages = append(formattedMessages, *formattedMessage)
-		} else {
-			formattedMessage := shared.FormatMessage(msg, channel, entities.Messages)
-			formattedMessage.PeerID = &peer.ID
-			formattedMessages = append(formattedMessages, *formattedMessage)
+		if msg, ok := msgClass.(*tg.Message); ok {
+			if areWeInUserModeOrBotMode {
+				formattedMessage := shared.FormatMessage(msg, userInfo, entities.Messages)
+				formattedMessage.PeerID = &peer.ID
+				formattedMessages = append(formattedMessages, *formattedMessage)
+			} else if peer.ChatType == types.GroupChat {
+				formattedMessage := shared.FormatGroupMessage(msg, peer.ID, entities.Users, entities.Chats, entities.Messages)
+				formattedMessage.PeerID = &peer.ID
+				formattedMessages = append(formattedMessages, *formattedMessage)
+			} else {
+				formattedMessage := shared.FormatMessage(msg, channel, entities.Messages)
+				formattedMessage.PeerID = &peer.ID
+				formattedMessages = append(formattedMessages, *formattedMessage)
+			}
+		} else if sMsg, ok := msgClass.(*tg.MessageService); ok {
+			formattedMessage := shared.FormatServiceMessage(sMsg, entities.Users, entities.Chats)
+			if formattedMessage != nil {
+				formattedMessage.PeerID = &peer.ID
+				formattedMessages = append(formattedMessages, *formattedMessage)
+			}
 		}
 	}
 
@@ -781,7 +785,7 @@ func (c *Client) EditMessage(ctx context.Context, req types.EditMessageRequest) 
 	if err != nil {
 		return types.EditMessageMsg{Err: types.NewEditMessageError(err)}
 	}
-	return types.EditMessageMsg{Response: true}
+	return types.EditMessageMsg{Response: true, UpdatedMessage: req.NewMessage}
 }
 
 func (c *Client) ForwardMessages(ctx context.Context, req types.ForwardMessagesRequest) error {

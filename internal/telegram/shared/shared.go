@@ -105,6 +105,14 @@ func FormatMessage[T ChannelOrUser](msg *tg.Message, userOrChannel *T, allMessag
 		hasComments = replies.Comments || replies.Replies > 0 || replies.ChannelID != 0
 	}
 
+	var isEdited bool
+	var editDateTime *time.Time
+	if editDate, ok := msg.GetEditDate(); ok && !msg.EditHide && editDate > 0 {
+		isEdited = true
+		t := time.Unix(int64(editDate), 0)
+		editDateTime = &t
+	}
+
 	webPageMedia, _ := msg.Media.(*tg.MessageMediaWebPage)
 	return &types.FormattedMessage{
 		ID:                   msg.ID,
@@ -127,6 +135,8 @@ func FormatMessage[T ChannelOrUser](msg *tg.Message, userOrChannel *T, allMessag
 		RepliesCount:         repliesCount,
 		RepliesChannelID:     repliesChannelID,
 		HasComments:          hasComments,
+		IsEdited:             isEdited,
+		EditDate:             editDateTime,
 	}
 }
 
@@ -402,6 +412,14 @@ func FormatGroupMessage(msg *tg.Message, groupID string, users []tg.UserClass, c
 		hasComments = replies.Comments || replies.Replies > 0 || replies.ChannelID != 0
 	}
 
+	var isEdited bool
+	var editDateTime *time.Time
+	if editDate, ok := msg.GetEditDate(); ok && !msg.EditHide && editDate > 0 {
+		isEdited = true
+		t := time.Unix(int64(editDate), 0)
+		editDateTime = &t
+	}
+
 	webPageMedia, _ := msg.Media.(*tg.MessageMediaWebPage)
 
 	return &types.FormattedMessage{
@@ -425,6 +443,88 @@ func FormatGroupMessage(msg *tg.Message, groupID string, users []tg.UserClass, c
 		RepliesCount:         repliesCount,
 		RepliesChannelID:     repliesChannelID,
 		HasComments:          hasComments,
+		IsEdited:             isEdited,
+		EditDate:             editDateTime,
+	}
+}
+
+func FormatServiceMessage(msg *tg.MessageService, users []tg.UserClass, chats []tg.ChatClass) *types.FormattedMessage {
+	if msg == nil {
+		return nil
+	}
+
+	actorName := "Someone"
+	if msg.Out {
+		actorName = "You"
+	} else if from, ok := msg.GetFromID(); ok {
+		switch f := from.(type) {
+		case *tg.PeerUser:
+			for _, u := range users {
+				if user, ok := u.(*tg.User); ok && user.ID == f.UserID {
+					name := strings.TrimSpace(user.FirstName + " " + user.LastName)
+					if name != "" {
+						actorName = name
+					} else if user.Username != "" {
+						actorName = user.Username
+					}
+					break
+				}
+			}
+		}
+	}
+
+	var text string
+	switch a := msg.Action.(type) {
+	case *tg.MessageActionChatAddUser:
+		var addedNames []string
+		for _, uid := range a.Users {
+			name := "a member"
+			for _, u := range users {
+				if user, ok := u.(*tg.User); ok && user.ID == uid {
+					n := strings.TrimSpace(user.FirstName + " " + user.LastName)
+					if n != "" {
+						name = n
+					}
+					break
+				}
+			}
+			addedNames = append(addedNames, name)
+		}
+		if len(addedNames) > 0 {
+			text = fmt.Sprintf("👤 %s joined the group", strings.Join(addedNames, ", "))
+		} else {
+			text = fmt.Sprintf("👤 %s joined the group", actorName)
+		}
+	case *tg.MessageActionChatJoinedByLink:
+		text = fmt.Sprintf("👤 %s joined the group via invite link", actorName)
+	case *tg.MessageActionChatJoinedByRequest:
+		text = fmt.Sprintf("👤 %s joined the group by request", actorName)
+	case *tg.MessageActionChatJoinedViaCommunity:
+		text = fmt.Sprintf("👤 %s joined the group via linked channel", actorName)
+	case *tg.MessageActionChatDeleteUser:
+		targetName := actorName
+		if a.UserID != 0 {
+			for _, u := range users {
+				if user, ok := u.(*tg.User); ok && user.ID == a.UserID {
+					n := strings.TrimSpace(user.FirstName + " " + user.LastName)
+					if n != "" {
+						targetName = n
+					}
+					break
+				}
+			}
+		}
+		text = fmt.Sprintf("🚪 %s left the group", targetName)
+	default:
+		return nil
+	}
+
+	return &types.FormattedMessage{
+		ID:        msg.ID,
+		Sender:    actorName,
+		Content:   text,
+		Date:      time.Unix(int64(msg.Date), 0),
+		IsService: true,
 	}
 }
 

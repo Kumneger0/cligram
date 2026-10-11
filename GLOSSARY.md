@@ -115,3 +115,12 @@ _Avoid_: Disabled input box, read-only placeholder, locked text field
 **Notification Cascade**:
 The tiered evaluation chain (Active Focus Suppression → Silent Flags → Peer NotifySettings → Account-Level Defaults) determining whether an incoming MTProto message triggers an OS desktop alert and whether message preview content is displayed.
 _Avoid_: Notification filter, alert pipeline, mute checker
+
+**Reactive Viewport Updates**:
+Real-time in-place mutations of active conversation messages (in-place content edits tagged with `(edited)`, immediate message removals on deletion, and per-peer unsent draft restoration) reacting to MTProto events without reloading chat history.
+_Avoid_: Viewport reload, chat refresh, message polling
+
+**Service Message**:
+An event notification embedded in the conversation stream (e.g. participant joins, leaves, and invite link entries) rendered as a centered, italicized badge distinct from standard user chat bubbles.
+_Avoid_: System notification, chat alert, admin event
+
