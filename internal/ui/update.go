@@ -639,6 +639,73 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateBotCommandSuggestions()
 		}
 		return m, nil
+	case RouteParsedLinkMsg:
+		if msg.Link != nil {
+			return m, routeTelegramLink(&m, msg.Link)
+		}
+		return m, nil
+	case types.CheckChatInviteMsg:
+		if msg.Err != nil {
+			slog.Error("Failed to check chat invite", "hash", msg.Hash, "error", msg.Err.Error())
+			m.Alert = m.Alert.WithAllowEscToClose().WithPosition(bubbleup.TopLeftPosition)
+			alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, "Invite error: "+msg.Err.Error())
+			return m, alertCmd
+		}
+		if msg.AlreadyJoined && msg.Chat != nil {
+			return m, selectAndNavigateToChannel(&m, *msg.Chat, nil, "Already a member of "+msg.Chat.Title())
+		}
+		if msg.Preview != nil {
+			return m, func() tea.Msg {
+				return OpenModalMsg{
+					ModalMode:   ModalModeJoinPreview,
+					JoinPreview: msg.Preview,
+				}
+			}
+		}
+		return m, nil
+	case types.ImportChatInviteMsg:
+		if msg.Err != nil {
+			slog.Error("Failed to import chat invite", "hash", msg.Hash, "error", msg.Err.Error())
+			if msg.Err.Error() == "USER_ALREADY_PARTICIPANT" {
+				m.Alert = m.Alert.WithAllowEscToClose().WithPosition(bubbleup.TopLeftPosition)
+				alertCmd := m.Alert.NewAlertCmd(bubbleup.InfoKey, "You are already a member of this chat")
+				return m, tea.Batch(alertCmd, func() tea.Msg { return CloseOverlay{} })
+			}
+			if msg.Err.Error() == "INVITE_REQUEST_SENT" {
+				m.Alert = m.Alert.WithAllowEscToClose().WithPosition(bubbleup.TopLeftPosition)
+				alertCmd := m.Alert.NewAlertCmd(bubbleup.InfoKey, "Join request sent to administrators")
+				return m, tea.Batch(alertCmd, func() tea.Msg { return CloseOverlay{} })
+			}
+			m.Alert = m.Alert.WithAllowEscToClose().WithPosition(bubbleup.TopLeftPosition)
+			alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, "Join failed: "+msg.Err.Error())
+			return m, tea.Batch(alertCmd, func() tea.Msg { return CloseOverlay{} })
+		}
+		if msg.Chat != nil {
+			return m, tea.Batch(
+				func() tea.Msg { return CloseOverlay{} },
+				selectAndNavigateToChannel(&m, *msg.Chat, nil, "Joined "+msg.Chat.Title()+"!"),
+			)
+		}
+		return m, func() tea.Msg { return CloseOverlay{} }
+	case types.JoinChannelMsg:
+		if msg.Err != nil {
+			slog.Error("Failed to join channel", "channelID", msg.ChannelID, "error", msg.Err.Error())
+			if msg.Err.Error() == "USER_ALREADY_PARTICIPANT" {
+				m.Alert = m.Alert.WithAllowEscToClose().WithPosition(bubbleup.TopLeftPosition)
+				alertCmd := m.Alert.NewAlertCmd(bubbleup.InfoKey, "You are already a member of this channel")
+				return m, tea.Batch(alertCmd, func() tea.Msg { return CloseOverlay{} })
+			}
+			m.Alert = m.Alert.WithAllowEscToClose().WithPosition(bubbleup.TopLeftPosition)
+			alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, "Join failed: "+msg.Err.Error())
+			return m, tea.Batch(alertCmd, func() tea.Msg { return CloseOverlay{} })
+		}
+		if msg.Chat != nil {
+			return m, tea.Batch(
+				func() tea.Msg { return CloseOverlay{} },
+				selectAndNavigateToChannel(&m, *msg.Chat, nil, "Joined "+msg.Chat.Title()+"!"),
+			)
+		}
+		return m, func() tea.Msg { return CloseOverlay{} }
 	}
 	outAlert, outCmd := m.Alert.Update(msg)
 	m.Alert = outAlert.(bubbleup.AlertModel)
@@ -1482,6 +1549,17 @@ func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
 			m.SkipNextInput = true
 			return m, nil
 		}
+		val := strings.TrimSpace(m.Input.Value())
+		if strings.HasPrefix(val, "/join ") || strings.HasPrefix(val, "/open ") {
+			linkStr := strings.TrimSpace(val[6:])
+			if pl := ParseTelegramLink(linkStr); pl != nil {
+				m.Input.Reset()
+				return m, routeTelegramLink(&m, pl)
+			}
+		} else if pl := ParseTelegramLink(val); pl != nil {
+			m.Input.Reset()
+			return m, routeTelegramLink(&m, pl)
+		}
 		return sendMessage(&m)
 	}
 	if m.FocusedOn == SideBar {
@@ -1554,32 +1632,51 @@ func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		if selectedMessage != nil && selectedMessage.MessageMediaWebPage != nil {
-			if webPage, ok := selectedMessage.MessageMediaWebPage.Webpage.(*tg.WebPage); ok {
-				if entity := getEntityName(webPage.URL); entity != nil {
-					return m, func() tea.Msg {
-						return types.OpenNewChatWithPeerMsg{
-							Chat: entity,
-						}
+		if selectedMessage != nil {
+			var linkToRoute *types.ParsedLink
+			var externalURL string
+
+			// 1. Check WebPage preview URL
+			if selectedMessage.MessageMediaWebPage != nil {
+				if webPage, ok := selectedMessage.MessageMediaWebPage.Webpage.(*tg.WebPage); ok {
+					if pl := ParseTelegramLink(webPage.URL); pl != nil {
+						linkToRoute = pl
+					} else {
+						externalURL = webPage.URL
 					}
 				}
+			}
 
-				url := webPage.URL
+			// 2. If no WebPage link, extract from message Content
+			if linkToRoute == nil && selectedMessage.Content != "" {
+				links := ExtractTelegramLinks(selectedMessage.Content)
+				if len(links) > 0 {
+					linkToRoute = links[0]
+				}
+			}
+
+			// 3. Route telegram link if found
+			if linkToRoute != nil {
+				return m, routeTelegramLink(&m, linkToRoute)
+			}
+
+			// 4. Open external URL in browser if present
+			if externalURL != "" {
 				var cmd tea.Cmd
 				switch runtime.GOOS {
 				case "darwin":
 					cmd = func() tea.Msg {
-						err := exec.Command("open", url).Start()
+						err := exec.Command("open", externalURL).Start()
 						if err != nil {
-							slog.Error("Failed to open URL", "error", err.Error(), "url", url)
+							slog.Error("Failed to open URL", "error", err.Error(), "url", externalURL)
 						}
 						return nil
 					}
 				case "linux":
 					cmd = func() tea.Msg {
-						err := exec.Command("xdg-open", url).Start()
+						err := exec.Command("xdg-open", externalURL).Start()
 						if err != nil {
-							slog.Error("Failed to open URL", "error", err.Error(), "url", url)
+							slog.Error("Failed to open URL", "error", err.Error(), "url", externalURL)
 						}
 						return nil
 					}
@@ -1612,6 +1709,61 @@ func getEntityName(link string) *types.EntityPreviewInfo {
 		}
 	}
 	return entityPreview
+}
+
+func selectAndNavigateToChannel(m *Model, ch types.ChannelInfo, offsetID *int, successAlert string) tea.Cmd {
+	var cmds []tea.Cmd
+	if !ch.IsBroadcast {
+		m.Mode = ModeGroups
+		if groupIndex := getGroupIndex(*m, ch); groupIndex != -1 {
+			m.Groups.Select(groupIndex)
+			m.SelectedGroup = m.Groups.Items()[groupIndex].(types.ChannelInfo)
+		} else {
+			items := append(m.Groups.Items(), ch)
+			w, h := m.Groups.Width(), m.Groups.Height()
+			m.Groups = list.New(items, list.NewDefaultDelegate(), w, h)
+			if h > 0 {
+				m.Groups.Select(len(m.Groups.Items()) - 1)
+			}
+			m.SelectedGroup = ch
+		}
+	} else {
+		m.Mode = ModeChannels
+		if channelIndex := getChannelIndex(*m, ch); channelIndex != -1 {
+			m.Channels.Select(channelIndex)
+			m.SelectedChannel = m.Channels.Items()[channelIndex].(types.ChannelInfo)
+		} else {
+			items := append(m.Channels.Items(), ch)
+			w, h := m.Channels.Width(), m.Channels.Height()
+			m.Channels = list.New(items, list.NewDefaultDelegate(), w, h)
+			if h > 0 {
+				m.Channels.Select(len(m.Channels.Items()) - 1)
+			}
+			m.SelectedChannel = ch
+		}
+	}
+
+	highlightCmd := func() tea.Msg {
+		if offsetID == nil {
+			return nil
+		}
+		return types.ShouldHighlightSpecificMessageMsg{
+			MessageID: *offsetID,
+		}
+	}
+
+	newM, navCmd := handleUserChange(m, offsetID, highlightCmd)
+	*m = newM
+	if navCmd != nil {
+		cmds = append(cmds, navCmd)
+	}
+
+	if successAlert != "" {
+		m.Alert = m.Alert.WithAllowEscToClose().WithPosition(bubbleup.TopLeftPosition)
+		cmds = append(cmds, m.Alert.NewAlertCmd(bubbleup.InfoKey, successAlert))
+	}
+
+	return tea.Batch(cmds...)
 }
 
 func (m Model) handleReplyKey() (tea.Model, tea.Cmd) {

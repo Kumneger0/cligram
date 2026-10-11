@@ -231,6 +231,12 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			membersInput.Focus()
 			m.membersInput = membersInput
 			cmds = append(cmds, m.spinner.Tick)
+		} else if msg.ModalMode == ModalModeJoinPreview {
+			m.ensureSpinner()
+			m.ModalMode = ModalModeJoinPreview
+			m.JoinPreview = msg.JoinPreview
+			m.isJoining = false
+			m.joinError = nil
 		}
 	case types.CurrentUserMsg:
 		if msg.Err != nil {
@@ -437,6 +443,11 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 			m.AlertTitle = ""
 			m.AlertMessage = ""
 		}
+		if m.ModalMode == ModalModeJoinPreview {
+			m.isJoining = false
+			m.JoinPreview = nil
+			m.joinError = nil
+		}
 		if m.ModalMode == ModalModeGroupMembers {
 			m.membersLoading = false
 			m.isPaginatingMembers = false
@@ -456,10 +467,13 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 		}
 		return m, func() tea.Msg { return CloseOverlay{} }
 	case "q", "Q":
-		if m.ModalMode == ModalModeAlert || m.Error != nil {
+		if m.ModalMode == ModalModeAlert || m.ModalMode == ModalModeJoinPreview || m.Error != nil {
 			m.Error = nil
 			m.AlertTitle = ""
 			m.AlertMessage = ""
+			m.isJoining = false
+			m.JoinPreview = nil
+			m.joinError = nil
 			return m, func() tea.Msg { return CloseOverlay{} }
 		}
 	case "enter":
@@ -505,6 +519,23 @@ func handleEnterKey(m *Foreground) (tea.Model, tea.Cmd) {
 		m.AlertTitle = ""
 		m.AlertMessage = ""
 		return m, func() tea.Msg { return CloseOverlay{} }
+	}
+	if m.ModalMode == ModalModeJoinPreview {
+		if m.isJoining || m.JoinPreview == nil {
+			return m, nil
+		}
+		m.ensureSpinner()
+		m.isJoining = true
+		m.joinError = nil
+		var joinCmd tea.Cmd
+		if telegram.Cligram != nil && telegram.Cligram.Context() != nil {
+			if m.JoinPreview.Hash != "" {
+				joinCmd = telegram.Cligram.ImportChatInvite(telegram.Cligram.Context(), m.JoinPreview.Hash)
+			} else if m.JoinPreview.ChannelID != 0 {
+				joinCmd = telegram.Cligram.JoinChannel(telegram.Cligram.Context(), m.JoinPreview.ChannelID, m.JoinPreview.AccessHash)
+			}
+		}
+		return m, tea.Batch(joinCmd, m.spinner.Tick)
 	}
 	if m.ModalMode == ModalModeShowStories {
 		if m.stories == nil || len(m.stories.Items()) == 0 {
@@ -722,6 +753,16 @@ func (m *Foreground) initForwardPicker(msg OpenModalMsg) {
 }
 
 func handleListSelection(m *Foreground) (tea.Model, tea.Cmd) {
+	if m.ModalMode == ModalModeSearch {
+		query := strings.TrimSpace(m.input.Value())
+		if parsed := ParseTelegramLink(query); parsed != nil {
+			return m, tea.Batch(
+				func() tea.Msg { return CloseOverlay{} },
+				func() tea.Msg { return RouteParsedLinkMsg{Link: parsed} },
+			)
+		}
+	}
+
 	selectedUser := m.searchResultCombined.SelectedItem()
 	if selectedUser == nil {
 		return m, nil

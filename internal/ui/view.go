@@ -376,8 +376,10 @@ func handleUserChange(m *Model, offsetID *int, afterMessagesCmd tea.Cmd) (Model,
 	m.SelectedMessageIndex = -1
 	m.viewport.SetContent("")
 	m.MainViewLoading = true
-	m.ChatUI.ResetSelected()
-	m.ChatUI.SetItems([]list.Item{})
+	if m.ChatUI.Height() > 0 {
+		m.ChatUI.ResetSelected()
+		m.ChatUI.SetItems([]list.Item{})
+	}
 	return *m, tea.Batch(cmd, afterMessagesCmd, prefetchBotCmds)
 }
 

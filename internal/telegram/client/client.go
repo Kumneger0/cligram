@@ -1661,3 +1661,172 @@ func (c *Client) fetchPeerBotCommands(ctx context.Context, peer types.Peer) ([]t
 
 	return deduped, nil
 }
+
+// CheckChatInvite verifies a chat invite link hash and returns chat preview metadata.
+func (c *Client) CheckChatInvite(ctx context.Context, hash string) tea.Cmd {
+	return func() tea.Msg {
+		if c == nil || c.Client == nil || hash == "" {
+			return types.CheckChatInviteMsg{
+				Hash: hash,
+				Err:  errors.New("invalid client or invite hash"),
+			}
+		}
+
+		callCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		defer cancel()
+
+		res, err := c.GetAPI().MessagesCheckChatInvite(callCtx, hash)
+		if err != nil {
+			return types.CheckChatInviteMsg{
+				Hash: hash,
+				Err:  err,
+			}
+		}
+
+		switch inv := res.(type) {
+		case *tg.ChatInviteAlready:
+			var channelInfo *types.ChannelInfo
+			switch ch := inv.Chat.(type) {
+			case *tg.Channel:
+				channelInfo = convertToChannelInfo(ch)
+			case *tg.Chat:
+				channelInfo = convertToChannelInfo(ch)
+			}
+			return types.CheckChatInviteMsg{
+				Hash:          hash,
+				AlreadyJoined: true,
+				Chat:          channelInfo,
+			}
+
+		case *tg.ChatInvite:
+			preview := &types.ChatInvitePreview{
+				Hash:              hash,
+				Title:             inv.Title,
+				About:             inv.About,
+				ParticipantsCount: inv.ParticipantsCount,
+				IsChannel:         inv.Broadcast,
+				IsGroup:           !inv.Broadcast,
+				RequestNeeded:     inv.RequestNeeded,
+				AlreadyJoined:     false,
+			}
+			return types.CheckChatInviteMsg{
+				Hash:          hash,
+				Preview:       preview,
+				AlreadyJoined: false,
+			}
+
+		case *tg.ChatInvitePeek:
+			var channelInfo *types.ChannelInfo
+			switch ch := inv.Chat.(type) {
+			case *tg.Channel:
+				channelInfo = convertToChannelInfo(ch)
+			case *tg.Chat:
+				channelInfo = convertToChannelInfo(ch)
+			}
+			return types.CheckChatInviteMsg{
+				Hash:          hash,
+				AlreadyJoined: true,
+				Chat:          channelInfo,
+			}
+
+		default:
+			return types.CheckChatInviteMsg{
+				Hash: hash,
+				Err:  fmt.Errorf("unsupported chat invite response: %T", res),
+			}
+		}
+	}
+}
+
+// ImportChatInvite imports a chat invite link to join a private chat/supergroup/channel.
+func (c *Client) ImportChatInvite(ctx context.Context, hash string) tea.Cmd {
+	return func() tea.Msg {
+		if c == nil || c.Client == nil || hash == "" {
+			return types.ImportChatInviteMsg{
+				Hash: hash,
+				Err:  errors.New("invalid client or invite hash"),
+			}
+		}
+
+		callCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		defer cancel()
+
+		res, err := c.GetAPI().MessagesImportChatInvite(callCtx, hash)
+		if err != nil {
+			return types.ImportChatInviteMsg{
+				Hash: hash,
+				Err:  err,
+			}
+		}
+
+		var joinedChat *types.ChannelInfo
+		switch r := res.(type) {
+		case *tg.MessagesChatInviteJoinResultOk:
+			joinedChat = extractChatFromUpdates(r.Updates)
+		}
+
+		return types.ImportChatInviteMsg{
+			Hash: hash,
+			Chat: joinedChat,
+		}
+	}
+}
+
+// JoinChannel joins a public channel or supergroup.
+func (c *Client) JoinChannel(ctx context.Context, channelID, accessHash int64) tea.Cmd {
+	return func() tea.Msg {
+		if c == nil || c.Client == nil || channelID == 0 {
+			return types.JoinChannelMsg{
+				ChannelID: channelID,
+				Err:       errors.New("invalid client or channel ID"),
+			}
+		}
+
+		callCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		defer cancel()
+
+		res, err := c.GetAPI().ChannelsJoinChannel(callCtx, &tg.InputChannel{
+			ChannelID:  channelID,
+			AccessHash: accessHash,
+		})
+		if err != nil {
+			return types.JoinChannelMsg{
+				ChannelID: channelID,
+				Err:       err,
+			}
+		}
+
+		var joinedChat *types.ChannelInfo
+		switch r := res.(type) {
+		case *tg.MessagesChatInviteJoinResultOk:
+			joinedChat = extractChatFromUpdates(r.Updates)
+		}
+
+		return types.JoinChannelMsg{
+			ChannelID: channelID,
+			Chat:      joinedChat,
+		}
+	}
+}
+
+func extractChatFromUpdates(updates tg.UpdatesClass) *types.ChannelInfo {
+	if updates == nil {
+		return nil
+	}
+	var chats []tg.ChatClass
+	switch u := updates.(type) {
+	case *tg.Updates:
+		chats = u.Chats
+	case *tg.UpdatesCombined:
+		chats = u.Chats
+	}
+	for _, chatClass := range chats {
+		switch ch := chatClass.(type) {
+		case *tg.Channel:
+			return convertToChannelInfo(ch)
+		case *tg.Chat:
+			return convertToChannelInfo(ch)
+		}
+	}
+	return nil
+}
