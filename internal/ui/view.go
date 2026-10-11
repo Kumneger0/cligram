@@ -282,6 +282,9 @@ func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (M
 		if !m.SkipNextInput {
 			m.Input, cmd = m.Input.Update(msg)
 			cmds = append(cmds, cmd)
+			if suggestCmd := m.updateBotCommandSuggestions(); suggestCmd != nil {
+				cmds = append(cmds, suggestCmd)
+			}
 		}
 	case SideBar:
 		m.Input.Blur()
@@ -328,9 +331,23 @@ func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (M
 func handleUserChange(m *Model, offsetID *int, afterMessagesCmd tea.Cmd) (Model, tea.Cmd) {
 	m.ShowForumTopics = false
 	m.SelectedForumTopic = nil
+	m.ShowBotCommands = false
+	m.FilteredBotCommands = nil
+	m.SelectedBotCommandIndex = 0
 
 	pInfo := getMessageParams(m)
 	m.ActivePeerID = pInfo.ID
+
+	var prefetchBotCmds tea.Cmd
+	if m.BotCommandsCache == nil {
+		m.BotCommandsCache = make(map[string][]types.BotCommand)
+	}
+	if _, cached := m.BotCommandsCache[pInfo.ID]; !cached && m.FetchingBotCommandsPeer != pInfo.ID && telegram.Cligram != nil && telegram.Cligram.Context() != nil {
+		if pInfo.ChatType == types.BotChat || pInfo.ChatType == types.GroupChat || pInfo.ChatType == types.ChannelChat || (pInfo.ChatType == types.UserChat && m.SelectedUser.IsBot) {
+			m.FetchingBotCommandsPeer = pInfo.ID
+			prefetchBotCmds = telegram.Cligram.GetPeerBotCommands(telegram.Cligram.Context(), pInfo)
+		}
+	}
 
 	isGroupForum := (m.Mode == ModeGroups && m.SelectedGroup.IsForum) ||
 		(m.Mode == ModeAll && m.SelectedGroup.IsForum && pInfo.ChatType == types.GroupChat)
@@ -340,7 +357,7 @@ func handleUserChange(m *Model, offsetID *int, afterMessagesCmd tea.Cmd) (Model,
 		m.SelectedMessageIndex = -1
 		m.viewport.SetContent("")
 		m.ChatUI.SetItems([]list.Item{})
-		return *m, telegram.Cligram.GetChannelForums(pInfo)
+		return *m, tea.Batch(telegram.Cligram.GetChannelForums(pInfo), prefetchBotCmds)
 	}
 	cmd := telegram.Cligram.GetMessages(telegram.Cligram.Context(), types.GetMessagesRequest{
 		Peer:          pInfo,
@@ -353,7 +370,7 @@ func handleUserChange(m *Model, offsetID *int, afterMessagesCmd tea.Cmd) (Model,
 		markAsReadCmd := telegram.Cligram.MarkMessagesAsRead(telegram.Cligram.Context(), types.MarkAsReadRequest{
 			Peer: pInfo,
 		})
-		return *m, tea.Batch(cmd, markAsReadCmd)
+		return *m, tea.Batch(cmd, markAsReadCmd, prefetchBotCmds)
 	}
 	m.Conversations = nil
 	m.SelectedMessageIndex = -1
@@ -361,7 +378,7 @@ func handleUserChange(m *Model, offsetID *int, afterMessagesCmd tea.Cmd) (Model,
 	m.MainViewLoading = true
 	m.ChatUI.ResetSelected()
 	m.ChatUI.SetItems([]list.Item{})
-	return *m, tea.Batch(cmd, afterMessagesCmd)
+	return *m, tea.Batch(cmd, afterMessagesCmd, prefetchBotCmds)
 }
 
 func isReadOnlyBroadcast(m *Model) bool {

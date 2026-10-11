@@ -358,6 +358,11 @@ type Model struct {
 	CallOverlay              CallOverlayModel
 	ActiveCallUserID         int64
 	SidebarSpinner           spinner.Model
+	BotCommandsCache         map[string][]types.BotCommand
+	FilteredBotCommands      []types.BotCommand
+	SelectedBotCommandIndex  int
+	ShowBotCommands          bool
+	FetchingBotCommandsPeer  string
 }
 
 type CustomEmojiDocumentMsg struct {
@@ -621,7 +626,14 @@ func prepareMainContent(m *Model, d layoutDimensions) string {
 		chatsView,
 	)
 
-	return mainStyle.Render(mainContent)
+	rendered := mainStyle.Render(mainContent)
+	if m.ShowBotCommands && len(m.FilteredBotCommands) > 0 {
+		popup := renderBotCommandsPopup(m, d.mainWidth)
+		if popup != "" {
+			rendered = overlay.Composite(popup, rendered, overlay.Left, overlay.Bottom, 2, 0)
+		}
+	}
+	return rendered
 }
 
 func (m *Model) CurrentPeerID() string {
@@ -645,6 +657,81 @@ func (m *Model) CurrentPeerID() string {
 		return m.SelectedGroup.ID
 	}
 	return ""
+}
+
+func (m *Model) updateBotCommandSuggestions() tea.Cmd {
+	if m.FocusedOn != Input {
+		m.ShowBotCommands = false
+		m.FilteredBotCommands = nil
+		return nil
+	}
+
+	val := m.Input.Value()
+	if !strings.HasPrefix(val, "/") || strings.Contains(val, " ") {
+		m.ShowBotCommands = false
+		m.FilteredBotCommands = nil
+		return nil
+	}
+
+	peerID := m.CurrentPeerID()
+	if peerID == "" {
+		m.ShowBotCommands = false
+		m.FilteredBotCommands = nil
+		return nil
+	}
+
+	if m.BotCommandsCache == nil {
+		m.BotCommandsCache = make(map[string][]types.BotCommand)
+	}
+
+	commands, cached := m.BotCommandsCache[peerID]
+	var fetchCmd tea.Cmd
+	if !cached {
+		pInfo := getMessageParams(m)
+		if m.FetchingBotCommandsPeer != peerID && telegram.Cligram != nil && telegram.Cligram.Context() != nil {
+			m.FetchingBotCommandsPeer = peerID
+			fetchCmd = telegram.Cligram.GetPeerBotCommands(telegram.Cligram.Context(), pInfo)
+		}
+	}
+
+	query := strings.ToLower(val[1:])
+	var prefixMatches []types.BotCommand
+	var containsMatches []types.BotCommand
+
+	for _, cmd := range commands {
+		cmdName := strings.ToLower(cmd.Command)
+		if query == "" || strings.HasPrefix(cmdName, query) {
+			prefixMatches = append(prefixMatches, cmd)
+		} else if strings.Contains(cmdName, query) {
+			containsMatches = append(containsMatches, cmd)
+		}
+	}
+
+	matched := append(prefixMatches, containsMatches...)
+	if len(matched) > 0 {
+		m.ShowBotCommands = true
+		m.FilteredBotCommands = matched
+		if m.SelectedBotCommandIndex < 0 || m.SelectedBotCommandIndex >= len(matched) {
+			m.SelectedBotCommandIndex = 0
+		}
+	} else {
+		m.ShowBotCommands = false
+		m.FilteredBotCommands = nil
+		m.SelectedBotCommandIndex = 0
+	}
+
+	return fetchCmd
+}
+
+func (m *Model) completeBotCommand() {
+	if m.SelectedBotCommandIndex >= 0 && m.SelectedBotCommandIndex < len(m.FilteredBotCommands) {
+		cmd := m.FilteredBotCommands[m.SelectedBotCommandIndex]
+		m.Input.SetValue("/" + cmd.Command + " ")
+		m.Input.CursorEnd()
+		m.ShowBotCommands = false
+		m.FilteredBotCommands = nil
+		m.SelectedBotCommandIndex = 0
+	}
 }
 
 func (m *Model) ActiveReadOutboxMaxID() int {

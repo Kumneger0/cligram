@@ -625,6 +625,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.CustomEmojis[msg.DocumentID] = msg.Document
 		return m, nil
+	case types.PeerBotCommandsMsg:
+		if m.BotCommandsCache == nil {
+			m.BotCommandsCache = make(map[string][]types.BotCommand)
+		}
+		if msg.Err == nil {
+			m.BotCommandsCache[msg.PeerID] = msg.Commands
+		}
+		if m.FetchingBotCommandsPeer == msg.PeerID {
+			m.FetchingBotCommandsPeer = ""
+		}
+		if msg.PeerID == m.CurrentPeerID() {
+			m.updateBotCommandSuggestions()
+		}
+		return m, nil
 	}
 	outAlert, outCmd := m.Alert.Update(msg)
 	m.Alert = outAlert.(bubbleup.AlertModel)
@@ -1155,6 +1169,16 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.viewport.GotoBottom()
 		}
 	case "up", "k":
+		if m.FocusedOn == Input && m.ShowBotCommands && len(m.FilteredBotCommands) > 0 {
+			if msg.String() == "up" {
+				m.SelectedBotCommandIndex--
+				if m.SelectedBotCommandIndex < 0 {
+					m.SelectedBotCommandIndex = len(m.FilteredBotCommands) - 1
+				}
+				m.SkipNextInput = true
+				return m, nil
+			}
+		}
 		if m.FocusedOn == Main {
 			if m.ShowForumTopics && m.SelectedForumTopic == nil {
 				return m, nil
@@ -1170,6 +1194,16 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 	case "down", "j":
+		if m.FocusedOn == Input && m.ShowBotCommands && len(m.FilteredBotCommands) > 0 {
+			if msg.String() == "down" {
+				m.SelectedBotCommandIndex++
+				if m.SelectedBotCommandIndex >= len(m.FilteredBotCommands) {
+					m.SelectedBotCommandIndex = 0
+				}
+				m.SkipNextInput = true
+				return m, nil
+			}
+		}
 		if m.FocusedOn == Main {
 			if m.ShowForumTopics && m.SelectedForumTopic == nil {
 				return m, nil
@@ -1224,6 +1258,12 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.IsModalVisible {
 			m.IsModalVisible = false
 			m.ModalContent = ""
+			return m, nil
+		}
+		if m.ShowBotCommands {
+			m.ShowBotCommands = false
+			m.FilteredBotCommands = nil
+			m.SkipNextInput = true
 			return m, nil
 		}
 		if m.SelectedFile != "" && m.SelectedFile != "uploading..." {
@@ -1288,6 +1328,11 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 	case "tab":
+		if m.FocusedOn == Input && m.ShowBotCommands && len(m.FilteredBotCommands) > 0 {
+			m.completeBotCommand()
+			m.SkipNextInput = true
+			return m, nil
+		}
 		m, cmd := changeFocusMode(&m, "tab", false)
 		cmds = append(cmds, cmd)
 		return m, tea.Batch(cmds...)
@@ -1432,6 +1477,11 @@ func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if m.FocusedOn == Input {
+		if m.ShowBotCommands && len(m.FilteredBotCommands) > 0 {
+			m.completeBotCommand()
+			m.SkipNextInput = true
+			return m, nil
+		}
 		return sendMessage(&m)
 	}
 	if m.FocusedOn == SideBar {

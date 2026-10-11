@@ -92,4 +92,8 @@ _Avoid_: Message grouping, message merging, bubble combining
 A styled metadata card rendered above the message input area displaying a staged file attachment (name, size) with single-key detachment (`[Esc]`).
 _Avoid_: File badge, attachment label, file box
 
+**Bot Command Autocomplete Overlay**:
+An ephemeral card composited directly above the message input bar in bot chats or groups with bots, displaying matched `/command - Description` pairs with `↑`/`↓` selection, `Tab`/`Enter` completion, and `Esc` dismissal.
+_Avoid_: Command popup, bot suggestion box, command menu
+
 
