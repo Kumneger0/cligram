@@ -295,18 +295,107 @@ func GetGlobalUpdateChannel() chan types.Notification {
 	return updateChannelGlobal
 }
 
+func extractPeerID(peerClass tg.PeerClass) string {
+	if peerClass == nil {
+		return ""
+	}
+	switch peer := peerClass.(type) {
+	case *tg.PeerUser:
+		return strconv.FormatInt(peer.UserID, 10)
+	case *tg.PeerChannel:
+		return strconv.FormatInt(peer.ChannelID, 10)
+	case *tg.PeerChat:
+		return strconv.FormatInt(peer.ChatID, 10)
+	}
+	return ""
+}
+
+func getPeerIDFromMessage(msg *tg.Message) string {
+	if msg == nil {
+		return ""
+	}
+	var peerClass tg.PeerClass
+	if msg.Out {
+		if p := msg.GetPeerID(); p != nil {
+			peerClass = p
+		} else if p, ok := msg.GetFromID(); ok {
+			peerClass = p
+		}
+	} else {
+		if p := msg.GetPeerID(); p != nil {
+			switch p.(type) {
+			case *tg.PeerChannel, *tg.PeerChat:
+				peerClass = p
+			}
+		}
+		if peerClass == nil {
+			if p, ok := msg.GetFromID(); ok {
+				peerClass = p
+			} else if p := msg.GetPeerID(); p != nil {
+				peerClass = p
+			}
+		}
+	}
+	return extractPeerID(peerClass)
+}
+
+func handleServiceMessage(sMsg *tg.MessageService, e tg.Entities, updateChannel chan types.Notification) {
+	var users []tg.UserClass
+	for _, u := range e.Users {
+		users = append(users, u)
+	}
+	var chats []tg.ChatClass
+	for _, c := range e.Chats {
+		chats = append(chats, c)
+	}
+	formatted := shared.FormatServiceMessage(sMsg, users, chats)
+	if formatted == nil {
+		return
+	}
+	peerID := extractPeerID(sMsg.GetPeerID())
+	if peerID == "" {
+		return
+	}
+	formatted.PeerID = &peerID
+	notification := types.Notification{
+		NewMessage: &types.NewMessageNotification{
+			ID:        sMsg.GetID(),
+			FromID:    peerID,
+			PeerID:    peerID,
+			Formatted: formatted,
+		},
+	}
+	select {
+	case updateChannel <- notification:
+	default:
+		slog.Warn("update channel is full, dropping service message")
+	}
+}
+
 func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHandler {
 	SetGlobalUpdateChannel(updateChannel)
 	dispatcher := tg.NewUpdateDispatcher()
 	dispatcher.OnNewChannelMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateNewChannelMessage) error {
-		msg, ok := update.Message.(*tg.Message)
-		if !ok {
-			return nil
-		}
-
-		if peerClass, ok := msg.GetFromID(); ok {
-			slog.Debug("received channel message", "peer", peerClass)
-			return nil
+		switch msg := update.Message.(type) {
+		case *tg.MessageService:
+			handleServiceMessage(msg, e, updateChannel)
+		case *tg.Message:
+			peerID := getPeerIDFromMessage(msg)
+			if peerID != "" {
+				notification := types.Notification{
+					NewMessage: &types.NewMessageNotification{
+						ID:      msg.GetID(),
+						FromID:  peerID,
+						PeerID:  peerID,
+						Message: msg,
+					},
+				}
+				select {
+				case updateChannel <- notification:
+				default:
+					slog.Warn("update channel is full, dropping channel message")
+				}
+			}
 		}
 		return nil
 	})
@@ -395,66 +484,111 @@ func newUpdateHandler(updateChannel chan types.Notification) telegram.UpdateHand
 	})
 
 	dispatcher.OnNewMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateNewMessage) error {
+		switch msg := update.Message.(type) {
+		case *tg.MessageService:
+			handleServiceMessage(msg, e, updateChannel)
+		case *tg.Message:
+			fromID := getPeerIDFromMessage(msg)
+			if fromID != "" {
+				notification := types.Notification{
+					NewMessage: &types.NewMessageNotification{
+						ID:      msg.GetID(),
+						FromID:  fromID,
+						PeerID:  fromID,
+						Message: msg,
+					},
+				}
+
+				select {
+				case updateChannel <- notification:
+				default:
+					slog.Warn("update channel is full, dropping message")
+				}
+			} else {
+				slog.Error("could not determine peer from message")
+			}
+		}
+		return nil
+	})
+
+	dispatcher.OnEditMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateEditMessage) error {
 		msg, ok := update.Message.(*tg.Message)
 		if !ok {
 			return nil
 		}
-		var peerClass tg.PeerClass
-		if msg.Out {
-			// For outgoing messages, PeerID is the recipient/destination dialog peer
-			if p := msg.GetPeerID(); p != nil {
-				peerClass = p
-			} else if p, ok := msg.GetFromID(); ok {
-				peerClass = p
-			}
-		} else {
-			// For incoming messages in channels or groups, PeerID is the conversation container
-			if p := msg.GetPeerID(); p != nil {
-				switch p.(type) {
-				case *tg.PeerChannel, *tg.PeerChat:
-					peerClass = p
-				}
-			}
-			// In private chats, FromID is the sender
-			if peerClass == nil {
-				if p, ok := msg.GetFromID(); ok {
-					peerClass = p
-				} else if p := msg.GetPeerID(); p != nil {
-					peerClass = p
-				}
-			}
+		peerID := getPeerIDFromMessage(msg)
+		editDate := time.Now()
+		if ed, ok := msg.GetEditDate(); ok && ed > 0 {
+			editDate = time.Unix(int64(ed), 0)
 		}
+		notification := types.Notification{
+			EditMessage: &types.EditMessageNotification{
+				ID:       msg.GetID(),
+				PeerID:   peerID,
+				Message:  msg,
+				EditDate: editDate,
+			},
+		}
+		select {
+		case updateChannel <- notification:
+		default:
+			slog.Warn("update channel is full, dropping edit message notification")
+		}
+		return nil
+	})
 
-		if peerClass != nil {
-			var fromID string
-			switch peer := peerClass.(type) {
-			case *tg.PeerUser:
-				fromID = strconv.FormatInt(peer.UserID, 10)
-			case *tg.PeerChannel:
-				fromID = strconv.FormatInt(peer.ChannelID, 10)
-			case *tg.PeerChat:
-				fromID = strconv.FormatInt(peer.ChatID, 10)
-			default:
-				slog.Warn("unknown peer type", "peer", peerClass)
-				return nil
-			}
+	dispatcher.OnEditChannelMessage(func(ctx context.Context, e tg.Entities, update *tg.UpdateEditChannelMessage) error {
+		msg, ok := update.Message.(*tg.Message)
+		if !ok {
+			return nil
+		}
+		peerID := getPeerIDFromMessage(msg)
+		editDate := time.Now()
+		if ed, ok := msg.GetEditDate(); ok && ed > 0 {
+			editDate = time.Unix(int64(ed), 0)
+		}
+		notification := types.Notification{
+			EditMessage: &types.EditMessageNotification{
+				ID:       msg.GetID(),
+				PeerID:   peerID,
+				Message:  msg,
+				EditDate: editDate,
+			},
+		}
+		select {
+		case updateChannel <- notification:
+		default:
+			slog.Warn("update channel is full, dropping edit channel message notification")
+		}
+		return nil
+	})
 
-			notification := types.Notification{
-				NewMessage: &types.NewMessageNotification{
-					ID:      msg.GetID(),
-					FromID:  fromID,
-					PeerID:  fromID,
-					Message: msg,
-				},
-			}
+	dispatcher.OnDeleteMessages(func(ctx context.Context, e tg.Entities, update *tg.UpdateDeleteMessages) error {
+		notification := types.Notification{
+			DeleteMessages: &types.DeleteMessagesNotification{
+				ChannelID: 0,
+				Messages:  update.Messages,
+			},
+		}
+		select {
+		case updateChannel <- notification:
+		default:
+			slog.Warn("update channel is full, dropping delete messages notification")
+		}
+		return nil
+	})
 
-			select {
-			case updateChannel <- notification:
-			default:
-				slog.Warn("update channel is full, dropping message")
-			}
-		} else {
-			slog.Error("could not determine peer from message")
+	dispatcher.OnDeleteChannelMessages(func(ctx context.Context, e tg.Entities, update *tg.UpdateDeleteChannelMessages) error {
+		notification := types.Notification{
+			DeleteMessages: &types.DeleteMessagesNotification{
+				ChannelID: update.ChannelID,
+				Messages:  update.Messages,
+			},
+		}
+		select {
+		case updateChannel <- notification:
+		default:
+			slog.Warn("update channel is full, dropping delete channel messages notification")
 		}
 		return nil
 	})

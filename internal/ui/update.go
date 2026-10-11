@@ -425,15 +425,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.ModalContent = GetModalContent(msg.Err.Error())
 			return m, nil
 		}
-		if msg.Response {
-			if selectedMessage, ok := m.ChatUI.SelectedItem().(types.FormattedMessage); ok {
-				selectedMessage.Content = msg.UpdatedMessage
-				items := m.ChatUI.Items()
-				items[m.ChatUI.GlobalIndex()] = selectedMessage
-				m.ChatUI.SetItems(items)
-			}
-			m.EditMessage = nil
-		}
+		m.EditMessage = nil
+		return m, nil
 
 	case types.UserTypingNotification:
 		user := msg.User
@@ -465,6 +458,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd := m.handleNewMessage(msg)
 		m = model.(Model)
 		cmds = append(cmds, cmd)
+		return m, cmd
+	case types.EditMessageNotification:
+		model, cmd := m.handleEditMessage(msg)
+		m = model.(Model)
+		return m, cmd
+	case types.DeleteMessagesNotification:
+		model, cmd := m.handleDeleteMessages(msg)
+		m = model.(Model)
 		return m, cmd
 	case types.ReadHistoryOutboxNotification:
 		if msg.MaxID <= 0 {
@@ -934,18 +935,25 @@ func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, te
 		}
 	}
 
-	if userInfo != nil {
+	if userInfo != nil && msg.Message != nil {
 		m.sendNewMessageNotification(*userInfo, msg.Message)
 	}
 
-	if channelOrGroupInfo != nil {
+	if channelOrGroupInfo != nil && msg.Message != nil {
 		m.sendNewMessageNotification(*channelOrGroupInfo, msg.Message)
+	}
+
+	isOut := false
+	if msg.Message != nil {
+		isOut = msg.Message.Out
+	} else if msg.Formatted != nil {
+		isOut = msg.Formatted.IsFromMe
 	}
 
 	currentPeerID := m.CurrentPeerID()
 	// If message does not belong to currently open chat:
 	if currentPeerID == "" || peerID != currentPeerID {
-		if !msg.Message.Out {
+		if !isOut {
 			var unreadCmds []tea.Cmd
 			if userInfo != nil {
 				l := listForUser(&m, *userInfo)
@@ -1004,27 +1012,32 @@ func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, te
 		chatType = types.UserChat
 	}
 
-	if !msg.Message.Out && userInfo != nil {
+	if !isOut && userInfo != nil {
 		m.SelectedUser.UnreadCount++
 	}
 
 	// Check if this message was already added (e.g. optimistic send or duplicate update)
 	alreadyPresent := false
 	for i, c := range m.Conversations {
-		if c.ID == msg.Message.ID || (msg.Message.Out && c.IsFromMe && c.Content == msg.Message.Message) {
-			m.Conversations[i].ID = msg.Message.ID
+		if c.ID == msg.ID || (msg.Message != nil && msg.Message.Out && c.IsFromMe && c.Content == msg.Message.Message) {
+			m.Conversations[i].ID = msg.ID
 			alreadyPresent = true
 			break
 		}
 	}
 
 	if !alreadyPresent {
-		formattedMessage := getFormattedMessageFunc(GetFormattedMessageArg{
-			ChatType:           chatType,
-			ChannelOrGroupInfo: channelOrGroupInfo,
-			UserInfo:           userInfo,
-			Message:            msg.Message,
-		})
+		var formattedMessage types.FormattedMessage
+		if msg.Formatted != nil {
+			formattedMessage = *msg.Formatted
+		} else if msg.Message != nil {
+			formattedMessage = getFormattedMessageFunc(GetFormattedMessageArg{
+				ChatType:           chatType,
+				ChannelOrGroupInfo: channelOrGroupInfo,
+				UserInfo:           userInfo,
+				Message:            msg.Message,
+			})
+		}
 		formattedMessage.PeerID = &peerID
 
 		wasAtBottom := m.viewport.AtBottom()
@@ -1043,6 +1056,119 @@ func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, te
 	cmd := m.updateConversations()
 	fetchCmd := m.checkAndFetchCustomEmojis(m.Conversations)
 	return m, tea.Batch(fetchCmd, cmd)
+}
+
+func (m Model) handleEditMessage(msg types.EditMessageNotification) (tea.Model, tea.Cmd) {
+	currentPeerID := m.CurrentPeerID()
+	if msg.PeerID != "" && currentPeerID != "" && msg.PeerID != currentPeerID {
+		return m, nil
+	}
+
+	foundIdx := -1
+	for i, c := range m.Conversations {
+		if c.ID == msg.ID {
+			foundIdx = i
+			break
+		}
+	}
+	if foundIdx == -1 {
+		return m, nil
+	}
+
+	if msg.Message != nil {
+		var userInfo *types.UserInfo
+		for _, v := range slices.Concat(m.Users.Items(), m.Bots.Items()) {
+			if user, ok := v.(types.UserInfo); ok && user.PeerID == currentPeerID {
+				userInfo = &user
+				break
+			}
+		}
+
+		var channelOrGroupInfo *types.ChannelInfo
+		if userInfo == nil {
+			for _, v := range slices.Concat(m.Channels.Items(), m.Groups.Items()) {
+				if cg, ok := v.(types.ChannelInfo); ok && cg.ID == currentPeerID {
+					channelOrGroupInfo = &cg
+					break
+				}
+			}
+		}
+
+		var chatType types.ChatType
+		if channelOrGroupInfo != nil {
+			if channelOrGroupInfo.IsBroadcast {
+				chatType = types.ChannelChat
+			} else {
+				chatType = types.GroupChat
+			}
+		} else if userInfo != nil {
+			if userInfo.IsBot {
+				chatType = types.BotChat
+			} else {
+				chatType = types.UserChat
+			}
+		} else {
+			chatType = types.UserChat
+		}
+
+		formatted := getFormattedMessageFunc(GetFormattedMessageArg{
+			ChatType:           chatType,
+			ChannelOrGroupInfo: channelOrGroupInfo,
+			UserInfo:           userInfo,
+			Message:            msg.Message,
+		})
+		formatted.IsEdited = true
+		editDate := msg.EditDate
+		formatted.EditDate = &editDate
+		formatted.PeerID = m.Conversations[foundIdx].PeerID
+		m.Conversations[foundIdx] = formatted
+	} else {
+		m.Conversations[foundIdx].IsEdited = true
+		editDate := msg.EditDate
+		m.Conversations[foundIdx].EditDate = &editDate
+	}
+
+	cmd := m.updateConversations()
+	fetchCmd := m.checkAndFetchCustomEmojis(m.Conversations)
+	return m, tea.Batch(fetchCmd, cmd)
+}
+
+func (m Model) handleDeleteMessages(msg types.DeleteMessagesNotification) (tea.Model, tea.Cmd) {
+	if len(msg.Messages) == 0 || len(m.Conversations) == 0 {
+		return m, nil
+	}
+
+	if msg.ChannelID != 0 {
+		currentPeerID := m.CurrentPeerID()
+		channelIDStr := strconv.FormatInt(msg.ChannelID, 10)
+		if currentPeerID != "" && currentPeerID != channelIDStr {
+			return m, nil
+		}
+	}
+
+	deletedSet := make(map[int]struct{}, len(msg.Messages))
+	for _, id := range msg.Messages {
+		deletedSet[id] = struct{}{}
+	}
+
+	newConversations := make([]types.FormattedMessage, 0, len(m.Conversations))
+	for _, c := range m.Conversations {
+		if _, deleted := deletedSet[c.ID]; !deleted {
+			newConversations = append(newConversations, c)
+		}
+	}
+
+	if len(newConversations) == len(m.Conversations) {
+		return m, nil
+	}
+
+	m.Conversations = newConversations
+	if m.SelectedMessageIndex >= len(m.Conversations) {
+		m.SelectedMessageIndex = len(m.Conversations) - 1
+	}
+
+	cmd := m.updateConversations()
+	return m, cmd
 }
 
 type GetFormattedMessageArg struct {
@@ -1424,6 +1550,10 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.IsReply {
 				m.IsReply = false
 				m.ReplyTo = nil
+			}
+			if m.EditMessage != nil {
+				m.EditMessage = nil
+				m.Input.Reset()
 			}
 			m.FocusedOn = Main
 			m.Input.Blur()

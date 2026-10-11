@@ -322,6 +322,7 @@ type Model struct {
 	ChatUI                   list.Model
 	Conversations            []types.FormattedMessage
 	ActivePeerID             string
+	Drafts                   map[string]string
 	SelectedMessageIndex     int
 	messageLineRanges        []messageLineRange
 	IsReply                  bool
@@ -814,6 +815,9 @@ func (m *Model) scrollSelectedMessageIntoView() {
 }
 
 func shouldCoalesceMessages(curr, prev types.FormattedMessage) bool {
+	if curr.IsService || prev.IsService {
+		return false
+	}
 	if curr.IsFromMe != prev.IsFromMe {
 		return false
 	}
@@ -909,6 +913,15 @@ func (m *Model) renderMessagesViewport(width, height int) string {
 }
 
 func (m *Model) renderMessageBubble(entry types.FormattedMessage, idx int, bubbleWidth int, viewportWidth int, readMaxOutboxID int) string {
+	if entry.IsService {
+		return lipgloss.NewStyle().
+			Width(viewportWidth).
+			Align(lipgloss.Center).
+			Foreground(DefaultTheme.SecondaryText).
+			Italic(true).
+			Render(entry.Content)
+	}
+
 	isSelected := (m.FocusedOn == Main && idx == m.SelectedMessageIndex)
 	isCoalesced := m.shouldCoalesce(idx)
 
@@ -1008,7 +1021,11 @@ func (m *Model) renderMessageBubble(entry types.FormattedMessage, idx int, bubbl
 			receiptStr = " " + readStateStyleSingle.Render("✓")
 		}
 	}
-	footer := timestampStyle.Render(timeStr) + receiptStr
+	var editedStr string
+	if entry.IsEdited {
+		editedStr = lipgloss.NewStyle().Foreground(DefaultTheme.SecondaryText).Italic(true).Render("(edited) ")
+	}
+	footer := editedStr + timestampStyle.Render(timeStr) + receiptStr
 	footerLine := lipgloss.NewStyle().
 		Width(max(10, bubbleWidth-4)).
 		Align(lipgloss.Right).

@@ -166,6 +166,14 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 	userMsg := m.Input.Value()
 	m.Input.Reset()
 	peerInfo := getMessageParams(m)
+	if m.Drafts != nil {
+		if peerInfo.ID != "" {
+			delete(m.Drafts, peerInfo.ID)
+		}
+		if m.ActivePeerID != "" {
+			delete(m.Drafts, m.ActivePeerID)
+		}
+	}
 	var messageToReply types.FormattedMessage
 	if m.ReplyTo != nil {
 		messageToReply = *m.ReplyTo
@@ -260,16 +268,43 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 }
 
 func (m *Model) editMessage(peerInfo types.Peer, userMsg string) (Model, tea.Cmd) {
+	if m.EditMessage == nil {
+		return *m, nil
+	}
+	editMsgID := m.EditMessage.ID
+	now := time.Now()
+	for i, c := range m.Conversations {
+		if c.ID == editMsgID {
+			m.Conversations[i].Content = userMsg
+			m.Conversations[i].IsEdited = true
+			m.Conversations[i].EditDate = &now
+			break
+		}
+	}
+	for idx, item := range m.ChatUI.Items() {
+		if fm, ok := item.(types.FormattedMessage); ok && fm.ID == editMsgID {
+			fm.Content = userMsg
+			fm.IsEdited = true
+			fm.EditDate = &now
+			_ = m.ChatUI.SetItem(idx, fm)
+			break
+		}
+	}
+	m.EditMessage = nil
+	m.Input.Reset()
+	updateCmd := m.updateConversations()
+
 	cmd := func() tea.Msg {
-		telegram.Cligram.EditMessage(telegram.Cligram.Context(), types.EditMessageRequest{
+		res := telegram.Cligram.EditMessage(telegram.Cligram.Context(), types.EditMessageRequest{
 			Peer:       peerInfo,
-			MessageID:  int(m.EditMessage.ID),
+			MessageID:  int(editMsgID),
 			NewMessage: userMsg,
 		})
-		return nil
+		res.UpdatedMessage = userMsg
+		return res
 	}
 
-	return *m, cmd
+	return *m, tea.Batch(cmd, updateCmd)
 }
 
 func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (Model, tea.Cmd) {
@@ -340,7 +375,15 @@ func handleUserChange(m *Model, offsetID *int, afterMessagesCmd tea.Cmd) (Model,
 	m.SelectedBotCommandIndex = 0
 
 	pInfo := getMessageParams(m)
+	if m.Drafts == nil {
+		m.Drafts = make(map[string]string)
+	}
+	if m.ActivePeerID != "" && m.ActivePeerID != pInfo.ID {
+		m.Drafts[m.ActivePeerID] = m.Input.Value()
+	}
 	m.ActivePeerID = pInfo.ID
+	m.Input.SetValue(m.Drafts[pInfo.ID])
+	m.Input.CursorEnd()
 
 	var prefetchBotCmds tea.Cmd
 	if m.BotCommandsCache == nil {
