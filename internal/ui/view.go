@@ -34,6 +34,7 @@ func (d CustomDelegate) Spacing() int {
 func (d CustomDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd {
 	return nil
 }
+
 func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	var title string
 	var icon string
@@ -123,12 +124,11 @@ func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 
 func (m Model) Init() tea.Cmd {
 	m.ensureSidebarSpinner()
-	filePickerInitCMD := m.Filepicker.Init()
 	if telegram.Cligram == nil {
-		return filePickerInitCMD
+		return nil
 	}
 	storiesCMD := telegram.Cligram.GetAllStories(telegram.Cligram.Context())
-	return tea.Batch(filePickerInitCMD, storiesCMD, telegram.Cligram.GetAllChats(telegram.Cligram.Context(), 0, 0, 50), m.SidebarSpinner.Tick)
+	return tea.Batch(storiesCMD, telegram.Cligram.GetAllChats(telegram.Cligram.Context(), 0, 0, 50), m.SidebarSpinner.Tick)
 }
 
 func getChannelIndex(m Model, channel types.ChannelInfo) int {
@@ -274,14 +274,7 @@ func (m *Model) editMessage(peerInfo types.Peer, userMsg string) (Model, tea.Cmd
 
 func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (Model, tea.Cmd) {
 	var cmd tea.Cmd
-	var cmds = *cmdsFromParent
-	m.Filepicker, cmd = m.Filepicker.Update(msg)
-	m.Filepicker.SetHeight(m.Height - 13)
-	cmds = append(cmds, cmd)
-	if didSelect, path := m.Filepicker.DidSelectFile(msg); didSelect && m.IsFilepickerVisible {
-		m.SelectedFile = path
-		m.IsFilepickerVisible = false
-	}
+	cmds := *cmdsFromParent
 
 	switch m.FocusedOn {
 	case Input:

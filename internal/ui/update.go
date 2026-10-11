@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"log/slog"
+	"os"
 	"os/exec"
 	"runtime"
 	"slices"
@@ -583,8 +584,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd := m.handleWindowSize(msg)
 		m = model.(Model)
 		cmds = append(cmds, cmd)
-		m.Filepicker, cmd = m.Filepicker.Update(msg)
-		cmds = append(cmds, cmd)
+	case FilePickedMsg:
+		if !msg.Canceled && msg.Path != "" {
+			if _, err := os.Stat(msg.Path); err == nil {
+				m.SelectedFile = msg.Path
+				m.FocusedOn = Input
+				m.Input.Focus()
+			}
+		}
+		return m, nil
 	case SelectSearchedUserResult:
 		model, cmd := m.handleSearchedUserResult(msg)
 		m = model.(Model)
@@ -1205,6 +1213,10 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 	case "esc":
+		if m.SelectedFile != "" && m.SelectedFile != "uploading..." {
+			m.SelectedFile = ""
+			return m, nil
+		}
 		if m.FocusedOn == Input {
 			if m.IsReply {
 				m.IsReply = false
@@ -1231,8 +1243,8 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.FocusedOn = SideBar
 			return m, nil
 		}
-	case "ctrl+a":
-		m, cmd := m.handleCtrlA()
+	case "ctrl+a", "ctrl+o":
+		m, cmd := m.handleFileAttachKey()
 		cmds = append(cmds, cmd)
 		return m, tea.Batch(cmds...)
 	case "ctrl+c":
@@ -1258,12 +1270,9 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 	case "tab":
-		if !m.IsFilepickerVisible {
-			m, cmd := changeFocusMode(&m, "tab", false)
-			cmds = append(cmds, cmd)
-			return m, tea.Batch(cmds...)
-		}
-		return m, nil
+		m, cmd := changeFocusMode(&m, "tab", false)
+		cmds = append(cmds, cmd)
+		return m, tea.Batch(cmds...)
 	case "shift+tab":
 		m, cmd := changeFocusMode(&m, "tab", true)
 		cmds = append(cmds, cmd)
@@ -1394,17 +1403,8 @@ func (m Model) handleEditKey() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) handleCtrlA() (tea.Model, tea.Cmd) {
-	if m.FocusedOn == Input {
-		m.IsFilepickerVisible = true
-		m.FocusedOn = Main
-		return m, nil
-	}
-	if m.IsFilepickerVisible {
-		m.IsFilepickerVisible = false
-		m.FocusedOn = Input
-	}
-	return m, nil
+func (m Model) handleFileAttachKey() (tea.Model, tea.Cmd) {
+	return TriggerFilePicker(&m)
 }
 
 func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
