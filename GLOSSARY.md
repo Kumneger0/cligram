@@ -88,3 +88,8 @@ _Avoid_: Participant list, member table, group users
 The visual grouping of consecutive messages sent by the same author within a 5-minute sliding window by omitting redundant author handles and tightening vertical spacing between bubbles.
 _Avoid_: Message grouping, message merging, bubble combining
 
+**Attachment Preview Chip**:
+A styled metadata card rendered above the message input area displaying a staged file attachment (name, size) with single-key detachment (`[Esc]`).
+_Avoid_: File badge, attachment label, file box
+
+

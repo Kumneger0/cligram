@@ -8,19 +8,17 @@ import (
 	"runtime/pprof"
 	"time"
 
-	"github.com/charmbracelet/bubbles/filepicker"
 	"github.com/charmbracelet/bubbles/list"
-	"github.com/gotd/td/tg"
-	"go.dalton.dog/bubbleup"
-
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/term"
+	"github.com/gotd/td/tg"
 	"github.com/kumneger0/cligram/internal/telegram"
 	"github.com/kumneger0/cligram/internal/telegram/types"
 	"github.com/kumneger0/cligram/internal/ui"
 	overlay "github.com/rmhubbert/bubbletea-overlay"
 	"github.com/spf13/cobra"
+	"go.dalton.dog/bubbleup"
 )
 
 var (
@@ -105,12 +103,6 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 				forumTopics.SetShowTitle(false)
 				forumTopics.SetShowStatusBar(false)
 
-				fp := filepicker.New()
-				fp.AllowedTypes = []string{}
-				fp.DirAllowed = false
-				fp.CurrentDirectory, _ = os.UserHomeDir()
-
-				model.Filepicker = fp
 				model.Input = input
 				model.All = allList
 				model.Users = userList
@@ -189,7 +181,6 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 				}()
 
 				_, err = Program.Run()
-
 				if err != nil {
 					return fmt.Errorf("failed to start TUI: %w", err)
 				}

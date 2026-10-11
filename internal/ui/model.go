@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/charmbracelet/bubbles/filepicker"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -21,19 +20,18 @@ import (
 	"github.com/kumneger0/cligram/internal/telegram"
 	"github.com/kumneger0/cligram/internal/telegram/types"
 	"github.com/muesli/reflow/wordwrap"
+	overlay "github.com/rmhubbert/bubbletea-overlay"
 	"go.dalton.dog/bubbleup"
 )
 
-var (
-	dialogBoxStyle = lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(DefaultTheme.AccentColor).
-		Padding(1, 2).
-		BorderTop(true).
-		BorderLeft(true).
-		BorderRight(true).
-		BorderBottom(true)
-)
+var dialogBoxStyle = lipgloss.NewStyle().
+	Border(lipgloss.RoundedBorder()).
+	BorderForeground(DefaultTheme.AccentColor).
+	Padding(1, 2).
+	BorderTop(true).
+	BorderLeft(true).
+	BorderRight(true).
+	BorderBottom(true)
 
 type ForumTopicsDelegate struct {
 	list.DefaultDelegate
@@ -300,8 +298,6 @@ type messageLineRange struct {
 type Model struct {
 	PhoneCallDhConfigs       *PhoneCallDghConfigs
 	Alert                    bubbleup.AlertModel
-	Filepicker               filepicker.Model
-	IsFilepickerVisible      bool
 	SelectedFile             string
 	All                      list.Model
 	AllLoaded                bool
@@ -406,21 +402,15 @@ func formatMessages(msgs []types.FormattedMessage) []list.Item {
 	return lines
 }
 
-// this is just temporary just to get things working
-// definitely i need to remove this
 func GetModalContent(errorMessage string) string {
 	var modalContent strings.Builder
 	modalContent.WriteString(errorMessage)
-	modalContent.WriteString("\n" + "press ctrl + c or q to close")
-	modalWidth := max(40, len(errorMessage)+4)
+	modalContent.WriteString("\n\n" + "[Enter] or [Esc] to dismiss")
+	modalWidth := max(44, min(65, len(errorMessage)+6))
 	return dialogBoxStyle.Width(modalWidth).Render(modalContent.String())
 }
 
 func setItemStyles(m *Model) string {
-	if m.IsModalVisible {
-		return renderModal(m)
-	}
-
 	dimensions := calculateLayoutDimensions(m)
 
 	updateListDimensions(m, dimensions)
@@ -441,7 +431,11 @@ func setItemStyles(m *Model) string {
 		fullLayout = lipgloss.JoinVertical(lipgloss.Top, row, inputView)
 	}
 
-	return lipgloss.NewStyle().Background(DefaultTheme.SubtleBg).Render(fullLayout)
+	bg := lipgloss.NewStyle().Background(DefaultTheme.SubtleBg).Render(fullLayout)
+	if m.IsModalVisible && m.ModalContent != "" {
+		return overlay.Composite(m.ModalContent, bg, overlay.Center, overlay.Center, 0, 0)
+	}
+	return bg
 }
 
 type layoutDimensions struct {
@@ -490,13 +484,7 @@ func updateListDimensions(m *Model, d layoutDimensions) {
 }
 
 func renderModal(m *Model) string {
-	return lipgloss.Place(
-		m.Width,
-		m.Height,
-		lipgloss.Center,
-		lipgloss.Center,
-		m.ModalContent,
-	)
+	return m.ModalContent
 }
 
 func getUserOrChannelName(m *Model) string {
@@ -622,15 +610,10 @@ func prepareMainContent(m *Model, d layoutDimensions) string {
 		return mainStyle.Render(mainContent)
 	}
 
-	var chatsView string
-	if m.IsFilepickerVisible {
-		chatsView = prepareFilepickerView(m)
-	} else {
-		headerHeight := lipgloss.Height(headerView)
-		availHeight := max(4, d.contentHeight-4-headerHeight)
-		availWidth := max(10, d.mainWidth-6)
-		chatsView = m.renderMessagesViewport(availWidth, availHeight)
-	}
+	headerHeight := lipgloss.Height(headerView)
+	availHeight := max(4, d.contentHeight-4-headerHeight)
+	availWidth := max(10, d.mainWidth-6)
+	chatsView := m.renderMessagesViewport(availWidth, availHeight)
 
 	mainContent := lipgloss.JoinVertical(
 		lipgloss.Top,
@@ -1096,21 +1079,6 @@ func (m *Model) renderMediaAttachment(att *types.MediaAttachment, isSelected boo
 	return cardStyle.Render(wordwrap.String(line, maxCardWidth))
 }
 
-func prepareFilepickerView(m *Model) string {
-	var s strings.Builder
-	s.WriteString("\n  ")
-	if m.SelectedFile == "" {
-		s.WriteString("Pick a file:")
-	} else {
-		s.WriteString("Selected file: click ctrl + a to close file picker\n")
-		s.WriteString(m.Filepicker.Styles.Selected.Render(m.SelectedFile))
-	}
-	s.WriteString("\n\n")
-	s.WriteString(m.Filepicker.View())
-	s.WriteString("\n")
-	return s.String()
-}
-
 func (m *Model) ensureSidebarSpinner() {
 	if len(m.SidebarSpinner.Spinner.Frames) == 0 {
 		s := spinner.New()
@@ -1364,8 +1332,8 @@ func prepareInputView(m *Model, d layoutDimensions) string {
 	}
 
 	if m.SelectedFile != "" {
-		fileContext := fmt.Sprintf("File \n%s", strings.Split(m.SelectedFile, "\n")[0])
-		inputView = lipgloss.JoinVertical(lipgloss.Top, fileContext, inputView)
+		attachmentChip := renderAttachmentChip(m.SelectedFile, d.mainWidth)
+		inputView = lipgloss.JoinVertical(lipgloss.Top, attachmentChip, inputView)
 	}
 
 	return inputView
