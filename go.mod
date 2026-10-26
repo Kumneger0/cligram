@@ -13,7 +13,7 @@ require (
 	github.com/gofrs/flock v0.13.1
 	github.com/golangci/golangci-lint v1.59.1
 	github.com/gotd/contrib v0.25.0
-	github.com/gotd/td v0.162.0
+	github.com/gotd/td v0.163.0
 	github.com/gotesttools/gotestfmt/v2 v2.5.0
 	github.com/hashicorp/go-version v1.9.0
 	github.com/muesli/mango-cobra v1.3.0
@@ -80,7 +80,6 @@ require (
 	github.com/curioswitch/go-reassign v0.2.0 // indirect
 	github.com/denis-tingaikin/go-header v0.5.0 // indirect
 	github.com/dlclark/regexp2 v1.12.0 // indirect
-	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
 	github.com/esiqveland/notify v0.13.3 // indirect
 	github.com/ettle/strcase v0.2.0 // indirect
