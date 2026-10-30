@@ -336,16 +336,17 @@ type CloseOverlay struct{}
 type ModalMode string
 
 const (
-	ModalModeSearch         ModalMode = "SEARCH"
-	ModalModeForwardMessage ModalMode = "FORWARD_MESSAGE"
-	ModalModeDeleteMessage  ModalMode = "DELETE_MESSAGE"
-	ModalModeShowStories    ModalMode = "SHOW_STORIES"
-	ModalModeSendReaction   ModalMode = "SEND_REACTION"
-	ModalModeGroupMembers   ModalMode = "GROUP_MEMBERS"
-	ModalModeAlert          ModalMode = "ALERT"
-	ModalModeJoinPreview    ModalMode = "JOIN_PREVIEW"
-	ModalModeComments       ModalMode = "COMMENTS"
-	ModalModeGhostMode      ModalMode = "GHOST_MODE"
+	ModalModeSearch          ModalMode = "SEARCH"
+	ModalModeForwardMessage  ModalMode = "FORWARD_MESSAGE"
+	ModalModeDeleteMessage   ModalMode = "DELETE_MESSAGE"
+	ModalModeShowStories     ModalMode = "SHOW_STORIES"
+	ModalModeSendReaction    ModalMode = "SEND_REACTION"
+	ModalModeGroupMembers    ModalMode = "GROUP_MEMBERS"
+	ModalModeAlert           ModalMode = "ALERT"
+	ModalModeJoinPreview     ModalMode = "JOIN_PREVIEW"
+	ModalModeComments        ModalMode = "COMMENTS"
+	ModalModeGhostMode       ModalMode = "GHOST_MODE"
+	ModalModeAccountSwitcher ModalMode = "ACCOUNT_SWITCHER"
 )
 
 type OpenModalMsg struct {
@@ -437,6 +438,24 @@ type Foreground struct {
 	// Ghost Mode fields
 	GhostModeIndex int
 	GhostConfig    config.CliGramConfig
+
+	// Account Switcher & Auth Wizard fields
+	Accounts             []types.AccountsOnDeviceInfo
+	ActiveAccount        string
+	AccountSwitcherIndex int
+	AccountsLoading      bool
+	IsSwitchingAccount   bool
+	InAuthWizard         bool
+	AuthWizardStep       int // 0: Phone, 1: Code, 2: 2FA Password
+	authPhoneInput       textinput.Model
+	authCodeInput        textinput.Model
+	authPasswordInput    textinput.Model
+	authPhoneNumber      string
+	authPhoneCodeHash    string
+	authNewAccountPath   string
+	authSession          *telegram.AuthSession
+	authLoading          bool
+	authError            error
 }
 
 func (f *Foreground) ensureSpinner() {
@@ -1246,6 +1265,10 @@ func (f *Foreground) View() string {
 		return renderGhostModeModal(f, foreStyle)
 	}
 
+	if f.ModalMode == ModalModeAccountSwitcher {
+		return renderAccountSwitcherModal(f, foreStyle)
+	}
+
 	title := lipgloss.NewStyle().Foreground(DefaultTheme.PrimaryText).Bold(true).Render("Search")
 	contentWidth := max(40, min(70, f.windowWidth*2/3))
 	f.input.Width = contentWidth - 4
@@ -1325,65 +1348,6 @@ func (m Model) GetUserAccessHashFromModel(userID int64) (types.UserInfo, error) 
 		}
 	}
 	return userInfo, nil
-}
-
-func renderEntityInfo(f *Foreground) string {
-	var info strings.Builder
-	detailStyle := lipgloss.NewStyle().Foreground(DefaultTheme.SecondaryText)
-
-	if f.Entity.User != nil {
-		u := f.Entity.User
-		name := u.FirstName
-		if u.LastName != "" {
-			name += " " + u.LastName
-		}
-		info.WriteString(lipgloss.NewStyle().Foreground(DefaultTheme.PrimaryText).Bold(true).Render(name) + "\n")
-		if u.Username != "" {
-			info.WriteString(detailStyle.Render("@"+u.Username) + "\n")
-		}
-		info.WriteString("\n")
-
-		if u.IsBot {
-			info.WriteString(detailStyle.Render("🤖 Bot") + "\n")
-		}
-
-		if u.IsOnline {
-			info.WriteString(lipgloss.NewStyle().Foreground(DefaultTheme.OnlineStatus).Render("● Online") + "\n")
-		} else if u.LastSeen != nil {
-			info.WriteString(detailStyle.Render("Last seen: "+*u.LastSeen) + "\n")
-		}
-
-		if u.Premium {
-			info.WriteString(lipgloss.NewStyle().Foreground(DefaultTheme.AccentColor).Render("⭐ Premium User") + "\n")
-		}
-		info.WriteString(detailStyle.Render(fmt.Sprintf("ID: %s", u.PeerID)) + "\n")
-	} else if f.Entity.Channel != nil || f.Entity.Group != nil {
-		var c *types.ChannelInfo
-		if f.Entity.Channel != nil {
-			c = f.Entity.Channel
-		} else {
-			c = f.Entity.Group
-		}
-
-		info.WriteString(lipgloss.NewStyle().Foreground(DefaultTheme.PrimaryText).Bold(true).Render(c.ChannelTitle) + "\n")
-		if c.Username != nil && *c.Username != "" {
-			info.WriteString(detailStyle.Render("@"+*c.Username) + "\n")
-		}
-		info.WriteString("\n")
-
-		if c.ParticipantsCount != nil {
-			info.WriteString(detailStyle.Render(fmt.Sprintf("Members: %d", *c.ParticipantsCount)) + "\n")
-		}
-
-		if c.IsBroadcast {
-			info.WriteString(detailStyle.Render("Broadcast Channel") + "\n")
-		}
-		if c.IsForum {
-			info.WriteString(detailStyle.Render("Forum Enabled") + "\n")
-		}
-		info.WriteString(detailStyle.Render(fmt.Sprintf("ID: %s", c.ID)) + "\n")
-	}
-	return lipgloss.NewStyle().Padding(1, 0).Render(info.String())
 }
 
 func formatNumberWithCommas(n int) string {
@@ -1509,6 +1473,197 @@ func renderGhostModeModal(f *Foreground, foreStyle lipgloss.Style) string {
 	footerHints := lipgloss.NewStyle().
 		Foreground(DefaultTheme.SecondaryText).
 		Render("[↑/↓, j/k] Navigate  [Enter/Space] Change  [Esc/q/F2/,] Close")
+
+	layout := lipgloss.JoinVertical(
+		lipgloss.Left,
+		title,
+		divider,
+		"",
+		lipgloss.JoinVertical(lipgloss.Left, itemBlocks...),
+		"",
+		footerDivider,
+		footerHints,
+	)
+	return foreStyle.Width(contentWidth + 2).Render(layout)
+}
+
+func renderAccountSwitcherModal(f *Foreground, foreStyle lipgloss.Style) string {
+	contentWidth := max(52, min(70, f.windowWidth-6))
+	if f.windowWidth <= 0 {
+		contentWidth = 58
+	}
+
+	spinView := f.spinner.View()
+	if spinView == "" {
+		spinView = "⠋"
+	}
+
+	divider := lipgloss.NewStyle().
+		Foreground(DefaultTheme.BorderColor).
+		Render(strings.Repeat("─", contentWidth))
+
+	if f.InAuthWizard {
+		title := lipgloss.NewStyle().
+			Foreground(DefaultTheme.AccentColor).
+			Bold(true).
+			Render("➕ Add Telegram Account")
+
+		var stepHeader, promptText string
+		var inputView string
+
+		switch f.AuthWizardStep {
+		case 0:
+			stepHeader = lipgloss.NewStyle().Foreground(DefaultTheme.AccentColor).Bold(true).Render("Step 1/3: Phone Number")
+			promptText = "Enter your phone number in international format (e.g. +14155552671):"
+			f.authPhoneInput.Width = contentWidth - 4
+			inputView = lipgloss.NewStyle().
+				Width(contentWidth).
+				Background(DefaultTheme.InputBg).
+				Padding(0, 1).
+				Render(f.authPhoneInput.View())
+		case 1:
+			stepHeader = lipgloss.NewStyle().Foreground(DefaultTheme.AccentColor).Bold(true).Render("Step 2/3: Login Code")
+			promptText = fmt.Sprintf("Enter the verification code sent to your Telegram app for %s:", f.authPhoneNumber)
+			f.authCodeInput.Width = contentWidth - 4
+			inputView = lipgloss.NewStyle().
+				Width(contentWidth).
+				Background(DefaultTheme.InputBg).
+				Padding(0, 1).
+				Render(f.authCodeInput.View())
+		case 2:
+			stepHeader = lipgloss.NewStyle().Foreground(DefaultTheme.AccentColor).Bold(true).Render("Step 3/3: Two-Factor Password (2FA)")
+			promptText = "🔐 This account has 2FA enabled. Enter your password:"
+			f.authPasswordInput.Width = contentWidth - 4
+			inputView = lipgloss.NewStyle().
+				Width(contentWidth).
+				Background(DefaultTheme.InputBg).
+				Padding(0, 1).
+				Render(f.authPasswordInput.View())
+		}
+
+		promptStyled := lipgloss.NewStyle().Foreground(DefaultTheme.PrimaryText).Render(promptText)
+
+		var elements []string
+		elements = append(elements, title, divider, stepHeader, promptStyled, "", inputView)
+
+		if f.authLoading {
+			loadingText := fmt.Sprintf("%s Please wait...", spinView)
+			switch f.AuthWizardStep {
+			case 0:
+				loadingText = fmt.Sprintf("%s Sending login code to Telegram...", spinView)
+			case 1:
+				loadingText = fmt.Sprintf("%s Verifying code and logging in...", spinView)
+			case 2:
+				loadingText = fmt.Sprintf("%s Authenticating with 2FA password...", spinView)
+			}
+			status := lipgloss.NewStyle().Foreground(DefaultTheme.AccentColor).Bold(true).Render(loadingText)
+			elements = append(elements, "", status)
+		} else if f.authError != nil {
+			errText := lipgloss.NewStyle().Foreground(DefaultTheme.ErrorColor).Render(fmt.Sprintf("⚠️  %v", f.authError))
+			elements = append(elements, "", errText)
+		}
+
+		footerDivider := lipgloss.NewStyle().
+			Foreground(DefaultTheme.BorderColor).
+			Render(strings.Repeat("─", contentWidth))
+		footerHints := lipgloss.NewStyle().
+			Foreground(DefaultTheme.SecondaryText).
+			Render("[Enter] Submit    [Esc] Back to Accounts")
+
+		elements = append(elements, "", footerDivider, footerHints)
+
+		layout := lipgloss.JoinVertical(lipgloss.Left, elements...)
+		return foreStyle.Width(contentWidth + 2).Render(layout)
+	}
+
+	titleText := "👤 Telegram Accounts"
+	if f.IsSwitchingAccount {
+		titleText = fmt.Sprintf("👤 Telegram Accounts — %s Switching account...", spinView)
+	} else if f.AccountsLoading {
+		titleText = fmt.Sprintf("👤 Telegram Accounts — %s Loading...", spinView)
+	}
+
+	title := lipgloss.NewStyle().
+		Foreground(DefaultTheme.AccentColor).
+		Bold(true).
+		Render(titleText)
+
+	var itemBlocks []string
+
+	for i, acc := range f.Accounts {
+		isSelected := i == f.AccountSwitcherIndex
+		isActive := acc.Path == f.ActiveAccount || (f.ActiveAccount == "" && i == 0)
+
+		var cursor string
+		var nameStyle, phoneStyle, pathStyle lipgloss.Style
+
+		if isSelected {
+			cursor = lipgloss.NewStyle().Foreground(DefaultTheme.AccentColor).Bold(true).Render("▎ ")
+			nameStyle = lipgloss.NewStyle().Foreground(DefaultTheme.AccentColor).Bold(true)
+			phoneStyle = lipgloss.NewStyle().Foreground(DefaultTheme.PrimaryText)
+			pathStyle = lipgloss.NewStyle().Foreground(DefaultTheme.AccentColor).Italic(true)
+		} else {
+			cursor = "  "
+			nameStyle = lipgloss.NewStyle().Foreground(DefaultTheme.PrimaryText).Bold(true)
+			phoneStyle = lipgloss.NewStyle().Foreground(DefaultTheme.SecondaryText)
+			pathStyle = lipgloss.NewStyle().Foreground(DefaultTheme.SecondaryText).Italic(true)
+		}
+
+		var activeBadge string
+		if isActive {
+			activeBadge = " " + lipgloss.NewStyle().
+				Foreground(DefaultTheme.OnlineStatus).
+				Bold(true).
+				Render("[Active]")
+		}
+
+		displayName := acc.AccountName
+		if displayName == "" {
+			displayName = "Telegram User"
+		}
+
+		phoneDisplay := acc.PhoneNumber
+		if phoneDisplay == "" {
+			phoneDisplay = "No phone saved"
+		}
+
+		topLine := fmt.Sprintf("%s%s%s %s", cursor, nameStyle.Render(displayName), activeBadge, pathStyle.Render("("+acc.Path+")"))
+		subLine := fmt.Sprintf("    %s", phoneStyle.Render("Phone: "+phoneDisplay))
+
+		itemBlocks = append(itemBlocks, topLine, subLine)
+		if i < len(f.Accounts)-1 || true {
+			itemBlocks = append(itemBlocks, "")
+		}
+	}
+
+	// [+ Add Account] item
+	addIndex := len(f.Accounts)
+	isAddSelected := f.AccountSwitcherIndex == addIndex
+
+	var addCursor string
+	var addLabelStyle, addDescStyle lipgloss.Style
+
+	if isAddSelected {
+		addCursor = lipgloss.NewStyle().Foreground(DefaultTheme.AccentColor).Bold(true).Render("▎ ")
+		addLabelStyle = lipgloss.NewStyle().Foreground(DefaultTheme.SelectedFg).Background(DefaultTheme.AccentColor).Padding(0, 1).Bold(true)
+		addDescStyle = lipgloss.NewStyle().Foreground(DefaultTheme.PrimaryText)
+	} else {
+		addCursor = "  "
+		addLabelStyle = lipgloss.NewStyle().Foreground(DefaultTheme.AccentColor).Bold(true)
+		addDescStyle = lipgloss.NewStyle().Foreground(DefaultTheme.SecondaryText)
+	}
+
+	addTopLine := fmt.Sprintf("%s%s", addCursor, addLabelStyle.Render("[+ Add Account]"))
+	addDescLine := fmt.Sprintf("    %s", addDescStyle.Render("Log in to another Telegram account via inline wizard"))
+	itemBlocks = append(itemBlocks, addTopLine, addDescLine)
+
+	footerDivider := lipgloss.NewStyle().
+		Foreground(DefaultTheme.BorderColor).
+		Render(strings.Repeat("─", contentWidth))
+
+	footerHints := lipgloss.NewStyle().
+		Foreground(DefaultTheme.SecondaryText).
+		Render("[↑/↓, j/k] Navigate  [Enter] Select / Add  [Esc/Ctrl+A/q] Close")
 
 	layout := lipgloss.JoinVertical(
 		lipgloss.Left,

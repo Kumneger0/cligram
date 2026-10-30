@@ -1,21 +1,12 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"log/slog"
-	"os"
-	"path/filepath"
-	"regexp"
-	"slices"
-	"strconv"
 	"strings"
-	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kumneger0/cligram/internal/telegram"
-	"github.com/kumneger0/cligram/internal/telegram/client"
 	"github.com/kumneger0/cligram/internal/telegram/types"
 	"github.com/spf13/cobra"
 )
@@ -164,160 +155,19 @@ func Account(telegramAPIID, telegramAPIHash string) *cobra.Command {
 }
 
 func generateDir() string {
-	userHomeDir, err := os.UserHomeDir()
-	if err != nil {
-		slog.Error(err.Error())
-		return "account1"
-	}
-	sessionDir := filepath.Join(userHomeDir, ".cligram")
-
-	if _, err := os.Stat(sessionDir); os.IsNotExist(err) {
-		return "account1"
-	}
-
-	dirEntry, err := os.ReadDir(sessionDir)
-	if err != nil {
-		slog.Error(err.Error())
-		return "account1"
-	}
-
-	re := regexp.MustCompile(`^account(\d+)$`)
-	maxID := 0
-
-	for _, dir := range dirEntry {
-		if dir.IsDir() {
-			matches := re.FindStringSubmatch(dir.Name())
-			if len(matches) == 2 {
-				id, err := strconv.Atoi(matches[1])
-				if err == nil && id > maxID {
-					maxID = id
-				}
-			}
-		}
-	}
-	return fmt.Sprintf("account%d", maxID+1)
+	return telegram.GenerateDir()
 }
 
-type DirInfo struct {
-	name    string
-	modTime int64
-}
+type DirInfo = telegram.DirInfo
 
 func getCligramDir() *string {
-	userHomeDir, err := os.UserHomeDir()
-	if err != nil {
-		slog.Error(err.Error())
-		return nil
-	}
-	sessionDir := filepath.Join(userHomeDir, ".cligram")
-	return &sessionDir
+	return telegram.GetCligramDir()
 }
 
 func getAccountPaths() []DirInfo {
-	cligramDir := getCligramDir()
-	if cligramDir == nil {
-		return []DirInfo{}
-	}
-	dirEntry, err := os.ReadDir(*cligramDir)
-	if err != nil {
-		slog.Error(err.Error())
-		return []DirInfo{}
-	}
-
-	var dirs []DirInfo
-	for _, dir := range dirEntry {
-		if dir.IsDir() {
-			info, err := dir.Info()
-			if err != nil {
-				slog.Error(err.Error())
-				continue
-			}
-			dirs = append(dirs, DirInfo{
-				name:    dir.Name(),
-				modTime: info.ModTime().Unix(),
-			})
-		}
-	}
-
-	slices.SortFunc(dirs, func(a, b DirInfo) int {
-		if a.modTime < b.modTime {
-			return -1
-		}
-		if a.modTime > b.modTime {
-			return 1
-		}
-		return 0
-	})
-
-	return dirs
+	return telegram.GetAccountPaths()
 }
 
 func getAccountDirsOnThisDevice(telegramAPIID, telegramAPIHash string) []types.AccountsOnDeviceInfo {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	dirs := getAccountPaths()
-
-	originalCligram := client.Cligram
-	originalUpdateChannel := client.GetGlobalUpdateChannel()
-	defer func() {
-		client.Cligram = originalCligram
-		client.SetGlobalUpdateChannel(originalUpdateChannel)
-	}()
-
-	var accountsOnThisDevice []types.AccountsOnDeviceInfo
-	for _, d := range dirs {
-		var mu sync.Mutex
-		var wg sync.WaitGroup
-		wg.Add(1)
-		go func(d DirInfo) {
-			defer wg.Done()
-
-			clientCtx, clientCancel := context.WithCancel(ctx)
-			defer clientCancel()
-
-			cligram, err := telegram.NewClient(clientCtx, nil, telegramAPIID, telegramAPIHash, d.name)
-			if err != nil {
-				slog.Error("failed to create client", "path", d.name, "error", err)
-				return
-			}
-
-			err = cligram.Client.Run(clientCtx, func(ctx context.Context) error {
-				self, err := cligram.Client.Self(ctx)
-				if err != nil {
-					errMessage := err.Error()
-					slog.Error(errMessage)
-					return err
-				}
-
-				mu.Lock()
-				accountsOnThisDevice = append(accountsOnThisDevice, types.AccountsOnDeviceInfo{
-					AccountName: self.FirstName,
-					PhoneNumber: self.Phone,
-					Path:        d.name,
-					ModTime:     d.modTime,
-				})
-				mu.Unlock()
-
-				clientCancel()
-				return nil
-			})
-
-			if err != nil {
-				slog.Debug("client run finished", "path", d.name, "error", err)
-			}
-		}(d)
-		wg.Wait()
-	}
-
-	slices.SortFunc(accountsOnThisDevice, func(a, b types.AccountsOnDeviceInfo) int {
-		if a.ModTime < b.ModTime {
-			return -1
-		}
-		if a.ModTime > b.ModTime {
-			return 1
-		}
-		return 0
-	})
-
-	return accountsOnThisDevice
+	return telegram.GetAccountDirsOnThisDevice(telegramAPIID, telegramAPIHash)
 }

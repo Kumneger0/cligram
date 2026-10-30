@@ -107,6 +107,31 @@ func (m Manager) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 					return m, tea.Batch(cmds...)
 				}
 			}
+		case "ctrl+a":
+			switch m.State {
+			case ModalView:
+				if fg, ok := m.Foreground.(*Foreground); ok && fg.ModalMode == ModalModeAccountSwitcher {
+					m.State = MainView
+					return m, nil
+				}
+			case MainView:
+				inputFocused := false
+				if bg, ok := m.Background.(Model); ok && bg.FocusedOn == Input {
+					inputFocused = true
+				} else if bg, ok := m.Background.(*Model); ok && bg.FocusedOn == Input {
+					inputFocused = true
+				}
+				if !inputFocused {
+					m.State = ModalView
+					openModalMsg := func() tea.Msg {
+						return OpenModalMsg{
+							ModalMode: ModalModeAccountSwitcher,
+						}
+					}
+					cmds = append(cmds, openModalMsg)
+					return m, tea.Batch(cmds...)
+				}
+			}
 		case "ctrl+k":
 			if m.State == MainView {
 				m.State = ModalView

@@ -42,6 +42,11 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 				return nil
 			}
 
+			telegram.SetAPICredentials(telegramAPIID, telegramAPIHash)
+			telegram.SetActiveAccount(account)
+			telegram.SetGlobalUpdateChannel(updateChannel)
+			telegram.SetSessionCancel(cancel)
+
 			cligram, err := telegram.NewClient(ctx, updateChannel, telegramAPIID, telegramAPIHash, account)
 			if err != nil {
 				slog.Error(err.Error())
@@ -50,7 +55,6 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 			telegram.Cligram = cligram
 			err = telegram.Cligram.Run(ctx, func(ctx context.Context) error {
 				accountsOnThisDevice := getAccountDirsOnThisDevice(telegramAPIID, telegramAPIHash)
-				telegram.SetGlobalUpdateChannel(updateChannel)
 				if err := cligram.Auth(ctx, accountsOnThisDevice); err != nil {
 					slog.Error(err.Error())
 					return fmt.Errorf("authentication failed: %w", err)
@@ -236,7 +240,7 @@ func Execute(version string, telegramAPIID, telegramAPIHash string) error {
 	accountPaths := getAccountPaths()
 	defaultAccount := "account1"
 	if len(accountPaths) > 0 {
-		defaultAccount = accountPaths[0].name
+		defaultAccount = accountPaths[0].Name
 	}
 	cmd.Flags().StringP("account", "a", defaultAccount, "account to login in to ")
 	cmd.PersistentFlags().StringVar(&cpuFile, "cpuprofile", "", "write cpu profile to `file`")
