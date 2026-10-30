@@ -207,3 +207,30 @@ type CallMuteToggledMsg struct {
 	Muted  bool
 	Err    error
 }
+
+type AccountSwitchedMsg struct {
+	Account string
+	User    *UserInfo
+	Err     error
+}
+
+type AuthCodeSentMsg struct {
+	PhoneCodeHash string
+	Err           error
+}
+
+type AuthSignInMsg struct {
+	PasswordNeeded bool
+	User           *UserInfo
+	Err            error
+}
+
+type AuthPasswordMsg struct {
+	User *UserInfo
+	Err  error
+}
+
+type AccountsLoadedMsg struct {
+	Accounts []AccountsOnDeviceInfo
+	Err      error
+}

@@ -40,6 +40,14 @@ type Client struct {
 	updateChannel         chan types.Notification
 	accountNotifySettings *types.AccountNotifySettings
 	accountNotifyMu       sync.RWMutex
+	account               string
+}
+
+func (c *Client) AccountName() string {
+	if c == nil {
+		return ""
+	}
+	return c.account
 }
 
 func (c *Client) GetAccountNotifySettings() *types.AccountNotifySettings {
@@ -104,6 +112,7 @@ func NewClient(ctx context.Context, config Config, account string) (*Client, err
 		Client:        Cligram,
 		ctx:           ctx,
 		updateChannel: config.UpdateChannel,
+		account:       account,
 	}, nil
 }
 

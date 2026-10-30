@@ -622,6 +622,103 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.CurrentUser = msg.User
+	case types.AccountSwitchedMsg:
+		if msg.Err != nil {
+			slog.Error("Failed to switch account", "account", msg.Account, "error", msg.Err)
+			return m, nil
+		}
+		m.CurrentUser = msg.User
+		m.ActivePeerID = ""
+		m.SelectedMessageIndex = -1
+		m.Conversations = []types.FormattedMessage{}
+		m.SelectedUser = types.UserInfo{}
+		m.SelectedChannel = types.ChannelInfo{}
+		m.SelectedGroup = types.ChannelInfo{}
+		m.SelectedForumTopic = nil
+		m.Drafts = make(map[string]string)
+		m.OffsetDate = 0
+		m.OffsetID = 0
+		m.UsersOffsetDate = 0
+		m.UsersOffsetID = 0
+		m.ChannelsOffsetDate = 0
+		m.ChannelsOffsetID = 0
+		m.GroupsOffsetDate = 0
+		m.GroupsOffsetID = 0
+		m.BotsOffsetDate = 0
+		m.BotsOffsetID = 0
+
+		allList := list.New([]list.Item{}, CustomDelegate{Model: &m}, 10, 20)
+		allList.SetShowPagination(false)
+		allList.SetShowHelp(false)
+		allList.SetShowTitle(false)
+		allList.SetShowStatusBar(false)
+
+		userList := list.New([]list.Item{}, CustomDelegate{Model: &m}, 10, 20)
+		userList.SetShowPagination(false)
+		userList.SetShowHelp(false)
+		userList.SetShowTitle(false)
+
+		channels := list.New([]list.Item{}, CustomDelegate{Model: &m}, 10, 20)
+		channels.SetShowPagination(false)
+		channels.SetShowHelp(false)
+		channels.SetShowTitle(false)
+
+		groups := list.New([]list.Item{}, CustomDelegate{Model: &m}, 10, 20)
+		groups.SetShowPagination(false)
+		groups.SetShowHelp(false)
+		groups.SetShowTitle(false)
+
+		botsList := list.New([]list.Item{}, CustomDelegate{Model: &m}, 10, 20)
+		botsList.SetShowPagination(false)
+		botsList.SetShowHelp(false)
+		botsList.SetShowTitle(false)
+
+		chatList := list.New([]list.Item{}, MessagesDelegate{Model: &m}, 5, 2)
+		chatList.SetShowPagination(false)
+		chatList.SetShowHelp(false)
+		chatList.SetShowFilter(false)
+		chatList.SetShowTitle(false)
+		chatList.SetShowStatusBar(false)
+
+		forumTopics := list.New([]list.Item{}, ForumTopicsDelegate{Model: &m}, 10, 20)
+		forumTopics.SetShowPagination(false)
+		forumTopics.SetShowHelp(false)
+		forumTopics.SetShowFilter(false)
+		forumTopics.SetShowTitle(false)
+		forumTopics.SetShowStatusBar(false)
+
+		m.All = allList
+		m.Users = userList
+		m.Channels = channels
+		m.Groups = groups
+		m.Bots = botsList
+		m.ChatUI = chatList
+		m.SelectedGroupForumTopics = forumTopics
+
+		m.SideBarLoading = true
+		m.StoriesLoading = true
+		m.AllLoading = true
+		m.AllLoaded = false
+		m.UsersLoaded = false
+		m.ChannelsLoaded = false
+		m.GroupsLoaded = false
+		m.BotsLoaded = false
+
+		var switchCmds []tea.Cmd
+		switchCmds = append(switchCmds, m.SidebarSpinner.Tick)
+		if telegram.Cligram != nil && telegram.Cligram.Context() != nil {
+			switchCmds = append(switchCmds,
+				telegram.Cligram.GetAllChats(telegram.Cligram.Context(), 0, 0, 50),
+				telegram.Cligram.GetAllStories(telegram.Cligram.Context()),
+			)
+			if m.CurrentUser == nil {
+				switchCmds = append(switchCmds, func() tea.Msg {
+					user, err := telegram.Cligram.GetMe(telegram.Cligram.Context())
+					return types.CurrentUserMsg{User: user, Err: err}
+				})
+			}
+		}
+		return m, tea.Batch(switchCmds...)
 	case CustomEmojiDocumentMsg:
 		if msg.Err != nil {
 			slog.Error("Failed to fetch custom emoji document", "error", msg.Err, "document_id", msg.DocumentID)
@@ -1603,7 +1700,7 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.FocusedOn = SideBar
 			return m, nil
 		}
-	case "ctrl+a", "ctrl+o":
+	case "ctrl+o":
 		m, cmd := m.handleFileAttachKey()
 		cmds = append(cmds, cmd)
 		return m, tea.Batch(cmds...)
@@ -1723,6 +1820,17 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return OpenModalMsg{
 					ModalMode: ModalModeGhostMode,
 				}
+			}
+		}
+	case "ctrl+a":
+		if m.FocusedOn == Input {
+			m, cmd := m.handleFileAttachKey()
+			cmds = append(cmds, cmd)
+			return m, tea.Batch(cmds...)
+		}
+		return m, func() tea.Msg {
+			return OpenModalMsg{
+				ModalMode: ModalModeAccountSwitcher,
 			}
 		}
 	}

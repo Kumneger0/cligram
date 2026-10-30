@@ -29,12 +29,70 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	switch msg := message.(type) {
 	case spinner.TickMsg:
-		if m.storiesLoading || m.isDownloadingStory || m.membersLoading || m.isPaginatingMembers || m.isSearchingMembers || m.isJoining || (m.ModalMode == ModalModeComments && (m.commentsLoading || m.isPostingComment)) {
+		if m.storiesLoading || m.isDownloadingStory || m.membersLoading || m.isPaginatingMembers || m.isSearchingMembers || m.isJoining || (m.ModalMode == ModalModeComments && (m.commentsLoading || m.isPostingComment)) || (m.ModalMode == ModalModeAccountSwitcher && (m.AccountsLoading || m.IsSwitchingAccount || m.authLoading)) {
 			var spinCmd tea.Cmd
 			m.spinner, spinCmd = m.spinner.Update(msg)
 			return m, spinCmd
 		}
 		return m, nil
+
+	case types.AccountsLoadedMsg:
+		m.AccountsLoading = false
+		if msg.Err != nil {
+			m.Error = msg.Err
+			return m, nil
+		}
+		m.Accounts = msg.Accounts
+		return m, nil
+
+	case types.AccountSwitchedMsg:
+		m.IsSwitchingAccount = false
+		if msg.Err != nil {
+			m.Error = msg.Err
+			return m, nil
+		}
+		m.ActiveAccount = msg.Account
+		return m, func() tea.Msg { return CloseOverlay{} }
+
+	case types.AuthCodeSentMsg:
+		m.authLoading = false
+		if msg.Err != nil {
+			m.authError = msg.Err
+			return m, nil
+		}
+		m.authError = nil
+		m.authPhoneCodeHash = msg.PhoneCodeHash
+		m.AuthWizardStep = 1
+		m.authCodeInput.Focus()
+		return m, nil
+
+	case types.AuthSignInMsg:
+		m.authLoading = false
+		if msg.Err != nil {
+			m.authError = msg.Err
+			return m, nil
+		}
+		if msg.PasswordNeeded {
+			m.authError = nil
+			m.AuthWizardStep = 2
+			m.authPasswordInput.Focus()
+			return m, nil
+		}
+		m.authError = nil
+		m.InAuthWizard = false
+		m.IsSwitchingAccount = true
+		return m, tea.Batch(m.spinner.Tick, telegram.SwitchAccount(m.authNewAccountPath))
+
+	case types.AuthPasswordMsg:
+		m.authLoading = false
+		if msg.Err != nil {
+			m.authError = msg.Err
+			return m, nil
+		}
+		m.authError = nil
+		m.InAuthWizard = false
+		m.IsSwitchingAccount = true
+		return m, tea.Batch(m.spinner.Tick, telegram.SwitchAccount(m.authNewAccountPath))
 
 	case types.StoriesDownloadStatusMsg:
 		m.isDownloadingStory = false
@@ -273,6 +331,10 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, m.spinner.Tick)
 		} else if msg.ModalMode == ModalModeGhostMode {
 			m.initGhostMode()
+		} else if msg.ModalMode == ModalModeAccountSwitcher {
+			m.initAccountSwitcher()
+			apiID, apiHash := telegram.GetAPICredentials()
+			cmds = append(cmds, m.spinner.Tick, telegram.GetAccountsCmd(apiID, apiHash))
 		}
 	case types.DiscussionMessageMsg:
 		if m.ModalMode == ModalModeComments {
@@ -463,7 +525,17 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 	cmds := *cmdsFromParent
 	switch msg.String() {
 	case "up", "ctrl+p":
-		if m.ModalMode == ModalModeGhostMode {
+		if m.ModalMode == ModalModeAccountSwitcher {
+			if !m.InAuthWizard {
+				maxIdx := len(m.Accounts)
+				if m.AccountSwitcherIndex > 0 {
+					m.AccountSwitcherIndex--
+				} else {
+					m.AccountSwitcherIndex = maxIdx
+				}
+			}
+			return m, nil
+		} else if m.ModalMode == ModalModeGhostMode {
 			if m.GhostModeIndex > 0 {
 				m.GhostModeIndex--
 			} else {
@@ -501,7 +573,17 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 			}
 		}
 	case "down", "ctrl+n":
-		if m.ModalMode == ModalModeGhostMode {
+		if m.ModalMode == ModalModeAccountSwitcher {
+			if !m.InAuthWizard {
+				maxIdx := len(m.Accounts)
+				if m.AccountSwitcherIndex < maxIdx {
+					m.AccountSwitcherIndex++
+				} else {
+					m.AccountSwitcherIndex = 0
+				}
+			}
+			return m, nil
+		} else if m.ModalMode == ModalModeGhostMode {
 			if m.GhostModeIndex < 2 {
 				m.GhostModeIndex++
 			} else {
@@ -576,6 +658,17 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 			m.input.Focus()
 		}
 	case "j":
+		if m.ModalMode == ModalModeAccountSwitcher {
+			if !m.InAuthWizard {
+				maxIdx := len(m.Accounts)
+				if m.AccountSwitcherIndex < maxIdx {
+					m.AccountSwitcherIndex++
+				} else {
+					m.AccountSwitcherIndex = 0
+				}
+			}
+			return m, nil
+		}
 		if m.ModalMode == ModalModeGhostMode {
 			if m.GhostModeIndex < 2 {
 				m.GhostModeIndex++
@@ -598,6 +691,17 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 			return m.checkMembersPagination()
 		}
 	case "k":
+		if m.ModalMode == ModalModeAccountSwitcher {
+			if !m.InAuthWizard {
+				maxIdx := len(m.Accounts)
+				if m.AccountSwitcherIndex > 0 {
+					m.AccountSwitcherIndex--
+				} else {
+					m.AccountSwitcherIndex = maxIdx
+				}
+			}
+			return m, nil
+		}
 		if m.ModalMode == ModalModeGhostMode {
 			if m.GhostModeIndex > 0 {
 				m.GhostModeIndex--
@@ -637,6 +741,17 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 			}
 		}
 	case "esc":
+		if m.ModalMode == ModalModeAccountSwitcher {
+			if m.InAuthWizard {
+				telegram.CancelAuthSession(m.authSession)
+				m.authSession = nil
+				m.InAuthWizard = false
+				m.authLoading = false
+				m.authError = nil
+				return m, nil
+			}
+			return m, func() tea.Msg { return CloseOverlay{} }
+		}
 		if m.ModalMode == ModalModeGhostMode {
 			return m, func() tea.Msg { return CloseOverlay{} }
 		}
@@ -679,6 +794,11 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 		}
 		return m, func() tea.Msg { return CloseOverlay{} }
 	case "q", "Q":
+		if m.ModalMode == ModalModeAccountSwitcher {
+			if !m.InAuthWizard {
+				return m, func() tea.Msg { return CloseOverlay{} }
+			}
+		}
 		if m.ModalMode == ModalModeGhostMode {
 			return m, func() tea.Msg { return CloseOverlay{} }
 		}
@@ -689,6 +809,10 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 			m.isJoining = false
 			m.JoinPreview = nil
 			m.joinError = nil
+			return m, func() tea.Msg { return CloseOverlay{} }
+		}
+	case "ctrl+a":
+		if m.ModalMode == ModalModeAccountSwitcher {
 			return m, func() tea.Msg { return CloseOverlay{} }
 		}
 	case "f2", ",":
@@ -722,6 +846,22 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 		}
 	}
 
+	if m.ModalMode == ModalModeAccountSwitcher && m.InAuthWizard {
+		var inputCmd tea.Cmd
+		switch m.AuthWizardStep {
+		case 0:
+			m.authPhoneInput, inputCmd = m.authPhoneInput.Update(msg)
+		case 1:
+			m.authCodeInput, inputCmd = m.authCodeInput.Update(msg)
+		case 2:
+			m.authPasswordInput, inputCmd = m.authPasswordInput.Update(msg)
+		}
+		if inputCmd != nil {
+			cmds = append(cmds, inputCmd)
+		}
+		return m, tea.Batch(cmds...)
+	}
+
 	if m.input.Focused() {
 		searchValue := m.input.Value()
 		if len(searchValue) >= 3 {
@@ -738,6 +878,62 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 }
 
 func handleEnterKey(m *Foreground) (tea.Model, tea.Cmd) {
+	if m.ModalMode == ModalModeAccountSwitcher {
+		if m.InAuthWizard {
+			if m.authLoading {
+				return m, nil
+			}
+			switch m.AuthWizardStep {
+			case 0:
+				phone := strings.TrimSpace(m.authPhoneInput.Value())
+				if phone == "" {
+					return m, nil
+				}
+				m.authPhoneNumber = phone
+				m.authLoading = true
+				m.authError = nil
+				if m.authSession == nil {
+					session, err := telegram.StartAuthSession(m.authNewAccountPath)
+					if err != nil {
+						m.authLoading = false
+						m.authError = err
+						return m, nil
+					}
+					m.authSession = session
+				}
+				return m, tea.Batch(m.spinner.Tick, telegram.SendAuthCodeCmd(m.authSession, phone))
+			case 1:
+				code := strings.TrimSpace(m.authCodeInput.Value())
+				if code == "" {
+					return m, nil
+				}
+				m.authLoading = true
+				m.authError = nil
+				return m, tea.Batch(m.spinner.Tick, telegram.SignInCodeCmd(m.authSession, m.authPhoneNumber, code, m.authPhoneCodeHash))
+			case 2:
+				password := strings.TrimSpace(m.authPasswordInput.Value())
+				if password == "" {
+					return m, nil
+				}
+				m.authLoading = true
+				m.authError = nil
+				return m, tea.Batch(m.spinner.Tick, telegram.AuthPasswordCmd(m.authSession, password))
+			}
+			return m, nil
+		}
+
+		if m.AccountSwitcherIndex == len(m.Accounts) {
+			m.startAuthWizard()
+			return m, nil
+		}
+
+		if m.AccountSwitcherIndex < len(m.Accounts) {
+			targetAcc := m.Accounts[m.AccountSwitcherIndex].Path
+			m.IsSwitchingAccount = true
+			return m, tea.Batch(m.spinner.Tick, telegram.SwitchAccount(targetAcc))
+		}
+		return m, nil
+	}
 	if m.ModalMode == ModalModeGhostMode {
 		m.toggleGhostModeOption()
 		return m, nil
@@ -1195,4 +1391,45 @@ func (m *Foreground) toggleGhostModeOption() {
 		m.GhostConfig.Chat.SendTypingState = &next
 	}
 	_ = config.SaveConfig(m.GhostConfig)
+}
+
+func (m *Foreground) initAccountSwitcher() {
+	m.ActiveAccount = telegram.GetActiveAccount()
+	m.AccountSwitcherIndex = 0
+	m.InAuthWizard = false
+	m.IsSwitchingAccount = false
+	m.AccountsLoading = true
+	apiID, apiHash := telegram.GetAPICredentials()
+	m.Accounts = telegram.GetAccountDirsOnThisDevice(apiID, apiHash)
+	if len(m.Accounts) > 0 {
+		m.AccountsLoading = false
+	}
+}
+
+func (m *Foreground) startAuthWizard() {
+	m.InAuthWizard = true
+	m.AuthWizardStep = 0
+	m.authPhoneNumber = ""
+	m.authPhoneCodeHash = ""
+	m.authError = nil
+	m.authLoading = false
+	m.authNewAccountPath = telegram.GenerateDir()
+
+	phoneIn := textinput.New()
+	phoneIn.Placeholder = "+14155552671"
+	phoneIn.Focus()
+	phoneIn.Prompt = "> "
+	m.authPhoneInput = phoneIn
+
+	codeIn := textinput.New()
+	codeIn.Placeholder = "12345"
+	codeIn.Prompt = "> "
+	m.authCodeInput = codeIn
+
+	passIn := textinput.New()
+	passIn.EchoMode = textinput.EchoPassword
+	passIn.EchoCharacter = '•'
+	passIn.Placeholder = "••••••••"
+	passIn.Prompt = "> "
+	m.authPasswordInput = passIn
 }

@@ -128,4 +128,6 @@ _Avoid_: System notification, chat alert, admin event
 An interactive modal dialog composited over the live chat view displaying AyuGram-style ghost privacy options (`Read Messages`, `Read Stories`, `Send Typing`), supporting arrow/vim navigation, live option toggling, and immediate persistence to disk without requiring a client restart.
 _Avoid_: Settings window, preferences dialog, config popup
 
-
+**Account Switcher Modal**:
+An interactive modal dialog composited over the live chat view displaying all configured Telegram accounts on the device with active status badges, hot-swapping active sessions cleanly without quitting, and providing an inline authentication wizard for adding new accounts.
+_Avoid_: Account popup, profile selector, multi-login dialog
