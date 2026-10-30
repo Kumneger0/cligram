@@ -124,3 +124,8 @@ _Avoid_: Viewport reload, chat refresh, message polling
 An event notification embedded in the conversation stream (e.g. participant joins, leaves, and invite link entries) rendered as a centered, italicized badge distinct from standard user chat bubbles.
 _Avoid_: System notification, chat alert, admin event
 
+**Ghost Mode Settings Modal**:
+An interactive modal dialog composited over the live chat view displaying AyuGram-style ghost privacy options (`Read Messages`, `Read Stories`, `Send Typing`), supporting arrow/vim navigation, live option toggling, and immediate persistence to disk without requiring a client restart.
+_Avoid_: Settings window, preferences dialog, config popup
+
+

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/gotd/td/tg"
-	"github.com/kumneger0/cligram/internal/config"
 	"github.com/kumneger0/cligram/internal/notification"
 	"github.com/kumneger0/cligram/internal/telegram/shared"
 	"github.com/kumneger0/cligram/internal/telegram/types"
@@ -216,7 +215,7 @@ func handlePhoneCall(ctx context.Context, phoneCall tg.PhoneCallClass, updateCha
 					return err
 				}
 
-				forceRelay := config.GetConfig().Calls.ForceRelay
+				forceRelay := false
 				servers := parseRTCServers(u.Connections)
 				err = bridge.ConnectCall(ctx, voip.ConnectCallParams{
 					UserID:          userID,

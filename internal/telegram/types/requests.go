@@ -49,5 +49,6 @@ type MarkAsReadRequest struct {
 }
 
 type SetTypingRequest struct {
-	Peer Peer `json:"peer"`
+	Peer     Peer `json:"peer"`
+	TopMsgID *int `json:"topMsgId,omitempty"`
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/kumneger0/cligram/internal/config"
 	"github.com/kumneger0/cligram/internal/telegram"
 	"github.com/kumneger0/cligram/internal/telegram/types"
 )
@@ -270,6 +271,8 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			ta.Focus()
 			m.commentInput = ta
 			cmds = append(cmds, m.spinner.Tick)
+		} else if msg.ModalMode == ModalModeGhostMode {
+			m.initGhostMode()
 		}
 	case types.DiscussionMessageMsg:
 		if m.ModalMode == ModalModeComments {
@@ -460,7 +463,14 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 	cmds := *cmdsFromParent
 	switch msg.String() {
 	case "up", "ctrl+p":
-		if m.ModalMode == ModalModeSendReaction {
+		if m.ModalMode == ModalModeGhostMode {
+			if m.GhostModeIndex > 0 {
+				m.GhostModeIndex--
+			} else {
+				m.GhostModeIndex = 2
+			}
+			return m, nil
+		} else if m.ModalMode == ModalModeSendReaction {
 			if m.selectedReactionIndex >= 8 {
 				m.selectedReactionIndex -= 8
 			}
@@ -491,7 +501,14 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 			}
 		}
 	case "down", "ctrl+n":
-		if m.ModalMode == ModalModeSendReaction {
+		if m.ModalMode == ModalModeGhostMode {
+			if m.GhostModeIndex < 2 {
+				m.GhostModeIndex++
+			} else {
+				m.GhostModeIndex = 0
+			}
+			return m, nil
+		} else if m.ModalMode == ModalModeSendReaction {
 			if m.selectedReactionIndex+8 < len(m.allReactions) {
 				m.selectedReactionIndex += 8
 			}
@@ -559,6 +576,14 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 			m.input.Focus()
 		}
 	case "j":
+		if m.ModalMode == ModalModeGhostMode {
+			if m.GhostModeIndex < 2 {
+				m.GhostModeIndex++
+			} else {
+				m.GhostModeIndex = 0
+			}
+			return m, nil
+		}
 		if m.ModalMode == ModalModeComments && m.focusedOn == LIST {
 			if m.commentsCursor < len(m.comments)-1 {
 				m.commentsCursor++
@@ -573,6 +598,14 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 			return m.checkMembersPagination()
 		}
 	case "k":
+		if m.ModalMode == ModalModeGhostMode {
+			if m.GhostModeIndex > 0 {
+				m.GhostModeIndex--
+			} else {
+				m.GhostModeIndex = 2
+			}
+			return m, nil
+		}
 		if m.ModalMode == ModalModeComments && m.focusedOn == LIST {
 			if m.commentsCursor > 0 {
 				m.commentsCursor--
@@ -604,6 +637,9 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 			}
 		}
 	case "esc":
+		if m.ModalMode == ModalModeGhostMode {
+			return m, func() tea.Msg { return CloseOverlay{} }
+		}
 		if m.ModalMode == ModalModeComments {
 			if m.focusedOn == SEARCH && m.commentsReplyTo != nil {
 				m.commentsReplyTo = nil
@@ -643,6 +679,9 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 		}
 		return m, func() tea.Msg { return CloseOverlay{} }
 	case "q", "Q":
+		if m.ModalMode == ModalModeGhostMode {
+			return m, func() tea.Msg { return CloseOverlay{} }
+		}
 		if m.ModalMode == ModalModeAlert || m.ModalMode == ModalModeJoinPreview || m.Error != nil {
 			m.Error = nil
 			m.AlertTitle = ""
@@ -651,6 +690,15 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 			m.JoinPreview = nil
 			m.joinError = nil
 			return m, func() tea.Msg { return CloseOverlay{} }
+		}
+	case "f2", ",":
+		if m.ModalMode == ModalModeGhostMode {
+			return m, func() tea.Msg { return CloseOverlay{} }
+		}
+	case " ":
+		if m.ModalMode == ModalModeGhostMode {
+			m.toggleGhostModeOption()
+			return m, nil
 		}
 	case "enter":
 		return handleEnterKey(m)
@@ -690,6 +738,10 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 }
 
 func handleEnterKey(m *Foreground) (tea.Model, tea.Cmd) {
+	if m.ModalMode == ModalModeGhostMode {
+		m.toggleGhostModeOption()
+		return m, nil
+	}
 	if m.ModalMode == ModalModeAlert || m.Error != nil {
 		m.Error = nil
 		m.AlertTitle = ""
@@ -1096,4 +1148,51 @@ func (m *Foreground) initStories(stories []types.Stories) {
 	stList.SetShowHelp(false)
 	stList.SetShowStatusBar(false)
 	m.stories = &stList
+}
+
+func (m *Foreground) initGhostMode() {
+	m.GhostConfig = config.GetConfig()
+	if m.GhostConfig.Chat.ReadReceiptMode == nil {
+		defMode := "default"
+		m.GhostConfig.Chat.ReadReceiptMode = &defMode
+	}
+	if m.GhostConfig.Chat.SendTypingState == nil {
+		defTyping := true
+		m.GhostConfig.Chat.SendTypingState = &defTyping
+	}
+}
+
+func (m *Foreground) toggleGhostModeOption() {
+	if m.GhostConfig.Chat.ReadReceiptMode == nil || m.GhostConfig.Chat.SendTypingState == nil {
+		m.initGhostMode()
+	}
+	switch m.GhostModeIndex {
+	case 0:
+		curr := "default"
+		if m.GhostConfig.Chat.ReadReceiptMode != nil {
+			curr = *m.GhostConfig.Chat.ReadReceiptMode
+		}
+		var next string
+		switch curr {
+		case "instant":
+			next = "default"
+		case "default":
+			next = "never"
+		case "never":
+			next = "instant"
+		default:
+			next = "default"
+		}
+		m.GhostConfig.Chat.ReadReceiptMode = &next
+	case 1:
+		m.GhostConfig.ReadStories = !m.GhostConfig.ReadStories
+	case 2:
+		curr := true
+		if m.GhostConfig.Chat.SendTypingState != nil {
+			curr = *m.GhostConfig.Chat.SendTypingState
+		}
+		next := !curr
+		m.GhostConfig.Chat.SendTypingState = &next
+	}
+	_ = config.SaveConfig(m.GhostConfig)
 }

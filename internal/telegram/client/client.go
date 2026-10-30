@@ -829,16 +829,24 @@ func (c *Client) MarkMessagesAsRead(ctx context.Context, req types.MarkAsReadReq
 func (c *Client) SetUserTyping(ctx context.Context, req types.SetTypingRequest) error {
 	inputPeer, err := shared.ConvertPeerToInputPeer(req.Peer)
 	if err != nil {
+		slog.Error("SetUserTyping convert peer failed", "peerID", req.Peer.ID, "chatType", req.Peer.ChatType, "error", err)
 		return err
 	}
 
-	_, err = c.GetAPI().MessagesSetTyping(ctx, &tg.MessagesSetTypingRequest{
+	setTypingReq := &tg.MessagesSetTypingRequest{
 		Peer:   inputPeer,
 		Action: &tg.SendMessageTypingAction{},
-	})
+	}
+	if req.TopMsgID != nil {
+		setTypingReq.SetTopMsgID(*req.TopMsgID)
+	}
+
+	slog.Debug("MessagesSetTyping sending to Telegram", "peerID", req.Peer.ID, "chatType", req.Peer.ChatType, "accessHash", req.Peer.AccessHash)
+	res, err := c.GetAPI().MessagesSetTyping(ctx, setTypingReq)
 	if err != nil {
 		return types.NewTelegramError(types.ErrorCodeSendFailed, "failed to set typing", err)
 	}
+	slog.Debug("MessagesSetTyping response", "peerID", req.Peer.ID, "ok", res)
 	return nil
 }
 

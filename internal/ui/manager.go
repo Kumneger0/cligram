@@ -63,7 +63,49 @@ func (m Manager) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				if bg, ok := m.Background.(Model); ok && bg.FocusedOn == Input {
 					break
 				}
+				if bg, ok := m.Background.(*Model); ok && bg.FocusedOn == Input {
+					break
+				}
 				return m, tea.Quit
+			}
+		case "f2":
+			if m.State == ModalView {
+				if fg, ok := m.Foreground.(*Foreground); ok && fg.ModalMode == ModalModeGhostMode {
+					m.State = MainView
+					return m, nil
+				}
+			}
+			m.State = ModalView
+			openModalMsg := func() tea.Msg {
+				return OpenModalMsg{
+					ModalMode: ModalModeGhostMode,
+				}
+			}
+			cmds = append(cmds, openModalMsg)
+			return m, tea.Batch(cmds...)
+		case ",":
+			if m.State == ModalView {
+				if fg, ok := m.Foreground.(*Foreground); ok && fg.ModalMode == ModalModeGhostMode {
+					m.State = MainView
+					return m, nil
+				}
+			} else if m.State == MainView {
+				inputFocused := false
+				if bg, ok := m.Background.(Model); ok && bg.FocusedOn == Input {
+					inputFocused = true
+				} else if bg, ok := m.Background.(*Model); ok && bg.FocusedOn == Input {
+					inputFocused = true
+				}
+				if !inputFocused {
+					m.State = ModalView
+					openModalMsg := func() tea.Msg {
+						return OpenModalMsg{
+							ModalMode: ModalModeGhostMode,
+						}
+					}
+					cmds = append(cmds, openModalMsg)
+					return m, tea.Batch(cmds...)
+				}
 			}
 		case "ctrl+k":
 			if m.State == MainView {
