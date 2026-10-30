@@ -253,7 +253,7 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 	}
 	m.SelectedMessageIndex = len(m.Conversations) - 1
 	m.viewport.GotoBottom()
-	if *cligramConfig.Chat.ReadReceiptMode == "default" {
+	if cligramConfig.Chat.ReadReceiptMode != nil && *cligramConfig.Chat.ReadReceiptMode != "never" {
 		cmd := telegram.Cligram.MarkMessagesAsRead(telegram.Cligram.Context(), types.MarkAsReadRequest{
 			Peer: peerInfo,
 		})
@@ -262,6 +262,7 @@ func sendMessage(m *Model) (Model, tea.Cmd) {
 	m.Input.Reset()
 	m.IsReply = false
 	m.ReplyTo = nil
+	m.LastTypingSent = time.Time{}
 
 	cmds = append(cmds, m.updateConversations())
 	return *m, tea.Batch(cmds...)
@@ -321,6 +322,11 @@ func updateFocusedComponent(m *Model, msg tea.Msg, cmdsFromParent *[]tea.Cmd) (M
 		if !m.SkipNextInput {
 			m.Input, cmd = m.Input.Update(msg)
 			cmds = append(cmds, cmd)
+			if _, isKey := msg.(tea.KeyMsg); isKey {
+				if typingCmd := SendUserIsTyping(m); typingCmd != nil {
+					cmds = append(cmds, typingCmd)
+				}
+			}
 			if suggestCmd := m.updateBotCommandSuggestions(); suggestCmd != nil {
 				cmds = append(cmds, suggestCmd)
 			}
@@ -413,11 +419,11 @@ func handleUserChange(m *Model, offsetID *int, afterMessagesCmd tea.Cmd) (Model,
 		ChatAreaWidth: nil,
 	})
 	cligramConfig := config.GetConfig()
-	if *cligramConfig.Chat.ReadReceiptMode == "instant" {
-		markAsReadCmd := telegram.Cligram.MarkMessagesAsRead(telegram.Cligram.Context(), types.MarkAsReadRequest{
+	var markAsReadCmd tea.Cmd
+	if cligramConfig.Chat.ReadReceiptMode != nil && *cligramConfig.Chat.ReadReceiptMode == "instant" {
+		markAsReadCmd = telegram.Cligram.MarkMessagesAsRead(telegram.Cligram.Context(), types.MarkAsReadRequest{
 			Peer: pInfo,
 		})
-		return *m, tea.Batch(cmd, markAsReadCmd, prefetchBotCmds)
 	}
 	m.Conversations = nil
 	m.SelectedMessageIndex = -1
@@ -429,7 +435,7 @@ func handleUserChange(m *Model, offsetID *int, afterMessagesCmd tea.Cmd) (Model,
 		m.ChatUI.ResetSelected()
 		m.ChatUI.SetItems([]list.Item{})
 	}
-	return *m, tea.Batch(cmd, afterMessagesCmd, prefetchBotCmds)
+	return *m, tea.Batch(cmd, markAsReadCmd, afterMessagesCmd, prefetchBotCmds)
 }
 
 func isReadOnlyBroadcast(m *Model) bool {
@@ -543,6 +549,10 @@ func changeSideBarMode(m *Model, msg string) (Model, tea.Cmd) {
 						m.Users.Select(foundIndex)
 					}
 					m.ChatUI.SetItems(nil)
+					m.Conversations = nil
+					m.SelectedMessageIndex = -1
+					m.viewport.SetContent("")
+					m.ActivePeerID = m.SelectedUser.PeerID
 					if telegram.Cligram != nil {
 						return *m, telegram.Cligram.GetMessages(telegram.Cligram.Context(), types.GetMessagesRequest{
 							Peer:          getMessageParams(m),

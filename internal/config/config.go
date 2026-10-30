@@ -8,32 +8,14 @@ import (
 	"sync"
 )
 
+type ChatConfig struct {
+	SendTypingState *bool   `json:"sendTypingState,omitempty"`
+	ReadReceiptMode *string `json:"readReceiptMode,omitempty"`
+}
+
 type CliGramConfig struct {
-	Chat struct {
-		SendTypingState *bool   `json:"sendTypingState,omitempty"`
-		ReadReceiptMode *string `json:"readReceiptMode,omitempty"`
-	} `json:"chat"`
-	ReadStories bool `json:"readStories"`
-	Privacy     struct {
-		LastSeenVisibility *string `json:"lastSeenVisibility,omitempty"`
-	} `json:"privacy"`
-	Calls CallsConfig `json:"calls"`
-}
-
-type CallsConfig struct {
-	ForceRelay bool `json:"force_relay,omitempty"`
-}
-
-func (c *CallsConfig) UnmarshalJSON(data []byte) error {
-	var raw struct {
-		ForceRelaySnake bool `json:"force_relay"`
-		ForceRelayCamel bool `json:"forceRelay"`
-	}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
-	}
-	c.ForceRelay = raw.ForceRelaySnake || raw.ForceRelayCamel
-	return nil
+	Chat        ChatConfig `json:"chat"`
+	ReadStories bool       `json:"readStories"`
 }
 
 func defaultCliGramConfig() CliGramConfig {
@@ -42,31 +24,69 @@ func defaultCliGramConfig() CliGramConfig {
 	readStories := false
 
 	return CliGramConfig{
-		Chat: struct {
-			SendTypingState *bool   `json:"sendTypingState,omitempty"`
-			ReadReceiptMode *string `json:"readReceiptMode,omitempty"`
-		}{
+		Chat: ChatConfig{
 			SendTypingState: &sendTyping,
 			ReadReceiptMode: &readReceipt,
 		},
 		ReadStories: readStories,
-		Privacy: struct {
-			LastSeenVisibility *string `json:"lastSeenVisibility,omitempty"`
-		}{
-			LastSeenVisibility: nil,
-		},
 	}
 }
 
-// read the config only once, mostly it won't change that often so we can cache it
-var config CliGramConfig
-var configOnce sync.Once
+var (
+	configMu sync.RWMutex
+	config   CliGramConfig
+	loaded   bool
+)
 
 func GetConfig() CliGramConfig {
-	configOnce.Do(func() {
+	configMu.RLock()
+	if loaded {
+		cfg := config
+		configMu.RUnlock()
+		return cfg
+	}
+	configMu.RUnlock()
+
+	configMu.Lock()
+	defer configMu.Unlock()
+	if !loaded {
 		config = readConfig()
-	})
+		loaded = true
+	}
 	return config
+}
+
+func SaveConfig(cfg CliGramConfig) error {
+	configMu.Lock()
+	defer configMu.Unlock()
+
+	userHomeDir, err := os.UserHomeDir()
+	if err != nil {
+		config = cfg
+		loaded = true
+		return err
+	}
+
+	configDir := filepath.Join(userHomeDir, ".cligram")
+	if err := os.MkdirAll(configDir, 0700); err != nil {
+		config = cfg
+		loaded = true
+		return err
+	}
+
+	configPath := filepath.Join(configDir, "user.config.json")
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	if err := os.WriteFile(configPath, data, 0600); err != nil {
+		return err
+	}
+
+	config = cfg
+	loaded = true
+	return nil
 }
 
 func readConfig() CliGramConfig {
@@ -86,16 +106,15 @@ func readConfig() CliGramConfig {
 	}
 	defer file.Close()
 
-	var config CliGramConfig
-
 	configFileContent, err := io.ReadAll(file)
 	if err != nil {
 		return defaultCliGramConfig()
 	}
 
-	if err := json.Unmarshal(configFileContent, &config); err != nil {
+	cfg := defaultCliGramConfig()
+	if err := json.Unmarshal(configFileContent, &cfg); err != nil {
 		return defaultCliGramConfig()
 	}
 
-	return config
+	return cfg
 }

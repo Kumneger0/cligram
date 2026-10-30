@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/kumneger0/cligram/internal/config"
 	"github.com/kumneger0/cligram/internal/telegram"
 	"github.com/kumneger0/cligram/internal/telegram/types"
 	"github.com/muesli/reflow/wordwrap"
@@ -344,6 +345,7 @@ const (
 	ModalModeAlert          ModalMode = "ALERT"
 	ModalModeJoinPreview    ModalMode = "JOIN_PREVIEW"
 	ModalModeComments       ModalMode = "COMMENTS"
+	ModalModeGhostMode      ModalMode = "GHOST_MODE"
 )
 
 type OpenModalMsg struct {
@@ -431,6 +433,10 @@ type Foreground struct {
 	isPostingComment       bool
 	commentsScrollOffset   int
 	commentsCursor         int
+
+	// Ghost Mode fields
+	GhostModeIndex int
+	GhostConfig    config.CliGramConfig
 }
 
 func (f *Foreground) ensureSpinner() {
@@ -1236,6 +1242,10 @@ func (f *Foreground) View() string {
 		return foreStyle.Width(contentWidth + 2).Render(layout)
 	}
 
+	if f.ModalMode == ModalModeGhostMode {
+		return renderGhostModeModal(f, foreStyle)
+	}
+
 	title := lipgloss.NewStyle().Foreground(DefaultTheme.PrimaryText).Bold(true).Render("Search")
 	contentWidth := max(40, min(70, f.windowWidth*2/3))
 	f.input.Width = contentWidth - 4
@@ -1386,14 +1396,129 @@ func formatNumberWithCommas(n int) string {
 	if remainder > 0 {
 		b.WriteString(in[:remainder])
 		if len(in) > remainder {
-			b.WriteByte(',')
+			_ = b.WriteByte(',')
 		}
 	}
 	for i := remainder; i < len(in); i += 3 {
 		b.WriteString(in[i : i+3])
 		if i+3 < len(in) {
-			b.WriteByte(',')
+			_ = b.WriteByte(',')
 		}
 	}
 	return b.String()
+}
+
+func renderGhostModeModal(f *Foreground, foreStyle lipgloss.Style) string {
+	contentWidth := max(52, min(65, f.windowWidth-6))
+	if f.windowWidth <= 0 {
+		contentWidth = 56
+	}
+
+	title := lipgloss.NewStyle().
+		Foreground(DefaultTheme.AccentColor).
+		Bold(true).
+		Render("👻 Ghost Mode")
+
+	divider := lipgloss.NewStyle().
+		Foreground(DefaultTheme.BorderColor).
+		Render(strings.Repeat("─", contentWidth))
+
+	readMode := "default"
+	if f.GhostConfig.Chat.ReadReceiptMode != nil {
+		readMode = *f.GhostConfig.Chat.ReadReceiptMode
+	}
+	var readVal, readDesc string
+	switch readMode {
+	case "instant":
+		readVal = "Immediately (Instant)"
+		readDesc = "Mark messages as read upon opening chat"
+	case "default":
+		readVal = "When Replying (Default)"
+		readDesc = "Mark messages as read only when sending a reply"
+	case "never":
+		readVal = "Never (Ghost Mode)"
+		readDesc = "Never mark messages as read"
+	default:
+		readVal = "When Replying (Default)"
+		readDesc = "Mark messages as read only when sending a reply"
+	}
+
+	var storiesVal, storiesDesc string
+	if f.GhostConfig.ReadStories {
+		storiesVal = "[x] Read Stories"
+		storiesDesc = "Send read receipt when viewing stories"
+	} else {
+		storiesVal = "[ ] Don't Read Stories"
+		storiesDesc = "View stories anonymously without read receipts"
+	}
+
+	typingEnabled := true
+	if f.GhostConfig.Chat.SendTypingState != nil {
+		typingEnabled = *f.GhostConfig.Chat.SendTypingState
+	}
+	var typingVal, typingDesc string
+	if typingEnabled {
+		typingVal = "[x] Send Typing"
+		typingDesc = "Broadcast typing status when composing messages"
+	} else {
+		typingVal = "[ ] Don't Send Typing"
+		typingDesc = "Hide typing status while composing"
+	}
+
+	type ghostItem struct {
+		label string
+		val   string
+		desc  string
+	}
+	items := []ghostItem{
+		{label: "Read Messages", val: readVal, desc: readDesc},
+		{label: "Read Stories", val: storiesVal, desc: storiesDesc},
+		{label: "Send Typing", val: typingVal, desc: typingDesc},
+	}
+
+	var itemBlocks []string
+	for i, it := range items {
+		isSelected := i == f.GhostModeIndex
+		var cursor string
+		var labelStyle, valStyle, descStyle lipgloss.Style
+
+		if isSelected {
+			cursor = lipgloss.NewStyle().Foreground(DefaultTheme.AccentColor).Bold(true).Render("▎ ")
+			labelStyle = lipgloss.NewStyle().Foreground(DefaultTheme.AccentColor).Bold(true)
+			valStyle = lipgloss.NewStyle().Foreground(DefaultTheme.SelectedFg).Background(DefaultTheme.AccentColor).Padding(0, 1).Bold(true)
+			descStyle = lipgloss.NewStyle().Foreground(DefaultTheme.PrimaryText)
+		} else {
+			cursor = "  "
+			labelStyle = lipgloss.NewStyle().Foreground(DefaultTheme.PrimaryText).Bold(true)
+			valStyle = lipgloss.NewStyle().Foreground(DefaultTheme.SecondaryText)
+			descStyle = lipgloss.NewStyle().Foreground(DefaultTheme.SecondaryText)
+		}
+
+		topLine := fmt.Sprintf("%s%s: %s", cursor, labelStyle.Render(it.label), valStyle.Render(it.val))
+		descLine := fmt.Sprintf("    %s", descStyle.Render(it.desc))
+		itemBlocks = append(itemBlocks, topLine, descLine)
+		if i < len(items)-1 {
+			itemBlocks = append(itemBlocks, "")
+		}
+	}
+
+	footerDivider := lipgloss.NewStyle().
+		Foreground(DefaultTheme.BorderColor).
+		Render(strings.Repeat("─", contentWidth))
+
+	footerHints := lipgloss.NewStyle().
+		Foreground(DefaultTheme.SecondaryText).
+		Render("[↑/↓, j/k] Navigate  [Enter/Space] Change  [Esc/q/F2/,] Close")
+
+	layout := lipgloss.JoinVertical(
+		lipgloss.Left,
+		title,
+		divider,
+		"",
+		lipgloss.JoinVertical(lipgloss.Left, itemBlocks...),
+		"",
+		footerDivider,
+		footerHints,
+	)
+	return foreStyle.Width(contentWidth + 2).Render(layout)
 }

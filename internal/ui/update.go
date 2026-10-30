@@ -16,6 +16,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gotd/td/tg"
+	"github.com/kumneger0/cligram/internal/config"
 	"github.com/kumneger0/cligram/internal/notification"
 	"github.com/kumneger0/cligram/internal/telegram"
 	"github.com/kumneger0/cligram/internal/telegram/client"
@@ -935,6 +936,17 @@ func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, te
 		}
 	}
 
+	if userInfo == nil && m.SelectedUser.PeerID == peerID {
+		userInfo = &m.SelectedUser
+	}
+	if channelOrGroupInfo == nil {
+		if m.SelectedChannel.ID == peerID {
+			channelOrGroupInfo = &m.SelectedChannel
+		} else if m.SelectedGroup.ID == peerID {
+			channelOrGroupInfo = &m.SelectedGroup
+		}
+	}
+
 	if userInfo != nil && msg.Message != nil {
 		m.sendNewMessageNotification(*userInfo, msg.Message)
 	}
@@ -1012,7 +1024,22 @@ func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, te
 		chatType = types.UserChat
 	}
 
-	if !isOut && userInfo != nil {
+	var markReadCmd tea.Cmd
+	cligramConfig := config.GetConfig()
+	if !isOut && cligramConfig.Chat.ReadReceiptMode != nil && *cligramConfig.Chat.ReadReceiptMode == "instant" {
+		peer := types.Peer{
+			ID:       peerID,
+			ChatType: chatType,
+		}
+		if channelOrGroupInfo != nil {
+			peer.AccessHash = channelOrGroupInfo.AccessHash
+		} else if userInfo != nil {
+			peer.AccessHash = userInfo.AccessHash
+		}
+		markReadCmd = telegram.Cligram.MarkMessagesAsRead(telegram.Cligram.Context(), types.MarkAsReadRequest{
+			Peer: peer,
+		})
+	} else if !isOut && userInfo != nil {
 		m.SelectedUser.UnreadCount++
 	}
 
@@ -1055,7 +1082,7 @@ func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, te
 
 	cmd := m.updateConversations()
 	fetchCmd := m.checkAndFetchCustomEmojis(m.Conversations)
-	return m, tea.Batch(fetchCmd, cmd)
+	return m, tea.Batch(fetchCmd, cmd, markReadCmd)
 }
 
 func (m Model) handleEditMessage(msg types.EditMessageNotification) (tea.Model, tea.Cmd) {
@@ -1684,8 +1711,21 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "alt+s":
 		return m, func() tea.Msg { return m.Stories }
+	case "f2":
+		return m, func() tea.Msg {
+			return OpenModalMsg{
+				ModalMode: ModalModeGhostMode,
+			}
+		}
+	case ",":
+		if m.FocusedOn != Input {
+			return m, func() tea.Msg {
+				return OpenModalMsg{
+					ModalMode: ModalModeGhostMode,
+				}
+			}
+		}
 	}
-	cmds = append(cmds, SendUserIsTyping(&m))
 	return m, tea.Batch(cmds...)
 }
 

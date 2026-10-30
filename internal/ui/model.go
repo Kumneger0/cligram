@@ -368,6 +368,7 @@ type Model struct {
 	IsJoiningChannel         bool
 	JoinRequestSent          bool
 	AccountNotifySettings    *types.AccountNotifySettings
+	LastTypingSent           time.Time
 }
 
 type CustomEmojiDocumentMsg struct {
@@ -1765,27 +1766,99 @@ func getMessageParams(m *Model) types.Peer {
 			}
 		}
 	}
+	if pInfo.ID == "" {
+		if m.Mode == ModeUsers && m.SelectedUser.PeerID != "" {
+			cType := types.UserChat
+			if m.SelectedUser.IsBot {
+				cType = types.BotChat
+			}
+			pInfo = types.Peer{
+				AccessHash: m.SelectedUser.AccessHash,
+				ID:         m.SelectedUser.PeerID,
+				ChatType:   cType,
+			}
+		} else if m.Mode == ModeBots && m.SelectedUser.PeerID != "" {
+			pInfo = types.Peer{
+				AccessHash: m.SelectedUser.AccessHash,
+				ID:         m.SelectedUser.PeerID,
+				ChatType:   types.BotChat,
+			}
+		} else if m.Mode == ModeChannels && m.SelectedChannel.ID != "" {
+			pInfo = types.Peer{
+				AccessHash: m.SelectedChannel.AccessHash,
+				ID:         m.SelectedChannel.ID,
+				ChatType:   types.ChannelChat,
+			}
+		} else if m.Mode == ModeGroups && m.SelectedGroup.ID != "" {
+			pInfo = types.Peer{
+				AccessHash: m.SelectedGroup.AccessHash,
+				ID:         m.SelectedGroup.ID,
+				ChatType:   types.GroupChat,
+			}
+		} else if m.Mode == ModeAll {
+			if m.SelectedUser.PeerID != "" {
+				cType := types.UserChat
+				if m.SelectedUser.IsBot {
+					cType = types.BotChat
+				}
+				pInfo = types.Peer{
+					AccessHash: m.SelectedUser.AccessHash,
+					ID:         m.SelectedUser.PeerID,
+					ChatType:   cType,
+				}
+			} else if m.SelectedChannel.ID != "" {
+				pInfo = types.Peer{
+					AccessHash: m.SelectedChannel.AccessHash,
+					ID:         m.SelectedChannel.ID,
+					ChatType:   types.ChannelChat,
+				}
+			} else if m.SelectedGroup.ID != "" {
+				pInfo = types.Peer{
+					AccessHash: m.SelectedGroup.AccessHash,
+					ID:         m.SelectedGroup.ID,
+					ChatType:   types.GroupChat,
+				}
+			}
+		}
+	}
 	return pInfo
 }
 
 func SendUserIsTyping(m *Model) tea.Cmd {
 	userConfig := config.GetConfig()
-	if !*userConfig.Chat.SendTypingState {
+	if userConfig.Chat.SendTypingState == nil || !*userConfig.Chat.SendTypingState {
 		return nil
 	}
 
-	if m.FocusedOn == Input && m.CanSendMessages() {
-		pInfo := getMessageParams(m)
-		if pInfo.ID != "" {
-			go func() {
-				err := telegram.Cligram.SetUserTyping(telegram.Cligram.Context(), types.SetTypingRequest{
-					Peer: pInfo,
-				})
-				if err != nil {
-					slog.Error(err.Error())
-				}
-			}()
-		}
+	if m.FocusedOn != Input || !m.CanSendMessages() || m.Input.Value() == "" {
+		return nil
 	}
-	return nil
+
+	if !m.LastTypingSent.IsZero() && time.Since(m.LastTypingSent) < 4*time.Second {
+		return nil
+	}
+
+	pInfo := getMessageParams(m)
+	if pInfo.ID == "" || telegram.Cligram == nil || telegram.Cligram.Context() == nil {
+		return nil
+	}
+	m.LastTypingSent = time.Now()
+
+	var topMsgID *int
+	if m.SelectedForumTopic != nil {
+		id := m.SelectedForumTopic.ID
+		topMsgID = &id
+	}
+
+	slog.Debug("SendUserIsTyping queued", "peerID", pInfo.ID, "chatType", pInfo.ChatType)
+	return func() tea.Msg {
+		err := telegram.Cligram.SetUserTyping(telegram.Cligram.Context(), types.SetTypingRequest{
+			Peer:     pInfo,
+			TopMsgID: topMsgID,
+		})
+		if err != nil {
+			slog.Error("failed to set typing", "peerID", pInfo.ID, "error", err)
+		}
+		return nil
+	}
 }

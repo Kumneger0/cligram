@@ -32,8 +32,11 @@ linters:
             - "fmt.Fprintf"
             - "fmt.Fprintln"
             - "fmt.Print"
+            - "fmt.Fprint"
             - "strings.Builder.WriteString"
+            - "strings.Builder.WriteByte"
             - "bytes.Buffer.WriteString"
+            - "os.File.Close"
   exclusions:
     generated: lax
     presets:

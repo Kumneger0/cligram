@@ -12,7 +12,6 @@ import (
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/updates"
 	"github.com/gotd/td/tg"
-	"github.com/kumneger0/cligram/internal/config"
 	"github.com/kumneger0/cligram/internal/telegram/shared"
 	"github.com/kumneger0/cligram/internal/telegram/types"
 	"github.com/kumneger0/cligram/internal/voip"
@@ -871,7 +870,7 @@ func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64, update
 	}
 	p2pStatesMu.Unlock()
 
-	forceRelay := config.GetConfig().Calls.ForceRelay
+	forceRelay := false
 	protocol := buildPhoneCallProtocol(res, forceRelay)
 
 	reqCallRes, err := Cligram.API().PhoneRequestCall(ctx, &tg.PhoneRequestCallRequest{
@@ -977,7 +976,7 @@ func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64, update
 		waitConnectMu.Unlock()
 	}()
 
-	forceRelay = config.GetConfig().Calls.ForceRelay
+	forceRelay = false
 	err = bridge.ConnectCall(ctx, voip.ConnectCallParams{
 		UserID:          userID,
 		Servers:         servers,
@@ -1064,7 +1063,7 @@ func AcceptIncomingCall(ctx context.Context, userID int64) error {
 	}
 	p2pStatesMu.Unlock()
 
-	forceRelay := config.GetConfig().Calls.ForceRelay
+	forceRelay := false
 	protocol := buildPhoneCallProtocol(res, forceRelay)
 
 	acceptRes, err := Cligram.API().PhoneAcceptCall(ctx, &tg.PhoneAcceptCallRequest{
