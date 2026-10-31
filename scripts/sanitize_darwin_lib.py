@@ -24,6 +24,14 @@ the Apple classic linker (ld_classic):
      ld: Assertion failed: (0 && "unsupported reference to selector"), function targetCString, file macho_relocatable_file.cpp, line 6826.
    which occurs when ld_classic attempts to parse modern 64-bit selector references
    as literal C-string pointers in its legacy ObjC1 pass.
+
+4. Filters corrupted template relocations from __DATA,__thread_vars sections.
+   Upstream packaging stripped local symbols from the static library, which caused
+   the third field of TLV descriptors (offset 0x10) to point to external symbol 0
+   (such as ___cxa_get_globals or guard variables). This triggers ld_classic's assertion:
+     ld: Assertion failed: (fit->binding == ld::Fixup::bindingDirectlyBound && "thread variable def contains pointer to global"), function doPass, file tlvp.cpp, line 278.
+   Filtering out relocations at (offset % 24) != 0 preserves the valid __tlv_bootstrap
+   relocations at offset 0 while eliminating the corrupted template fixups.
 """
 
 import os
@@ -125,6 +133,20 @@ def patch_macho_bytes(data: bytearray, member_name: str) -> bool:
                     if (flags & 0xff) == 5:  # S_LITERAL_POINTERS -> S_REGULAR
                         struct.pack_into('<I', data, sect_offset+64, flags & ~0xff)
                         patched = True
+                elif sectname == b'__thread_vars':
+                    reloff, nreloc = struct.unpack('<II', data[sect_offset+56:sect_offset+64])
+                    if nreloc > 0 and reloff > 0 and reloff + nreloc*8 <= len(data):
+                        kept_relocs = []
+                        for i in range(nreloc):
+                            r_entry = data[reloff + i*8 : reloff + (i+1)*8]
+                            r_addr, _ = struct.unpack('<II', r_entry)
+                            if (r_addr % 24) == 0:
+                                kept_relocs.append(r_entry)
+                        if len(kept_relocs) < nreloc:
+                            for i, r_entry in enumerate(kept_relocs):
+                                data[reloff + i*8 : reloff + (i+1)*8] = r_entry
+                            struct.pack_into('<I', data, sect_offset+60, len(kept_relocs))
+                            patched = True
                 sect_offset += 80
         offset += cmdsize
     return patched
