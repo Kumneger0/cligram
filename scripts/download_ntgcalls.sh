@@ -70,4 +70,8 @@ else
     exit 1
 fi
 
+if [ "${GOOS}" = "darwin" ]; then
+    python3 "${SCRIPT_DIR}/sanitize_darwin_lib.py" "${TARGET_LIB}"
+fi
+
 echo "--> [ntgcalls] Successfully installed static library at ${TARGET_LIB}"

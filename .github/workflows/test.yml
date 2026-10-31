@@ -58,30 +58,6 @@ jobs:
           echo "=== unwind sections ==="
           xcrun otool -l ntg/lib/darwin_arm64/libntgcalls.a | grep -A 5 -B 2 -i unwind | head -40 || true
 
-      - name: Toolchain & Linker Matrix Diagnostic (macOS)
-        if: matrix.os == 'macos-latest'
-        continue-on-error: true
-        run: |
-          for XCODE_APP in /Applications/Xcode_*.app; do
-            [ -d "$XCODE_APP" ] || continue
-            [ -L "$XCODE_APP" ] && continue
-            echo "=================================================="
-            echo "Testing Xcode: $XCODE_APP"
-            export DEVELOPER_DIR="$XCODE_APP/Contents/Developer"
-            xcodebuild -version 2>/dev/null | head -1 || true
-            clang --version 2>/dev/null | head -1 || true
-
-            for FLAGS in "" "-Wl,-no_compact_unwind" "-Wl,-ld_classic" "-Wl,-ld_classic -Wl,-no_compact_unwind"; do
-              echo "  --------------------------------------------------"
-              echo "  Testing with Flags: '$FLAGS'"
-              if OUT=$(CGO_LDFLAGS_ALLOW="-Wl,.*" CGO_LDFLAGS="$FLAGS" go test -c -o /dev/null ./cmd/callhelper 2>&1); then
-                echo "  >>> SUCCESS! <<<"
-              else
-                echo "  FAILED with exit code $?:"
-                echo "$OUT" | grep -v "^#" | head -15
-              fi
-            done
-          done
 
       - name: Build unified cligram application
         env:
