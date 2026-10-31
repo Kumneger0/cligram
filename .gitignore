@@ -17,3 +17,5 @@ channels.json
 incoming-notifications.log
 docs/call-lifecycle.md
 docs/call-lifecyle.md
+ntg/lib/
+*.a

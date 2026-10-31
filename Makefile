@@ -6,8 +6,12 @@ default: help
 help: 
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
+.PHONY: deps-voip
+deps-voip: ## Download pre-compiled static libntgcalls if not present
+	@bash scripts/download_ntgcalls.sh
+
 .PHONY: build
-build: ## Build cligram binary with embedded call-helper
+build: deps-voip ## Build cligram binary with embedded call-helper
 	@echo "--> Building unified cligram application..."
 	@go build -ldflags "-X main.version=$(shell git describe --abbrev=0 --tags 2>/dev/null || echo dev) -X main.telegramAPIID=$(shell echo $$TELEGRAM_API_ID) -X main.telegramAPIHash=$(shell echo $$TELEGRAM_API_HASH)" -o $(projectname)
 
@@ -32,7 +36,7 @@ test-core: ## Run tests for core packages
 	@go tool cover -func=coverage.out | sort -rnk3
 
 .PHONY: test-call-helper
-test-call-helper: ## Run tests for Cgo call-helper worker (requires libntgcalls)
+test-call-helper: deps-voip ## Run tests for Cgo call-helper worker (requires libntgcalls)
 	@echo "--> Running call-helper worker tests..."
 	@go test -v ./cmd/callhelper/...
 

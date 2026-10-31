@@ -1,7 +1,11 @@
 package ntg // nolint:revive
 
 /*
-#cgo LDFLAGS: -L/usr/local/lib -lntgcalls -ldl -lpthread -lopus -lcrypto -lm
+#cgo linux,amd64 LDFLAGS: ${SRCDIR}/lib/linux_amd64/libntgcalls.a -lz -lresolv -ldl -lpthread -lm -lstdc++
+#cgo linux,arm64 LDFLAGS: ${SRCDIR}/lib/linux_arm64/libntgcalls.a -lz -lresolv -ldl -lpthread -lm -lstdc++
+#cgo darwin,arm64 LDFLAGS: ${SRCDIR}/lib/darwin_arm64/libntgcalls.a -lz -lresolv -lc++ -framework CoreFoundation -framework Security
+#cgo darwin,amd64 LDFLAGS: ${SRCDIR}/lib/darwin_amd64/libntgcalls.a -lz -lresolv -lc++ -framework CoreFoundation -framework Security
+#cgo windows,amd64 LDFLAGS: ${SRCDIR}/lib/windows_amd64/ntgcalls.lib -lws2_32 -lwinmm -lcrypt32
 
 #include <stdint.h>
 #include <stdlib.h>
