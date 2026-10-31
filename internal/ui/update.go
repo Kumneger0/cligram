@@ -127,7 +127,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tickCall()
 		case types.CallStateMissingHelper:
 			m.CallOverlay.SetMissingHelper()
-			alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, "⚠️ cligram-voip helper missing")
+			alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, "⚠️ call helper unavailable")
 			return m, alertCmd
 		case types.CallStateBusyMissed:
 			alertCmd := m.Alert.NewAlertCmd(bubbleup.InfoKey, "📞 Missed call (line busy)")

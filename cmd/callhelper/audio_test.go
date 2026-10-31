@@ -1,4 +1,4 @@
-package main_test
+package callhelper_test
 
 import (
 	"bytes"
@@ -7,12 +7,12 @@ import (
 	"os/exec"
 	"testing"
 
-	main "github.com/kumneger0/cligram/cmd/cligram-voip"
+	"github.com/kumneger0/cligram/cmd/callhelper"
 	"github.com/kumneger0/cligram/ntg"
 )
 
 func TestAudioToolCandidates(t *testing.T) {
-	captureCandidates, playbackCandidates := main.GetAudioCandidates()
+	captureCandidates, playbackCandidates := callhelper.GetAudioCandidates()
 
 	if len(captureCandidates) < 3 {
 		t.Errorf("expected at least 3 capture candidates (PipeWire, PulseAudio, ALSA), got %d", len(captureCandidates))
@@ -34,13 +34,13 @@ func TestAudioToolCandidates(t *testing.T) {
 }
 
 func TestResolveAudioCommands(t *testing.T) {
-	captureCmd, playbackCmd, serverName := main.ResolveAudioCommands()
+	captureCmd, playbackCmd, serverName := callhelper.ResolveAudioCommands()
 	// In Linux test environments, at least one of PipeWire, PulseAudio, or ALSA is typically installed
 	t.Logf("Resolved audio server: %s, capture: %s, playback: %s", serverName, captureCmd, playbackCmd)
 }
 
 func TestPrintProtocol(t *testing.T) {
-	proto := main.GetProtocol()
+	proto := callhelper.GetProtocol()
 	t.Logf("NTG PROTOCOL: %+v", proto)
 }
 

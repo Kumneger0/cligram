@@ -32,9 +32,9 @@ type p2pCallState struct {
 }
 
 var (
-	voipSupervisor = voip.NewSupervisor("cligram-voip")
+	voipSupervisor = voip.NewSupervisor()
 
-	currentBridge   voip.SignalingBridge
+	currentBridge   *voip.JSONRPCBridge
 	currentBridgeMu sync.Mutex
 
 	// updateChannelGlobal is stored to allow background bridge callbacks to notify the UI.
@@ -49,9 +49,9 @@ var (
 	waitConnect   = make(map[int64]chan error)
 	waitConnectMu sync.Mutex
 
-	callMuted         bool
-	callMutedMu       sync.Mutex
-	findSidecarBinary = voip.FindSidecarBinary
+	callMuted            bool
+	callMutedMu          sync.Mutex
+	findWorkerExecutable = voip.FindWorkerExecutable
 
 	checkPeerCallPrivacy = func(ctx context.Context, userID int64, accessHash int64) error {
 		if Cligram == nil || Cligram.API() == nil {
@@ -76,7 +76,7 @@ var (
 	}
 )
 
-func getVoipBridge(ctx context.Context) (voip.SignalingBridge, error) {
+func getVoipBridge(ctx context.Context) (*voip.JSONRPCBridge, error) {
 	currentBridgeMu.Lock()
 	defer currentBridgeMu.Unlock()
 
@@ -141,7 +141,7 @@ func getVoipBridge(ctx context.Context) (voip.SignalingBridge, error) {
 	}()
 
 	bridge.OnSignaling(func(event voip.SignalingEvent) {
-		slog.Info("signaling event received from sidecar", "userID", event.UserID, "dataLen", len(event.Data))
+		slog.Info("signaling event received from worker", "userID", event.UserID, "dataLen", len(event.Data))
 		select {
 		case <-sigCtx.Done():
 			return
@@ -239,7 +239,7 @@ func getVoipBridge(ctx context.Context) (voip.SignalingBridge, error) {
 						Reason: &tg.PhoneCallDiscardReasonDisconnect{},
 					})
 					if discErr != nil {
-						slog.Error("failed to discard call on sidecar disconnect", "userID", userID, "error", discErr)
+						slog.Error("failed to discard call on worker disconnect", "userID", userID, "error", discErr)
 					}
 				}
 
@@ -778,7 +778,7 @@ func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64, update
 		updateChannel = GetGlobalUpdateChannel()
 	}
 
-	// Pre-flight check: verify peer call privacy before allocating VoIP sidecar processes or DH keys
+	// Pre-flight check: verify peer call privacy before allocating VoIP worker processes or DH keys
 	if err := checkPeerCallPrivacy(ctx, userID, accessHash); err != nil {
 		slog.Warn("pre-flight call privacy check blocked call", "userID", userID, "error", err)
 		return err
@@ -787,7 +787,7 @@ func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64, update
 	bridge, err := getVoipBridge(ctx)
 	if err != nil {
 		if errors.Is(err, voip.ErrHelperNotFound) {
-			slog.Warn("cligram-voip helper not found")
+			slog.Warn("call-helper worker not found")
 			if updateChannel != nil {
 				select {
 				case updateChannel <- types.Notification{

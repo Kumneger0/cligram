@@ -1,8 +1,7 @@
-package main
+package callhelper
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"log/slog"
 	"os"
@@ -11,45 +10,45 @@ import (
 	"time"
 )
 
-func main() {
-	loopbackFlag := flag.Bool("loopback", false, "Run audio capture and playback loopback diagnostic")
-	flag.Parse()
-
+// Run starts the media/signaling worker directly.
+func Run(loopback bool) error {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
 		Level: slog.LevelDebug,
 	})))
 
-	if *loopbackFlag {
+	if loopback {
 		runLoopbackDiagnostic()
-		return
+		return nil
 	}
 
 	// In child process spawned via exec.Cmd.ExtraFiles, ExtraFiles[0] is assigned FD 3
 	ipcFile := os.NewFile(3, "cligram-ipc-socket")
 	if ipcFile == nil {
-		slog.Error("FD 3 is nil: cligram-voip must be launched by cligram core")
-		os.Exit(1)
+		slog.Error("FD 3 is nil: call-helper must be launched by cligram core")
+		return fmt.Errorf("FD 3 is nil: call-helper must be launched by cligram core")
 	}
 
-	// Verify FD 3 is actually open and valid
+	// Verify FD 3 is actually open and valid socket
 	var stat syscall.Stat_t
-	if err := syscall.Fstat(3, &stat); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: FD 3 is not a valid open socket: %v\n", err)
-		fmt.Fprintf(os.Stderr, "cligram-voip must be launched as a child process of cligram core.\n")
+	if err := syscall.Fstat(3, &stat); err != nil || (stat.Mode&syscall.S_IFMT) != syscall.S_IFSOCK {
+		fmt.Fprintf(os.Stderr, "Error: FD 3 is not a valid open socket\n")
+		fmt.Fprintf(os.Stderr, "cligram call-helper must be launched as a child process of cligram core.\n")
 		fmt.Fprintf(os.Stderr, "Run with --loopback to test local audio pipeline.\n")
-		os.Exit(1)
+		return fmt.Errorf("FD 3 is not a valid open socket")
 	}
 
-	slog.Info("cligram-voip started, listening on inherited FD 3")
-	handler := NewSidecarHandler(ipcFile, ipcFile)
+	slog.Info("cligram call-helper started, listening on inherited FD 3")
+	handler := NewHandler(ipcFile, ipcFile)
 
 	if err := handler.Run(); err != nil {
-		slog.Info("cligram-voip exiting", "reason", err)
+		slog.Info("cligram call-helper exiting", "reason", err)
+		return err
 	}
+	return nil
 }
 
 func runLoopbackDiagnostic() {
-	fmt.Println("🎙️ Running Cligram VoIP Audio Loopback Diagnostic...")
+	fmt.Println("🎙️ Running Cligram Call Helper Audio Loopback Diagnostic...")
 	captureCmd, playbackCmd, soundServer := ResolveAudioCommands()
 
 	if captureCmd == "" || playbackCmd == "" {

@@ -7,69 +7,25 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
 )
 
-var ErrHelperNotFound = errors.New("cligram-voip helper binary not found")
+var ErrHelperNotFound = errors.New("call-helper worker executable not found")
 
-// FindSidecarBinary searches for the cligram-voip executable in standard locations.
-func FindSidecarBinary() (string, error) {
-	return FindSidecarBinaryCustom("cligram-voip")
+// FindWorkerExecutable resolves the current cligram executable path.
+func FindWorkerExecutable() (string, error) {
+	exePath, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", ErrHelperNotFound, err)
+	}
+	return exePath, nil
 }
 
-// FindSidecarBinaryCustom searches for a specific binary name in:
-// 1. Next to current executable
-// 2. Current working directory (for 'go run .')
-// 3. PATH
-// 4. Standard user and system bin locations (~/.local/bin, /usr/local/bin, /usr/bin)
-func FindSidecarBinaryCustom(binaryName string) (string, error) {
-	// 1. Check next to current executable
-	if exePath, err := os.Executable(); err == nil {
-		exeDir := filepath.Dir(exePath)
-		candidate := filepath.Join(exeDir, binaryName)
-		if fi, err := os.Stat(candidate); err == nil && !fi.IsDir() && fi.Mode()&0o111 != 0 {
-			return candidate, nil
-		}
-	}
-
-	// 2. Check current working directory (e.g. when run with 'go run .')
-	if cwd, err := os.Getwd(); err == nil {
-		candidate := filepath.Join(cwd, binaryName)
-		if fi, err := os.Stat(candidate); err == nil && !fi.IsDir() && fi.Mode()&0o111 != 0 {
-			return candidate, nil
-		}
-	}
-
-	// 3. Check PATH
-	if p, err := exec.LookPath(binaryName); err == nil {
-		return p, nil
-	}
-
-	// 4. Check ~/.local/bin
-	if homeDir, err := os.UserHomeDir(); err == nil {
-		candidate := filepath.Join(homeDir, ".local", "bin", binaryName)
-		if fi, err := os.Stat(candidate); err == nil && !fi.IsDir() && fi.Mode()&0o111 != 0 {
-			return candidate, nil
-		}
-	}
-
-	// 5. Check standard system locations
-	for _, dir := range []string{"/usr/local/bin", "/usr/bin"} {
-		candidate := filepath.Join(dir, binaryName)
-		if fi, err := os.Stat(candidate); err == nil && !fi.IsDir() && fi.Mode()&0o111 != 0 {
-			return candidate, nil
-		}
-	}
-
-	return "", ErrHelperNotFound
-}
-
-// Supervisor manages the lifecycle of the out-of-process VoIP sidecar.
+// Supervisor manages the lifecycle of the out-of-process voice call-helper worker.
 type Supervisor struct {
-	binaryName string
+	customCmd []string
 
 	mu        sync.Mutex
 	cmd       *exec.Cmd
@@ -79,13 +35,11 @@ type Supervisor struct {
 	onExit    func(error)
 }
 
-// NewSupervisor creates a supervisor targeting binaryName (defaults to "cligram-voip").
-func NewSupervisor(binaryName string) *Supervisor {
-	if binaryName == "" {
-		binaryName = "cligram-voip"
-	}
+// NewSupervisor creates a supervisor. Optional customCmd can be supplied (mainly for tests)
+// to override the executable and arguments. When omitted, it launches os.Executable() with argument "call-helper".
+func NewSupervisor(customCmd ...string) *Supervisor {
 	return &Supervisor{
-		binaryName: binaryName,
+		customCmd: customCmd,
 	}
 }
 
@@ -101,8 +55,8 @@ func (s *Supervisor) OnExit(h func(error)) {
 	s.mu.Unlock()
 }
 
-// Start spawns the sidecar if not already running, establishes the anonymous socketpair on FD 3, and returns the bridge.
-func (s *Supervisor) Start(ctx context.Context) (SignalingBridge, error) {
+// Start spawns the call-helper worker if not already running, establishes the anonymous socketpair on FD 3, and returns the bridge.
+func (s *Supervisor) Start(ctx context.Context) (*JSONRPCBridge, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -112,9 +66,21 @@ func (s *Supervisor) Start(ctx context.Context) (SignalingBridge, error) {
 		return s.bridge, nil
 	}
 
-	binaryPath, err := FindSidecarBinaryCustom(s.binaryName)
-	if err != nil {
-		return nil, err
+	var binaryPath string
+	var args []string
+
+	if len(s.customCmd) > 0 && s.customCmd[0] != "" {
+		binaryPath = s.customCmd[0]
+		if len(s.customCmd) > 1 {
+			args = s.customCmd[1:]
+		}
+	} else {
+		var err error
+		binaryPath, err = FindWorkerExecutable()
+		if err != nil {
+			return nil, err
+		}
+		args = []string{"call-helper"}
 	}
 
 	// Create anonymous socketpair
@@ -123,14 +89,14 @@ func (s *Supervisor) Start(ctx context.Context) (SignalingBridge, error) {
 		return nil, fmt.Errorf("socketpair: %w", err)
 	}
 
-	parentFile := os.NewFile(uintptr(fds[0]), "cligram-voip-parent")
-	childFile := os.NewFile(uintptr(fds[1]), "cligram-voip-child")
+	parentFile := os.NewFile(uintptr(fds[0]), "cligram-call-helper-parent")
+	childFile := os.NewFile(uintptr(fds[1]), "cligram-call-helper-child")
 
-	cmd := exec.CommandContext(ctx, binaryPath)
+	cmd := exec.CommandContext(ctx, binaryPath, args...)
 	cmd.ExtraFiles = []*os.File{childFile} // In child, ExtraFiles start at FD 3
 
-	// Redirect sidecar stdout and stderr to /tmp/cligram-voip.log for observability
-	if logFile, err := os.OpenFile("/tmp/cligram-voip.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
+	// Redirect worker stdout and stderr to /tmp/cligram-call-helper.log for observability
+	if logFile, err := os.OpenFile("/tmp/cligram-call-helper.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644); err == nil {
 		cmd.Stdout = logFile
 		cmd.Stderr = logFile
 		defer logFile.Close()
@@ -139,7 +105,7 @@ func (s *Supervisor) Start(ctx context.Context) (SignalingBridge, error) {
 	if err := cmd.Start(); err != nil {
 		_ = parentFile.Close()
 		_ = childFile.Close()
-		return nil, fmt.Errorf("start sidecar: %w", err)
+		return nil, fmt.Errorf("start call-helper worker: %w", err)
 	}
 
 	// Child holds its own file descriptor; close child end in parent
@@ -172,7 +138,7 @@ func (s *Supervisor) Start(ctx context.Context) (SignalingBridge, error) {
 	return bridge, nil
 }
 
-// Stop terminates the running sidecar process cleanly.
+// Stop terminates the running worker process cleanly.
 func (s *Supervisor) Stop() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -185,7 +151,7 @@ func (s *Supervisor) Stop() error {
 	}
 
 	if s.cmd != nil && s.cmd.Process != nil {
-		slog.Info("terminating cligram-voip sidecar")
+		slog.Info("terminating cligram call-helper worker")
 		_ = s.cmd.Process.Signal(syscall.SIGTERM)
 		s.cmd = nil
 	}
@@ -199,14 +165,14 @@ func (s *Supervisor) IsRunning() bool {
 	return s.bridge != nil
 }
 
-// ResetIdleTimer schedules graceful shutdown of the sidecar after duration d.
+// ResetIdleTimer schedules graceful shutdown of the worker after duration d.
 func (s *Supervisor) ResetIdleTimer(d time.Duration) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.cancelIdleTimerLocked()
 	s.idleTimer = time.AfterFunc(d, func() {
-		slog.Info("cligram-voip idle timeout reached, stopping sidecar")
+		slog.Info("cligram call-helper idle timeout reached, stopping worker")
 		_ = s.Stop()
 
 		s.mu.Lock()

@@ -9,15 +9,15 @@ import (
 	"github.com/kumneger0/cligram/internal/telegram/types"
 )
 
-func TestInitiateP2PCall_PreFlightPrivacyHaltsBeforeSidecar(t *testing.T) {
-	// 1. Mock sidecar binary finder to fail if invoked
-	sidecarInvoked := false
-	origFinder := findSidecarBinary
-	findSidecarBinary = func() (string, error) {
-		sidecarInvoked = true
-		return "/usr/local/bin/cligram-voip", nil
+func TestInitiateP2PCall_PreFlightPrivacyHaltsBeforeWorker(t *testing.T) {
+	// 1. Mock worker executable finder to fail if invoked
+	workerInvoked := false
+	origFinder := findWorkerExecutable
+	findWorkerExecutable = func() (string, error) {
+		workerInvoked = true
+		return "/usr/local/bin/cligram", nil
 	}
-	defer func() { findSidecarBinary = origFinder }()
+	defer func() { findWorkerExecutable = origFinder }()
 
 	// 2. Mock pre-flight privacy check to return ErrPrivacyRestricted
 	origPrivacyCheck := checkPeerCallPrivacy
@@ -38,8 +38,8 @@ func TestInitiateP2PCall_PreFlightPrivacyHaltsBeforeSidecar(t *testing.T) {
 		t.Errorf("expected ErrPrivacyRestricted, got %v", err)
 	}
 
-	if sidecarInvoked {
-		t.Errorf("expected sidecar binary finder NOT to be invoked when privacy check fails")
+	if workerInvoked {
+		t.Errorf("expected worker executable finder NOT to be invoked when privacy check fails")
 	}
 }
 
