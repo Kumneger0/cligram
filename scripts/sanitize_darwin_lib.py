@@ -39,8 +39,10 @@ def patch_macho_bytes(data: bytearray, member_name: str) -> bool:
                     break
                 sectname = bytes(data[sect_offset:sect_offset+16]).rstrip(b'\x00')
                 if sectname == b'__compact_unwind':
-                    # Rename section so ld64 compact unwind pass skips it without invalidating section address range
-                    data[sect_offset:sect_offset+16] = b'__compact_unused'
+                    # Moving section to __DWARF tells ld64 it is a non-propagated debug section
+                    # which is completely skipped during atom parsing, avoiding compact unwind limitations.
+                    data[sect_offset:sect_offset+16] = b'__debug_unwind\x00\x00'
+                    data[sect_offset+16:sect_offset+32] = b'__DWARF\x00\x00\x00\x00\x00\x00\x00\x00\x00'
                     patched = True
                 sect_offset += 80
         offset += cmdsize

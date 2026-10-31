@@ -2,8 +2,8 @@ projectname?=cligram
 
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
-	export CGO_LDFLAGS_ALLOW := -Wl,.*
-	export CGO_LDFLAGS := -Wl,-ld_classic -Wl,-no_compact_unwind
+	export CGO_LDFLAGS_ALLOW := (-Wl,.*|-v)
+	export CGO_LDFLAGS := -v -Wl,-ld_classic -Wl,-no_compact_unwind
 endif
 
 default: help
