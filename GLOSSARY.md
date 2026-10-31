@@ -4,12 +4,12 @@ A terminal-based Telegram client written in Go.
 
 ## Language
 
-**VoIP Sidecar**:
-A standalone helper daemon linked against libntgcalls that manages media streams and WebRTC, communicating with the core client over a local Unix domain socket.
-_Avoid_: In-process Cgo, VoIP plugin, native binding
+**Call Helper**:
+An on-demand child worker process spawned directly from the `cligram` binary (`cligram call-helper`) linked against libntgcalls that manages media streams and WebRTC, communicating with the core client over a local Unix domain socket.
+_Avoid_: VoIP sidecar, in-process Cgo, VoIP plugin, native binding
 
 **Audio Pipeline**:
-The OS subprocess stream (PipeWire, PulseAudio, or ALSA) piping raw PCM data between the desktop sound server and the VoIP sidecar.
+The OS subprocess stream (PipeWire, PulseAudio, or ALSA) piping raw PCM data between the desktop sound server and the call helper.
 _Avoid_: Sound driver, audio engine
 
 **Call Relay**:
@@ -25,12 +25,12 @@ The complete lifecycle of a single voice conversation, encompassing Diffie-Hellm
 _Avoid_: Call instance, phone connection
 
 **Signaling Bridge**:
-The component in Cligram core that translates Telegram MTProto call events into JSON-RPC messages and forwards them to the VoIP sidecar.
+The component in Cligram core that translates Telegram MTProto call events into JSON-RPC messages and forwards them to the call helper.
 _Avoid_: Call proxy, socket relay
 
-**Ephemeral Sidecar**:
-A helper process spawned on demand upon call initiation and terminated after an idle period following call completion.
-_Avoid_: Daemon service, background worker
+**Ephemeral Worker**:
+A call helper child process spawned on demand upon call initiation via `os.Executable()` and terminated after an idle period following call completion.
+_Avoid_: Ephemeral sidecar, daemon service, background worker
 
 **Connection Badge**:
 A TUI status indicator reflecting whether voice call media is currently transported via direct peer-to-peer (`[P2P]`) or routed through Telegram reflectors (`[Relay]`).
@@ -45,7 +45,7 @@ The prioritized runtime sequence of sound server backends (PipeWire → PulseAud
 _Avoid_: Audio retry, driver cascade
 
 **Signaling Packet**:
-An opaque WebRTC media signaling payload emitted by the VoIP sidecar and conveyed across Telegram MTProto via phone.sendSignalingData.
+An opaque WebRTC media signaling payload emitted by the call helper and conveyed across Telegram MTProto via phone.sendSignalingData.
 _Avoid_: Control packet, raw payload
 
 **Incoming Call Overlay**:
@@ -57,7 +57,7 @@ A persistent single-line bar pinned at the top of the TUI layout throughout an a
 _Avoid_: Call header, active call indicator
 
 **Call Privacy Guard**:
-Pre-flight verification of peer privacy flags (`PhoneCallsPrivate`, `PhoneCallsAvailable`) and interception of MTProto privacy errors (`USER_PRIVACY_RESTRICTED`) that halts call initiation prior to allocating VoIP sidecar resources.
+Pre-flight verification of peer privacy flags (`PhoneCallsPrivate`, `PhoneCallsAvailable`) and interception of MTProto privacy errors (`USER_PRIVACY_RESTRICTED`) that halts call initiation prior to allocating call helper resources.
 _Avoid_: Call permission check, privacy blocker
 
 **Live Modal Compositor**:

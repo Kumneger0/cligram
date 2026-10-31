@@ -18,10 +18,10 @@ Engineering conventions and judgement standards for Cligram. Evaluated during co
 
 - **Explicit Handling**: Never discard errors silently with blank identifiers (`_ = ...`) in signaling, RPC handlers, or I/O loops.
 - **Structured Logging**: Log errors with descriptive context using the repository's logger package (`internal/logger`).
-- **User-Facing Feedback**: When an unexpected error interrupts user flow (e.g. sidecar process crash, connection failure), surface actionable feedback via UI notifications or toasts.
+- **User-Facing Feedback**: When an unexpected error interrupts user flow (e.g. call worker process crash, connection failure), surface actionable feedback via UI notifications or toasts.
 
 ## 4. Architectural Boundaries (Cgo Isolation)
 
-- **Pure-Go Core**: All packages under `internal/` and the root binary must build with `CGO_ENABLED=0`. No imports of `C` or Cgo-dependent libraries are allowed in core.
-- **Out-of-Process Sidecars**: Native bindings (such as WebRTC or `libntgcalls`) belong strictly inside isolated subcommands under `cmd/` (e.g. `cmd/cligram-voip`).
+- **Pure-Go Core**: All packages under `internal/` must remain pure Go. No imports of `C` or Cgo-dependent libraries are allowed in `internal/`.
+- **Out-of-Process Workers**: Native bindings (such as WebRTC or `libntgcalls`) belong strictly inside isolated child worker subcommands under `cmd/` (e.g. `cligram call-helper` in `cmd/callhelper`).
 - **IPC Protocol**: Cross-boundary communication must use structured JSON-RPC over designated file descriptors (such as inherited socketpairs).

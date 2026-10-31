@@ -1,4 +1,4 @@
-package main
+package callhelper
 
 import (
 	"log/slog"

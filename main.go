@@ -22,6 +22,14 @@ var (
 )
 
 func main() {
+	if slices.Contains(os.Args, "call-helper") {
+		if err := cmd.Execute(version, telegramAPIID, telegramAPIHash); err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	lockFilePath := filepath.Join(os.TempDir(), "cligram.lock")
 	fileLock := flock.New(lockFilePath)
 	locked, err := fileLock.TryLock()
@@ -41,7 +49,7 @@ func main() {
 	}()
 
 	pid := os.Getpid()
-	if err := os.WriteFile(lockFilePath, []byte(strconv.Itoa(pid)), 0644); err != nil {
+	if err := os.WriteFile(lockFilePath, []byte(strconv.Itoa(pid)), 0o644); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: could not write PID to lock file: %v\n", err)
 	}
 	logRotator := logger.Init()

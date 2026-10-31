@@ -63,9 +63,9 @@ func handlePhoneCall(ctx context.Context, phoneCall tg.PhoneCallClass, updateCha
 			return nil
 		}
 
-		// 2. Check if cligram-voip helper binary is installed
+		// 2. Check if call-helper worker is available
 		if _, err := findSidecarBinary(); err != nil {
-			slog.Warn("incoming call received but cligram-voip helper is missing", "caller", userName)
+			slog.Warn("incoming call received but call-helper worker is missing", "caller", userName)
 			if Cligram != nil && Cligram.API() != nil {
 				if _, err := Cligram.API().PhoneDiscardCall(ctx, &tg.PhoneDiscardCallRequest{
 					Peer: tg.InputPhoneCall{
@@ -77,7 +77,7 @@ func handlePhoneCall(ctx context.Context, phoneCall tg.PhoneCallClass, updateCha
 					slog.Error("failed to discard call on missing helper", "callerID", userID, "error", err)
 				}
 			}
-			notification.Notify("Missed Call", fmt.Sprintf("Incoming call from %s declined (cligram-voip helper not installed)", userName))
+			notification.Notify("Missed Call", fmt.Sprintf("Incoming call from %s declined (call-helper not installed)", userName))
 			select {
 			case updateChannel <- types.Notification{
 				CallEvent: &types.CallNotification{

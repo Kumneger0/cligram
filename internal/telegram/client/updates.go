@@ -32,7 +32,7 @@ type p2pCallState struct {
 }
 
 var (
-	voipSupervisor = voip.NewSupervisor("cligram-voip")
+	voipSupervisor = voip.NewSupervisor()
 
 	currentBridge   voip.SignalingBridge
 	currentBridgeMu sync.Mutex
@@ -787,7 +787,7 @@ func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64, update
 	bridge, err := getVoipBridge(ctx)
 	if err != nil {
 		if errors.Is(err, voip.ErrHelperNotFound) {
-			slog.Warn("cligram-voip helper not found")
+			slog.Warn("call-helper worker not found")
 			if updateChannel != nil {
 				select {
 				case updateChannel <- types.Notification{

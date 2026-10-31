@@ -7,20 +7,14 @@ help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: build
-build: ## Build pure-Go cligram binary
-	@echo "--> Building pure-Go application..."
-	@CGO_ENABLED=0 go build -ldflags "-X main.version=$(shell git describe --abbrev=0 --tags 2>/dev/null || echo dev) -X main.telegramAPIID=$(shell echo $$TELEGRAM_API_ID) -X main.telegramAPIHash=$(shell echo $$TELEGRAM_API_HASH)" -o $(projectname)
-
-.PHONY: build-voip
-build-voip: ## Build Cgo VoIP ephemeral sidecar
-	@echo "--> Building cligram-voip ephemeral sidecar..."
-	@go build -o cligram-voip ./cmd/cligram-voip
+build: ## Build cligram binary with embedded call-helper
+	@echo "--> Building unified cligram application..."
+	@go build -ldflags "-X main.version=$(shell git describe --abbrev=0 --tags 2>/dev/null || echo dev) -X main.telegramAPIID=$(shell echo $$TELEGRAM_API_ID) -X main.telegramAPIHash=$(shell echo $$TELEGRAM_API_HASH)" -o $(projectname)
 
 .PHONY: install
-install: build build-voip
-	@echo "--> Installing cligram and cligram-voip to /usr/local/bin..."
+install: build ## Install cligram to /usr/local/bin
+	@echo "--> Installing cligram to /usr/local/bin..."
 	@sudo cp $(projectname) /usr/local/bin/
-	@sudo cp cligram-voip /usr/local/bin/
 	@echo "--> Installation complete. Run 'cligram' to start."
 
 .PHONY: run
@@ -32,23 +26,23 @@ bootstrap:
 	go generate -tags tools tools/tools.go
 
 .PHONY: test-core
-test-core: ## Run tests for pure-Go core packages without Cgo
-	@echo "--> Running pure-Go core tests..."
-	@CGO_ENABLED=0 go test --cover -parallel=1 -v -coverprofile=coverage.out ./internal/...
+test-core: ## Run tests for core packages
+	@echo "--> Running core tests..."
+	@go test --cover -parallel=1 -v -coverprofile=coverage.out ./internal/...
 	@go tool cover -func=coverage.out | sort -rnk3
 
-.PHONY: test-voip
-test-voip: ## Run tests for Cgo VoIP ephemeral sidecar (requires libntgcalls)
-	@echo "--> Running VoIP sidecar tests..."
-	@go test -v ./cmd/cligram-voip/...
+.PHONY: test-call-helper
+test-call-helper: ## Run tests for Cgo call-helper worker (requires libntgcalls)
+	@echo "--> Running call-helper worker tests..."
+	@go test -v ./cmd/callhelper/...
 
 .PHONY: test
-test: clean test-core ## Run test suite for core application
+test: clean test-core test-call-helper ## Run test suite for core application
 
 .PHONY: clean
 clean: 
 	@echo "--> Cleaning up..."
-	@rm -rf coverage.out dist/ $(projectname)
+	@rm -rf coverage.out dist/ $(projectname) cligram-voip
 	@rm -rf embed
 	@rm -rf js/bin
 	@rm -rf js/node_modules
