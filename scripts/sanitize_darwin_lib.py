@@ -80,18 +80,16 @@ def patch_archive(archive_path: str):
             else:
                 realname = name
 
-            if 'ntgcalls.cpp' in realname:
-                member_data_offset = f.tell()
-                member_data = bytearray(f.read(size - namelen))
-                if patch_macho_bytes(member_data, realname):
-                    f.seek(member_data_offset)
-                    f.write(member_data)
-                    patched_count += 1
-                    print(f"--> [sanitize] Neutralized __compact_unwind in {realname}")
+            member_data_offset = f.tell()
+            member_data = bytearray(f.read(size - namelen))
+            if patch_macho_bytes(member_data, realname):
+                f.seek(member_data_offset)
+                f.write(member_data)
+                patched_count += 1
 
             f.seek(hdr_end + size + (size % 2))
 
-        print(f"--> [sanitize] Successfully patched {patched_count} object(s) in {archive_path}")
+        print(f"--> [sanitize] Successfully neutralized __compact_unwind in {patched_count} object(s) in {archive_path}")
 
 
 if __name__ == '__main__':

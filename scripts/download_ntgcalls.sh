@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VERSION="v2.2.1-beta03"
+VERSION="v2.2.5"
 BASE_URL="https://github.com/pytgcalls/ntgcalls/releases/download/${VERSION}"
 
 # Resolve script directory and repository root
