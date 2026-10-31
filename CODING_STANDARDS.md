@@ -22,6 +22,6 @@ Engineering conventions and judgement standards for Cligram. Evaluated during co
 
 ## 4. Architectural Boundaries (Cgo Isolation)
 
-- **Pure-Go Core**: All packages under `internal/` must remain pure Go. No imports of `C` or Cgo-dependent libraries are allowed in `internal/`.
+- **Core Packages**: All packages under `internal/` must avoid Cgo. No imports of `C` or Cgo-dependent libraries are allowed in `internal/`.
 - **Out-of-Process Workers**: Native bindings (such as WebRTC or `libntgcalls`) belong strictly inside isolated child worker subcommands under `cmd/` (e.g. `cligram call-helper` in `cmd/callhelper`).
 - **IPC Protocol**: Cross-boundary communication must use structured JSON-RPC over designated file descriptors (such as inherited socketpairs).

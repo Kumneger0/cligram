@@ -1,6 +1,6 @@
 # Contributing to Cligram CLI
 
-Thank you for considering contributing to Cligram CLI! This project is a pure Go application that provides a terminal-based Telegram client using the Bubbletea framework for the UI and the gotd/td library for Telegram API interactions.
+Thank you for considering contributing to Cligram CLI! This project is a Go application that provides a terminal-based Telegram client using the Bubbletea framework for the UI and the gotd/td library for Telegram API interactions.
 
 ## Project Architecture
 
@@ -22,7 +22,7 @@ Thank you for considering contributing to Cligram CLI! This project is a pure Go
    - Notification system in `internal/notification/`
 
 4. **VoIP Subsystem & Unified Call Helper**:
-   - Pure-Go Core: VoIP signaling, supervisor lifecycle, and UI in `internal/voip/`, `internal/ui/`, and `internal/telegram/client/updates.go`.
+   - Core Client: VoIP signaling, supervisor lifecycle, and UI in `internal/voip/`, `internal/ui/`, and `internal/telegram/client/updates.go`.
    - On-Demand Child Worker: Cgo worker in `cmd/callhelper/` invoked via `cligram call-helper` handling `libntgcalls` audio pipeline and WebRTC media streams.
    - Anonymous IPC: Core and worker communicate across an anonymous `socketpair` via inherited FD 3.
 
