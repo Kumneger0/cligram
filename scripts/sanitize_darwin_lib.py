@@ -2,22 +2,31 @@
 """
 sanitize_darwin_lib.py
 
-Scans a Mach-O static library (.a) for ntgcalls.cpp.o object members.
-In those members, neutralizes the __LD,__compact_unwind section by renaming it
-to __compact_unused and clearing its size and relocation count.
+Scans a Mach-O static library (.a) and sanitizes unwinding metadata to satisfy
+the Apple classic linker (ld_classic):
 
-This resolves the Apple classic linker (ld_classic) failure:
-  ld: in .../libntgcalls.a(ntgcalls.cpp.o), too many compact unwind infos in function ...
-which is caused by >70 compact unwind entries in a single AsyncPromise atom exceeding
-ld_classic's internal per-function atom table limit.
+1. Neutralizes __TEXT,__eh_frame sections in all member objects by renaming them
+   to __DWARF,__debug_frame. Upstream pytgcalls packaging generates broken DWARF
+   FDEs whose relocation targets point outside code sections (e.g. in ffmpeg/vp9/opus),
+   causing ld_classic to crash with:
+     ld: Assertion failed: (targetAtom != NULL), function Fixup, file ld.hpp, line 1058.
+   Since all Darwin arm64 objects in libntgcalls.a also contain full __compact_unwind
+   tables, moving __eh_frame to __DWARF safely suppresses DWARF CFI parsing without
+   affecting unwinding.
+
+2. Neutralizes __LD,__compact_unwind in heavily templated C++ objects (or any object
+   with >15 compact unwind records for a single function atom) by renaming to
+   __DWARF,__debug_unwind. This resolves ld_classic's 4-bit limit error:
+     ld: in .../libntgcalls.a(ntgcalls.cpp.o), too many compact unwind infos in function ...
 """
 
 import os
 import struct
 import sys
+from collections import defaultdict
 
 
-TARGET_MEMBERS = (
+TARGET_CU_MEMBERS = (
     'ntgcalls.cpp',
     'h264_decoder.cpp',
     'src_mc.cpp',
@@ -25,42 +34,16 @@ TARGET_MEMBERS = (
 )
 
 
-def patch_macho_bytes(data: bytearray, member_name: str) -> bool:
+def has_oversized_compact_unwind(data: bytearray) -> bool:
+    """Returns True if any function atom in the Mach-O object has > 15 compact unwind records."""
     if len(data) < 32:
         return False
     magic, = struct.unpack('<I', data[:4])
-    if magic != 0xfeedfacf:  # MH_MAGIC_64
+    if magic != 0xfeedfacf:
         return False
-
     _, _, _, ncmds, _, _, _ = struct.unpack('<IIIIIII', data[4:32])
     offset = 32
-
-    # Safety check: if this object contains an __eh_frame section, preserve its __compact_unwind intact.
-    # When ld64 has compact unwind records for an object with __eh_frame, it skips parsing
-    # individual FDEs. If compact unwind is removed, ld64 attempts to parse __eh_frame FDEs
-    # which fails on synthetic/internal symbols (e.g. in libc++abi cxa_handlers / private_typeinfo).
-    for _ in range(ncmds):
-        if offset + 8 > len(data):
-            break
-        cmd, cmdsize = struct.unpack('<II', data[offset:offset+8])
-        if cmd == 0x19:  # LC_SEGMENT_64
-            nsects, = struct.unpack('<I', data[offset+64:offset+68])
-            sect_offset = offset + 72
-            for _ in range(nsects):
-                if sect_offset + 80 > len(data):
-                    break
-                sectname = bytes(data[sect_offset:sect_offset+16]).rstrip(b'\x00')
-                if sectname == b'__eh_frame':
-                    return False
-                sect_offset += 80
-        offset += cmdsize
-
-    # Moving __compact_unwind to the __DWARF segment instructs ld64 to treat it as a
-    # non-propagated debug section and skip atom parsing entirely.
-    # This prevents the 4-bit limit error ("too many compact unwind infos in function ...")
-    # caused by complex C++ templates/lambdas (e.g. in ntgcalls.cpp.o, h264_decoder.cpp.o).
-    offset = 32
-    patched = False
+    cu_sect = None
     for _ in range(ncmds):
         if offset + 8 > len(data):
             break
@@ -73,7 +56,62 @@ def patch_macho_bytes(data: bytearray, member_name: str) -> bool:
                     break
                 sectname = bytes(data[sect_offset:sect_offset+16]).rstrip(b'\x00')
                 if sectname == b'__compact_unwind':
+                    addr, size, file_offset, align, reloff, nreloc = struct.unpack(
+                        '<QQIIII', data[sect_offset+32:sect_offset+64]
+                    )
+                    cu_sect = (reloff, nreloc)
+                sect_offset += 80
+        offset += cmdsize
+
+    if not cu_sect:
+        return False
+    reloff, nreloc = cu_sect
+    if nreloc <= 15:
+        return False
+
+    entry_symbols = defaultdict(int)
+    for i in range(nreloc):
+        if reloff + (i + 1) * 8 > len(data):
+            break
+        r_addr, r_info = struct.unpack('<II', data[reloff + i*8:reloff + (i+1)*8])
+        r_symnum = r_info & 0xFFFFFF
+        if (r_addr % 32) == 0:  # Code address relocation
+            entry_symbols[r_symnum] += 1
+            if entry_symbols[r_symnum] > 15:
+                return True
+    return False
+
+
+def patch_macho_bytes(data: bytearray, member_name: str) -> bool:
+    if len(data) < 32:
+        return False
+    magic, = struct.unpack('<I', data[:4])
+    if magic != 0xfeedfacf:  # MH_MAGIC_64
+        return False
+
+    _, _, _, ncmds, _, _, _ = struct.unpack('<IIIIIII', data[4:32])
+    offset = 32
+    patched = False
+
+    should_patch_cu = any(t in member_name for t in TARGET_CU_MEMBERS) or has_oversized_compact_unwind(data)
+
+    for _ in range(ncmds):
+        if offset + 8 > len(data):
+            break
+        cmd, cmdsize = struct.unpack('<II', data[offset:offset+8])
+        if cmd == 0x19:  # LC_SEGMENT_64
+            nsects, = struct.unpack('<I', data[offset+64:offset+68])
+            sect_offset = offset + 72
+            for _ in range(nsects):
+                if sect_offset + 80 > len(data):
+                    break
+                sectname = bytes(data[sect_offset:sect_offset+16]).rstrip(b'\x00')
+                if should_patch_cu and sectname == b'__compact_unwind':
                     data[sect_offset:sect_offset+16] = b'__debug_unwind\x00\x00'
+                    data[sect_offset+16:sect_offset+32] = b'__DWARF\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+                    patched = True
+                elif sectname == b'__eh_frame':
+                    data[sect_offset:sect_offset+16] = b'__debug_frame\x00\x00\x00'
                     data[sect_offset+16:sect_offset+32] = b'__DWARF\x00\x00\x00\x00\x00\x00\x00\x00\x00'
                     patched = True
                 sect_offset += 80
@@ -91,11 +129,10 @@ def patch_archive(archive_path: str):
         if magic != b'!<arch>\n':
             f.seek(0)
             data = bytearray(f.read())
-            if any(t in os.path.basename(archive_path) for t in TARGET_MEMBERS):
-                if patch_macho_bytes(data, os.path.basename(archive_path)):
-                    f.seek(0)
-                    f.write(data)
-                    print(f"--> [sanitize] Patched raw Mach-O object {archive_path}")
+            if patch_macho_bytes(data, os.path.basename(archive_path)):
+                f.seek(0)
+                f.write(data)
+                print(f"--> [sanitize] Patched raw Mach-O object {archive_path}")
             return
 
         patched_count = 0
@@ -113,18 +150,16 @@ def patch_archive(archive_path: str):
             else:
                 realname = name
 
-            if any(t in realname for t in TARGET_MEMBERS):
-                member_data_offset = f.tell()
-                member_data = bytearray(f.read(size - namelen))
-                if patch_macho_bytes(member_data, realname):
-                    f.seek(member_data_offset)
-                    f.write(member_data)
-                    patched_count += 1
-                    print(f"--> [sanitize] Neutralized __compact_unwind in {realname}")
+            member_data_offset = f.tell()
+            member_data = bytearray(f.read(size - namelen))
+            if patch_macho_bytes(member_data, realname):
+                f.seek(member_data_offset)
+                f.write(member_data)
+                patched_count += 1
 
             f.seek(hdr_end + size + (size % 2))
 
-        print(f"--> [sanitize] Successfully neutralized __compact_unwind in {patched_count} object(s) in {archive_path}")
+        print(f"--> [sanitize] Successfully sanitized {patched_count} object(s) in {archive_path}")
 
 
 if __name__ == '__main__':
