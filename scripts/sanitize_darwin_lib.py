@@ -17,6 +17,14 @@ import struct
 import sys
 
 
+TARGET_MEMBERS = (
+    'ntgcalls.cpp',
+    'h264_decoder.cpp',
+    'src_mc.cpp',
+    'src_downsample_downsample.cpp',
+)
+
+
 def patch_macho_bytes(data: bytearray, member_name: str) -> bool:
     if len(data) < 32:
         return False
@@ -27,7 +35,7 @@ def patch_macho_bytes(data: bytearray, member_name: str) -> bool:
     _, _, _, ncmds, _, _, _ = struct.unpack('<IIIIIII', data[4:32])
     offset = 32
 
-    # If this object contains an __eh_frame section, preserve its __compact_unwind intact.
+    # Safety check: if this object contains an __eh_frame section, preserve its __compact_unwind intact.
     # When ld64 has compact unwind records for an object with __eh_frame, it skips parsing
     # individual FDEs. If compact unwind is removed, ld64 attempts to parse __eh_frame FDEs
     # which fails on synthetic/internal symbols (e.g. in libc++abi cxa_handlers / private_typeinfo).
@@ -47,10 +55,10 @@ def patch_macho_bytes(data: bytearray, member_name: str) -> bool:
                 sect_offset += 80
         offset += cmdsize
 
-    # For objects without __eh_frame, moving __compact_unwind to the __DWARF segment
-    # instructs ld64 to treat it as a non-propagated debug section and skip atom parsing entirely.
+    # Moving __compact_unwind to the __DWARF segment instructs ld64 to treat it as a
+    # non-propagated debug section and skip atom parsing entirely.
     # This prevents the 4-bit limit error ("too many compact unwind infos in function ...")
-    # caused by complex C++ templates (e.g. in ntgcalls.cpp.o, h264_decoder.cpp.o).
+    # caused by complex C++ templates/lambdas (e.g. in ntgcalls.cpp.o, h264_decoder.cpp.o).
     offset = 32
     patched = False
     for _ in range(ncmds):
@@ -83,10 +91,11 @@ def patch_archive(archive_path: str):
         if magic != b'!<arch>\n':
             f.seek(0)
             data = bytearray(f.read())
-            if patch_macho_bytes(data, os.path.basename(archive_path)):
-                f.seek(0)
-                f.write(data)
-                print(f"--> [sanitize] Patched raw Mach-O object {archive_path}")
+            if any(t in os.path.basename(archive_path) for t in TARGET_MEMBERS):
+                if patch_macho_bytes(data, os.path.basename(archive_path)):
+                    f.seek(0)
+                    f.write(data)
+                    print(f"--> [sanitize] Patched raw Mach-O object {archive_path}")
             return
 
         patched_count = 0
@@ -104,12 +113,14 @@ def patch_archive(archive_path: str):
             else:
                 realname = name
 
-            member_data_offset = f.tell()
-            member_data = bytearray(f.read(size - namelen))
-            if patch_macho_bytes(member_data, realname):
-                f.seek(member_data_offset)
-                f.write(member_data)
-                patched_count += 1
+            if any(t in realname for t in TARGET_MEMBERS):
+                member_data_offset = f.tell()
+                member_data = bytearray(f.read(size - namelen))
+                if patch_macho_bytes(member_data, realname):
+                    f.seek(member_data_offset)
+                    f.write(member_data)
+                    patched_count += 1
+                    print(f"--> [sanitize] Neutralized __compact_unwind in {realname}")
 
             f.seek(hdr_end + size + (size % 2))
 
