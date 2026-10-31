@@ -26,6 +26,32 @@ def patch_macho_bytes(data: bytearray, member_name: str) -> bool:
 
     _, _, _, ncmds, _, _, _ = struct.unpack('<IIIIIII', data[4:32])
     offset = 32
+
+    # If this object contains an __eh_frame section, preserve its __compact_unwind intact.
+    # When ld64 has compact unwind records for an object with __eh_frame, it skips parsing
+    # individual FDEs. If compact unwind is removed, ld64 attempts to parse __eh_frame FDEs
+    # which fails on synthetic/internal symbols (e.g. in libc++abi cxa_handlers / private_typeinfo).
+    for _ in range(ncmds):
+        if offset + 8 > len(data):
+            break
+        cmd, cmdsize = struct.unpack('<II', data[offset:offset+8])
+        if cmd == 0x19:  # LC_SEGMENT_64
+            nsects, = struct.unpack('<I', data[offset+64:offset+68])
+            sect_offset = offset + 72
+            for _ in range(nsects):
+                if sect_offset + 80 > len(data):
+                    break
+                sectname = bytes(data[sect_offset:sect_offset+16]).rstrip(b'\x00')
+                if sectname == b'__eh_frame':
+                    return False
+                sect_offset += 80
+        offset += cmdsize
+
+    # For objects without __eh_frame, moving __compact_unwind to the __DWARF segment
+    # instructs ld64 to treat it as a non-propagated debug section and skip atom parsing entirely.
+    # This prevents the 4-bit limit error ("too many compact unwind infos in function ...")
+    # caused by complex C++ templates (e.g. in ntgcalls.cpp.o, h264_decoder.cpp.o).
+    offset = 32
     patched = False
     for _ in range(ncmds):
         if offset + 8 > len(data):
@@ -39,8 +65,6 @@ def patch_macho_bytes(data: bytearray, member_name: str) -> bool:
                     break
                 sectname = bytes(data[sect_offset:sect_offset+16]).rstrip(b'\x00')
                 if sectname == b'__compact_unwind':
-                    # Moving section to __DWARF tells ld64 it is a non-propagated debug section
-                    # which is completely skipped during atom parsing, avoiding compact unwind limitations.
                     data[sect_offset:sect_offset+16] = b'__debug_unwind\x00\x00'
                     data[sect_offset+16:sect_offset+32] = b'__DWARF\x00\x00\x00\x00\x00\x00\x00\x00\x00'
                     patched = True
