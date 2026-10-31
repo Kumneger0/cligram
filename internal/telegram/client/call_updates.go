@@ -64,7 +64,7 @@ func handlePhoneCall(ctx context.Context, phoneCall tg.PhoneCallClass, updateCha
 		}
 
 		// 2. Check if call-helper worker is available
-		if _, err := findSidecarBinary(); err != nil {
+		if _, err := findWorkerExecutable(); err != nil {
 			slog.Warn("incoming call received but call-helper worker is missing", "caller", userName)
 			if Cligram != nil && Cligram.API() != nil {
 				if _, err := Cligram.API().PhoneDiscardCall(ctx, &tg.PhoneDiscardCallRequest{

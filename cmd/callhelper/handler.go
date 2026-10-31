@@ -28,8 +28,6 @@ type Handler struct {
 	encoder      *json.Encoder
 	decoder      *json.Decoder
 	writeMu      sync.Mutex
-	peerGB       map[int64][]byte
-	peerGBMu     sync.Mutex
 	isP2P        map[int64]bool
 	isP2PMu      sync.RWMutex
 	playbackMu   sync.Mutex
@@ -45,7 +43,6 @@ func NewHandler(r io.Reader, w io.Writer) *Handler {
 		client:       ntg.Init(),
 		encoder:      json.NewEncoder(w),
 		decoder:      json.NewDecoder(r),
-		peerGB:       make(map[int64][]byte),
 		isP2P:        make(map[int64]bool),
 		playbackSess: make(map[int64]*playbackSession),
 	}

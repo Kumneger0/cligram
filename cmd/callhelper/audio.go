@@ -78,14 +78,14 @@ func ResolveAudioCommands() (string, string, string) {
 
 	// If no matching pair, resolve independently
 	for _, c := range captures {
-		if _, err := exec.LookPath(c.Binary); err == nil {
+		if ProbeAudioTool(c.Binary) {
 			selectedCapture = c.Command
 			selectedServer = c.SoundServer
 			break
 		}
 	}
 	for _, p := range playbacks {
-		if _, err := exec.LookPath(p.Binary); err == nil {
+		if ProbeAudioTool(p.Binary) {
 			selectedPlayback = p.Command
 			if selectedServer == "" {
 				selectedServer = p.SoundServer

@@ -23,11 +23,6 @@ func FindWorkerExecutable() (string, error) {
 	return exePath, nil
 }
 
-// FindSidecarBinary is maintained for backward compatibility and resolves the worker executable.
-func FindSidecarBinary() (string, error) {
-	return FindWorkerExecutable()
-}
-
 // Supervisor manages the lifecycle of the out-of-process voice call-helper worker.
 type Supervisor struct {
 	customCmd []string
@@ -41,12 +36,8 @@ type Supervisor struct {
 }
 
 // NewSupervisor creates a supervisor. Optional customCmd can be supplied (mainly for tests)
-// to override the executable and arguments. When omitted or set to "cligram-voip",
-// it launches os.Executable() with argument "call-helper".
+// to override the executable and arguments. When omitted, it launches os.Executable() with argument "call-helper".
 func NewSupervisor(customCmd ...string) *Supervisor {
-	if len(customCmd) == 1 && (customCmd[0] == "cligram-voip" || customCmd[0] == "") {
-		customCmd = nil
-	}
 	return &Supervisor{
 		customCmd: customCmd,
 	}
@@ -65,7 +56,7 @@ func (s *Supervisor) OnExit(h func(error)) {
 }
 
 // Start spawns the call-helper worker if not already running, establishes the anonymous socketpair on FD 3, and returns the bridge.
-func (s *Supervisor) Start(ctx context.Context) (SignalingBridge, error) {
+func (s *Supervisor) Start(ctx context.Context) (*JSONRPCBridge, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
