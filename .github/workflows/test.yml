@@ -10,6 +10,9 @@ jobs:
         os: [ubuntu-latest, macos-latest]
 
     runs-on: ${{ matrix.os }}
+    env:
+      CGO_LDFLAGS_ALLOW: "-Wl,-ld_classic"
+      CGO_LDFLAGS: ${{ matrix.os == 'macos-latest' && '-Wl,-ld_classic' || '' }}
 
     steps:
       - uses: actions/checkout@v7

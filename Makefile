@@ -1,5 +1,11 @@
 projectname?=cligram
 
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+	export CGO_LDFLAGS_ALLOW := -Wl,-ld_classic
+	export CGO_LDFLAGS := -Wl,-ld_classic
+endif
+
 default: help
 
 .PHONY: help
