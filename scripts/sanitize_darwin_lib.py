@@ -18,6 +18,12 @@ the Apple classic linker (ld_classic):
    with >15 compact unwind records for a single function atom) by renaming to
    __DWARF,__debug_unwind. This resolves ld_classic's 4-bit limit error:
      ld: in .../libntgcalls.a(ntgcalls.cpp.o), too many compact unwind infos in function ...
+
+3. Normalizes __DATA,__objc_selrefs section type from S_LITERAL_POINTERS (0x5)
+   to S_REGULAR (0x0). This resolves the Apple classic linker failure:
+     ld: Assertion failed: (0 && "unsupported reference to selector"), function targetCString, file macho_relocatable_file.cpp, line 6826.
+   which occurs when ld_classic attempts to parse modern 64-bit selector references
+   as literal C-string pointers in its legacy ObjC1 pass.
 """
 
 import os
@@ -114,6 +120,11 @@ def patch_macho_bytes(data: bytearray, member_name: str) -> bool:
                     data[sect_offset:sect_offset+16] = b'__debug_frame\x00\x00\x00'
                     data[sect_offset+16:sect_offset+32] = b'__DWARF\x00\x00\x00\x00\x00\x00\x00\x00\x00'
                     patched = True
+                elif sectname == b'__objc_selrefs':
+                    flags, = struct.unpack('<I', data[sect_offset+64:sect_offset+68])
+                    if (flags & 0xff) == 5:  # S_LITERAL_POINTERS -> S_REGULAR
+                        struct.pack_into('<I', data, sect_offset+64, flags & ~0xff)
+                        patched = True
                 sect_offset += 80
         offset += cmdsize
     return patched
