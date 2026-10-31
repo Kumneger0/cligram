@@ -5,6 +5,7 @@ on: [push, pull_request]
 jobs:
   test:
     strategy:
+      fail-fast: false
       matrix:
         go-version: [1.25.x]
         os: [ubuntu-latest, macos-latest]
@@ -71,12 +72,14 @@ jobs:
             clang --version 2>/dev/null | head -1 || true
 
             for FLAGS in "" "-Wl,-no_compact_unwind" "-Wl,-ld_classic" "-Wl,-ld_classic -Wl,-no_compact_unwind"; do
-              echo "  -> Flags: '$FLAGS'"
-              OUT=$(CGO_LDFLAGS_ALLOW="-Wl,.*" CGO_LDFLAGS="$FLAGS" go test -c -o /dev/null ./cmd/callhelper 2>&1) && {
-                echo "     >>> SUCCESS! <<<"
-              } || {
-                echo "     FAILED: $(echo "$OUT" | grep -E "ld:|Assertion|clang:" | head -2 | tr '\n' ' ')"
-              }
+              echo "  --------------------------------------------------"
+              echo "  Testing with Flags: '$FLAGS'"
+              if OUT=$(CGO_LDFLAGS_ALLOW="-Wl,.*" CGO_LDFLAGS="$FLAGS" go test -c -o /dev/null ./cmd/callhelper 2>&1); then
+                echo "  >>> SUCCESS! <<<"
+              else
+                echo "  FAILED with exit code $?:"
+                echo "$OUT" | grep -v "^#" | head -15
+              fi
             done
           done
 

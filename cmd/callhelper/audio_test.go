@@ -132,6 +132,10 @@ func TestPipewirePlayWithTeeReader(t *testing.T) {
 	defer os.Remove(dumpFile.Name())
 	defer dumpFile.Close()
 
+	if _, err := exec.LookPath("pw-play"); err != nil {
+		t.Skip("pw-play not available in test environment")
+	}
+
 	tee := io.TeeReader(src, dumpFile)
 	cmd := exec.Command("pw-play", "--format", "s16", "--rate", "48000", "--channels", "1", "--latency", "20ms", "-")
 	cmd.Stdin = tee
