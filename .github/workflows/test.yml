@@ -24,6 +24,39 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
 
+      - name: Inspect CI toolchain (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          echo "=== sw_vers ==="
+          sw_vers
+          echo "=== xcodebuild -version ==="
+          xcodebuild -version
+          echo "=== clang --version ==="
+          clang --version
+          echo "=== xcrun --find ld ==="
+          xcrun --find ld
+          echo "=== go version ==="
+          go version
+          echo "=== available Xcode versions ==="
+          ls -ld /Applications/Xcode* || true
+
+      - name: Download VoIP dependencies
+        run: make deps-voip
+
+      - name: Inspect static library (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          echo "=== file ==="
+          file ntg/lib/darwin_arm64/libntgcalls.a
+          echo "=== ar -t ==="
+          xcrun ar -t ntg/lib/darwin_arm64/libntgcalls.a | head -30
+          echo "=== nm AsyncPromise ==="
+          xcrun nm -arch arm64 -C ntg/lib/darwin_arm64/libntgcalls.a | grep -F 'AsyncPromise' | head -30
+          echo "=== otool -l (head 100) ==="
+          xcrun otool -l ntg/lib/darwin_arm64/libntgcalls.a | head -100
+          echo "=== unwind sections ==="
+          xcrun otool -l ntg/lib/darwin_arm64/libntgcalls.a | grep -A 5 -B 2 -i unwind | head -40 || true
+
       - name: Build unified cligram application
         env:
           TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
