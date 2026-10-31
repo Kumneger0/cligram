@@ -39,10 +39,8 @@ def patch_macho_bytes(data: bytearray, member_name: str) -> bool:
                     break
                 sectname = bytes(data[sect_offset:sect_offset+16]).rstrip(b'\x00')
                 if sectname == b'__compact_unwind':
-                    # Rename section and zero out size and nreloc
+                    # Rename section so ld64 compact unwind pass skips it without invalidating section address range
                     data[sect_offset:sect_offset+16] = b'__compact_unused'
-                    struct.pack_into('<Q', data, sect_offset+40, 0)  # size = 0
-                    struct.pack_into('<I', data, sect_offset+60, 0)  # nreloc = 0
                     patched = True
                 sect_offset += 80
         offset += cmdsize
