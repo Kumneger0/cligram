@@ -6,7 +6,7 @@ A terminal-based Telegram client written in Go.
 
 **Call Helper**:
 An on-demand child worker process spawned directly from the `cligram` binary (`cligram call-helper`) linked against libntgcalls that manages media streams and WebRTC, communicating with the core client over a local Unix domain socket.
-_Avoid_: VoIP sidecar, in-process Cgo, VoIP plugin, native binding
+_Avoid_: In-process Cgo, VoIP plugin, native binding
 
 **Audio Pipeline**:
 The OS subprocess stream (PipeWire, PulseAudio, or ALSA) piping raw PCM data between the desktop sound server and the call helper.
@@ -30,7 +30,7 @@ _Avoid_: Call proxy, socket relay
 
 **Ephemeral Worker**:
 A call helper child process spawned on demand upon call initiation via `os.Executable()` and terminated after an idle period following call completion.
-_Avoid_: Ephemeral sidecar, daemon service, background worker
+_Avoid_: Daemon service, background worker
 
 **Connection Badge**:
 A TUI status indicator reflecting whether voice call media is currently transported via direct peer-to-peer (`[P2P]`) or routed through Telegram reflectors (`[Relay]`).
