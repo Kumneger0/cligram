@@ -2,9 +2,10 @@ version: 2
 project_name: cligram
 env:
   - GO111MODULE=on
-  - CGO_ENABLED=0
+  - CGO_ENABLED=1
 before:
   hooks:
+    - make deps-voip
     - ./scripts/manpages.sh
     - ./scripts/completions.sh
 builds:
@@ -17,12 +18,10 @@ builds:
       - -X main.telegramAPIHash={{ .Env.TELEGRAM_API_HASH }}
     goos:
       - linux
-      - darwin
     goarch:
       - amd64
-      - arm64
     env:
-      - CGO_ENABLED=0
+      - CGO_ENABLED=1
 archives:
   -
     ids:
