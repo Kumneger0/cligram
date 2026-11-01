@@ -39,7 +39,11 @@ jobs:
           go version
 
       - name: Download VoIP dependencies
-        run: make deps-voip
+        run: |
+          make deps-voip
+          if [ "${{ matrix.os }}" = "macos-latest" ]; then
+            sudo cp ntg/lib/darwin_arm64/libntgcalls.dylib /usr/local/lib/ || true
+          fi
 
       - name: Inspect shared library (macOS)
         if: matrix.os == 'macos-latest'
@@ -57,6 +61,8 @@ jobs:
         run: make build
 
       - name: Run tests
+        env:
+          DYLD_LIBRARY_PATH: ${{ github.workspace }}/ntg/lib/darwin_arm64
         run: make test
 
       - name: Upload coverage to Codecov

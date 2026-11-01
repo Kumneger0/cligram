@@ -43,7 +43,7 @@ test-core: ## Run tests for core packages
 .PHONY: test-call-helper
 test-call-helper: deps-voip ## Run tests for Cgo call-helper worker (requires libntgcalls)
 	@echo "--> Running call-helper worker tests..."
-	@go test -v ./cmd/callhelper/...
+	@DYLD_LIBRARY_PATH="$(CURDIR)/ntg/lib/darwin_arm64:$(CURDIR)/ntg/lib/darwin_amd64:$$DYLD_LIBRARY_PATH" go test -v ./cmd/callhelper/...
 
 .PHONY: test
 test: clean test-core test-call-helper ## Run test suite for core application
