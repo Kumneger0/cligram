@@ -43,7 +43,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [arm64, amd64]
+        arch: [arm64]
     env:
       CGO_LDFLAGS_ALLOW: "(-Wl,.*|-v)"
     steps:
