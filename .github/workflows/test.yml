@@ -13,7 +13,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       CGO_LDFLAGS_ALLOW: "(-Wl,.*|-v)"
-      CGO_LDFLAGS: ${{ matrix.os == 'macos-latest' && '-v -Wl,-ld_classic -Wl,-no_compact_unwind' || '' }}
 
     steps:
       - uses: actions/checkout@v7
@@ -38,25 +37,17 @@ jobs:
           xcrun --find ld
           echo "=== go version ==="
           go version
-          echo "=== available Xcode versions ==="
-          ls -ld /Applications/Xcode* || true
 
       - name: Download VoIP dependencies
         run: make deps-voip
 
-      - name: Inspect static library (macOS)
+      - name: Inspect shared library (macOS)
         if: matrix.os == 'macos-latest'
         run: |
           echo "=== file ==="
-          file ntg/lib/darwin_arm64/libntgcalls.a
-          echo "=== ar -t ==="
-          xcrun ar -t ntg/lib/darwin_arm64/libntgcalls.a | head -30
-          echo "=== nm AsyncPromise ==="
-          xcrun nm -arch arm64 -C ntg/lib/darwin_arm64/libntgcalls.a | grep -F 'AsyncPromise' | head -30
-          echo "=== otool -l (head 100) ==="
-          xcrun otool -l ntg/lib/darwin_arm64/libntgcalls.a | head -100
-          echo "=== unwind sections ==="
-          xcrun otool -l ntg/lib/darwin_arm64/libntgcalls.a | grep -A 5 -B 2 -i unwind | head -40 || true
+          file ntg/lib/darwin_arm64/libntgcalls.dylib
+          echo "=== otool -L ==="
+          otool -L ntg/lib/darwin_arm64/libntgcalls.dylib
 
 
       - name: Build unified cligram application

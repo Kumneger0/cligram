@@ -3,8 +3,8 @@ package ntg // nolint:revive
 /*
 #cgo linux,amd64 LDFLAGS: ${SRCDIR}/lib/linux_amd64/libntgcalls.a -lz -lresolv -ldl -lpthread -lm -lstdc++
 #cgo linux,arm64 LDFLAGS: ${SRCDIR}/lib/linux_arm64/libntgcalls.a -lz -lresolv -ldl -lpthread -lm -lstdc++
-#cgo darwin,arm64 LDFLAGS: ${SRCDIR}/lib/darwin_arm64/libntgcalls.a -lz -lbz2 -liconv -lc++ -framework Foundation -framework AVFoundation -framework CoreFoundation -framework Security -framework CoreAudio -framework AudioToolbox -framework CoreVideo -framework CoreMedia -framework CoreGraphics -framework VideoToolbox
-#cgo darwin,amd64 LDFLAGS: ${SRCDIR}/lib/darwin_amd64/libntgcalls.a -lz -lbz2 -liconv -lc++ -framework Foundation -framework AVFoundation -framework CoreFoundation -framework Security -framework CoreAudio -framework AudioToolbox -framework CoreVideo -framework CoreMedia -framework CoreGraphics -framework VideoToolbox
+#cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/lib/darwin_arm64 -L/usr/local/lib -L/opt/homebrew/lib -lntgcalls -Wl,-rpath,@loader_path/ntg/lib/darwin_arm64 -Wl,-rpath,@executable_path/ntg/lib/darwin_arm64 -Wl,-rpath,/usr/local/lib -Wl,-rpath,/opt/homebrew/lib
+#cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/lib/darwin_amd64 -L/usr/local/lib -L/opt/homebrew/lib -lntgcalls -Wl,-rpath,@loader_path/ntg/lib/darwin_amd64 -Wl,-rpath,@executable_path/ntg/lib/darwin_amd64 -Wl,-rpath,/usr/local/lib -Wl,-rpath,/opt/homebrew/lib
 #cgo windows,amd64 LDFLAGS: ${SRCDIR}/lib/windows_amd64/ntgcalls.lib -lws2_32 -lwinmm -lcrypt32
 
 #include <stdint.h>
