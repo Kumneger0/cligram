@@ -23,8 +23,11 @@ jobs:
         uses: actions/setup-go@v7
         with:
           go-version: 1.25.x
-      -
-        name: Run GoReleaser
+      - name: Download VoIP dependencies
+        run: |
+          make deps-voip
+
+      - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v7
         with:
           version: '~> v2'
@@ -33,3 +36,56 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
           TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+
+  release-macos:
+    needs: goreleaser
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, amd64]
+    env:
+      CGO_LDFLAGS_ALLOW: "(-Wl,.*|-v)"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: 1.25.x
+
+      - name: Download VoIP dependencies
+        run: |
+          TARGET_OS=darwin TARGET_ARCH=${{ matrix.arch }} make deps-voip
+          sudo cp ntg/lib/darwin_${{ matrix.arch }}/libntgcalls.dylib /usr/local/lib/ || true
+
+      - name: Build macOS binary
+        env:
+          CGO_ENABLED: "1"
+          GOOS: darwin
+          GOARCH: ${{ matrix.arch }}
+        run: |
+          VERSION="${{ github.ref_name }}"
+          go build -ldflags "-s -w -X main.version=${VERSION} -X main.telegramAPIID=${{ secrets.TELEGRAM_API_ID }} -X main.telegramAPIHash=${{ secrets.TELEGRAM_API_HASH }}" -o cligram .
+
+      - name: Package macOS archive
+        run: |
+          ARCH_NAME="${{ matrix.arch }}"
+          if [ "$ARCH_NAME" = "amd64" ]; then
+            ARCH_NAME="x86_64"
+          fi
+          cp ntg/lib/darwin_${{ matrix.arch }}/libntgcalls.dylib . || true
+          tar -czvf "cligram_Darwin_${ARCH_NAME}.tar.gz" cligram libntgcalls.dylib README.md LICENSE
+
+      - name: Upload to GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ARCH_NAME="${{ matrix.arch }}"
+          if [ "$ARCH_NAME" = "amd64" ]; then
+            ARCH_NAME="x86_64"
+          fi
+          gh release upload "${{ github.ref_name }}" "cligram_Darwin_${ARCH_NAME}.tar.gz" --clobber

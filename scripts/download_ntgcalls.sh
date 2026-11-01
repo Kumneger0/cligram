@@ -9,16 +9,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 # Detect OS
-OS_TYPE="$(uname -s)"
+OS_TYPE="${TARGET_OS:-$(uname -s)}"
 case "${OS_TYPE}" in
-    Linux*)     GOOS="linux" ;;
-    Darwin*)    GOOS="darwin" ;;
-    MINGW*|MSYS*|CYGWIN*) GOOS="windows" ;;
+    Linux*|linux*)     GOOS="linux" ;;
+    Darwin*|darwin*)   GOOS="darwin" ;;
+    MINGW*|MSYS*|CYGWIN*|windows*) GOOS="windows" ;;
     *)          echo "Unsupported OS: ${OS_TYPE}" >&2; exit 1 ;;
 esac
 
 # Detect Architecture
-ARCH_TYPE="$(uname -m)"
+ARCH_TYPE="${TARGET_ARCH:-$(uname -m)}"
 case "${ARCH_TYPE}" in
     x86_64|amd64)   GOARCH="amd64"; NTG_ARCH="x86_64" ;;
     aarch64|arm64)  GOARCH="arm64"; NTG_ARCH="arm64" ;;
