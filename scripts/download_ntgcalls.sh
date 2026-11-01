@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VERSION="v2.2.5"
+VERSION="v3.0.5"
 BASE_URL="https://github.com/pytgcalls/ntgcalls/releases/download/${VERSION}"
 
 # Resolve script directory and repository root
@@ -53,7 +53,7 @@ echo "--> [ntgcalls] Downloading ${VERSION} static library for ${ASSET_PLATFORM}
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "${TMP_DIR}"' EXIT
 
-curl -fsSL -o "${TMP_DIR}/${ZIP_NAME}" "${DOWNLOAD_URL}"
+curl -fsSL --retry 3 --retry-connrefused -o "${TMP_DIR}/${ZIP_NAME}" "${DOWNLOAD_URL}"
 
 echo "--> [ntgcalls] Extracting static library to ${TARGET_DIR}..."
 unzip -q -o "${TMP_DIR}/${ZIP_NAME}" -d "${TMP_DIR}/extracted"
@@ -68,10 +68,6 @@ else
     echo "Error: static library not found in extracted archive" >&2
     ls -la "${TMP_DIR}/extracted" >&2
     exit 1
-fi
-
-if [ "${GOOS}" = "darwin" ]; then
-    python3 "${SCRIPT_DIR}/sanitize_darwin_lib.py" "${TARGET_LIB}"
 fi
 
 echo "--> [ntgcalls] Successfully installed static library at ${TARGET_LIB}"
