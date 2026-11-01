@@ -232,6 +232,7 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 	cmd.AddCommand(ManCmd(cmd))
 	cmd.AddCommand(Logout(telegramAPIID, telegramAPIHash))
 	cmd.AddCommand(Account(telegramAPIID, telegramAPIHash))
+	cmd.AddCommand(newCallHelperCmd())
 	return cmd
 }
 

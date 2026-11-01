@@ -13,12 +13,12 @@ import (
 )
 
 func TestHandlePhoneCall_IncomingCallAlert(t *testing.T) {
-	// 1. Mock sidecar binary finder so test does not depend on host environment
-	origFinder := findSidecarBinary
-	findSidecarBinary = func() (string, error) {
-		return "/usr/local/bin/cligram-voip", nil
+	// 1. Mock worker executable finder so test does not depend on host environment
+	origFinder := findWorkerExecutable
+	findWorkerExecutable = func() (string, error) {
+		return "/usr/local/bin/cligram", nil
 	}
-	defer func() { findSidecarBinary = origFinder }()
+	defer func() { findWorkerExecutable = origFinder }()
 
 	// 2. Intercept notification.Alert
 	var alertTitle, alertMsg string
@@ -69,12 +69,12 @@ func TestHandlePhoneCall_IncomingCallAlert(t *testing.T) {
 	}
 }
 
-func TestHandlePhoneCall_MissingSidecarDeclinesCall(t *testing.T) {
-	origFinder := findSidecarBinary
-	findSidecarBinary = func() (string, error) {
+func TestHandlePhoneCall_MissingHelperDeclinesCall(t *testing.T) {
+	origFinder := findWorkerExecutable
+	findWorkerExecutable = func() (string, error) {
 		return "", errors.New("binary not found")
 	}
-	defer func() { findSidecarBinary = origFinder }()
+	defer func() { findWorkerExecutable = origFinder }()
 
 	var notifyTitle, notifyMsg string
 	origNotifyFn := notification.NotifyFn

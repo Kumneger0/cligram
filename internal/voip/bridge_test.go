@@ -21,7 +21,7 @@ func TestBridge_CreateCall(t *testing.T) {
 	bridge.Start()
 	defer bridge.Close()
 
-	// Simulate sidecar responding on serverConn
+	// Simulate worker responding on serverConn
 	go func() {
 		decoder := json.NewDecoder(serverConn)
 		encoder := json.NewEncoder(serverConn)
@@ -98,7 +98,7 @@ func TestBridge_Notifications(t *testing.T) {
 	bridge.Start()
 	defer bridge.Close()
 
-	// Sidecar sends two notifications
+	// Worker sends two notifications
 	go func() {
 		encoder := json.NewEncoder(serverConn)
 
@@ -185,7 +185,7 @@ func TestBridge_FullCallLifecycle(t *testing.T) {
 	bridge.Start()
 	defer bridge.Close()
 
-	// Mock sidecar handler
+	// Mock worker handler
 	go func() {
 		decoder := json.NewDecoder(serverConn)
 		encoder := json.NewEncoder(serverConn)

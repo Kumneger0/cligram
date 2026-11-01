@@ -91,7 +91,7 @@ type StopCallParams struct {
 	UserID int64 `json:"user_id"`
 }
 
-// Sidecar to Core Asynchronous Event Notifications
+// Worker to Core Asynchronous Event Notifications
 
 type SignalingEvent struct {
 	UserID int64  `json:"user_id"`

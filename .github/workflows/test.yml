@@ -5,11 +5,14 @@ on: [push, pull_request]
 jobs:
   test:
     strategy:
+      fail-fast: false
       matrix:
         go-version: [1.25.x]
         os: [ubuntu-latest, macos-latest]
 
     runs-on: ${{ matrix.os }}
+    env:
+      CGO_LDFLAGS_ALLOW: "(-Wl,.*|-v)"
 
     steps:
       - uses: actions/checkout@v7
@@ -21,13 +24,45 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
 
-      - name: Build pure-Go core application
+      - name: Inspect CI toolchain (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          echo "=== sw_vers ==="
+          sw_vers
+          echo "=== xcodebuild -version ==="
+          xcodebuild -version
+          echo "=== clang --version ==="
+          clang --version
+          echo "=== xcrun --find ld ==="
+          xcrun --find ld
+          echo "=== go version ==="
+          go version
+
+      - name: Download VoIP dependencies
+        run: |
+          make deps-voip
+          if [ "${{ matrix.os }}" = "macos-latest" ]; then
+            sudo cp ntg/lib/darwin_arm64/libntgcalls.dylib /usr/local/lib/ || true
+          fi
+
+      - name: Inspect shared library (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          echo "=== file ==="
+          file ntg/lib/darwin_arm64/libntgcalls.dylib
+          echo "=== otool -L ==="
+          otool -L ntg/lib/darwin_arm64/libntgcalls.dylib
+
+
+      - name: Build unified cligram application
         env:
           TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
           TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
         run: make build
 
       - name: Run tests
+        env:
+          DYLD_LIBRARY_PATH: ${{ github.workspace }}/ntg/lib/darwin_arm64
         run: make test
 
       - name: Upload coverage to Codecov

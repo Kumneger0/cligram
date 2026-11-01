@@ -10,23 +10,7 @@ import (
 	"sync/atomic"
 )
 
-// SignalingBridge defines the interface for communicating with the VoIP sidecar.
-type SignalingBridge interface {
-	Start()
-	Close() error
-	CreateCall(ctx context.Context, params CreateCallParams) (*CreateCallResult, error)
-	ExchangeKeys(ctx context.Context, params ExchangeKeysParams) (*ExchangeKeysResult, error)
-	ConnectCall(ctx context.Context, params ConnectCallParams) error
-	SendSignaling(ctx context.Context, userID int64, data []byte) error
-	SetMute(ctx context.Context, params SetMuteParams) error
-	StopCall(ctx context.Context, params StopCallParams) error
-	OnSignaling(handler func(SignalingEvent))
-	OnStateChange(handler func(StateChangeEvent))
-	OnAudioError(handler func(AudioErrorEvent))
-	OnClose(handler func(error))
-}
-
-// JSONRPCBridge implements SignalingBridge over an io.ReadWriteCloser stream.
+// JSONRPCBridge provides JSON-RPC communication with the call-helper worker over an io.ReadWriteCloser stream.
 type JSONRPCBridge struct {
 	conn      io.ReadWriteCloser
 	encoder   *json.Encoder

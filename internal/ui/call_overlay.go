@@ -64,7 +64,7 @@ func (m CallOverlayModel) View() string {
 	case CallOverlayNone:
 		return ""
 	case CallOverlayMissingHelper:
-		prompt := "⚠️  VoIP Helper Missing\n\nVoice calling requires 'cligram-voip'.\nPlease install it to ~/.local/bin or your PATH.\n\n    [Enter/Esc] Dismiss"
+		prompt := "⚠️  VoIP Helper Missing\n\nVoice calling call-helper failed to start.\n\n    [Enter/Esc] Dismiss"
 		return callOverlayWarningStyle.Render(prompt)
 	case CallOverlayDialing:
 		prompt := fmt.Sprintf("📞 Calling %s...\n\n    [Alt+H] Cancel", m.UserName)

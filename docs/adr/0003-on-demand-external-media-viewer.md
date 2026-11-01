@@ -11,5 +11,5 @@ We represent media attachments in the message stream as structured metadata badg
 ## Consequences
 
 - Full media support across photos, videos, audio, voice notes, and documents without terminal emulator incompatibilities.
-- Zero extra dependencies on native image rendering libraries in the Pure-Go core.
+- Zero extra dependencies on native image rendering libraries in the core application.
 - Bandwidth and disk space are conserved by downloading media exclusively on demand.

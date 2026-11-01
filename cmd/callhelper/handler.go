@@ -1,4 +1,4 @@
-package main
+package callhelper
 
 import (
 	"context"
@@ -23,13 +23,11 @@ type playbackSession struct {
 	cmd      *exec.Cmd
 }
 
-type SidecarHandler struct {
+type Handler struct {
 	client       *ntg.Client
 	encoder      *json.Encoder
 	decoder      *json.Decoder
 	writeMu      sync.Mutex
-	peerGB       map[int64][]byte
-	peerGBMu     sync.Mutex
 	isP2P        map[int64]bool
 	isP2PMu      sync.RWMutex
 	playbackMu   sync.Mutex
@@ -40,12 +38,11 @@ func GetProtocol() ntg.Protocol {
 	return ntg.GetProtocol()
 }
 
-func NewSidecarHandler(r io.Reader, w io.Writer) *SidecarHandler {
-	h := &SidecarHandler{
+func NewHandler(r io.Reader, w io.Writer) *Handler {
+	h := &Handler{
 		client:       ntg.Init(),
 		encoder:      json.NewEncoder(w),
 		decoder:      json.NewDecoder(r),
-		peerGB:       make(map[int64][]byte),
 		isP2P:        make(map[int64]bool),
 		playbackSess: make(map[int64]*playbackSession),
 	}
@@ -54,7 +51,7 @@ func NewSidecarHandler(r io.Reader, w io.Writer) *SidecarHandler {
 	return h
 }
 
-func (h *SidecarHandler) setupCallbacks() {
+func (h *Handler) setupCallbacks() {
 	h.client.OnSignal(func(chatID int64, data []byte) {
 		slog.Info("emitting signaling data to core", "chatID", chatID, "len", len(data))
 		params, _ := json.Marshal(voip.SignalingEvent{
@@ -90,7 +87,7 @@ func (h *SidecarHandler) setupCallbacks() {
 	})
 }
 
-func (h *SidecarHandler) notify(method string, params json.RawMessage) {
+func (h *Handler) notify(method string, params json.RawMessage) {
 	req := voip.JSONRPCRequest{
 		JSONRPC: "2.0",
 		Method:  method,
@@ -104,7 +101,7 @@ func (h *SidecarHandler) notify(method string, params json.RawMessage) {
 	}
 }
 
-func (h *SidecarHandler) sendResponse(id *uint64, result any, err *voip.JSONRPCError) {
+func (h *Handler) sendResponse(id *uint64, result any, err *voip.JSONRPCError) {
 	resp := voip.JSONRPCResponse{
 		JSONRPC: "2.0",
 		ID:      id,
@@ -122,7 +119,7 @@ func (h *SidecarHandler) sendResponse(id *uint64, result any, err *voip.JSONRPCE
 	}
 }
 
-func (h *SidecarHandler) Run() error {
+func (h *Handler) Run() error {
 	for {
 		var req voip.JSONRPCRequest
 		if err := h.decoder.Decode(&req); err != nil {
@@ -133,7 +130,7 @@ func (h *SidecarHandler) Run() error {
 	}
 }
 
-func (h *SidecarHandler) handleRequest(req voip.JSONRPCRequest) {
+func (h *Handler) handleRequest(req voip.JSONRPCRequest) {
 	switch req.Method {
 	case "call.create":
 		var params voip.CreateCallParams
@@ -240,7 +237,7 @@ func (h *SidecarHandler) handleRequest(req voip.JSONRPCRequest) {
 	}
 }
 
-func (h *SidecarHandler) handleCallCreate(params voip.CreateCallParams) (*voip.CreateCallResult, error) {
+func (h *Handler) handleCallCreate(params voip.CreateCallParams) (*voip.CreateCallResult, error) {
 	if err := h.client.CreateP2P(params.UserID); err != nil {
 		return nil, fmt.Errorf("create p2p: %w", err)
 	}
@@ -267,7 +264,7 @@ func (h *SidecarHandler) handleCallCreate(params voip.CreateCallParams) (*voip.C
 	}, nil
 }
 
-func (h *SidecarHandler) handleCallConnect(params voip.ConnectCallParams) error {
+func (h *Handler) handleCallConnect(params voip.ConnectCallParams) error {
 	// Setup audio pipeline right when call connects, avoiding pipe buffer overflow/stale audio during ringing
 	h.setupAudioStreams(params.UserID)
 
@@ -307,7 +304,7 @@ func (h *SidecarHandler) handleCallConnect(params voip.ConnectCallParams) error 
 	return nil
 }
 
-func (h *SidecarHandler) setupStream(userID int64, streamMode ntg.StreamMode, command string) {
+func (h *Handler) setupStream(userID int64, streamMode ntg.StreamMode, command string) {
 	if command == "" {
 		return
 	}
@@ -331,7 +328,7 @@ func (h *SidecarHandler) setupStream(userID int64, streamMode ntg.StreamMode, co
 	}
 }
 
-func (h *SidecarHandler) stopPlayback(userID int64) {
+func (h *Handler) stopPlayback(userID int64) {
 	h.playbackMu.Lock()
 	defer h.playbackMu.Unlock()
 	if sess, ok := h.playbackSess[userID]; ok {
@@ -345,7 +342,7 @@ func (h *SidecarHandler) stopPlayback(userID int64) {
 	}
 }
 
-func (h *SidecarHandler) setupAudioStreams(userID int64) {
+func (h *Handler) setupAudioStreams(userID int64) {
 	captureCmd, playbackCmd, soundServer := ResolveAudioCommands()
 	slog.Info("🎙️ Setting up audio pipeline with TeeReader", "server", soundServer, "userID", userID)
 
