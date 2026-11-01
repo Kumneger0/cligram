@@ -25,13 +25,15 @@ the Apple classic linker (ld_classic):
    which occurs when ld_classic attempts to parse modern 64-bit selector references
    as literal C-string pointers in its legacy ObjC1 pass.
 
-4. Filters corrupted template relocations from __DATA,__thread_vars sections.
+4. Clears relocations from __DATA,__thread_vars sections.
    Upstream packaging stripped local symbols from the static library, which caused
    the third field of TLV descriptors (offset 0x10) to point to external symbol 0
-   (such as ___cxa_get_globals or guard variables). This triggers ld_classic's assertion:
+   (such as ___cxa_get_globals or guard variables). In multi-descriptor objects,
+   secondary descriptors also placed __tlv_bootstrap at non-zero offsets within
+   single aggregated atoms. Both trigger ld_classic's assertion:
      ld: Assertion failed: (fit->binding == ld::Fixup::bindingDirectlyBound && "thread variable def contains pointer to global"), function doPass, file tlvp.cpp, line 278.
-   Filtering out relocations at (offset % 24) != 0 preserves the valid __tlv_bootstrap
-   relocations at offset 0 while eliminating the corrupted template fixups.
+   Zeroing out relocations on __thread_vars eliminates non-zero fixup offsets in TLV atoms
+   while preserving the section's S_THREAD_LOCAL_VARIABLES definition, preventing the crash.
 """
 
 import os
@@ -135,18 +137,9 @@ def patch_macho_bytes(data: bytearray, member_name: str) -> bool:
                         patched = True
                 elif sectname == b'__thread_vars':
                     reloff, nreloc = struct.unpack('<II', data[sect_offset+56:sect_offset+64])
-                    if nreloc > 0 and reloff > 0 and reloff + nreloc*8 <= len(data):
-                        kept_relocs = []
-                        for i in range(nreloc):
-                            r_entry = data[reloff + i*8 : reloff + (i+1)*8]
-                            r_addr, _ = struct.unpack('<II', r_entry)
-                            if (r_addr % 24) == 0:
-                                kept_relocs.append(r_entry)
-                        if len(kept_relocs) < nreloc:
-                            for i, r_entry in enumerate(kept_relocs):
-                                data[reloff + i*8 : reloff + (i+1)*8] = r_entry
-                            struct.pack_into('<I', data, sect_offset+60, len(kept_relocs))
-                            patched = True
+                    if nreloc > 0:
+                        struct.pack_into('<II', data, sect_offset+56, 0, 0)
+                        patched = True
                 sect_offset += 80
         offset += cmdsize
     return patched
