@@ -13,7 +13,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       CGO_LDFLAGS_ALLOW: "(-Wl,.*|-v)"
-      CGO_LDFLAGS: ${{ matrix.os == 'macos-latest' && '-v' || '' }}
+      CGO_LDFLAGS: ${{ matrix.os == 'macos-latest' && '-v -Wl,-no_compact_unwind' || '' }}
 
     steps:
       - uses: actions/checkout@v7

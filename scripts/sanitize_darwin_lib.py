@@ -72,16 +72,6 @@ def patch_macho_bytes(data: bytearray, member_name: str = "") -> bool:
                     data[sect_offset:sect_offset+16] = b'__debug_frame\x00\x00\x00'
                     data[sect_offset+16:sect_offset+32] = b'__DWARF\x00\x00\x00\x00\x00\x00\x00\x00\x00'
                     patched = True
-                elif sectname == b'__objc_selrefs':
-                    flags, = struct.unpack('<I', data[sect_offset+64:sect_offset+68])
-                    if (flags & 0xff) == 5:  # S_LITERAL_POINTERS -> S_REGULAR
-                        struct.pack_into('<I', data, sect_offset+64, flags & ~0xff)
-                        patched = True
-                elif sectname == b'__thread_vars':
-                    reloff, nreloc = struct.unpack('<II', data[sect_offset+56:sect_offset+64])
-                    if nreloc > 0:
-                        struct.pack_into('<II', data, sect_offset+56, 0, 0)
-                        patched = True
                 sect_offset += 80
         offset += cmdsize
     return patched
