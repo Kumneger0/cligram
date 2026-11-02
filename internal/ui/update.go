@@ -79,6 +79,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case types.CallUserResponse:
 		if msg.Err != nil {
+			notification.StopRingtone()
 			slog.Error("call initiation failed", "error", msg.Err)
 			targetName := m.CallOverlay.UserName
 			if targetName == "" && (m.Mode == ModeUsers || m.Mode == ModeAll) {
@@ -98,7 +99,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, alertCmd
 		}
 		slog.Info("call initiated", "userID", msg.UserID)
-		if m.CallOverlay.State == CallOverlayDialing && msg.UserID != nil {
+		if (m.CallOverlay.State == CallOverlayDialing || m.CallOverlay.State == CallOverlayRinging || m.CallOverlay.State == CallOverlayConnecting) && msg.UserID != nil {
 			userName := m.CallOverlay.UserName
 			if userName == "" && (m.Mode == ModeUsers || m.Mode == ModeAll) {
 				userName = m.SelectedUser.FirstName
@@ -112,8 +113,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.State {
 		case types.CallStateIncoming:
 			m.CallOverlay.SetIncoming(msg.UserName, msg.UserID)
-			return m, tea.Printf("\a")
+			notification.StartRingtone(notification.RingtoneIncoming)
+			return m, nil
+		case types.CallStateRinging:
+			userName := msg.UserName
+			if (userName == "" || strings.HasPrefix(userName, "User ")) && m.CallOverlay.UserName != "" {
+				userName = m.CallOverlay.UserName
+			}
+			if (userName == "" || strings.HasPrefix(userName, "User ")) && (m.Mode == ModeUsers || m.Mode == ModeAll) && m.SelectedUser.FirstName != "" {
+				userName = m.SelectedUser.FirstName
+			}
+			m.CallOverlay.SetRinging(userName, msg.UserID)
+			m.ActiveCallUserID = msg.UserID
+			notification.StartRingtone(notification.RingtoneOutgoing)
+			return m, nil
+		case types.CallStateConnecting:
+			notification.StopRingtone()
+			userName := msg.UserName
+			if (userName == "" || strings.HasPrefix(userName, "User ")) && m.CallOverlay.UserName != "" {
+				userName = m.CallOverlay.UserName
+			}
+			if (userName == "" || strings.HasPrefix(userName, "User ")) && (m.Mode == ModeUsers || m.Mode == ModeAll) && m.SelectedUser.FirstName != "" {
+				userName = m.SelectedUser.FirstName
+			}
+			m.CallOverlay.SetConnecting(userName, msg.UserID)
+			m.ActiveCallUserID = msg.UserID
+			return m, nil
 		case types.CallStateActive:
+			notification.StopRingtone()
 			userName := msg.UserName
 			if (userName == "" || strings.HasPrefix(userName, "User ")) && m.CallOverlay.UserName != "" {
 				userName = m.CallOverlay.UserName
@@ -126,13 +153,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.ActiveCallUserID = msg.UserID
 			return m, tickCall()
 		case types.CallStateMissingHelper:
+			notification.StopRingtone()
 			m.CallOverlay.SetMissingHelper()
 			alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, "⚠️ call helper unavailable")
 			return m, alertCmd
 		case types.CallStateBusyMissed:
+			notification.StopRingtone()
 			alertCmd := m.Alert.NewAlertCmd(bubbleup.InfoKey, "📞 Missed call (line busy)")
 			return m, alertCmd
 		case types.CallStateEnded, types.CallStateDeclined:
+			notification.StopRingtone()
 			m.CallOverlay.SetNone()
 			m.ActiveCallUserID = 0
 			if msg.Err != nil {
@@ -150,6 +180,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.ActiveCallUserID = 0
 			alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, "Failed to accept call: "+msg.Err.Error())
 			return m, alertCmd
+		}
+		if m.CallOverlay.State == CallOverlayIncoming {
+			m.CallOverlay.SetConnecting(m.CallOverlay.UserName, msg.UserID)
+			m.ActiveCallUserID = msg.UserID
 		}
 		return m, nil
 	case types.CallDeclinedMsg:
@@ -1481,9 +1515,10 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 	}
-	if m.CallOverlay.State == CallOverlayDialing {
+	if m.CallOverlay.State == CallOverlayDialing || m.CallOverlay.State == CallOverlayRinging || m.CallOverlay.State == CallOverlayConnecting {
 		switch msg.String() {
 		case "alt+h", "esc":
+			notification.StopRingtone()
 			if telegram.Cligram != nil {
 				return m, telegram.Cligram.HangupCall(telegram.Cligram.Context(), m.CallOverlay.UserID)
 			}
@@ -1495,11 +1530,14 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.CallOverlay.State == CallOverlayIncoming {
 		switch msg.String() {
 		case "a":
+			notification.StopRingtone()
+			m.CallOverlay.SetConnecting(m.CallOverlay.UserName, m.CallOverlay.UserID)
 			if telegram.Cligram != nil {
 				return m, telegram.Cligram.AcceptCall(telegram.Cligram.Context(), m.CallOverlay.UserID)
 			}
 			return m, nil
 		case "d", "esc":
+			notification.StopRingtone()
 			userID := m.CallOverlay.UserID
 			m.CallOverlay.SetNone()
 			m.ActiveCallUserID = 0

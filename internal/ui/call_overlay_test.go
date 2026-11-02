@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -9,11 +10,16 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/kumneger0/cligram/internal/notification"
 	"github.com/kumneger0/cligram/internal/telegram"
 	"github.com/kumneger0/cligram/internal/telegram/client"
 	"github.com/kumneger0/cligram/internal/telegram/types"
 	"go.dalton.dog/bubbleup"
 )
+
+func init() {
+	notification.SetRingtonePlayer(func(ctx context.Context, rt notification.RingtoneType) {})
+}
 
 func newTestModel(width, height int) Model {
 	m := Model{
@@ -515,6 +521,69 @@ func TestModel_OutgoingCallTransitionToActive(t *testing.T) {
 	lines := strings.Split(strings.TrimRight(activeView, "\n"), "\n")
 	if len(lines) > 24 {
 		t.Errorf("expected lines <= 24, got %d lines", len(lines))
+	}
+}
+
+func TestModel_OutgoingCall_FullLifecycle_Ringing_Connecting_Active(t *testing.T) {
+	m := newTestModel(80, 24)
+	uID := int64(5660513633)
+
+	// Step 1: User dialed Kune -> Dialing
+	m.CallOverlay.SetDialing("Kune", uID)
+	if m.CallOverlay.State != CallOverlayDialing || !m.CallOverlay.IsModal() {
+		t.Fatalf("expected CallOverlayDialing and modal active")
+	}
+	if !strings.Contains(m.View(), "Calling Kune...") {
+		t.Errorf("expected view to contain 'Calling Kune...'")
+	}
+
+	// Step 2: Recipient's phone starts ringing -> Ringing
+	resModel, cmd := m.Update(types.CallNotification{
+		State:  types.CallStateRinging,
+		UserID: uID,
+	})
+	m = resModel.(Model)
+	if cmd != nil {
+		t.Errorf("expected no tick cmd on ringing state")
+	}
+	if m.CallOverlay.State != CallOverlayRinging || !m.CallOverlay.IsModal() {
+		t.Fatalf("expected CallOverlayRinging and modal active, got %v", m.CallOverlay.State)
+	}
+	if !strings.Contains(m.View(), "Ringing Kune...") {
+		t.Errorf("expected view to contain 'Ringing Kune...', got:\n%s", m.View())
+	}
+
+	// Step 3: Peer answers, establishing WebRTC -> Connecting
+	resModel, cmd = m.Update(types.CallNotification{
+		State:  types.CallStateConnecting,
+		UserID: uID,
+	})
+	m = resModel.(Model)
+	if cmd != nil {
+		t.Errorf("expected no tick cmd on connecting state")
+	}
+	if m.CallOverlay.State != CallOverlayConnecting || !m.CallOverlay.IsModal() {
+		t.Fatalf("expected CallOverlayConnecting and modal active, got %v", m.CallOverlay.State)
+	}
+	if !strings.Contains(m.View(), "Connecting with Kune...") {
+		t.Errorf("expected view to contain 'Connecting with Kune...', got:\n%s", m.View())
+	}
+
+	// Step 4: WebRTC connects -> Active (timer starts)
+	resModel, cmd = m.Update(types.CallNotification{
+		State:   types.CallStateActive,
+		UserID:  uID,
+		IsRelay: false,
+	})
+	m = resModel.(Model)
+	if cmd == nil {
+		t.Errorf("expected tickCall cmd on CallStateActive")
+	}
+	if m.CallOverlay.State != CallOverlayActive || m.CallOverlay.IsModal() {
+		t.Fatalf("expected CallOverlayActive with non-modal status bar")
+	}
+	if !strings.Contains(m.View(), "In call with Kune") {
+		t.Errorf("expected view to contain 'In call with Kune'")
 	}
 }
 

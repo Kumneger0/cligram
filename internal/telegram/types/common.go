@@ -217,6 +217,8 @@ type CallState string
 const (
 	CallStateIncoming      CallState = "incoming"
 	CallStateOutgoing      CallState = "outgoing"
+	CallStateRinging       CallState = "ringing"
+	CallStateConnecting    CallState = "connecting"
 	CallStateActive        CallState = "active"
 	CallStateEnded         CallState = "ended"
 	CallStateDeclined      CallState = "declined"

@@ -143,6 +143,17 @@ func handlePhoneCall(ctx context.Context, phoneCall tg.PhoneCallClass, updateCha
 		// Signal the waiting goroutine
 		state.waitData <- nil
 
+		// Notify UI that peer accepted and call is now connecting
+		select {
+		case updateChannel <- types.Notification{
+			CallEvent: &types.CallNotification{
+				UserID: userID,
+				State:  types.CallStateConnecting,
+			},
+		}:
+		default:
+		}
+
 	case *tg.PhoneCall:
 		// ---- CALL ACTIVE (both sides) ----
 		slog.Info("call is active", "callID", u.ID)
@@ -242,18 +253,18 @@ func handlePhoneCall(ctx context.Context, phoneCall tg.PhoneCallClass, updateCha
 			}
 		}
 
-		// Notify UI that call is now active
+		// Notify UI that call is connecting (signaling completed, WebRTC establishing)
 		select {
 		case updateChannel <- types.Notification{
 			CallEvent: &types.CallNotification{
 				UserID:   userID,
 				UserName: userName,
-				State:    types.CallStateActive,
+				State:    types.CallStateConnecting,
 				IsRelay:  !u.P2PAllowed,
 			},
 		}:
 		default:
-			slog.Warn("update channel is full, dropping active call notification")
+			slog.Warn("update channel is full, dropping connecting call notification")
 		}
 
 	case *tg.PhoneCallDiscarded:
@@ -311,7 +322,7 @@ func handlePhoneCall(ctx context.Context, phoneCall tg.PhoneCallClass, updateCha
 		}
 
 	case *tg.PhoneCallWaiting:
-		slog.Info("call waiting", "participantID", u.ParticipantID)
+		slog.Info("call waiting", "participantID", u.ParticipantID, "receiveDate", u.ReceiveDate)
 
 		userID := u.ParticipantID
 
@@ -323,6 +334,31 @@ func handlePhoneCall(ctx context.Context, phoneCall tg.PhoneCallClass, updateCha
 			}
 		}
 		p2pStatesMu.Unlock()
+
+		if u.ReceiveDate != 0 {
+			userName := fmt.Sprintf("User %d", userID)
+			if Cligram != nil && Cligram.API() != nil {
+				userInfo, err := shared.GetUserInfo(ctx, *Cligram.API(), userID)
+				if err == nil && userInfo != nil {
+					userName = userInfo.FirstName
+					if userInfo.LastName != "" {
+						userName += " " + userInfo.LastName
+					}
+				}
+			}
+
+			select {
+			case updateChannel <- types.Notification{
+				CallEvent: &types.CallNotification{
+					UserID:   userID,
+					UserName: userName,
+					State:    types.CallStateRinging,
+				},
+			}:
+			default:
+				slog.Warn("update channel is full, dropping ringing call notification")
+			}
+		}
 
 	default:
 		fmt.Printf("Unknown call state: %#v\n", phoneCall)
