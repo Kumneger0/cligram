@@ -157,8 +157,8 @@ func TestHandlePhoneCall_OutgoingCallActive(t *testing.T) {
 		if notif.CallEvent == nil {
 			t.Fatalf("expected CallEvent notification")
 		}
-		if notif.CallEvent.State != types.CallStateActive {
-			t.Errorf("expected CallStateActive, got %v", notif.CallEvent.State)
+		if notif.CallEvent.State != types.CallStateConnecting {
+			t.Errorf("expected CallStateConnecting, got %v", notif.CallEvent.State)
 		}
 		if notif.CallEvent.UserID != peerUserID {
 			t.Errorf("expected UserID %d, got %d", peerUserID, notif.CallEvent.UserID)
@@ -178,6 +178,53 @@ func TestHandlePhoneCall_OutgoingCallActive(t *testing.T) {
 	p2pStatesMu.Unlock()
 	if state == nil || state.phoneCall != phoneCall {
 		t.Errorf("expected p2pState to hold phoneCall object")
+	}
+}
+
+func TestHandlePhoneCall_PhoneCallWaiting_Ringing(t *testing.T) {
+	ctx := context.Background()
+	updateChan := make(chan types.Notification, 10)
+	peerUserID := int64(333444)
+	callID := int64(555666)
+
+	p2pStatesMu.Lock()
+	p2pStates[peerUserID] = &p2pCallState{
+		isOutgoing: true,
+	}
+	p2pStatesMu.Unlock()
+
+	defer func() {
+		p2pStatesMu.Lock()
+		delete(p2pStates, peerUserID)
+		p2pStatesMu.Unlock()
+	}()
+
+	waiting := &tg.PhoneCallWaiting{
+		ID:            callID,
+		AccessHash:    777888,
+		AdminID:       111222,
+		ParticipantID: peerUserID,
+		ReceiveDate:   1700000000,
+	}
+
+	err := handlePhoneCall(ctx, waiting, updateChan)
+	if err != nil {
+		t.Fatalf("unexpected error handling PhoneCallWaiting: %v", err)
+	}
+
+	select {
+	case notif := <-updateChan:
+		if notif.CallEvent == nil {
+			t.Fatalf("expected CallEvent notification")
+		}
+		if notif.CallEvent.State != types.CallStateRinging {
+			t.Errorf("expected CallStateRinging, got %v", notif.CallEvent.State)
+		}
+		if notif.CallEvent.UserID != peerUserID {
+			t.Errorf("expected UserID %d, got %d", peerUserID, notif.CallEvent.UserID)
+		}
+	default:
+		t.Fatalf("expected notification on update channel for ringing PhoneCallWaiting")
 	}
 }
 

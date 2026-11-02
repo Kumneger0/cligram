@@ -176,6 +176,24 @@ func getVoipBridge(ctx context.Context) (*voip.JSONRPCBridge, error) {
 			}
 		}
 
+		if event.State == "connecting" {
+			updateChannelGlobalMu.Lock()
+			chGlobal := updateChannelGlobal
+			updateChannelGlobalMu.Unlock()
+
+			if chGlobal != nil {
+				select {
+				case chGlobal <- types.Notification{
+					CallEvent: &types.CallNotification{
+						UserID: event.UserID,
+						State:  types.CallStateConnecting,
+					},
+				}:
+				default:
+				}
+			}
+		}
+
 		if event.State == "connected" {
 			updateChannelGlobalMu.Lock()
 			chGlobal := updateChannelGlobal
@@ -899,6 +917,18 @@ func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64, update
 			slog.Info("initialized outgoing call with inputCall from phone.requestCall", "userID", userID, "callID", phoneCallWaiting.ID)
 		}
 		p2pStatesMu.Unlock()
+
+		if phoneCallWaiting.ReceiveDate != 0 && updateChannel != nil {
+			select {
+			case updateChannel <- types.Notification{
+				CallEvent: &types.CallNotification{
+					UserID: userID,
+					State:  types.CallStateRinging,
+				},
+			}:
+			default:
+			}
+		}
 	}
 
 	p2pStatesMu.Lock()
@@ -999,6 +1029,29 @@ func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64, update
 				return err
 			}
 			slog.Info("P2P connected successfully")
+			if updateChannel != nil {
+				userName := fmt.Sprintf("User %d", userID)
+				if Cligram != nil && Cligram.API() != nil {
+					userInfo, err := shared.GetUserInfo(ctx, *Cligram.API(), userID)
+					if err == nil && userInfo != nil {
+						userName = userInfo.FirstName
+						if userInfo.LastName != "" {
+							userName += " " + userInfo.LastName
+						}
+					}
+				}
+				select {
+				case updateChannel <- types.Notification{
+					CallEvent: &types.CallNotification{
+						UserID:   userID,
+						UserName: userName,
+						State:    types.CallStateActive,
+						IsRelay:  !phoneCallObj.P2PAllowed,
+					},
+				}:
+				default:
+				}
+			}
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-time.After(30 * time.Second):

@@ -13,6 +13,8 @@ const (
 	CallOverlayNone CallOverlayState = iota
 	CallOverlayIncoming
 	CallOverlayDialing
+	CallOverlayRinging
+	CallOverlayConnecting
 	CallOverlayActive
 	CallOverlayMissingHelper
 )
@@ -69,6 +71,12 @@ func (m CallOverlayModel) View() string {
 	case CallOverlayDialing:
 		prompt := fmt.Sprintf("📞 Calling %s...\n\n    [Alt+H] Cancel", m.UserName)
 		return callOverlayBorderStyle.Render(prompt)
+	case CallOverlayRinging:
+		prompt := fmt.Sprintf("🔔 Ringing %s...\n\n    [Alt+H] Cancel", m.UserName)
+		return callOverlayBorderStyle.Render(prompt)
+	case CallOverlayConnecting:
+		prompt := fmt.Sprintf("🔄 Connecting with %s...\n\n    [Alt+H] Cancel", m.UserName)
+		return callOverlayBorderStyle.Render(prompt)
 	case CallOverlayIncoming:
 		prompt := fmt.Sprintf("📞 Incoming call from %s\n\n    [a] Accept    [d/Esc] Decline", m.UserName)
 		return callOverlayBorderStyle.Render(prompt)
@@ -103,6 +111,26 @@ func (m *CallOverlayModel) SetDialing(userName string, userID int64) {
 	m.Muted = false
 }
 
+func (m *CallOverlayModel) SetRinging(userName string, userID int64) {
+	m.State = CallOverlayRinging
+	if userName != "" {
+		m.UserName = userName
+	}
+	if userID != 0 {
+		m.UserID = userID
+	}
+}
+
+func (m *CallOverlayModel) SetConnecting(userName string, userID int64) {
+	m.State = CallOverlayConnecting
+	if userName != "" {
+		m.UserName = userName
+	}
+	if userID != 0 {
+		m.UserID = userID
+	}
+}
+
 func (m *CallOverlayModel) SetIncoming(userName string, userID int64) {
 	m.State = CallOverlayIncoming
 	m.UserName = userName
@@ -114,9 +142,9 @@ func (m *CallOverlayModel) SetActive(userName string, userID int64) {
 	m.State = CallOverlayActive
 	m.UserName = userName
 	m.UserID = userID
-	m.ElapsedSeconds = 0
 	if m.StartTime.IsZero() {
 		m.StartTime = time.Now()
+		m.ElapsedSeconds = 0
 	}
 }
 
@@ -142,7 +170,7 @@ func (m *CallOverlayModel) ToggleMute() {
 // IsModal returns true if the overlay is in a centered modal dialog state.
 func (m CallOverlayModel) IsModal() bool {
 	switch m.State {
-	case CallOverlayIncoming, CallOverlayDialing, CallOverlayMissingHelper:
+	case CallOverlayIncoming, CallOverlayDialing, CallOverlayRinging, CallOverlayConnecting, CallOverlayMissingHelper:
 		return true
 	default:
 		return false
