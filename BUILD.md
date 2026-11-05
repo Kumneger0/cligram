@@ -11,11 +11,6 @@ Before building, ensure you have the following installed on your system:
 - **Make:** Standard build automation tool
 - **Git:** Version control
 
-### Linux Audio Libraries
-
-For voice calling support, ensure an audio backend is present:
-- PipeWire (`pipewire-audio` / `pipewire-utils`), PulseAudio (`pulseaudio-utils`), or ALSA (`alsa-utils`).
-
 ## Build Instructions
 
 1. **Clone the repository:**
