@@ -1,36 +1,13 @@
-# Building from Source
+# Installing Cligram
 
-## Prerequisites
+### Quick Install (Recommended)
 
-Before building cligram from source, ensure you have the following prerequisites installed:
+Install the latest pre-built binary for Linux or macOS using the automated install script:
 
-- [Go](https://go.dev/dl/) version 1.25 or higher
-- Git
-
-## Installation Steps
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/kumneger0/cligram.git
-   cd cligram
-   ```
-
-2. Build the project:
-   ```bash
-   make build
-   ```
-
-3. (Optional) Install the binary system-wide:
-   ```bash
-   sudo make install
-   ```
-
-## Verifying Installation
-
-After installation, you can verify that cligram is working correctly by running:
 ```bash
-cligram version
+curl -fsSL https://raw.githubusercontent.com/Kumneger0/cligram/main/install.sh | bash
 ```
 
-If you encounter any issues during installation:  
-For additional help, please [open an issue](https://github.com/kumneger0/cligram/issues/new) on GitHub.
+### Building from Source
+
+To compile Cligram directly from source code, see [BUILD.md](./BUILD.md).
