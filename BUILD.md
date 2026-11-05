@@ -6,10 +6,9 @@ This guide explains how to compile and run Cligram directly from source code.
 
 Before building, ensure you have the following installed on your system:
 
-- **Go:** Version 1.25 or higher ([download Go](https://go.dev/dl/))
-- **C/C++ Compiler:** `gcc` or `clang` (required for Cgo audio/voice calling bindings)
-- **Make:** Standard build automation tool
-- **Git:** Version control
+- **Go:** Version 1.25 or higher
+- **C/C++ Compiler:** `gcc` or `clang` (for Cgo voice calling bindings)
+- **Git** and **Make**
 
 ## Build Instructions
 
