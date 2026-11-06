@@ -346,6 +346,10 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.initAccountSwitcher()
 			apiID, apiHash := telegram.GetAPICredentials()
 			cmds = append(cmds, m.spinner.Tick, telegram.GetAccountsCmd(apiID, apiHash))
+		} else if msg.ModalMode == ModalModeActionMenu {
+			m.ActionMenuTitle = msg.ActionMenuTitle
+			m.ActionMenuItems = msg.ActionMenuItems
+			m.ActionMenuIndex = 0
 		}
 	case types.DiscussionMessageMsg:
 		if m.ModalMode == ModalModeComments {
@@ -533,6 +537,9 @@ func (m *Foreground) handleSearch(msg types.SearchUsersMsg, cmds *[]tea.Cmd) (te
 }
 
 func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (tea.Model, tea.Cmd) {
+	if m.ModalMode == ModalModeActionMenu {
+		return m.handleActionMenuKeys(msg)
+	}
 	cmds := *cmdsFromParent
 	switch msg.String() {
 	case "up", "ctrl+p":
@@ -1478,4 +1485,50 @@ func (m *Foreground) startAuthWizardForAccount(accPath string) {
 			_ = os.Remove(filepath.Join(userHome, ".cligram", accPath, "session.json"))
 		}
 	}
+}
+
+func (m *Foreground) handleActionMenuKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	key := msg.String()
+	switch key {
+	case "esc", "q", "x":
+		return m, func() tea.Msg { return CloseOverlay{} }
+	case "up", "k":
+		if len(m.ActionMenuItems) > 0 {
+			if m.ActionMenuIndex > 0 {
+				m.ActionMenuIndex--
+			} else {
+				m.ActionMenuIndex = len(m.ActionMenuItems) - 1
+			}
+		}
+		return m, nil
+	case "down", "j":
+		if len(m.ActionMenuItems) > 0 {
+			if m.ActionMenuIndex < len(m.ActionMenuItems)-1 {
+				m.ActionMenuIndex++
+			} else {
+				m.ActionMenuIndex = 0
+			}
+		}
+		return m, nil
+	case "enter":
+		if len(m.ActionMenuItems) > 0 && m.ActionMenuIndex >= 0 && m.ActionMenuIndex < len(m.ActionMenuItems) {
+			actionID := m.ActionMenuItems[m.ActionMenuIndex].ActionID
+			return m, tea.Batch(
+				func() tea.Msg { return CloseOverlay{} },
+				func() tea.Msg { return ExecuteActionMsg{ActionID: actionID} },
+			)
+		}
+		return m, func() tea.Msg { return CloseOverlay{} }
+	default:
+		// Check for mnemonic hotkey match
+		for _, item := range m.ActionMenuItems {
+			if strings.EqualFold(item.Key, key) {
+				return m, tea.Batch(
+					func() tea.Msg { return CloseOverlay{} },
+					func() tea.Msg { return ExecuteActionMsg{ActionID: item.ActionID} },
+				)
+			}
+		}
+	}
+	return m, nil
 }

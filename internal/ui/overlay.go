@@ -347,25 +347,38 @@ const (
 	ModalModeComments        ModalMode = "COMMENTS"
 	ModalModeGhostMode       ModalMode = "GHOST_MODE"
 	ModalModeAccountSwitcher ModalMode = "ACCOUNT_SWITCHER"
+	ModalModeActionMenu      ModalMode = "ACTION_MENU"
 )
 
+type ActionMenuItem struct {
+	Key      string
+	Label    string
+	ActionID string
+}
+
+type ExecuteActionMsg struct {
+	ActionID string
+}
+
 type OpenModalMsg struct {
-	ModalMode    ModalMode
-	AlertTitle   string
-	AlertMessage string
-	FromPeer     *list.Item
-	Message      *types.FormattedMessage
-	CommentsPost *types.FormattedMessage
-	UsersList    *list.Model
-	ChannelsList *list.Model
-	GroupsList   *list.Model
-	BotsList     *list.Model
-	Stories      []types.Stories
-	Entity       *types.EntityPreviewInfo
-	GroupPeer    *types.Peer
-	GroupTitle   string
-	TotalMembers int
-	JoinPreview  *types.ChatInvitePreview
+	ModalMode       ModalMode
+	AlertTitle      string
+	AlertMessage    string
+	FromPeer        *list.Item
+	Message         *types.FormattedMessage
+	CommentsPost    *types.FormattedMessage
+	UsersList       *list.Model
+	ChannelsList    *list.Model
+	GroupsList      *list.Model
+	BotsList        *list.Model
+	Stories         []types.Stories
+	Entity          *types.EntityPreviewInfo
+	GroupPeer       *types.Peer
+	GroupTitle      string
+	TotalMembers    int
+	JoinPreview     *types.ChatInvitePreview
+	ActionMenuTitle string
+	ActionMenuItems []ActionMenuItem
 }
 
 type ForwardMsg struct {
@@ -458,6 +471,11 @@ type Foreground struct {
 	authSession          *telegram.AuthSession
 	authLoading          bool
 	authError            error
+
+	// Action Menu fields
+	ActionMenuTitle string
+	ActionMenuItems []ActionMenuItem
+	ActionMenuIndex int
 }
 
 func (f *Foreground) ensureSpinner() {
@@ -1271,6 +1289,10 @@ func (f *Foreground) View() string {
 		return renderAccountSwitcherModal(f, foreStyle)
 	}
 
+	if f.ModalMode == ModalModeActionMenu {
+		return renderActionMenuModal(f, foreStyle)
+	}
+
 	title := lipgloss.NewStyle().Foreground(DefaultTheme.PrimaryText).Bold(true).Render("Search")
 	contentWidth := max(40, min(70, f.windowWidth*2/3))
 	f.input.Width = contentWidth - 4
@@ -1709,5 +1731,84 @@ func renderAccountSwitcherModal(f *Foreground, foreStyle lipgloss.Style) string 
 	elements = append(elements, "", lipgloss.JoinVertical(lipgloss.Left, itemBlocks...), "", footerDivider, footerHints)
 
 	layout := lipgloss.JoinVertical(lipgloss.Left, elements...)
+	return foreStyle.Width(contentWidth + 2).Render(layout)
+}
+
+func renderActionMenuModal(f *Foreground, foreStyle lipgloss.Style) string {
+	contentWidth := max(44, min(65, f.windowWidth-6))
+	if f.windowWidth <= 0 {
+		contentWidth = 50
+	}
+
+	titleText := f.ActionMenuTitle
+	if titleText == "" {
+		titleText = "Actions"
+	}
+	title := lipgloss.NewStyle().
+		Foreground(DefaultTheme.AccentColor).
+		Bold(true).
+		Render("⚡ " + titleText)
+
+	divider := lipgloss.NewStyle().
+		Foreground(DefaultTheme.BorderColor).
+		Render(strings.Repeat("─", contentWidth))
+
+	var itemBlocks []string
+	if len(f.ActionMenuItems) == 0 {
+		emptyMsg := lipgloss.NewStyle().
+			Foreground(DefaultTheme.SecondaryText).
+			Italic(true).
+			Padding(1, 2).
+			Render("No actions available")
+		itemBlocks = append(itemBlocks, emptyMsg)
+	} else {
+		for i, item := range f.ActionMenuItems {
+			isSelected := i == f.ActionMenuIndex
+			var cursor string
+			var keyStyle, labelStyle lipgloss.Style
+
+			if isSelected {
+				cursor = lipgloss.NewStyle().Foreground(DefaultTheme.AccentColor).Bold(true).Render("▎ ")
+				keyStyle = lipgloss.NewStyle().
+					Foreground(DefaultTheme.SelectedFg).
+					Background(DefaultTheme.AccentColor).
+					Padding(0, 1).
+					Bold(true)
+				labelStyle = lipgloss.NewStyle().
+					Foreground(DefaultTheme.SelectedFg).
+					Bold(true)
+			} else {
+				cursor = "  "
+				keyStyle = lipgloss.NewStyle().
+					Foreground(DefaultTheme.AccentColor).
+					Bold(true)
+				labelStyle = lipgloss.NewStyle().
+					Foreground(DefaultTheme.PrimaryText)
+			}
+
+			keyDisplay := fmt.Sprintf("[%s]", item.Key)
+			line := fmt.Sprintf("%s%-7s  %s", cursor, keyStyle.Render(keyDisplay), labelStyle.Render(item.Label))
+			itemBlocks = append(itemBlocks, line)
+		}
+	}
+
+	footerDivider := lipgloss.NewStyle().
+		Foreground(DefaultTheme.BorderColor).
+		Render(strings.Repeat("─", contentWidth))
+
+	footerHints := lipgloss.NewStyle().
+		Foreground(DefaultTheme.SecondaryText).
+		Render("[↑/↓, j/k] Navigate  [Enter/Key] Select  [Esc/x/q] Close")
+
+	layout := lipgloss.JoinVertical(
+		lipgloss.Left,
+		title,
+		divider,
+		"",
+		lipgloss.JoinVertical(lipgloss.Left, itemBlocks...),
+		"",
+		footerDivider,
+		footerHints,
+	)
 	return foreStyle.Width(contentWidth + 2).Render(layout)
 }
