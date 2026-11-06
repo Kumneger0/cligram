@@ -91,12 +91,13 @@ func (m Manager) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, openModalMsg)
 			return m, tea.Batch(cmds...)
 		case ",":
-			if m.State == ModalView {
+			switch m.State {
+			case ModalView:
 				if fg, ok := m.Foreground.(*Foreground); ok && fg.ModalMode == ModalModeGhostMode {
 					m.State = MainView
 					return m, nil
 				}
-			} else if m.State == MainView {
+			case MainView:
 				inputFocused := false
 				if bg, ok := m.Background.(Model); ok && bg.FocusedOn == Input {
 					inputFocused = true
@@ -137,6 +138,13 @@ func (m Manager) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					cmds = append(cmds, openModalMsg)
 					return m, tea.Batch(cmds...)
+				}
+			}
+		case "x":
+			if m.State == ModalView {
+				if fg, ok := m.Foreground.(*Foreground); ok && fg.ModalMode == ModalModeActionMenu {
+					m.State = MainView
+					return m, nil
 				}
 			}
 		case "ctrl+k":

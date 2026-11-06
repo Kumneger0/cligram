@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -655,6 +657,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case SelectSearchedUserResult:
 		model, cmd := m.handleSearchedUserResult(msg)
+		m = model.(Model)
+		cmds = append(cmds, cmd)
+	case ExecuteActionMsg:
+		model, cmd := m.handleExecuteAction(msg)
 		m = model.(Model)
 		cmds = append(cmds, cmd)
 	case types.GetAllStoriesMsg:
@@ -1844,6 +1850,13 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 			return m, tea.Batch(cmds...)
 		}
+	case "x":
+		switch m.FocusedOn {
+		case Main:
+			return m.openMessageActionMenu()
+		case SideBar:
+			return m.openChatActionMenu()
+		}
 	case "ctrl+r":
 		if m.FocusedOn == Main && m.SelectedMessage() != nil {
 			cmds := []tea.Cmd{telegram.Cligram.GetAvailableReactions(telegram.Cligram.Context())}
@@ -2307,10 +2320,7 @@ func (m Model) handleForwardKey() (tea.Model, tea.Cmd) {
 	}
 }
 
-func (m Model) handleMemberRosterKey() (tea.Model, tea.Cmd) {
-	if m.FocusedOn != Main {
-		return m, nil
-	}
+func (m Model) openGroupMembersForPeer() (tea.Model, tea.Cmd) {
 	pInfo := getMessageParams(&m)
 	if pInfo.ID == "" {
 		return m, nil
@@ -2350,6 +2360,231 @@ func (m Model) handleMemberRosterKey() (tea.Model, tea.Cmd) {
 		return m, tea.Batch(openModalMsg, fetchCmd)
 	}
 	return m, openModalMsg
+}
+
+func (m Model) handleMemberRosterKey() (tea.Model, tea.Cmd) {
+	if m.FocusedOn != Main {
+		return m, nil
+	}
+	return m.openGroupMembersForPeer()
+}
+
+func (m Model) openMessageActionMenu() (tea.Model, tea.Cmd) {
+	selectedMessage := m.SelectedMessage()
+	if selectedMessage == nil {
+		return m, nil
+	}
+
+	var items []ActionMenuItem
+
+	// [r] Reply
+	items = append(items, ActionMenuItem{Key: "r", Label: "Reply", ActionID: "reply"})
+
+	// [e] Edit (only if own message and <= 48h)
+	if selectedMessage.IsFromMe || strings.ToLower(selectedMessage.Sender) == "you" {
+		sentDate := selectedMessage.Date
+		diff := time.Since(sentDate)
+		if sentDate.IsZero() || diff.Hours() < 48 {
+			items = append(items, ActionMenuItem{Key: "e", Label: "Edit message", ActionID: "edit"})
+		}
+	}
+
+	// [d] Delete
+	items = append(items, ActionMenuItem{Key: "d", Label: "Delete message", ActionID: "delete"})
+
+	// [f] Forward
+	items = append(items, ActionMenuItem{Key: "f", Label: "Forward message", ActionID: "forward"})
+
+	// [R] React with emoji
+	items = append(items, ActionMenuItem{Key: "R", Label: "React with emoji", ActionID: "react"})
+
+	// [y] Copy text
+	if strings.TrimSpace(selectedMessage.Content) != "" {
+		items = append(items, ActionMenuItem{Key: "y", Label: "Copy text", ActionID: "copy"})
+	}
+
+	// [o] Open link / media
+	hasMedia := selectedMessage.MediaAttachment != nil
+	hasLinks := selectedMessage.MessageMediaWebPage != nil ||
+		strings.Contains(selectedMessage.Content, "http://") ||
+		strings.Contains(selectedMessage.Content, "https://") ||
+		strings.Contains(selectedMessage.Content, "t.me/")
+	if hasMedia || hasLinks {
+		items = append(items, ActionMenuItem{Key: "o", Label: "Open link / media", ActionID: "open_media"})
+	}
+
+	// [c] View comments
+	if hasComments, count, _ := m.SelectedMessageHasComments(); hasComments {
+		label := "View comments"
+		if count > 0 {
+			label = fmt.Sprintf("View comments (%d)", count)
+		}
+		items = append(items, ActionMenuItem{Key: "c", Label: label, ActionID: "comments"})
+	}
+
+	return m, func() tea.Msg {
+		return OpenModalMsg{
+			ModalMode:       ModalModeActionMenu,
+			ActionMenuTitle: "Message Actions",
+			ActionMenuItems: items,
+		}
+	}
+}
+
+func (m Model) openChatActionMenu() (tea.Model, tea.Cmd) {
+	var selectedItem list.Item
+	switch m.Mode {
+	case ModeAll:
+		selectedItem = m.All.SelectedItem()
+	case ModeUsers:
+		selectedItem = m.Users.SelectedItem()
+	case ModeBots:
+		selectedItem = m.Bots.SelectedItem()
+	case ModeChannels:
+		selectedItem = m.Channels.SelectedItem()
+	case ModeGroups:
+		selectedItem = m.Groups.SelectedItem()
+	}
+	if selectedItem == nil {
+		return m, nil
+	}
+
+	var title string
+	var isGroup, canCall bool
+	switch it := selectedItem.(type) {
+	case types.UserInfo:
+		title = it.FirstName
+		if it.LastName != "" {
+			title += " " + it.LastName
+		}
+		if title == "" {
+			title = it.Username
+		}
+		canCall = !it.IsBot && !it.PhoneCallsPrivate && it.PeerID != ""
+	case *types.UserInfo:
+		if it != nil {
+			title = it.FirstName
+			if it.LastName != "" {
+				title += " " + it.LastName
+			}
+			if title == "" {
+				title = it.Username
+			}
+			canCall = !it.IsBot && !it.PhoneCallsPrivate && it.PeerID != ""
+		}
+	case types.ChannelInfo:
+		title = it.ChannelTitle
+		isGroup = !it.IsBroadcast
+	case *types.ChannelInfo:
+		if it != nil {
+			title = it.ChannelTitle
+			isGroup = !it.IsBroadcast
+		}
+	}
+	if title == "" {
+		title = selectedItem.FilterValue()
+	}
+
+	var items []ActionMenuItem
+	items = append(items, ActionMenuItem{Key: "enter", Label: "Open chat", ActionID: "open_chat"})
+	if canCall && m.CallOverlay.State == CallOverlayNone {
+		items = append(items, ActionMenuItem{Key: "p", Label: "Voice call", ActionID: "call"})
+	}
+	if len(m.Stories) > 0 {
+		items = append(items, ActionMenuItem{Key: "s", Label: "View stories", ActionID: "stories"})
+	}
+	if isGroup {
+		items = append(items, ActionMenuItem{Key: "m", Label: "View group members", ActionID: "members"})
+	}
+
+	return m, func() tea.Msg {
+		return OpenModalMsg{
+			ModalMode:       ModalModeActionMenu,
+			ActionMenuTitle: "Chat: " + title,
+			ActionMenuItems: items,
+		}
+	}
+}
+
+func (m Model) handleExecuteAction(msg ExecuteActionMsg) (tea.Model, tea.Cmd) {
+	switch msg.ActionID {
+	case "reply":
+		return m.handleReplyKey()
+	case "edit":
+		return m.handleEditKey()
+	case "delete":
+		return m.handleDeleteKey()
+	case "forward":
+		return m.handleForwardKey()
+	case "react":
+		if m.SelectedMessage() != nil {
+			cmds := []tea.Cmd{telegram.Cligram.GetAvailableReactions(telegram.Cligram.Context())}
+			if m.CurrentUser == nil {
+				cmds = append(cmds, func() tea.Msg {
+					user, err := telegram.Cligram.GetMe(telegram.Cligram.Context())
+					return types.CurrentUserMsg{User: user, Err: err}
+				})
+			}
+			return m, tea.Batch(cmds...)
+		}
+	case "copy":
+		selectedMessage := m.SelectedMessage()
+		if selectedMessage != nil && selectedMessage.Content != "" {
+			err := clipboard.WriteAll(selectedMessage.Content)
+			m.Alert = m.Alert.WithAllowEscToClose().WithPosition(bubbleup.TopLeftPosition)
+			if err != nil {
+				alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, "Failed to copy: "+err.Error())
+				return m, alertCmd
+			}
+			alertCmd := m.Alert.NewAlertCmd(bubbleup.InfoKey, "Message copied to clipboard")
+			return m, alertCmd
+		}
+	case "open_media":
+		return m.handleEnterKey()
+	case "comments":
+		return m.openCommentsForSelectedMessage()
+	case "open_chat":
+		return handleUserChange(&m, nil, nil)
+	case "call":
+		canCall := false
+		var userToCall types.UserInfo
+		if m.Mode == ModeUsers && m.SelectedUser.PeerID != "" {
+			canCall = true
+			userToCall = m.SelectedUser
+		} else if m.Mode == ModeAll {
+			if selected := m.All.SelectedItem(); selected != nil {
+				if u, ok := selected.(types.UserInfo); ok && !u.IsBot && u.PeerID != "" {
+					canCall = true
+					userToCall = u
+				}
+			}
+		}
+		if canCall && m.CallOverlay.State == CallOverlayNone {
+			if userToCall.PhoneCallsPrivate {
+				alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, "Cannot call "+userToCall.FirstName+" due to their privacy settings.")
+				return m, alertCmd
+			}
+			pInfo := peerFromItem(userToCall)
+			uID, err := strconv.ParseInt(pInfo.ID, 10, 64)
+			if err != nil {
+				slog.Error("failed to parse peer ID for call", "error", err)
+				alertCmd := m.Alert.NewAlertCmd(bubbleup.ErrorKey, "Invalid user ID: "+err.Error())
+				return m, alertCmd
+			}
+			m.CallOverlay.SetDialing(userToCall.FirstName, uID)
+			return m, telegram.Cligram.CallUser(telegram.Cligram.Context(), pInfo)
+		}
+	case "stories":
+		return m, func() tea.Msg {
+			return OpenModalMsg{
+				ModalMode: ModalModeShowStories,
+				Stories:   m.Stories,
+			}
+		}
+	case "members":
+		return m.openGroupMembersForPeer()
+	}
+	return m, nil
 }
 
 func itemUniqueKey(item list.Item) string {
