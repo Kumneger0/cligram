@@ -119,3 +119,42 @@ func TestConcurrentConfigAccess(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestIgnoredUpdateVersion(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+
+	configMu.Lock()
+	loaded = false
+	configMu.Unlock()
+
+	// Initial value should be empty
+	if v := GetIgnoredUpdateVersion(); v != "" {
+		t.Fatalf("expected empty ignored update version, got %q", v)
+	}
+
+	// Set version
+	if err := SetIgnoredUpdateVersion("v2.8.0"); err != nil {
+		t.Fatalf("SetIgnoredUpdateVersion failed: %v", err)
+	}
+	if v := GetIgnoredUpdateVersion(); v != "v2.8.0" {
+		t.Errorf("expected v2.8.0, got %q", v)
+	}
+
+	// Reload from disk
+	configMu.Lock()
+	loaded = false
+	configMu.Unlock()
+
+	if v := GetIgnoredUpdateVersion(); v != "v2.8.0" {
+		t.Errorf("expected reloaded v2.8.0, got %q", v)
+	}
+
+	// Clear version
+	if err := ClearIgnoredUpdateVersion(); err != nil {
+		t.Fatalf("ClearIgnoredUpdateVersion failed: %v", err)
+	}
+	if v := GetIgnoredUpdateVersion(); v != "" {
+		t.Errorf("expected empty after clear, got %q", v)
+	}
+}

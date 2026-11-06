@@ -147,6 +147,7 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 				}
 
 				Program = tea.NewProgram(manager, tea.WithAltScreen())
+				go NotifyNewVersionIfAvailable()
 				go func() {
 					for {
 						select {
@@ -198,6 +199,7 @@ func newRootCmd(version string, telegramAPIID, telegramAPIHash string) *cobra.Co
 					return fmt.Errorf("failed to start TUI: %w", err)
 				}
 
+				PromptExitUpgradeIfAvailable()
 				return nil
 			})
 			if err != nil {

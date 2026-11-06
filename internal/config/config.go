@@ -14,8 +14,9 @@ type ChatConfig struct {
 }
 
 type CliGramConfig struct {
-	Chat        ChatConfig `json:"chat"`
-	ReadStories bool       `json:"readStories"`
+	Chat                 ChatConfig `json:"chat"`
+	ReadStories          bool       `json:"readStories"`
+	IgnoredUpdateVersion string     `json:"ignoredUpdateVersion,omitempty"`
 }
 
 func defaultCliGramConfig() CliGramConfig {
@@ -117,4 +118,23 @@ func readConfig() CliGramConfig {
 	}
 
 	return cfg
+}
+
+func GetIgnoredUpdateVersion() string {
+	return GetConfig().IgnoredUpdateVersion
+}
+
+func SetIgnoredUpdateVersion(version string) error {
+	cfg := GetConfig()
+	cfg.IgnoredUpdateVersion = version
+	return SaveConfig(cfg)
+}
+
+func ClearIgnoredUpdateVersion() error {
+	cfg := GetConfig()
+	if cfg.IgnoredUpdateVersion == "" {
+		return nil
+	}
+	cfg.IgnoredUpdateVersion = ""
+	return SaveConfig(cfg)
 }

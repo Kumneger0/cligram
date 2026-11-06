@@ -48,6 +48,10 @@ func (m *Model) checkAndFetchCustomEmojis(messages []types.FormattedMessage) tea
 
 type CallTickMsg time.Time
 
+type NewVersionMsg struct {
+	Version string
+}
+
 func tickCall() tea.Cmd {
 	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
 		return CallTickMsg(t)
@@ -58,6 +62,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
+	case NewVersionMsg:
+		m.Alert = m.Alert.WithAllowEscToClose().WithPosition(bubbleup.TopLeftPosition)
+		alertCmd := m.Alert.NewAlertCmd(
+			bubbleup.InfoKey,
+			"A new version ("+msg.Version+") of cligram is available. Some features may not work as expected—upgrade is recommended.",
+		)
+		return m, alertCmd
 	case CallTickMsg:
 		if m.CallOverlay.State == CallOverlayActive {
 			tTime := time.Time(msg)
