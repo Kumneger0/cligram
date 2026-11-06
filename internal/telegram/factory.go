@@ -100,13 +100,7 @@ func SwitchAccount(targetAccount string) tea.Cmd {
 			}
 		}
 
-		// 1. Cleanly cancel existing session
-		if ActiveSessionCancel != nil {
-			ActiveSessionCancel()
-			ActiveSessionCancel = nil
-		}
-
-		// 2. Create new session context
+		// 1. Create new session context
 		newCtx, newCancel := context.WithCancel(context.Background())
 		updateCh := GetGlobalUpdateChannel()
 
@@ -119,7 +113,7 @@ func SwitchAccount(targetAccount string) tea.Cmd {
 			}
 		}
 
-		// 3. Start client.Run in background and wait for connection
+		// 2. Start client.Run in background and wait for connection
 		connected := make(chan struct{})
 		runErrCh := make(chan error, 1)
 
@@ -151,15 +145,56 @@ func SwitchAccount(targetAccount string) tea.Cmd {
 			}
 		}
 
-		// 4. Update active client pointers
+		// 3. Verify that the session is authorized and valid
+		authStatus, authErr := newClient.Client.Auth().Status(newCtx)
+		if authErr != nil || !authStatus.Authorized {
+			newCancel()
+			if authErr != nil && types.IsSessionRevoked(authErr) {
+				return types.AccountSwitchedMsg{
+					Account: targetAccount,
+					Err:     types.ErrSessionRevoked,
+				}
+			}
+			if !authStatus.Authorized {
+				return types.AccountSwitchedMsg{
+					Account: targetAccount,
+					Err:     types.ErrSessionRevoked,
+				}
+			}
+			return types.AccountSwitchedMsg{
+				Account: targetAccount,
+				Err:     fmt.Errorf("failed to check auth status for account %s: %w", targetAccount, authErr),
+			}
+		}
+
+		// 4. Fetch user profile
+		user, err := newClient.GetMe(newCtx)
+		if err != nil {
+			newCancel()
+			if types.IsSessionRevoked(err) {
+				return types.AccountSwitchedMsg{
+					Account: targetAccount,
+					Err:     types.ErrSessionRevoked,
+				}
+			}
+			return types.AccountSwitchedMsg{
+				Account: targetAccount,
+				Err:     fmt.Errorf("failed to authenticate account %s: %w", targetAccount, err),
+			}
+		}
+
+		// 5. Verification passed: cancel old session and switch active pointers
+		if ActiveSessionCancel != nil {
+			ActiveSessionCancel()
+			ActiveSessionCancel = nil
+		}
+
 		Cligram = newClient
 		client.Cligram = newClient.Client
 		ActiveAccount = targetAccount
 		ActiveSessionCancel = newCancel
 
-		// 5. Fetch user profile
-		user, err := newClient.GetMe(newCtx)
-		if err == nil && user != nil {
+		if user != nil {
 			_ = SaveAccountMetadata(targetAccount, types.AccountsOnDeviceInfo{
 				AccountName: user.FirstName,
 				PhoneNumber: user.Username,

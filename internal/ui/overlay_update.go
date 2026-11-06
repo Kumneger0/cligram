@@ -3,6 +3,8 @@ package ui
 import (
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -48,9 +50,18 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	case types.AccountSwitchedMsg:
 		m.IsSwitchingAccount = false
 		if msg.Err != nil {
-			m.Error = msg.Err
+			if types.IsSessionRevoked(msg.Err) {
+				m.RevokedAccount = msg.Account
+				m.accountError = nil
+				m.Error = nil
+			} else {
+				m.accountError = msg.Err
+				m.Error = msg.Err
+			}
 			return m, nil
 		}
+		m.RevokedAccount = ""
+		m.accountError = nil
 		m.ActiveAccount = msg.Account
 		return m, func() tea.Msg { return CloseOverlay{} }
 
@@ -740,8 +751,23 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 				}
 			}
 		}
+	case "d":
+		if m.ModalMode == ModalModeAccountSwitcher && m.RevokedAccount != "" {
+			targetAcc := m.RevokedAccount
+			m.RevokedAccount = ""
+			m.accountError = nil
+			_ = telegram.DeleteAccount(targetAcc)
+			apiID, apiHash := telegram.GetAPICredentials()
+			m.AccountsLoading = true
+			return m, telegram.GetAccountsCmd(apiID, apiHash)
+		}
 	case "esc":
 		if m.ModalMode == ModalModeAccountSwitcher {
+			if m.RevokedAccount != "" {
+				m.RevokedAccount = ""
+				m.accountError = nil
+				return m, nil
+			}
 			if m.InAuthWizard {
 				telegram.CancelAuthSession(m.authSession)
 				m.authSession = nil
@@ -879,6 +905,13 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 
 func handleEnterKey(m *Foreground) (tea.Model, tea.Cmd) {
 	if m.ModalMode == ModalModeAccountSwitcher {
+		if m.RevokedAccount != "" {
+			targetAcc := m.RevokedAccount
+			m.RevokedAccount = ""
+			m.accountError = nil
+			m.startAuthWizardForAccount(targetAcc)
+			return m, nil
+		}
 		if m.InAuthWizard {
 			if m.authLoading {
 				return m, nil
@@ -1398,6 +1431,8 @@ func (m *Foreground) initAccountSwitcher() {
 	m.AccountSwitcherIndex = 0
 	m.InAuthWizard = false
 	m.IsSwitchingAccount = false
+	m.RevokedAccount = ""
+	m.accountError = nil
 	m.AccountsLoading = true
 	apiID, apiHash := telegram.GetAPICredentials()
 	m.Accounts = telegram.GetAccountDirsOnThisDevice(apiID, apiHash)
@@ -1432,4 +1467,15 @@ func (m *Foreground) startAuthWizard() {
 	passIn.Placeholder = "••••••••"
 	passIn.Prompt = "> "
 	m.authPasswordInput = passIn
+}
+
+func (m *Foreground) startAuthWizardForAccount(accPath string) {
+	m.startAuthWizard()
+	if accPath != "" {
+		m.authNewAccountPath = accPath
+		userHome, _ := os.UserHomeDir()
+		if userHome != "" {
+			_ = os.Remove(filepath.Join(userHome, ".cligram", accPath, "session.json"))
+		}
+	}
 }
