@@ -1612,7 +1612,12 @@ func renderAccountSwitcherModal(f *Foreground, foreStyle lipgloss.Style) string 
 		}
 
 		var activeBadge string
-		if isActive {
+		if acc.Path == f.RevokedAccount {
+			activeBadge = " " + lipgloss.NewStyle().
+				Foreground(DefaultTheme.ErrorColor).
+				Bold(true).
+				Render("[Revoked]")
+		} else if isActive {
 			activeBadge = " " + lipgloss.NewStyle().
 				Foreground(DefaultTheme.OnlineStatus).
 				Bold(true).
@@ -1669,19 +1674,29 @@ func renderAccountSwitcherModal(f *Foreground, foreStyle lipgloss.Style) string 
 
 	var banner string
 	if f.RevokedAccount != "" {
-		revokedMsg := fmt.Sprintf("⚠️ Session for %s was revoked.", f.RevokedAccount)
-		banner = lipgloss.NewStyle().
+		revokedMsg := lipgloss.NewStyle().
 			Foreground(DefaultTheme.ErrorColor).
-			Border(lipgloss.RoundedBorder()).
+			Bold(true).
+			Render(fmt.Sprintf("⚠️ Session for %s was revoked.", f.RevokedAccount))
+
+		actionHints := lipgloss.NewStyle().
+			Foreground(DefaultTheme.SecondaryText).
+			Render("[Enter] Log in again    [d] Remove account    [Esc] Cancel")
+
+		banner = lipgloss.NewStyle().
+			Background(DefaultTheme.InputBg).
+			Border(lipgloss.Border{Left: "▎"}, false, false, false, true).
 			BorderForeground(DefaultTheme.ErrorColor).
 			Padding(0, 1).
-			Width(contentWidth).
-			Render(fmt.Sprintf("%s\n\n%s",
-				lipgloss.NewStyle().Bold(true).Render(revokedMsg),
-				lipgloss.NewStyle().Foreground(DefaultTheme.SecondaryText).Render("[Enter] Log in again    [d] Remove account    [Esc] Cancel"),
-			))
+			Width(contentWidth - 2).
+			Render(fmt.Sprintf("%s\n%s", revokedMsg, actionHints))
 	} else if f.accountError != nil {
 		banner = lipgloss.NewStyle().
+			Background(DefaultTheme.InputBg).
+			Border(lipgloss.Border{Left: "▎"}, false, false, false, true).
+			BorderForeground(DefaultTheme.ErrorColor).
+			Padding(0, 1).
+			Width(contentWidth - 2).
 			Foreground(DefaultTheme.ErrorColor).
 			Render(fmt.Sprintf("⚠️ %v", f.accountError))
 	}
