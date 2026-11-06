@@ -438,38 +438,12 @@ func handleUserChange(m *Model, offsetID *int, afterMessagesCmd tea.Cmd) (Model,
 	return *m, tea.Batch(cmd, markAsReadCmd, afterMessagesCmd, prefetchBotCmds)
 }
 
-func isReadOnlyBroadcast(m *Model) bool {
-	if m.isUnjoinedChat() {
-		return false
-	}
-	if m.Mode == ModeChannels && !m.SelectedChannel.IsCreator {
-		return true
-	}
-	if m.Mode == ModeAll {
-		if selected := m.All.SelectedItem(); selected != nil {
-			if ch, ok := selected.(types.ChannelInfo); ok && ch.IsBroadcast && !ch.IsCreator {
-				return true
-			}
-		} else if m.SelectedChannel.IsBroadcast && !m.SelectedChannel.IsCreator {
-			return true
-		}
-	}
-	return false
-}
-
 func changeFocusMode(m *Model, msg string, shift bool) (Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	currentlyFocusedOn := m.FocusedOn
 	canFocus := m.CanFocusInput()
-	if currentlyFocusedOn == SideBar {
-		pInfo := getMessageParams(m)
-		if pInfo.ID != "" && pInfo.ID != m.ActivePeerID {
-			mUpdated, changeCmd := handleUserChange(m, nil, nil)
-			*m = mUpdated
-			if changeCmd != nil {
-				cmds = append(cmds, changeCmd)
-			}
-		}
+	switch currentlyFocusedOn {
+	case SideBar:
 		if shift {
 			if canFocus {
 				m.FocusedOn = Input
@@ -479,7 +453,7 @@ func changeFocusMode(m *Model, msg string, shift bool) (Model, tea.Cmd) {
 		} else {
 			m.FocusedOn = Main
 		}
-	} else if currentlyFocusedOn == Main {
+	case Main:
 		if shift {
 			m.FocusedOn = SideBar
 		} else {
@@ -489,7 +463,7 @@ func changeFocusMode(m *Model, msg string, shift bool) (Model, tea.Cmd) {
 				m.FocusedOn = SideBar
 			}
 		}
-	} else { // currentlyFocusedOn == Input
+	default: // currentlyFocusedOn == Input
 		if shift {
 			m.FocusedOn = Main
 		} else {

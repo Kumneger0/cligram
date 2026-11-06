@@ -494,10 +494,6 @@ func updateListDimensions(m *Model, d layoutDimensions) {
 	}
 }
 
-func renderModal(m *Model) string {
-	return m.ModalContent
-}
-
 func getUserOrChannelName(m *Model) string {
 	if m.ActivePeerID != "" {
 		if m.SelectedUser.PeerID == m.ActivePeerID {
