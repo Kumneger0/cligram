@@ -175,6 +175,9 @@ func TestActionMenu_Chat_Open(t *testing.T) {
 	if findItem("call") == nil {
 		t.Errorf("expected call action for user with calls allowed")
 	}
+	if findItem("stories") != nil {
+		t.Errorf("stories should NOT be present in chat action menu")
+	}
 }
 
 func TestActionMenu_Chat_GroupMembers(t *testing.T) {
