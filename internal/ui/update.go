@@ -2490,9 +2490,6 @@ func (m Model) openChatActionMenu() (tea.Model, tea.Cmd) {
 	if canCall && m.CallOverlay.State == CallOverlayNone {
 		items = append(items, ActionMenuItem{Key: "p", Label: "Voice call", ActionID: "call"})
 	}
-	if len(m.Stories) > 0 {
-		items = append(items, ActionMenuItem{Key: "s", Label: "View stories", ActionID: "stories"})
-	}
 	if isGroup {
 		items = append(items, ActionMenuItem{Key: "m", Label: "View group members", ActionID: "members"})
 	}
