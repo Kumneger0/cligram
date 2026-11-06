@@ -10,6 +10,7 @@ import (
 
 var (
 	ErrPrivacyRestricted = errors.New("user privacy restricted")
+	ErrSessionRevoked    = errors.New("session revoked")
 )
 
 type TelegramError struct {
@@ -61,6 +62,22 @@ func IsPrivacyRestricted(err error) bool {
 		strings.Contains(errStr, "PRIVACY SETTINGS") ||
 		strings.Contains(errStr, "PARTICIPANT_VERSION_OUTDATED") ||
 		strings.Contains(errStr, "CALL_PROTOCOL_FLAGS_INVALID")
+}
+
+// IsSessionRevoked returns true if the error indicates that the Telegram session was revoked or expired.
+func IsSessionRevoked(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, ErrSessionRevoked) {
+		return true
+	}
+	errStr := strings.ToUpper(err.Error())
+	return strings.Contains(errStr, "SESSION_REVOKED") ||
+		strings.Contains(errStr, "SESSION_EXPIRED") ||
+		strings.Contains(errStr, "AUTH_KEY_UNREGISTERED") ||
+		strings.Contains(errStr, "USER_DEACTIVATED") ||
+		strings.Contains(errStr, "AUTH_KEY_PERM_EMPTY")
 }
 
 func NewTelegramError(code int, message string, cause error) *TelegramError {

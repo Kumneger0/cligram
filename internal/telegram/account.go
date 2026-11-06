@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -239,4 +240,28 @@ func GetAccountsCmd(telegramAPIID, telegramAPIHash string) tea.Cmd {
 			Err:      nil,
 		}
 	}
+}
+
+func DeleteAccount(accountName string) error {
+	if accountName == "" {
+		return fmt.Errorf("account name cannot be empty")
+	}
+	userHomeDir, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	sessionDir, err := filepath.Abs(filepath.Join(userHomeDir, ".cligram"))
+	if err != nil {
+		return err
+	}
+	cligramWorkingDIR, err := filepath.Abs(filepath.Join(sessionDir, accountName))
+	if err != nil {
+		return err
+	}
+
+	if !strings.HasPrefix(cligramWorkingDIR, sessionDir+string(os.PathSeparator)) {
+		return fmt.Errorf("invalid account name: %s", accountName)
+	}
+
+	return os.RemoveAll(cligramWorkingDIR)
 }

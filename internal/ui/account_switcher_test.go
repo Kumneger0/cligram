@@ -2,6 +2,8 @@ package ui
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -486,5 +488,152 @@ func TestAccountSwitcher_AuthWizard_CancelViaEsc(t *testing.T) {
 	}
 	if _, ok := closeCmd().(CloseOverlay); !ok {
 		t.Errorf("expected CloseOverlay, got %T", closeCmd())
+	}
+}
+
+func TestAccountSwitcher_SessionRevoked_BannerAndActions(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+
+	// Create test account directory for account2
+	account2Dir := filepath.Join(tempHome, ".cligram", "account2")
+	if err := os.MkdirAll(account2Dir, 0700); err != nil {
+		t.Fatalf("failed to create account2 dir: %v", err)
+	}
+	_ = os.WriteFile(filepath.Join(account2Dir, "session.json"), []byte("{}"), 0600)
+
+	fg := &Foreground{
+		ModalMode: ModalModeAccountSwitcher,
+		Accounts: []types.AccountsOnDeviceInfo{
+			{AccountName: "Alice", Path: "account1"},
+			{AccountName: "Bob", Path: "account2"},
+		},
+		ActiveAccount:      "account1",
+		IsSwitchingAccount: true,
+		windowWidth:        80,
+	}
+
+	// 1. Simulate account switch failing due to revoked session
+	m, cmd := fg.Update(types.AccountSwitchedMsg{
+		Account: "account2",
+		Err:     types.ErrSessionRevoked,
+	})
+	fg = m.(*Foreground)
+
+	// Overlay must NOT close
+	if cmd != nil {
+		msg := cmd()
+		if _, ok := msg.(CloseOverlay); ok {
+			t.Fatalf("overlay should not close on session revoked")
+		}
+	}
+
+	if fg.IsSwitchingAccount {
+		t.Errorf("expected IsSwitchingAccount to be reset to false")
+	}
+	if fg.RevokedAccount != "account2" {
+		t.Fatalf("expected RevokedAccount 'account2', got '%s'", fg.RevokedAccount)
+	}
+
+	// Active account remains untouched
+	if fg.ActiveAccount != "account1" {
+		t.Errorf("expected active account to remain 'account1', got '%s'", fg.ActiveAccount)
+	}
+
+	// Verify rendering of the warning banner and actionable hints
+	view := fg.View()
+	if !strings.Contains(view, "⚠️ Session for account2 was revoked.") {
+		t.Errorf("expected view to contain '⚠️ Session for account2 was revoked.', got:\n%s", view)
+	}
+	if !strings.Contains(view, "[Enter] Log in again") || !strings.Contains(view, "[d] Remove account") || !strings.Contains(view, "[Esc] Cancel") {
+		t.Errorf("expected view to contain action hints [Enter] Log in again, [d] Remove account, [Esc] Cancel; got:\n%s", view)
+	}
+
+	// 2. Test [Esc] cancels the revocation banner
+	mEsc, _ := fg.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	fgEsc := mEsc.(*Foreground)
+	if fgEsc.RevokedAccount != "" {
+		t.Errorf("expected RevokedAccount to be cleared after Esc, got '%s'", fgEsc.RevokedAccount)
+	}
+
+	// 3. Test [Enter] triggers re-login via Auth Wizard targeting account2
+	fg.RevokedAccount = "account2"
+	mEnter, _ := fg.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	fgEnter := mEnter.(*Foreground)
+	if fgEnter.RevokedAccount != "" {
+		t.Errorf("expected RevokedAccount to be cleared on Enter, got '%s'", fgEnter.RevokedAccount)
+	}
+	if !fgEnter.InAuthWizard {
+		t.Errorf("expected InAuthWizard to be true")
+	}
+	if fgEnter.authNewAccountPath != "account2" {
+		t.Errorf("expected authNewAccountPath 'account2', got '%s'", fgEnter.authNewAccountPath)
+	}
+	// Old session.json should have been cleaned up
+	if _, err := os.Stat(filepath.Join(account2Dir, "session.json")); !os.IsNotExist(err) {
+		t.Errorf("expected session.json to be deleted before re-login")
+	}
+
+	// 4. Test [d] removes the revoked account
+	fgRevoked := &Foreground{
+		ModalMode: ModalModeAccountSwitcher,
+		Accounts: []types.AccountsOnDeviceInfo{
+			{AccountName: "Alice", Path: "account1"},
+			{AccountName: "Bob", Path: "account2"},
+		},
+		ActiveAccount:  "account1",
+		RevokedAccount: "account2",
+		windowWidth:    80,
+	}
+
+	mD, dCmd := fgRevoked.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	fgD := mD.(*Foreground)
+	if fgD.RevokedAccount != "" {
+		t.Errorf("expected RevokedAccount cleared after 'd', got '%s'", fgD.RevokedAccount)
+	}
+	if !fgD.AccountsLoading {
+		t.Errorf("expected AccountsLoading to be true after delete")
+	}
+	if dCmd == nil {
+		t.Fatalf("expected GetAccountsCmd to be returned after 'd'")
+	}
+	// Account directory should be removed
+	if _, err := os.Stat(account2Dir); !os.IsNotExist(err) {
+		t.Errorf("expected account2 directory to be deleted")
+	}
+}
+
+func TestAccountSwitcher_Manager_EscDoesNotExitModalWhenRevoked(t *testing.T) {
+	bg := dummyModel{text: "BACKGROUND_CHAT"}
+	fg := &Foreground{
+		ModalMode:      ModalModeAccountSwitcher,
+		RevokedAccount: "account2",
+	}
+
+	mgr := Manager{
+		State:        ModalView,
+		WindowWidth:  80,
+		WindowHeight: 24,
+		Foreground:   fg,
+		Background:   bg,
+		Overlay: overlay.New(
+			fg,
+			bg,
+			overlay.Center,
+			overlay.Center,
+			0,
+			0,
+		),
+	}
+
+	// Pressing Esc when RevokedAccount is active should NOT transition to MainView
+	m, _ := mgr.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	mgr = m.(Manager)
+	if mgr.State != ModalView {
+		t.Fatalf("expected State to stay ModalView on Esc when RevokedAccount is set, got %v", mgr.State)
+	}
+	fgRes := mgr.Foreground.(*Foreground)
+	if fgRes.RevokedAccount != "" {
+		t.Errorf("expected RevokedAccount to be cleared after Esc, got '%s'", fgRes.RevokedAccount)
 	}
 }

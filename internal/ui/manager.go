@@ -55,6 +55,13 @@ func (m Manager) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "esc":
 			if m.State == ModalView {
+				if fg, ok := m.Foreground.(*Foreground); ok {
+					if fg.ModalMode == ModalModeAccountSwitcher && (fg.RevokedAccount != "" || fg.InAuthWizard) {
+						fgModel, fgCmd := fg.Update(msg)
+						m.Foreground = fgModel
+						return m, fgCmd
+					}
+				}
 				m.State = MainView
 				return m, nil
 			}

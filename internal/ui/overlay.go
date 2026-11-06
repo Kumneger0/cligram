@@ -445,6 +445,8 @@ type Foreground struct {
 	AccountSwitcherIndex int
 	AccountsLoading      bool
 	IsSwitchingAccount   bool
+	RevokedAccount       string
+	accountError         error
 	InAuthWizard         bool
 	AuthWizardStep       int // 0: Phone, 1: Code, 2: 2FA Password
 	authPhoneInput       textinput.Model
@@ -1665,15 +1667,32 @@ func renderAccountSwitcherModal(f *Foreground, foreStyle lipgloss.Style) string 
 		Foreground(DefaultTheme.SecondaryText).
 		Render("[↑/↓, j/k] Navigate  [Enter] Select / Add  [Esc/Ctrl+A/q] Close")
 
-	layout := lipgloss.JoinVertical(
-		lipgloss.Left,
-		title,
-		divider,
-		"",
-		lipgloss.JoinVertical(lipgloss.Left, itemBlocks...),
-		"",
-		footerDivider,
-		footerHints,
-	)
+	var banner string
+	if f.RevokedAccount != "" {
+		revokedMsg := fmt.Sprintf("⚠️ Session for %s was revoked.", f.RevokedAccount)
+		banner = lipgloss.NewStyle().
+			Foreground(DefaultTheme.ErrorColor).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(DefaultTheme.ErrorColor).
+			Padding(0, 1).
+			Width(contentWidth).
+			Render(fmt.Sprintf("%s\n\n%s",
+				lipgloss.NewStyle().Bold(true).Render(revokedMsg),
+				lipgloss.NewStyle().Foreground(DefaultTheme.SecondaryText).Render("[Enter] Log in again    [d] Remove account    [Esc] Cancel"),
+			))
+	} else if f.accountError != nil {
+		banner = lipgloss.NewStyle().
+			Foreground(DefaultTheme.ErrorColor).
+			Render(fmt.Sprintf("⚠️ %v", f.accountError))
+	}
+
+	var elements []string
+	elements = append(elements, title, divider)
+	if banner != "" {
+		elements = append(elements, "", banner)
+	}
+	elements = append(elements, "", lipgloss.JoinVertical(lipgloss.Left, itemBlocks...), "", footerDivider, footerHints)
+
+	layout := lipgloss.JoinVertical(lipgloss.Left, elements...)
 	return foreStyle.Width(contentWidth + 2).Render(layout)
 }
