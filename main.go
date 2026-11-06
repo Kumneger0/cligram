@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
-	"sync"
 	"syscall"
 
 	"github.com/gofrs/flock"
@@ -56,24 +55,13 @@ func main() {
 	defer logRotator.Close()
 	slog.Info("Starting Application")
 
-	var isUpdateAvailable bool
-
-	var wg sync.WaitGroup
-
 	if !slices.Contains(os.Args, "upgrade") && version != "" {
-		wg.Go(func() {
-			isUpdateAvailable = cmd.GetNewVersionInfo(version).IsUpdateAvailable
-		})
+		cmd.CheckUpdateAsync(version)
 	}
 
 	if err := cmd.Execute(version, telegramAPIID, telegramAPIHash); err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)
 		os.Exit(1)
-	}
-
-	wg.Wait()
-	if isUpdateAvailable {
-		fmt.Println("An update is available use cligram upgrade to update to latest version")
 	}
 }
 

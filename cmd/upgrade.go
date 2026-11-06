@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"log/slog"
 	"net/http"
 	"os"
@@ -13,10 +12,12 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	goversion "github.com/hashicorp/go-version"
-	pb "github.com/schollz/progressbar/v3"
+	"github.com/kumneger0/cligram/internal/config"
+	"github.com/kumneger0/cligram/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -82,131 +83,181 @@ type Asset struct {
 	BrowserDownloadURL string    `json:"browser_download_url"`
 }
 
-type OsName string
-
 const (
-	DARWIN  OsName = "darwin"
-	WINDOWS OsName = "windows"
-	LINUX   OsName = "linux"
+	REPOURL          = "https://api.github.com/repos/kumneger0/cligram/releases/latest"
+	installScriptURL = "https://raw.githubusercontent.com/Kumneger0/cligram/main/install.sh"
 )
 
-type LinuxDistro string
+type UpdateState struct {
+	mu            sync.Mutex
+	checked       bool
+	available     bool
+	latestVersion string
+}
 
-const (
-	UBUNTU LinuxDistro = "ubuntu"
-	DEBIAN LinuxDistro = "debian"
-	ALPINE LinuxDistro = "alpine"
-)
+var GlobalUpdateState UpdateState
 
-const (
-	REPOURL = "https://api.github.com/repos/kumneger0/cligram/releases/latest"
-)
+func CheckUpdateAsync(currentVersion string) {
+	if currentVersion == "" {
+		return
+	}
+	go func() {
+		info := GetNewVersionInfo(currentVersion)
+		GlobalUpdateState.mu.Lock()
+		GlobalUpdateState.checked = true
+		GlobalUpdateState.available = info.IsUpdateAvailable
+		if info.IsUpdateAvailable {
+			GlobalUpdateState.latestVersion = info.LatestRelease.TagName
+		}
+		GlobalUpdateState.mu.Unlock()
 
-func upgradeCligram(currentVersion string) *cobra.Command {
-	fileExtensions := map[LinuxDistro]string{
-		UBUNTU: "deb",
-		DEBIAN: "deb",
-		ALPINE: "apk",
+		NotifyNewVersionIfAvailable()
+	}()
+}
+
+func NotifyNewVersionIfAvailable() {
+	GlobalUpdateState.mu.Lock()
+	defer GlobalUpdateState.mu.Unlock()
+
+	time.Sleep(3 * time.Second) // Wait for 2 seconds before sending the notification
+	if GlobalUpdateState.available && GlobalUpdateState.latestVersion != "" {
+		if config.GetIgnoredUpdateVersion() != GlobalUpdateState.latestVersion {
+			if Program != nil {
+				Program.Send(ui.NewVersionMsg{Version: GlobalUpdateState.latestVersion})
+			}
+		}
+	}
+}
+
+func PromptExitUpgradeIfAvailable() {
+	GlobalUpdateState.mu.Lock()
+	available := GlobalUpdateState.available
+	latestVersion := GlobalUpdateState.latestVersion
+	GlobalUpdateState.mu.Unlock()
+
+	if !available || latestVersion == "" {
+		return
 	}
 
+	ignoredVersion := config.GetIgnoredUpdateVersion()
+	if ignoredVersion == latestVersion {
+		return
+	}
+
+	fmt.Printf("\nA new version (%s) of cligram is available. Some features may not work as expected—upgrade is recommended.\n", latestVersion)
+	fmt.Print("Would you like to upgrade now? (y/N): ")
+
+	reader := bufio.NewReader(os.Stdin)
+	response, err := reader.ReadString('\n')
+	if err != nil {
+		response = ""
+	}
+	response = strings.TrimSpace(response)
+
+	if strings.EqualFold(response, "y") || strings.EqualFold(response, "yes") {
+		binDir := GetActiveBinDir()
+		fmt.Printf("Upgrading to %s...\n", latestVersion)
+		if err := RunUpgrade(binDir); err != nil {
+			fmt.Printf("Upgrade failed: %v\n", err)
+			return
+		}
+		_ = config.ClearIgnoredUpdateVersion()
+		fmt.Println("cligram upgraded successfully!")
+	} else {
+		if err := config.SetIgnoredUpdateVersion(latestVersion); err != nil {
+			slog.Error("failed to save ignored update version", "error", err)
+		} else {
+			fmt.Printf("Upgrade skipped. You won't be reminded again for %s. (Run 'cligram upgrade' anytime to update.)\n", latestVersion)
+		}
+	}
+}
+
+func upgradeCligram(currentVersion string) *cobra.Command {
 	return &cobra.Command{
 		Use:          "upgrade",
 		Short:        "upgrade to latest version",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
-		Run: func(cmd *cobra.Command, args []string) {
-			var osName OsName
-			var distroName string
-			switch runtime.GOOS {
-			case "windows":
-				osName = WINDOWS
-			case "darwin":
-				osName = DARWIN
-			case "linux":
-				osName = LINUX
-				var err error
-				distroName, err = getDistroName()
-				if err != nil {
-					log.Fatal("oops we failed to get the distro you are using")
-				}
-			}
-			if osName != LINUX {
-				fmt.Println("upgrade command is only supported in linux")
-				return
-			}
-
-			if !strings.EqualFold(distroName, string(DEBIAN)) &&
-				!strings.EqualFold(distroName, string(UBUNTU)) &&
-				!strings.EqualFold(distroName, string(ALPINE)) {
-				fmt.Println("upgrade is only supported in debian, ubuntu and alpine linux")
-				return
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+				return fmt.Errorf("upgrade is only supported on Linux and macOS")
 			}
 
 			newVersionInfo := GetNewVersionInfo(currentVersion)
 			if !newVersionInfo.IsUpdateAvailable {
-				fmt.Println("Already latest version")
-				return
+				fmt.Println("Already on the latest version")
+				return nil
 			}
+
 			latestRelease := newVersionInfo.LatestRelease
+			fmt.Printf("Found latest version %s (current: %s)\n", latestRelease.TagName, currentVersion)
 
-			var assetURL string
-			format := fileExtensions[LinuxDistro(strings.ToLower(distroName))]
-			for _, v := range latestRelease.Assets {
-				if strings.Contains(v.Name, runtime.GOARCH) && strings.Contains(v.Name, strings.ToLower(string(osName))) && strings.Contains(v.Name, format) {
-					assetURL = v.BrowserDownloadURL
-				}
-			}
-			if assetURL == "" {
-				log.Fatal("No compatible package found for your system")
+			binDir := GetActiveBinDir()
+			if err := RunUpgrade(binDir); err != nil {
+				return fmt.Errorf("upgrade failed: %w", err)
 			}
 
-			fmt.Println("Found latest version", latestRelease.TagName)
-			userHomeDir, err := os.UserHomeDir()
-			if err != nil {
-				log.Fatal("failed to get user home dir")
-			}
-			cacheDir := filepath.Join(userHomeDir, ".cache")
-			_, err = os.Stat(cacheDir)
-			if os.IsNotExist(err) {
-				if mkErr := os.Mkdir(cacheDir, 0o755); mkErr != nil {
-					log.Fatal("failed to create cache dir:", mkErr)
-				}
-			}
-
-			var fileName string
-
-			if strings.EqualFold(distroName, string(DEBIAN)) || strings.EqualFold(distroName, string(UBUNTU)) {
-				fileName = "cligram-latest-version.deb"
-			}
-			if strings.EqualFold(distroName, string(ALPINE)) {
-				fileName = "cligram-latest-version.apk"
-			}
-
-			if fileName == "" {
-				log.Fatal("Failed to upgrade")
-			}
-
-			filePathToWriteFile := filepath.Join(cacheDir, fileName)
-			_ = os.Remove(filePathToWriteFile)
-			err = downloadBinary(assetURL, filePathToWriteFile)
-
-			if err != nil {
-				fmt.Println("Failed To downloand the binary", err.Error())
-			}
-
-			if strings.EqualFold(distroName, string(DEBIAN)) || strings.EqualFold(distroName, string(UBUNTU)) {
-				installBinary("dpkg", "-i", filePathToWriteFile)
-			}
-			if strings.EqualFold(distroName, string(ALPINE)) {
-				installBinary("apk", "add", "--allow-untrusted", filePathToWriteFile)
-			}
+			_ = config.ClearIgnoredUpdateVersion()
+			fmt.Println("Successfully upgraded cligram!")
+			return nil
 		},
 	}
+}
+
+func GetActiveBinDir() string {
+	execPath, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	return filepath.Dir(execPath)
+}
+
+func RunUpgrade(binDir string) error {
+	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+		return fmt.Errorf("upgrade is only supported on Linux and macOS")
+	}
+
+	if _, err := exec.LookPath("bash"); err != nil {
+		return fmt.Errorf("bash is required to run the upgrade script: %w", err)
+	}
+	if _, err := exec.LookPath("curl"); err != nil {
+		return fmt.Errorf("curl is required to download the upgrade script: %w", err)
+	}
+
+	cmdStr := fmt.Sprintf("curl -fsSL %s | bash", installScriptURL)
+	cmd := exec.Command("bash", "-c", cmdStr)
+	if binDir != "" {
+		cmd.Env = append(os.Environ(), fmt.Sprintf("BINDIR=%s", binDir))
+	} else {
+		cmd.Env = os.Environ()
+	}
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	return cmd.Run()
 }
 
 type NewVersionInfo struct {
 	IsUpdateAvailable bool
 	LatestRelease     Release
+}
+
+func IsNewerVersion(currentVersion, latestVersion string) (bool, error) {
+	if currentVersion == "" || latestVersion == "" {
+		return false, nil
+	}
+	cleanCurrent := strings.TrimPrefix(currentVersion, "v")
+	v1, err := goversion.NewVersion(cleanCurrent)
+	if err != nil {
+		return false, err
+	}
+	cleanLatest := strings.TrimPrefix(latestVersion, "v")
+	v2, err := goversion.NewVersion(cleanLatest)
+	if err != nil {
+		return false, err
+	}
+	return v2.GreaterThan(v1), nil
 }
 
 func GetNewVersionInfo(installedVersion string) NewVersionInfo {
@@ -216,21 +267,18 @@ func GetNewVersionInfo(installedVersion string) NewVersionInfo {
 			LatestRelease:     Release{},
 		}
 	}
-	cleanVersion := strings.Replace(installedVersion, "v", "", 1)
-	ver, err := goversion.NewVersion(cleanVersion)
-	if err != nil {
-		fmt.Println("Invalid installed version:", err)
-		return NewVersionInfo{
-			IsUpdateAvailable: false,
-			LatestRelease:     Release{},
-		}
-	}
+
 	response, err := http.Get(REPOURL)
 	if err != nil {
 		slog.Error("failed to fetch latest release", "url", REPOURL, "error", err)
 		return NewVersionInfo{IsUpdateAvailable: false, LatestRelease: Release{}}
 	}
 	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		slog.Error("unexpected status code fetching latest release", "status", response.StatusCode)
+		return NewVersionInfo{IsUpdateAvailable: false, LatestRelease: Release{}}
+	}
 
 	data, err := io.ReadAll(response.Body)
 	if err != nil {
@@ -243,95 +291,18 @@ func GetNewVersionInfo(installedVersion string) NewVersionInfo {
 		slog.Error("failed to decode latest release response", "error", err)
 		return NewVersionInfo{IsUpdateAvailable: false, LatestRelease: Release{}}
 	}
-	latestVersion, err := goversion.NewVersion(strings.Replace(latestRelease.TagName, "v", "", 1))
+
+	newer, err := IsNewerVersion(installedVersion, latestRelease.TagName)
 	if err != nil {
-		slog.Error(err.Error())
+		slog.Error("failed to compare versions", "installed", installedVersion, "latest", latestRelease.TagName, "error", err)
 		return NewVersionInfo{
 			IsUpdateAvailable: false,
 			LatestRelease:     latestRelease,
 		}
 	}
 
-	if !latestVersion.GreaterThan(ver) {
-		return NewVersionInfo{
-			IsUpdateAvailable: false,
-			LatestRelease:     latestRelease,
-		}
-	}
 	return NewVersionInfo{
-		IsUpdateAvailable: true,
+		IsUpdateAvailable: newer,
 		LatestRelease:     latestRelease,
-	}
-}
-
-func getDistroName() (string, error) {
-	file, err := os.Open("/etc/os-release")
-	if err != nil {
-		return "", fmt.Errorf("failed to open /etc/os-release: %w", err)
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if after, ok := strings.CutPrefix(line, "ID="); ok {
-			distroName := after
-			return strings.Trim(distroName, `"`), nil
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return "", fmt.Errorf("error reading /etc/os-release: %w", err)
-	}
-
-	return "", fmt.Errorf("distribution name not found in /etc/os-release")
-}
-
-func downloadBinary(url string, outputPath string) error {
-	resp, err := http.Get(url)
-
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to download file: HTTP %d", resp.StatusCode)
-	}
-
-	out, err := os.Create(outputPath)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	bar := pb.DefaultBytes(
-		resp.ContentLength,
-		"downloading",
-	)
-
-	_, err = io.Copy(io.MultiWriter(out, bar), resp.Body)
-	return err
-}
-
-func installBinary(installCommand ...string) {
-	fmt.Println("Installing package requires sudo privileges...")
-	fmt.Print("Continue? (y/N): ")
-	var response string
-	if _, scanErr := fmt.Scanln(&response); scanErr != nil {
-		fmt.Println("Installation canceled")
-		return
-	}
-	if !strings.EqualFold(response, "y") && !strings.EqualFold(response, "yes") {
-		fmt.Println("Installation canceled")
-		return
-	}
-	cmd := exec.Command("sudo", installCommand...)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	err := cmd.Run()
-	if err != nil {
-		log.Fatal(err.Error())
 	}
 }
