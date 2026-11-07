@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/gotd/td/tg"
 	"github.com/kumneger0/cligram/internal/config"
 	"github.com/kumneger0/cligram/internal/telegram"
 	"github.com/kumneger0/cligram/internal/telegram/types"
@@ -882,15 +883,7 @@ func (f *Foreground) View() string {
 		return foreStyle.Render(layout)
 	}
 	if f.ModalMode == ModalModeSendReaction {
-		title := lipgloss.NewStyle().Foreground(DefaultTheme.PrimaryText).Bold(true).Render("Send Reaction")
-		var content string
-		if len(f.allReactions) > 0 {
-			content = renderReactionsGrid(f)
-		} else {
-			content = lipgloss.NewStyle().Foreground(DefaultTheme.AccentColor).Render("Loading reactions...")
-		}
-		layout := lipgloss.JoinVertical(lipgloss.Left, title, content)
-		return foreStyle.Render(layout)
+		return renderReactionModal(f, foreStyle)
 	}
 
 	if f.ModalMode == ModalModeComments {
@@ -1324,44 +1317,137 @@ func (f *Foreground) View() string {
 	return foreStyle.Width(contentWidth + 2).Render(layout)
 }
 
-func renderReactionsGrid(f *Foreground) string {
+var defaultReactionEmojis = []string{
+	"❤", "👍", "👎", "🔥", "🥰", "👏", "😁", "🤔",
+	"🤯", "😱", "🤬", "😢", "🎉", "🤩", "🤮", "💩",
+	"🙏", "👌", "🕊", "🤡", "🥱", "🥴", "😍", "🐳",
+	"💔", "🤨", "😐", "🍓", "🍾", "💋", "🖕", "😈",
+	"😴", "😭", "🤓", "👻", "👨‍💻", "👀", "🎃", "🙈",
+	"😇", "😰", "🤝", "✍", "🤗", "🫡", "🎅", "🎄",
+	"☃", "💅", "🤪", "🗿", "🆒", "💘", "🙉", "🦄",
+	"😘", "💊", "🙊", "😎", "👾", "🤷", "😡", "😂",
+}
+
+func (f *Foreground) getActiveReactions() []types.Reaction {
+	if len(f.allReactions) > 0 {
+		return f.allReactions
+	}
+	res := make([]types.Reaction, len(defaultReactionEmojis))
+	for i, em := range defaultReactionEmojis {
+		res[i] = types.Reaction{
+			AvailableReaction: tg.AvailableReaction{
+				Reaction: em,
+			},
+		}
+	}
+	return res
+}
+
+func normalizeEmojiDisplay(em string) string {
+	switch em {
+	case "❤", "🕊", "✍", "☃":
+		return em + "\ufe0f"
+	default:
+		return em
+	}
+}
+
+func renderReactionModal(f *Foreground, foreStyle lipgloss.Style) string {
+	contentWidth := 44
+	if f.windowWidth > 0 && f.windowWidth < 48 {
+		contentWidth = max(30, f.windowWidth-4)
+	}
+
+	title := lipgloss.NewStyle().
+		Foreground(DefaultTheme.AccentColor).
+		Bold(true).
+		Render("⚡ Send Reaction")
+
+	divider := lipgloss.NewStyle().
+		Foreground(DefaultTheme.BorderColor).
+		Render(strings.Repeat("─", contentWidth))
+
+	footerDivider := lipgloss.NewStyle().
+		Foreground(DefaultTheme.BorderColor).
+		Render(strings.Repeat("─", contentWidth))
+
+	footerHints := lipgloss.NewStyle().
+		Foreground(DefaultTheme.SecondaryText).
+		Render("[↑/↓/←/→] Move  [Enter] React  [Esc] Close")
+
+	body := renderReactionsGrid(f, contentWidth)
+
+	layout := lipgloss.JoinVertical(
+		lipgloss.Left,
+		title,
+		divider,
+		"",
+		body,
+		"",
+		footerDivider,
+		footerHints,
+	)
+
+	return foreStyle.
+		Width(contentWidth + 2).
+		Render(layout)
+}
+
+func renderReactionsGrid(f *Foreground, contentWidth int) string {
 	const columns = 8
+	reactions := f.getActiveReactions()
 	var rows []string
 	var currentRow []string
 
-	for i, reaction := range f.allReactions {
-		style := lipgloss.NewStyle().Padding(0, 1)
-		reactionText := reaction.Reaction
+	for i, reaction := range reactions {
+		reactionText := normalizeEmojiDisplay(reaction.Reaction)
+
+		if reaction.AvailableReaction.Premium && !f.isMePremium {
+			reactionText += "🔒"
+		} else if reaction.AvailableReaction.Premium {
+			reactionText += "⭐"
+		}
+
+		style := lipgloss.NewStyle().
+			Width(5).
+			Align(lipgloss.Center)
 
 		if i == f.selectedReactionIndex {
 			style = style.
 				Foreground(DefaultTheme.SelectedFg).
-				Background(DefaultTheme.AccentColor)
-		}
-
-		if reaction.AvailableReaction.Premium && !f.isMePremium {
-			reactionText = reactionText + "🔒"
-			if i != f.selectedReactionIndex {
-				style = style.Foreground(DefaultTheme.SecondaryText)
-			}
-		} else if reaction.AvailableReaction.Premium {
-			reactionText = reactionText + "⭐"
+				Background(DefaultTheme.AccentColor).
+				Bold(true)
+		} else if reaction.AvailableReaction.Premium && !f.isMePremium {
+			style = style.Foreground(DefaultTheme.SecondaryText)
 		}
 
 		currentRow = append(currentRow, style.Render(reactionText))
 
-		if len(currentRow) == columns || i == len(f.allReactions)-1 {
-			rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, currentRow...))
+		if len(currentRow) == columns || i == len(reactions)-1 {
+			for len(currentRow) < columns {
+				currentRow = append(currentRow, lipgloss.NewStyle().Width(5).Render(""))
+			}
+			rowStr := lipgloss.JoinHorizontal(lipgloss.Top, currentRow...)
+			centeredRow := lipgloss.NewStyle().Width(contentWidth).Align(lipgloss.Center).Render(rowStr)
+			rows = append(rows, centeredRow)
 			currentRow = nil
 		}
 	}
 
-	grid := lipgloss.JoinVertical(lipgloss.Left, rows...)
-	return lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder()).
-		BorderForeground(DefaultTheme.BorderColor).
-		Padding(1).
-		Render(grid)
+	maxRows := len(rows)
+	if f.windowHeight > 0 && f.windowHeight-8 < maxRows {
+		maxRows = max(4, f.windowHeight-8)
+	}
+
+	selectedRow := f.selectedReactionIndex / columns
+	startRow := 0
+	if selectedRow >= maxRows {
+		startRow = selectedRow - maxRows + 1
+	}
+	endRow := min(len(rows), startRow+maxRows)
+	visibleRows := rows[startRow:endRow]
+
+	return lipgloss.JoinVertical(lipgloss.Left, visibleRows...)
 }
 
 func (m Model) GetUserAccessHashFromModel(userID int64) (types.UserInfo, error) {

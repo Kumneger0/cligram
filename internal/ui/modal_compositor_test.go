@@ -10,6 +10,9 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/gotd/td/tg"
 	"github.com/kumneger0/cligram/internal/telegram/types"
 	overlay "github.com/rmhubbert/bubbletea-overlay"
 )
@@ -638,5 +641,106 @@ func TestForeground_StoriesModal_DownloadingErrorCleanedUp(t *testing.T) {
 	selectedStory := fg.stories.Items()[0].(types.Stories)
 	if selectedStory.IsSelected {
 		t.Errorf("expected story IsSelected to be false after download error")
+	}
+}
+
+func TestReactionModalRender(t *testing.T) {
+	fg := &Foreground{
+		ModalMode:    ModalModeSendReaction,
+		windowWidth:  80,
+		windowHeight: 24,
+	}
+	for _, em := range defaultReactionEmojis {
+		norm := normalizeEmojiDisplay(em)
+		wAnsi := ansi.StringWidth(norm)
+		wLip := lipgloss.Width(norm)
+		if wAnsi != 2 || wLip != 2 {
+			t.Logf("Emoji %q (norm %q): ansi=%d lip=%d", em, norm, wAnsi, wLip)
+		}
+	}
+	view := fg.View()
+	if strings.Contains(view, "Loading reactions...") {
+		t.Errorf("reaction modal should not display 'Loading reactions...' when default emojis are available")
+	}
+	lines := strings.Split(view, "\n")
+	for i, l := range lines {
+		w := ansi.StringWidth(l)
+		if w > 80 {
+			t.Errorf("line %d width %d exceeds window width 80: %q", i, w, l)
+		}
+	}
+}
+
+func TestManager_ReactionModal_NoOverflow(t *testing.T) {
+	bg := dummyModel{text: "background"}
+	fg := &Foreground{
+		ModalMode:    ModalModeSendReaction,
+		windowWidth:  80,
+		windowHeight: 24,
+	}
+	mgr := Manager{
+		State:        ModalView,
+		WindowWidth:  80,
+		WindowHeight: 24,
+		Foreground:   fg,
+		Background:   bg,
+	}
+	compositeView := mgr.View()
+	lines := strings.Split(compositeView, "\n")
+	if len(lines) > 24 {
+		t.Errorf("compositeView line count %d exceeds window height 24", len(lines))
+	}
+	for i, line := range lines {
+		w := ansi.StringWidth(line)
+		if w > 80 {
+			t.Errorf("line %d width %d exceeds window width 80: %q", i, w, line)
+		}
+	}
+	if strings.Contains(compositeView, "Loading reactions...") {
+		t.Errorf("compositeView should not contain 'Loading reactions...'")
+	}
+}
+
+func TestManager_ReactionModal_AllSelectionsNoOverflow(t *testing.T) {
+	tgReactions := []string{
+		"❤", "👍", "👎", "🔥", "🥰", "👏", "😁", "🤔",
+		"🤯", "😱", "🤬", "😢", "🎉", "🤩", "🤮", "💩",
+		"🙏", "👌", "🕊", "🤡", "🥱", "🥴", "😍", "🐳",
+		"🌚", "🌭", "💯", "🤣", "⚡", "🍌", "🏆",
+	}
+	allReactions := make([]types.Reaction, len(tgReactions))
+	for i, em := range tgReactions {
+		allReactions[i] = types.Reaction{
+			AvailableReaction: tg.AvailableReaction{Reaction: em},
+		}
+	}
+
+	bg := dummyModel{text: "background line with some text on the right side           09:27 AM"}
+	for idx := range tgReactions {
+		fg := &Foreground{
+			ModalMode:             ModalModeSendReaction,
+			windowWidth:           80,
+			windowHeight:          24,
+			allReactions:          allReactions,
+			selectedReactionIndex: idx,
+		}
+		mgr := Manager{
+			State:        ModalView,
+			WindowWidth:  80,
+			WindowHeight: 24,
+			Foreground:   fg,
+			Background:   bg,
+		}
+		view := mgr.View()
+		lines := strings.Split(view, "\n")
+		if len(lines) > 24 {
+			t.Fatalf("at selection index %d: line count %d > 24", idx, len(lines))
+		}
+		for lineIdx, line := range lines {
+			w := ansi.StringWidth(line)
+			if w >= 80 {
+				t.Fatalf("at selection index %d, line %d: width %d >= 80 (line: %q)", idx, lineIdx, w, line)
+			}
+		}
 	}
 }

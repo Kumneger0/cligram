@@ -487,3 +487,33 @@ func TestActionMenu_ExecuteAction_React(t *testing.T) {
 		t.Errorf("expected OpenModalMsg with ModalModeSendReaction when react action is executed")
 	}
 }
+
+func TestModel_ApplyReactionOptimistic(t *testing.T) {
+	m := Model{
+		Conversations: []types.FormattedMessage{
+			{ID: 10, Content: "Hello world"},
+		},
+	}
+
+	// 1. Add reaction optimistically
+	m.applyReactionOptimistic(10, "🔥", false)
+	if m.Conversations[0].Reactions == nil {
+		t.Fatalf("expected Reactions to be non-nil")
+	}
+	if len(m.Conversations[0].Reactions.Results) != 1 {
+		t.Fatalf("expected 1 reaction result, got %d", len(m.Conversations[0].Reactions.Results))
+	}
+	r := m.Conversations[0].Reactions.Results[0]
+	if r.Count != 1 {
+		t.Errorf("expected count 1, got %d", r.Count)
+	}
+	if _, ok := r.GetChosenOrder(); !ok {
+		t.Errorf("expected chosen order to be set")
+	}
+
+	// 2. Remove reaction optimistically
+	m.applyReactionOptimistic(10, "🔥", true)
+	if len(m.Conversations[0].Reactions.Results) != 0 {
+		t.Errorf("expected 0 reaction results after removing only reaction, got %d", len(m.Conversations[0].Reactions.Results))
+	}
+}

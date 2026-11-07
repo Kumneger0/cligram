@@ -580,13 +580,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m = model.(Model)
 		cmds = append(cmds, cmd)
 	case types.SendReactionResponseMsg:
+		pInfo := getMessageParams(&m)
 		if msg.Err != nil {
 			slog.Error("Failed to send reaction", "error", msg.Err.Error())
+			if pInfo.ID != "" && telegram.Cligram != nil && telegram.Cligram.Context() != nil {
+				return m, telegram.Cligram.GetSingleMessage(telegram.Cligram.Context(), pInfo, msg.MessageID)
+			}
 			return m, nil
 		}
 		if msg.Response {
-			pInfo := getMessageParams(&m)
-			return m, telegram.Cligram.GetSingleMessage(telegram.Cligram.Context(), pInfo, msg.MessageID)
+			if pInfo.ID != "" && telegram.Cligram != nil && telegram.Cligram.Context() != nil {
+				return m, telegram.Cligram.GetSingleMessage(telegram.Cligram.Context(), pInfo, msg.MessageID)
+			}
 		}
 	case types.SingleMessageMsg:
 		if msg.Err != nil {
@@ -594,16 +599,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		pInfo := getMessageParams(&m)
 		isValid := false
-		if msg.Message != nil && msg.Message.PeerID != nil {
-			switch m.Mode {
-			case ModeUsers, ModeBots:
-				isValid = *msg.Message.PeerID == m.SelectedUser.PeerID
-			case ModeChannels:
-				isValid = *msg.Message.PeerID == m.SelectedChannel.ID
-			case ModeGroups:
-				isValid = *msg.Message.PeerID == m.SelectedGroup.ID
-			}
+		if msg.Message != nil && msg.Message.PeerID != nil && pInfo.ID != "" {
+			isValid = *msg.Message.PeerID == pInfo.ID
 		}
 
 		if isValid {
@@ -617,23 +616,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case types.SendReactionMsg:
-		var peer types.Peer
-		if m.SelectedUser.PeerID != "" {
-			peer = peerFromItem(m.SelectedUser)
-			message := m.SelectedMessage()
-			if message != nil {
-				alreadyReacted := false
-				if message.Reactions != nil {
-					for _, r := range message.Reactions.Results {
-						if _, ok := r.GetChosenOrder(); ok {
-							if reaction, ok := r.Reaction.(*tg.ReactionEmoji); ok && reaction.Emoticon == msg.Reaction.Reaction {
-								alreadyReacted = true
-								break
-							}
+		peer := getMessageParams(&m)
+		message := m.SelectedMessage()
+		if message != nil && peer.ID != "" {
+			alreadyReacted := false
+			if message.Reactions != nil {
+				for _, r := range message.Reactions.Results {
+					if _, ok := r.GetChosenOrder(); ok {
+						if reaction, ok := r.Reaction.(*tg.ReactionEmoji); ok && reaction.Emoticon == msg.Reaction.Reaction {
+							alreadyReacted = true
+							break
 						}
 					}
 				}
+			}
 
+			m.applyReactionOptimistic(message.ID, msg.Reaction.Reaction, alreadyReacted)
+			cmds = append(cmds, m.updateConversations())
+
+			if telegram.Cligram != nil && telegram.Cligram.Context() != nil {
 				cmds = append(cmds, telegram.Cligram.SendReaction(telegram.Cligram.Context(), types.SendReactionRequest{
 					Peer:      peer,
 					MessageID: message.ID,
@@ -2902,4 +2903,58 @@ func listForUser(m *Model, user types.UserInfo) *list.Model {
 		return &m.Bots
 	}
 	return &m.Users
+}
+
+func (m *Model) applyReactionOptimistic(messageID int, emoticon string, remove bool) {
+	for i := range m.Conversations {
+		if m.Conversations[i].ID == messageID {
+			conv := &m.Conversations[i]
+			if conv.Reactions == nil {
+				conv.Reactions = &tg.MessageReactions{}
+			}
+			var updatedResults []tg.ReactionCount
+			found := false
+			for _, r := range conv.Reactions.Results {
+				if emoji, ok := r.Reaction.(*tg.ReactionEmoji); ok && emoji.Emoticon == emoticon {
+					found = true
+					if remove {
+						if r.Count > 1 {
+							r.Count--
+							r.Flags.Unset(0)
+							r.ChosenOrder = 0
+							updatedResults = append(updatedResults, r)
+						}
+					} else {
+						r.Count++
+						r.SetChosenOrder(1)
+						updatedResults = append(updatedResults, r)
+					}
+				} else {
+					if !remove {
+						// If the user previously reacted with another emoji, replace it
+						if _, isChosen := r.GetChosenOrder(); isChosen {
+							r.Flags.Unset(0)
+							r.ChosenOrder = 0
+							if r.Count > 1 {
+								r.Count--
+								updatedResults = append(updatedResults, r)
+							}
+							continue
+						}
+					}
+					updatedResults = append(updatedResults, r)
+				}
+			}
+			if !found && !remove {
+				newR := tg.ReactionCount{
+					Reaction: &tg.ReactionEmoji{Emoticon: emoticon},
+					Count:    1,
+				}
+				newR.SetChosenOrder(1)
+				updatedResults = append(updatedResults, newR)
+			}
+			conv.Reactions.Results = updatedResults
+			break
+		}
+	}
 }
