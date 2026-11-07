@@ -744,3 +744,72 @@ func TestManager_ReactionModal_AllSelectionsNoOverflow(t *testing.T) {
 		}
 	}
 }
+
+func TestForeground_DeleteMessageModal_Rendering(t *testing.T) {
+	fg := &Foreground{
+		ModalMode:    ModalModeDeleteMessage,
+		windowWidth:  80,
+		windowHeight: 24,
+		Message: &types.FormattedMessage{
+			ID:      10,
+			Sender:  "John",
+			Content: "Are we still meeting for lunch at noon?",
+		},
+	}
+
+	view := fg.View()
+	t.Logf("Rendered Delete Modal with message:\n%s", view)
+
+	if !strings.Contains(view, "Delete Message") {
+		t.Errorf("expected view to contain 'Delete Message', got:\n%s", view)
+	}
+	if !strings.Contains(view, "Are you sure you want to delete this message?") {
+		t.Errorf("expected view to contain question, got:\n%s", view)
+	}
+	if !strings.Contains(view, "meeting for lunch") {
+		t.Errorf("expected view to contain snippet, got:\n%s", view)
+	}
+	if !strings.Contains(view, "This action cannot be undone.") {
+		t.Errorf("expected view to contain warning, got:\n%s", view)
+	}
+	if !strings.Contains(view, "Delete") || !strings.Contains(view, "Cancel") {
+		t.Errorf("expected view to contain action buttons, got:\n%s", view)
+	}
+
+	// Test with nil message (fallback)
+	fgNil := &Foreground{
+		ModalMode:    ModalModeDeleteMessage,
+		windowWidth:  80,
+		windowHeight: 24,
+	}
+	viewNil := fgNil.View()
+	t.Logf("Rendered Delete Modal without message:\n%s", viewNil)
+
+	if !strings.Contains(viewNil, "Delete Message") {
+		t.Errorf("expected viewNil to contain 'Delete Message'")
+	}
+	if !strings.Contains(viewNil, "Are you sure you want to delete this message?") {
+		t.Errorf("expected viewNil to contain question")
+	}
+
+	// Ensure compositing within window bounds
+	bg := dummyModel{text: "background line with some text on the right side"}
+	mgr := Manager{
+		State:        ModalView,
+		WindowWidth:  80,
+		WindowHeight: 24,
+		Foreground:   fg,
+		Background:   bg,
+	}
+	mgrView := mgr.View()
+	lines := strings.Split(mgrView, "\n")
+	if len(lines) > 24 {
+		t.Fatalf("manager view line count %d > 24", len(lines))
+	}
+	for lineIdx, line := range lines {
+		w := ansi.StringWidth(line)
+		if w > 80 {
+			t.Fatalf("at line %d: width %d > 80", lineIdx, w)
+		}
+	}
+}
