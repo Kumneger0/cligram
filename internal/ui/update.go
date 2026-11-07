@@ -1981,17 +1981,6 @@ func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
 			m.SkipNextInput = true
 			return m, nil
 		}
-		val := strings.TrimSpace(m.Input.Value())
-		if strings.HasPrefix(val, "/join ") || strings.HasPrefix(val, "/open ") {
-			linkStr := strings.TrimSpace(val[6:])
-			if pl := ParseTelegramLink(linkStr); pl != nil {
-				m.Input.Reset()
-				return m, routeTelegramLink(&m, pl)
-			}
-		} else if pl := ParseTelegramLink(val); pl != nil {
-			m.Input.Reset()
-			return m, routeTelegramLink(&m, pl)
-		}
 		return sendMessage(&m)
 	}
 	if m.FocusedOn == SideBar {
