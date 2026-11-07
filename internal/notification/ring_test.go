@@ -9,9 +9,9 @@ import (
 )
 
 func TestRingtone_Lifecycle(t *testing.T) {
-	var playCount int32
+	var playCount atomic.Int32
 	SetRingtonePlayer(func(ctx context.Context, rt RingtoneType) {
-		atomic.AddInt32(&playCount, 1)
+		playCount.Add(1)
 	})
 	defer ResetRingtonePlayer()
 
@@ -26,7 +26,7 @@ func TestRingtone_Lifecycle(t *testing.T) {
 
 	// Give a moment for the initial play to execute
 	time.Sleep(50 * time.Millisecond)
-	if atomic.LoadInt32(&playCount) == 0 {
+	if playCount.Load() == 0 {
 		t.Errorf("expected ringtone player to be invoked at least once")
 	}
 

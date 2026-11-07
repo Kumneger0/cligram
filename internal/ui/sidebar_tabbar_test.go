@@ -146,7 +146,7 @@ func TestThresholdBackfill_CategorySwitch(t *testing.T) {
 
 	// Case 2: Category has >= 10 items, should NOT trigger backfill
 	items10 := make([]list.Item, 10)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		items10[i] = types.ChannelInfo{ID: string(rune('1' + i)), ChannelTitle: "Group"}
 	}
 	m.Groups.SetItems(items10)
@@ -190,7 +190,7 @@ func TestScrollTriggeredPagination(t *testing.T) {
 
 	// Create 20 items in All
 	items := make([]list.Item, 20)
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		items[i] = types.UserInfo{
 			PeerID:    string(rune('A' + i)),
 			FirstName: "User",

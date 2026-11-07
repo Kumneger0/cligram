@@ -58,17 +58,11 @@ func (d ForumTopicsDelegate) Render(w io.Writer, m list.Model, index int, item l
 
 	var content string
 	if unreadBadge != "" {
-		availWidth := m.Width() - lipgloss.Width(unreadBadge) - 2
-		if availWidth < 0 {
-			availWidth = 0
-		}
+		availWidth := max(m.Width()-lipgloss.Width(unreadBadge)-2, 0)
 		name := lipgloss.NewStyle().MaxWidth(availWidth).Render(title)
 
 		occupied := lipgloss.Width(name) + lipgloss.Width(unreadBadge) + 2
-		spacerWidth := m.Width() - occupied
-		if spacerWidth < 0 {
-			spacerWidth = 0
-		}
+		spacerWidth := max(m.Width()-occupied, 0)
 		spacer := strings.Repeat(" ", spacerWidth)
 		content = lipgloss.JoinHorizontal(lipgloss.Top, name, spacer, unreadBadge)
 	} else {
@@ -868,10 +862,7 @@ func (m *Model) renderMessagesViewport(width, height int) string {
 
 	readMaxOutboxID := m.ActiveReadOutboxMaxID()
 
-	bubbleWidth := max(24, int(float64(width)*0.80))
-	if bubbleWidth > width-2 {
-		bubbleWidth = width - 2
-	}
+	bubbleWidth := min(max(24, int(float64(width)*0.80)), width-2)
 
 	var renderedCards []string
 	m.messageLineRanges = make([]messageLineRange, len(m.Conversations))

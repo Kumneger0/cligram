@@ -195,7 +195,7 @@ func generateOutgoingRing(sampleRate int) []byte {
 	writeWavHeader(buf, sampleRate, numSamples)
 
 	fadeSec := 0.04
-	for i := 0; i < numSamples; i++ {
+	for i := range numSamples {
 		t := float64(i) / float64(sampleRate)
 		env := 1.0
 		if t < fadeSec {
@@ -223,7 +223,7 @@ func generateIncomingChime(sampleRate int) []byte {
 
 	samplesPerNote := int(float64(sampleRate) * noteDuration)
 	for _, freq := range notes {
-		for i := 0; i < samplesPerNote; i++ {
+		for i := range samplesPerNote {
 			t := float64(i) / float64(sampleRate)
 			env := math.Exp(-t * 6.0)
 			val := int16(0.7 * math.Sin(2*math.Pi*freq*t) * env * 24000)

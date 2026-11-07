@@ -66,7 +66,7 @@ func ResolveAudioCommands() (string, string, string) {
 	var selectedPlayback string
 	var selectedServer string
 
-	for i := 0; i < len(captures); i++ {
+	for i := range captures {
 		c := captures[i]
 		p := playbacks[i]
 

@@ -137,7 +137,7 @@ func TestEliminationOfCursorSnapping_SmartAutoScroll(t *testing.T) {
 	// Populate initial history
 	var initialMsgs [50]types.FormattedMessage
 	baseTime := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
-	for i := 0; i < 30; i++ {
+	for i := range 30 {
 		initialMsgs[i] = types.FormattedMessage{
 			ID:      i + 1,
 			Date:    baseTime.Add(time.Duration(i) * time.Minute),
@@ -182,7 +182,7 @@ func TestKeyboardNavigation_SelectionAndScroll(t *testing.T) {
 	m.FocusedOn = Main
 	baseTime := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
 
-	for i := 0; i < 15; i++ {
+	for i := range 15 {
 		m.Conversations = append(m.Conversations, types.FormattedMessage{
 			ID:      i + 1,
 			Date:    baseTime.Add(time.Duration(i) * time.Minute),
@@ -550,7 +550,7 @@ func TestScrollingBoundaries_AndClamping(t *testing.T) {
 
 	var messages []types.FormattedMessage
 	baseTime := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
-	for i := 0; i < 15; i++ {
+	for i := range 15 {
 		messages = append(messages, types.FormattedMessage{
 			ID:      i + 1,
 			Content: fmt.Sprintf("Message item %d with multi-line detail\nSecond line of item %d", i+1, i+1),
@@ -638,7 +638,7 @@ func TestWindowResize_PreservesScrollOffset(t *testing.T) {
 
 	var messages []types.FormattedMessage
 	baseTime := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
-	for i := 0; i < 30; i++ {
+	for i := range 30 {
 		messages = append(messages, types.FormattedMessage{
 			ID:      i + 1,
 			Content: fmt.Sprintf("Message item %d with plenty of text to allow scrollback", i+1),
