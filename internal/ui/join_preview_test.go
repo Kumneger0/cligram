@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kumneger0/cligram/internal/telegram/types"
 )
@@ -353,41 +352,36 @@ func TestModelUpdate_RouteParsedLinkMsg(t *testing.T) {
 	}
 }
 
-func TestModelUpdate_HandleEnterKey_InputLinks(t *testing.T) {
-	ti := textinput.New()
-	m := Model{
-		FocusedOn: Input,
-		Input:     ti,
-	}
+func TestModelUpdate_HandleEnterKey_InputDoesNotHijackLinks(t *testing.T) {
+	m := newTestModel(80, 24)
+	m.FocusedOn = Input
 
-	// 1. /open command with public channel link
+	// 1. Text starting with /open or /join should be treated as normal message, not link routing
 	m.Input.SetValue("/open https://t.me/durov")
-	_, cmd := m.handleEnterKey()
-	if cmd == nil {
-		t.Fatalf("expected command for /open input")
+	mUpdated, cmd := m.handleEnterKey()
+	m = mUpdated.(Model)
+	if m.Input.Value() != "" {
+		t.Errorf("expected input to be reset after sending message")
 	}
-	msg := cmd()
-	openMsg, ok := msg.(types.OpenNewChatWithPeerMsg)
-	if !ok {
-		t.Fatalf("expected OpenNewChatWithPeerMsg, got %T", msg)
-	}
-	if openMsg.Chat == nil || openMsg.Chat.Entity != "durov" {
-		t.Errorf("unexpected routed link: %+v", openMsg.Chat)
+	if cmd != nil {
+		msg := cmd()
+		if _, ok := msg.(types.OpenNewChatWithPeerMsg); ok {
+			t.Fatalf("did not expect OpenNewChatWithPeerMsg from message input")
+		}
 	}
 
-	// 2. Direct public username typed into input
+	// 2. Direct public username typed into input should not route as link
 	m.Input.SetValue("@durov")
-	_, cmd = m.handleEnterKey()
-	if cmd == nil {
-		t.Fatalf("expected command for @durov in input")
+	mUpdated, cmd = m.handleEnterKey()
+	m = mUpdated.(Model)
+	if m.Input.Value() != "" {
+		t.Errorf("expected input to be reset after sending message")
 	}
-	msg = cmd()
-	openMsg, ok = msg.(types.OpenNewChatWithPeerMsg)
-	if !ok {
-		t.Fatalf("expected OpenNewChatWithPeerMsg, got %T", msg)
-	}
-	if openMsg.Chat == nil || openMsg.Chat.Entity != "durov" {
-		t.Errorf("unexpected routed link: %+v", openMsg.Chat)
+	if cmd != nil {
+		msg := cmd()
+		if _, ok := msg.(types.OpenNewChatWithPeerMsg); ok {
+			t.Fatalf("did not expect OpenNewChatWithPeerMsg from message input")
+		}
 	}
 }
 
