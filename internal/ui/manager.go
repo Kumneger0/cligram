@@ -1,7 +1,10 @@
 package ui
 
 import (
+	"strings"
+
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/kumneger0/cligram/internal/telegram"
 	"github.com/kumneger0/cligram/internal/telegram/types"
 	overlay "github.com/rmhubbert/bubbletea-overlay"
@@ -216,7 +219,23 @@ func (m Manager) View() string {
 	if m.State == ModalView {
 		fg := m.Foreground.View()
 		bg := m.Background.View()
-		return overlay.Composite(fg, bg, overlay.Center, overlay.Center, 0, 0)
+		res := overlay.Composite(fg, bg, overlay.Center, overlay.Center, 0, 0)
+		if m.WindowWidth > 0 {
+			maxW := m.WindowWidth - 1
+			lines := strings.Split(res, "\n")
+			for i, line := range lines {
+				line = strings.TrimRight(line, " ")
+				if ansi.StringWidth(line) > maxW {
+					line = ansi.Truncate(line, maxW, "")
+				}
+				lines[i] = line
+			}
+			if m.WindowHeight > 0 && len(lines) > m.WindowHeight {
+				lines = lines[:m.WindowHeight]
+			}
+			res = strings.Join(lines, "\n")
+		}
+		return res
 	}
 	return m.Background.View()
 }

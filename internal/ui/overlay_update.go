@@ -140,7 +140,9 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.allReactions = msg.Reactions
-		m.selectedReactionIndex = 0
+		if m.selectedReactionIndex >= len(m.allReactions) {
+			m.selectedReactionIndex = 0
+		}
 
 	case MemberSearchTickMsg:
 		if m.ModalMode == ModalModeGroupMembers && msg.Seq == m.membersSearchSeq && strings.TrimSpace(m.membersInput.Value()) == msg.Query {
@@ -267,12 +269,15 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.ChannelsList = msg.ChannelsList
 		m.GroupsList = msg.GroupsList
 		m.BotsList = msg.BotsList
-		if msg.ModalMode == ModalModeSearch {
+		switch msg.ModalMode {
+		case ModalModeSendReaction:
+			m.selectedReactionIndex = 0
+		case ModalModeSearch:
 			m.focusedOn = SEARCH
 			m.input.Focus()
-		} else if msg.ModalMode == ModalModeForwardMessage {
+		case ModalModeForwardMessage:
 			m.initForwardPicker(msg)
-		} else if msg.ModalMode == ModalModeShowStories {
+		case ModalModeShowStories:
 			m.ensureSpinner()
 			if len(msg.Stories) > 0 {
 				m.initStories(msg.Stories)
@@ -282,7 +287,7 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				m.stories = nil
 				cmds = append(cmds, m.spinner.Tick)
 			}
-		} else if msg.ModalMode == ModalModeGroupMembers {
+		case ModalModeGroupMembers:
 			m.ensureSpinner()
 			m.groupTitle = msg.GroupTitle
 			m.groupPeer = msg.GroupPeer
@@ -304,13 +309,13 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			membersInput.Focus()
 			m.membersInput = membersInput
 			cmds = append(cmds, m.spinner.Tick)
-		} else if msg.ModalMode == ModalModeJoinPreview {
+		case ModalModeJoinPreview:
 			m.ensureSpinner()
 			m.ModalMode = ModalModeJoinPreview
 			m.JoinPreview = msg.JoinPreview
 			m.isJoining = false
 			m.joinError = nil
-		} else if msg.ModalMode == ModalModeComments {
+		case ModalModeComments:
 			m.ensureSpinner()
 			m.ModalMode = ModalModeComments
 			m.commentsPost = msg.CommentsPost
@@ -340,13 +345,13 @@ func (m *Foreground) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			ta.Focus()
 			m.commentInput = ta
 			cmds = append(cmds, m.spinner.Tick)
-		} else if msg.ModalMode == ModalModeGhostMode {
+		case ModalModeGhostMode:
 			m.initGhostMode()
-		} else if msg.ModalMode == ModalModeAccountSwitcher {
+		case ModalModeAccountSwitcher:
 			m.initAccountSwitcher()
 			apiID, apiHash := telegram.GetAPICredentials()
 			cmds = append(cmds, m.spinner.Tick, telegram.GetAccountsCmd(apiID, apiHash))
-		} else if msg.ModalMode == ModalModeActionMenu {
+		case ModalModeActionMenu:
 			m.ActionMenuTitle = msg.ActionMenuTitle
 			m.ActionMenuItems = msg.ActionMenuItems
 			m.ActionMenuIndex = 0
@@ -564,6 +569,7 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 			if m.selectedReactionIndex >= 8 {
 				m.selectedReactionIndex -= 8
 			}
+			return m, nil
 		} else if m.ModalMode == ModalModeSearch {
 			m.searchResultCombined.CursorUp()
 			return m, nil
@@ -609,9 +615,10 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 			}
 			return m, nil
 		} else if m.ModalMode == ModalModeSendReaction {
-			if m.selectedReactionIndex+8 < len(m.allReactions) {
+			if m.selectedReactionIndex+8 < len(m.getActiveReactions()) {
 				m.selectedReactionIndex += 8
 			}
+			return m, nil
 		} else if m.ModalMode == ModalModeSearch {
 			m.searchResultCombined.CursorDown()
 			return m, nil
@@ -638,12 +645,14 @@ func (m *Foreground) handleKeyPress(msg tea.KeyMsg, cmdsFromParent *[]tea.Cmd) (
 			if m.selectedReactionIndex > 0 {
 				m.selectedReactionIndex--
 			}
+			return m, nil
 		}
 	case "right":
 		if m.ModalMode == ModalModeSendReaction {
-			if m.selectedReactionIndex < len(m.allReactions)-1 {
+			if m.selectedReactionIndex < len(m.getActiveReactions())-1 {
 				m.selectedReactionIndex++
 			}
+			return m, nil
 		}
 	case "tab":
 		if m.ModalMode == ModalModeComments {
@@ -1180,15 +1189,16 @@ func (m *Foreground) checkMembersPagination() (tea.Model, tea.Cmd) {
 }
 
 func handleSendReaction(m *Foreground) (tea.Model, tea.Cmd) {
-	if len(m.allReactions) == 0 {
+	reactions := m.getActiveReactions()
+	if len(reactions) == 0 {
 		return m, nil
 	}
 
-	if m.selectedReactionIndex < 0 || m.selectedReactionIndex >= len(m.allReactions) {
+	if m.selectedReactionIndex < 0 || m.selectedReactionIndex >= len(reactions) {
 		return m, nil
 	}
 
-	selectedReaction := m.allReactions[m.selectedReactionIndex]
+	selectedReaction := reactions[m.selectedReactionIndex]
 
 	if selectedReaction.AvailableReaction.Premium && !m.isMePremium {
 		m.Error = fmt.Errorf("this is a premium reaction, upgrade to use it")
