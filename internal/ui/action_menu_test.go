@@ -63,9 +63,13 @@ func TestActionMenu_Message_OpenAndFilter(t *testing.T) {
 
 	// Should contain reply, edit, delete, forward, react, copy, open_media, comments
 	for _, id := range []string{"reply", "edit", "delete", "forward", "react", "copy", "open_media", "comments"} {
-		if findItem(id) == nil {
+		item := findItem(id)
+		if item == nil {
 			t.Errorf("expected action %q to be present in menu", id)
 		}
+	}
+	if reactItem := findItem("react"); reactItem != nil && reactItem.Key != "ctrl+r" {
+		t.Errorf("expected react action to have key 'ctrl+r', got %q", reactItem.Key)
 	}
 
 	// 2. Someone else's message older than 48 hours without media or links
@@ -341,6 +345,36 @@ func TestActionMenu_Foreground_DirectHotkey(t *testing.T) {
 	}
 	if !hasExecuteAction || executedActionID != "reply" {
 		t.Errorf("expected ExecuteActionMsg with reply, got %q", executedActionID)
+	}
+
+	// Direct hotkey 'ctrl+r' for react
+	fg.ActionMenuItems = append(fg.ActionMenuItems, ActionMenuItem{Key: "ctrl+r", Label: "React with emoji", ActionID: "react"})
+	_, cmd = fg.Update(tea.KeyMsg{Type: tea.KeyCtrlR})
+	if cmd == nil {
+		t.Fatalf("expected batch cmd on 'ctrl+r', got nil")
+	}
+	batchMsgs, ok = cmd().(tea.BatchMsg)
+	if !ok {
+		t.Fatalf("expected BatchMsg on ctrl+r, got %T", cmd())
+	}
+	hasCloseOverlay = false
+	hasExecuteAction = false
+	executedActionID = ""
+	for _, c := range batchMsgs {
+		if c == nil {
+			continue
+		}
+		inner := c()
+		switch v := inner.(type) {
+		case CloseOverlay:
+			hasCloseOverlay = true
+		case ExecuteActionMsg:
+			hasExecuteAction = true
+			executedActionID = v.ActionID
+		}
+	}
+	if !hasCloseOverlay || !hasExecuteAction || executedActionID != "react" {
+		t.Errorf("expected ExecuteActionMsg with react on ctrl+r, got %q", executedActionID)
 	}
 }
 

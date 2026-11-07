@@ -1787,7 +1787,13 @@ func renderActionMenuModal(f *Foreground, foreStyle lipgloss.Style) string {
 			}
 
 			keyDisplay := fmt.Sprintf("[%s]", item.Key)
-			line := fmt.Sprintf("%s%-7s  %s", cursor, keyStyle.Render(keyDisplay), labelStyle.Render(item.Label))
+			keyBadge := keyStyle.Render(keyDisplay)
+			keyWidth := lipgloss.Width(keyBadge)
+			padding := ""
+			if keyWidth < 10 {
+				padding = strings.Repeat(" ", 10-keyWidth)
+			}
+			line := fmt.Sprintf("%s%s%s  %s", cursor, keyBadge, padding, labelStyle.Render(item.Label))
 			itemBlocks = append(itemBlocks, line)
 		}
 	}

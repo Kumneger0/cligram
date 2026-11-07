@@ -2395,8 +2395,8 @@ func (m Model) openMessageActionMenu() (tea.Model, tea.Cmd) {
 	// [f] Forward
 	items = append(items, ActionMenuItem{Key: "f", Label: "Forward message", ActionID: "forward"})
 
-	// [R] React with emoji
-	items = append(items, ActionMenuItem{Key: "R", Label: "React with emoji", ActionID: "react"})
+	// [ctrl+r] React with emoji
+	items = append(items, ActionMenuItem{Key: "ctrl+r", Label: "React with emoji", ActionID: "react"})
 
 	// [y] Copy text
 	if strings.TrimSpace(selectedMessage.Content) != "" {
