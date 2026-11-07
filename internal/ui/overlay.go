@@ -854,33 +854,7 @@ func (f *Foreground) View() string {
 		return foreStyle.Width(contentWidth + 2).Render(layout)
 	}
 	if f.ModalMode == ModalModeDeleteMessage {
-		title := lipgloss.NewStyle().Foreground(DefaultTheme.PrimaryText).Bold(true).Render("Delete Message")
-		yes := lipgloss.NewStyle().
-			Foreground(DefaultTheme.SelectedFg).
-			Background(DefaultTheme.AccentColor).
-			Padding(0, 1).
-			Render("Y")
-		no := lipgloss.NewStyle().
-			Foreground(DefaultTheme.SelectedFg).
-			Background(DefaultTheme.ErrorColor).
-			Padding(0, 1).
-			Render("N")
-		contentStyle := lipgloss.NewStyle().
-			Foreground(DefaultTheme.PrimaryText).
-			Background(DefaultTheme.SubtleBg).
-			Padding(1, 2)
-		var content strings.Builder
-		content.WriteString("Are You Sure You want to delete this message \n")
-		content.WriteString("Press")
-		content.WriteString(" ")
-		content.WriteString(yes)
-		content.WriteString(" to confirm")
-		content.WriteString(" or ")
-		content.WriteString(no)
-		content.WriteString(" to cancel")
-		contentString := contentStyle.Render(content.String())
-		layout := lipgloss.JoinVertical(lipgloss.Left, title, contentString)
-		return foreStyle.Render(layout)
+		return renderDeleteMessageModal(f, foreStyle)
 	}
 	if f.ModalMode == ModalModeSendReaction {
 		return renderReactionModal(f, foreStyle)
@@ -1902,5 +1876,98 @@ func renderActionMenuModal(f *Foreground, foreStyle lipgloss.Style) string {
 		footerDivider,
 		footerHints,
 	)
+	return foreStyle.Width(contentWidth + 2).Render(layout)
+}
+
+func renderDeleteMessageModal(f *Foreground, foreStyle lipgloss.Style) string {
+	contentWidth := max(46, min(56, f.windowWidth-6))
+	if f.windowWidth <= 0 {
+		contentWidth = 48
+	}
+
+	title := lipgloss.NewStyle().
+		Foreground(DefaultTheme.ErrorColor).
+		Bold(true).
+		Render("🗑  Delete Message")
+
+	divider := lipgloss.NewStyle().
+		Foreground(DefaultTheme.BorderColor).
+		Render(strings.Repeat("─", contentWidth))
+
+	prompt := lipgloss.NewStyle().
+		Foreground(DefaultTheme.PrimaryText).
+		Bold(true).
+		Width(contentWidth).
+		Render("Are you sure you want to delete this message?")
+
+	var elements []string
+	elements = append(elements, title, divider, "", prompt)
+
+	if f.Message != nil {
+		var snippet string
+		if f.Message.Content != "" {
+			snippet = strings.ReplaceAll(f.Message.Content, "\n", " ")
+			snippet = strings.TrimSpace(snippet)
+		} else if f.Message.MediaAttachment != nil {
+			snippet = fmt.Sprintf("[%s attachment]", f.Message.MediaAttachment.Type)
+		} else if f.Message.Document != nil {
+			snippet = "[Document]"
+		}
+
+		if snippet != "" {
+			maxSnippetLen := max(20, contentWidth-6)
+			if len(snippet) > maxSnippetLen {
+				snippet = snippet[:maxSnippetLen-1] + "…"
+			}
+			previewStyle := lipgloss.NewStyle().
+				Foreground(DefaultTheme.SecondaryText).
+				Italic(true).
+				Border(lipgloss.NormalBorder(), false, false, false, true).
+				BorderForeground(DefaultTheme.AccentColor).
+				Padding(0, 1).
+				Width(contentWidth)
+			previewText := previewStyle.Render(fmt.Sprintf("%q", snippet))
+			elements = append(elements, "", previewText)
+		}
+	}
+
+	warning := lipgloss.NewStyle().
+		Foreground(DefaultTheme.SecondaryText).
+		Width(contentWidth).
+		Render("This action cannot be undone.")
+	elements = append(elements, "", warning)
+
+	footerDivider := lipgloss.NewStyle().
+		Foreground(DefaultTheme.BorderColor).
+		Render(strings.Repeat("─", contentWidth))
+
+	confirmBadge := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#FFFFFF")).
+		Background(DefaultTheme.ErrorColor).
+		Bold(true).
+		Padding(0, 1).
+		Render("y")
+	confirmLabel := lipgloss.NewStyle().
+		Foreground(DefaultTheme.ErrorColor).
+		Bold(true).
+		Render("Delete")
+	confirmBtn := lipgloss.JoinHorizontal(lipgloss.Center, confirmBadge, " ", confirmLabel)
+
+	cancelBadge := lipgloss.NewStyle().
+		Foreground(DefaultTheme.SelectedFg).
+		Background(DefaultTheme.SelectedBg).
+		Bold(true).
+		Padding(0, 1).
+		Render("n / Esc")
+	cancelLabel := lipgloss.NewStyle().
+		Foreground(DefaultTheme.SecondaryText).
+		Render("Cancel")
+	cancelBtn := lipgloss.JoinHorizontal(lipgloss.Center, cancelBadge, " ", cancelLabel)
+
+	actions := lipgloss.JoinHorizontal(lipgloss.Center, confirmBtn, "    ", cancelBtn)
+
+	elements = append(elements, "", footerDivider, actions)
+
+	layout := lipgloss.JoinVertical(lipgloss.Left, elements...)
 	return foreStyle.Width(contentWidth + 2).Render(layout)
 }
