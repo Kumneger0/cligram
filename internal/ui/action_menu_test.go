@@ -453,3 +453,37 @@ func TestActionMenu_Manager_Dismissal(t *testing.T) {
 		t.Errorf("expected Manager state to be MainView after 'x', got %v", m.State)
 	}
 }
+
+func TestActionMenu_ExecuteAction_React(t *testing.T) {
+	m := Model{
+		FocusedOn: Main,
+		Conversations: []types.FormattedMessage{
+			{ID: 1, Content: "Hello world"},
+		},
+		SelectedMessageIndex: 0,
+	}
+
+	_, cmd := m.handleExecuteAction(ExecuteActionMsg{ActionID: "react"})
+	if cmd == nil {
+		t.Fatalf("expected cmd on react action, got nil")
+	}
+
+	msg := cmd()
+	var foundOpenModal bool
+	if modalMsg, ok := msg.(OpenModalMsg); ok && modalMsg.ModalMode == ModalModeSendReaction {
+		foundOpenModal = true
+	} else if batchMsgs, ok := msg.(tea.BatchMsg); ok {
+		for _, c := range batchMsgs {
+			if c == nil {
+				continue
+			}
+			if modalMsg, ok := c().(OpenModalMsg); ok && modalMsg.ModalMode == ModalModeSendReaction {
+				foundOpenModal = true
+			}
+		}
+	}
+
+	if !foundOpenModal {
+		t.Errorf("expected OpenModalMsg with ModalModeSendReaction when react action is executed")
+	}
+}

@@ -2515,12 +2515,20 @@ func (m Model) handleExecuteAction(msg ExecuteActionMsg) (tea.Model, tea.Cmd) {
 		return m.handleForwardKey()
 	case "react":
 		if m.SelectedMessage() != nil {
-			cmds := []tea.Cmd{telegram.Cligram.GetAvailableReactions(telegram.Cligram.Context())}
-			if m.CurrentUser == nil {
-				cmds = append(cmds, func() tea.Msg {
-					user, err := telegram.Cligram.GetMe(telegram.Cligram.Context())
-					return types.CurrentUserMsg{User: user, Err: err}
-				})
+			openModalMsg := func() tea.Msg {
+				return OpenModalMsg{
+					ModalMode: ModalModeSendReaction,
+				}
+			}
+			cmds := []tea.Cmd{openModalMsg}
+			if telegram.Cligram != nil && telegram.Cligram.Context() != nil {
+				cmds = append(cmds, telegram.Cligram.GetAvailableReactions(telegram.Cligram.Context()))
+				if m.CurrentUser == nil {
+					cmds = append(cmds, func() tea.Msg {
+						user, err := telegram.Cligram.GetMe(telegram.Cligram.Context())
+						return types.CurrentUserMsg{User: user, Err: err}
+					})
+				}
 			}
 			return m, tea.Batch(cmds...)
 		}
