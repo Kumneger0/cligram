@@ -103,7 +103,7 @@ func TestConcurrentConfigAccess(t *testing.T) {
 	configMu.Unlock()
 
 	var wg sync.WaitGroup
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		wg.Add(2)
 		go func(idx int) {
 			defer wg.Done()

@@ -613,7 +613,7 @@ func TestForeground_GroupMembersModal_Pagination(t *testing.T) {
 
 	// 1. First batch: 200 members
 	firstBatch := make([]types.GroupMemberInfo, 200)
-	for i := 0; i < 200; i++ {
+	for i := range 200 {
 		firstBatch[i] = types.GroupMemberInfo{
 			User: types.UserInfo{
 				FirstName: "User",
@@ -661,7 +661,7 @@ func TestForeground_GroupMembersModal_Pagination(t *testing.T) {
 
 	// 3. Second batch: 50 members (final page, < 200)
 	secondBatch := make([]types.GroupMemberInfo, 50)
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		secondBatch[i] = types.GroupMemberInfo{
 			User: types.UserInfo{
 				FirstName: "ExtraUser",
@@ -740,7 +740,7 @@ func TestForeground_GroupMembersModal_TotalMembersDisplay(t *testing.T) {
 
 	// First batch of 200 arrives with MTProto filtered participants TotalCount 10851
 	batch := make([]types.GroupMemberInfo, 200)
-	for i := 0; i < 200; i++ {
+	for i := range 200 {
 		batch[i] = types.GroupMemberInfo{
 			User: types.UserInfo{FirstName: "User", PeerID: "1"},
 			Role: types.MemberRoleMember,

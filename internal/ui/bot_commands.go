@@ -35,10 +35,9 @@ func renderBotCommandsPopup(m *Model, mainWidth int) string {
 	}
 
 	cardWidth := max(30, min(mainWidth-4, 55))
-	innerWidth := cardWidth - 4 // border (2) + padding (2)
-	if innerWidth < 10 {
-		innerWidth = 10
-	}
+	innerWidth := max(
+		// border (2) + padding (2)
+		cardWidth-4, 10)
 
 	maxVisible := 5
 	totalCmds := len(m.FilteredBotCommands)

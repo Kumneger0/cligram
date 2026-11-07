@@ -91,18 +91,12 @@ func (d CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 	indicatorWidth := lipgloss.Width(indicator)
 	iconWidth := lipgloss.Width(icon)
 
-	availNameWidth := totalWidth - indicatorWidth - iconWidth - badgeWidth - 1
-	if availNameWidth < 3 {
-		availNameWidth = 3
-	}
+	availNameWidth := max(totalWidth-indicatorWidth-iconWidth-badgeWidth-1, 3)
 
 	name := lipgloss.NewStyle().MaxWidth(availNameWidth).Render(title)
 	nameWidth := lipgloss.Width(name)
 
-	spacerWidth := totalWidth - indicatorWidth - iconWidth - nameWidth - badgeWidth
-	if spacerWidth < 0 {
-		spacerWidth = 0
-	}
+	spacerWidth := max(totalWidth-indicatorWidth-iconWidth-nameWidth-badgeWidth, 0)
 	spacer := strings.Repeat(" ", spacerWidth)
 
 	var rowContent string

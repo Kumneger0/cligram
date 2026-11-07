@@ -16,7 +16,7 @@ type JSONRPCBridge struct {
 	encoder   *json.Encoder
 	decoder   *json.Decoder
 	writeMu   sync.Mutex
-	requestID uint64
+	requestID atomic.Uint64
 
 	pendingMu sync.Mutex
 	pending   map[uint64]chan *JSONRPCResponse
@@ -109,7 +109,7 @@ func (b *JSONRPCBridge) call(ctx context.Context, method string, params any, res
 	default:
 	}
 
-	id := atomic.AddUint64(&b.requestID, 1)
+	id := b.requestID.Add(1)
 
 	paramsBytes, err := json.Marshal(params)
 	if err != nil {

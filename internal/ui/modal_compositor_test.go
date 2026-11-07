@@ -36,7 +36,7 @@ func (d dummyModel) View() string {
 		return s
 	}
 	lines := make([]string, 24)
-	for i := 0; i < 23; i++ {
+	for i := range 23 {
 		lines[i] = pad(fmt.Sprintf("line %d", i+1))
 	}
 	lines[23] = pad("Footer: " + d.text)
