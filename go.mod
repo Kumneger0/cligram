@@ -1,11 +1,13 @@
 module github.com/kumneger0/cligram
 
-go 1.25.4
+go 1.26.0
 
 require (
+	github.com/atotto/clipboard v0.1.4
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
+	github.com/charmbracelet/x/ansi v0.11.9
 	github.com/charmbracelet/x/term v0.2.2
 	github.com/daixiang0/gci v0.14.0
 	github.com/gen2brain/beeep v0.11.2
@@ -23,7 +25,7 @@ require (
 	github.com/spf13/cobra v1.10.2
 	go.dalton.dog/bubbleup v1.4.0
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616
-	golang.org/x/term v0.45.0
+	golang.org/x/term v0.48.0
 	golang.org/x/time v0.15.0
 	golang.org/x/tools v0.49.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
@@ -52,7 +54,6 @@ require (
 	github.com/andybalholm/brotli v1.2.1 // indirect
 	github.com/ashanbrown/forbidigo v1.6.0 // indirect
 	github.com/ashanbrown/makezero v1.1.1 // indirect
-	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bkielbasa/cyclop v1.2.1 // indirect
@@ -68,7 +69,6 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/charithe/durationcheck v0.0.10 // indirect
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect
-	github.com/charmbracelet/x/ansi v0.11.9 // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.16-0.20260602025815-df92a5806f7e // indirect
 	github.com/chavacava/garif v0.1.0 // indirect
 	github.com/ckaznocha/intrange v0.1.2 // indirect
@@ -249,7 +249,7 @@ require (
 	golang.org/x/mod v0.39.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/sys v0.50.0 // indirect
 	golang.org/x/telemetry v0.0.0-20260811182544-a038080d80e5 // indirect
 	golang.org/x/text v0.41.0 // indirect
 	golang.org/x/tools/go/expect v0.1.1-deprecated // indirect
