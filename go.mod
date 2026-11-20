@@ -1,6 +1,6 @@
 module github.com/kumneger0/cligram
 
-go 1.25.4
+go 1.26.0
 
 require (
 	github.com/atotto/clipboard v0.1.4
@@ -12,7 +12,7 @@ require (
 	github.com/daixiang0/gci v0.14.0
 	github.com/gen2brain/beeep v0.12.0
 	github.com/go-critic/go-critic v0.15.0
-	github.com/gofrs/flock v0.13.1
+	github.com/gofrs/flock v0.13.2
 	github.com/golangci/golangci-lint v1.59.1
 	github.com/gotd/contrib v0.26.0
 	github.com/gotd/td v0.166.0
@@ -247,7 +247,7 @@ require (
 	golang.org/x/mod v0.39.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/telemetry v0.0.0-20260811182544-a038080d80e5 // indirect
 	golang.org/x/text v0.41.0 // indirect
 	golang.org/x/tools/go/expect v0.1.1-deprecated // indirect
