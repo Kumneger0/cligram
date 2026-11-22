@@ -460,6 +460,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if found {
 				cmds = append(cmds, m.updateConversations())
+				m.viewport.GotoBottom()
 			}
 		}
 		if m.SelectedFile == "uploading..." {
@@ -1216,22 +1217,23 @@ func (m Model) handleNewMessage(msg types.NewMessageNotification) (tea.Model, te
 		}
 		formattedMessage.PeerID = &peerID
 
-		wasAtBottom := m.viewport.AtBottom()
 		m.Conversations = append(m.Conversations, formattedMessage)
 		if len(m.Conversations) > 250 {
 			m.Conversations = m.Conversations[len(m.Conversations)-250:]
 		}
-		if wasAtBottom {
-			m.SelectedMessageIndex = len(m.Conversations) - 1
-			m.viewport.GotoBottom()
-		} else if m.SelectedMessageIndex >= len(m.Conversations) {
-			m.SelectedMessageIndex = len(m.Conversations) - 1
-		}
 	}
 
-	cmd := m.updateConversations()
+	wasAtBottom := m.viewport.AtBottom()
+	updateConversationCmd := m.updateConversations()
+	if wasAtBottom {
+		m.SelectedMessageIndex = len(m.Conversations) - 1
+		m.viewport.GotoBottom()
+	} else if m.SelectedMessageIndex >= len(m.Conversations) {
+		m.SelectedMessageIndex = len(m.Conversations) - 1
+	}
+
 	fetchCmd := m.checkAndFetchCustomEmojis(m.Conversations)
-	return m, tea.Batch(fetchCmd, cmd, markReadCmd)
+	return m, tea.Batch(fetchCmd, updateConversationCmd, markReadCmd)
 }
 
 func (m Model) handleEditMessage(msg types.EditMessageNotification) (tea.Model, tea.Cmd) {
