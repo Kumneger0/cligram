@@ -14,7 +14,6 @@ import (
 
 var ErrHelperNotFound = errors.New("call-helper worker executable not found")
 
-// FindWorkerExecutable resolves the current cligram executable path.
 func FindWorkerExecutable() (string, error) {
 	exePath, err := os.Executable()
 	if err != nil {
@@ -23,10 +22,8 @@ func FindWorkerExecutable() (string, error) {
 	return exePath, nil
 }
 
-// Supervisor manages the lifecycle of the out-of-process voice call-helper worker.
 type Supervisor struct {
 	customCmd []string
-
 	mu        sync.Mutex
 	cmd       *exec.Cmd
 	bridge    *JSONRPCBridge
@@ -35,8 +32,6 @@ type Supervisor struct {
 	onExit    func(error)
 }
 
-// NewSupervisor creates a supervisor. Optional customCmd can be supplied (mainly for tests)
-// to override the executable and arguments. When omitted, it launches os.Executable() with argument "call-helper".
 func NewSupervisor(customCmd ...string) *Supervisor {
 	return &Supervisor{
 		customCmd: customCmd,
@@ -55,7 +50,6 @@ func (s *Supervisor) OnExit(h func(error)) {
 	s.mu.Unlock()
 }
 
-// Start spawns the call-helper worker if not already running, establishes the anonymous socketpair on FD 3, and returns the bridge.
 func (s *Supervisor) Start(ctx context.Context) (*JSONRPCBridge, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -83,7 +77,6 @@ func (s *Supervisor) Start(ctx context.Context) (*JSONRPCBridge, error) {
 		args = []string{"call-helper"}
 	}
 
-	// Create anonymous socketpair
 	fds, err := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_STREAM, 0)
 	if err != nil {
 		return nil, fmt.Errorf("socketpair: %w", err)
@@ -93,9 +86,8 @@ func (s *Supervisor) Start(ctx context.Context) (*JSONRPCBridge, error) {
 	childFile := os.NewFile(uintptr(fds[1]), "cligram-call-helper-child")
 
 	cmd := exec.CommandContext(ctx, binaryPath, args...)
-	cmd.ExtraFiles = []*os.File{childFile} // In child, ExtraFiles start at FD 3
+	cmd.ExtraFiles = []*os.File{childFile}
 
-	// Redirect worker stdout and stderr to /tmp/cligram-call-helper.log for observability
 	if logFile, err := os.OpenFile("/tmp/cligram-call-helper.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644); err == nil {
 		cmd.Stdout = logFile
 		cmd.Stderr = logFile
@@ -108,7 +100,6 @@ func (s *Supervisor) Start(ctx context.Context) (*JSONRPCBridge, error) {
 		return nil, fmt.Errorf("start call-helper worker: %w", err)
 	}
 
-	// Child holds its own file descriptor; close child end in parent
 	_ = childFile.Close()
 
 	bridge := NewJSONRPCBridge(parentFile)
@@ -117,7 +108,6 @@ func (s *Supervisor) Start(ctx context.Context) (*JSONRPCBridge, error) {
 	s.cmd = cmd
 	s.bridge = bridge
 
-	// Monitor child process exit
 	go func(c *exec.Cmd, b *JSONRPCBridge) {
 		waitErr := c.Wait()
 		_ = b.Close()
@@ -138,7 +128,6 @@ func (s *Supervisor) Start(ctx context.Context) (*JSONRPCBridge, error) {
 	return bridge, nil
 }
 
-// Stop terminates the running worker process cleanly.
 func (s *Supervisor) Stop() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -165,7 +154,6 @@ func (s *Supervisor) IsRunning() bool {
 	return s.bridge != nil
 }
 
-// ResetIdleTimer schedules graceful shutdown of the worker after duration d.
 func (s *Supervisor) ResetIdleTimer(d time.Duration) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -185,7 +173,6 @@ func (s *Supervisor) ResetIdleTimer(d time.Duration) {
 	})
 }
 
-// CancelIdleTimer cancels any active idle shutdown countdown.
 func (s *Supervisor) CancelIdleTimer() {
 	s.mu.Lock()
 	defer s.mu.Unlock()

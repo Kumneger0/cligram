@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VERSION="v2.2.5"
+VERSION="v3.0.7"
 BASE_URL="https://github.com/pytgcalls/ntgcalls/releases/download/${VERSION}"
 
 # Resolve script directory and repository root
@@ -34,6 +34,7 @@ fi
 
 TARGET_DIR="${REPO_ROOT}/ntg/lib/${GOOS}_${GOARCH}"
 mkdir -p "${TARGET_DIR}"
+VERSION_FILE="${REPO_ROOT}/ntg/lib/.version"
 
 if [ "${GOOS}" = "windows" ]; then
     TARGET_LIB="${TARGET_DIR}/ntgcalls.lib"
@@ -46,8 +47,13 @@ else
     ZIP_NAME="ntgcalls.${ASSET_PLATFORM}-static_libs.zip"
 fi
 
-if [ -s "${TARGET_LIB}" ]; then
-    echo "--> [ntgcalls] Library already exists at ${TARGET_LIB}"
+FORCE_DOWNLOAD=false
+if [ "${1:-}" = "--force" ] || [ ! -f "${VERSION_FILE}" ] || [ "$(cat "${VERSION_FILE}" 2>/dev/null)" != "${VERSION}" ]; then
+    FORCE_DOWNLOAD=true
+fi
+
+if [ -s "${TARGET_LIB}" ] && [ "${FORCE_DOWNLOAD}" = false ]; then
+    echo "--> [ntgcalls] Library already exists at ${TARGET_LIB} (version: ${VERSION})"
     exit 0
 fi
 
@@ -61,6 +67,15 @@ curl -fsSL --retry 3 --retry-connrefused -o "${TMP_DIR}/${ZIP_NAME}" "${DOWNLOAD
 
 echo "--> [ntgcalls] Extracting library to ${TARGET_DIR}..."
 unzip -q -o "${TMP_DIR}/${ZIP_NAME}" -d "${TMP_DIR}/extracted"
+
+# Extract header if present
+if [ -f "${TMP_DIR}/extracted/include/ntgcalls.h" ]; then
+    cp "${TMP_DIR}/extracted/include/ntgcalls.h" "${REPO_ROOT}/ntg/ntgcalls.h"
+    echo "--> [ntgcalls] Updated header at ${REPO_ROOT}/ntg/ntgcalls.h"
+elif [ -f "${TMP_DIR}/extracted/ntgcalls.h" ]; then
+    cp "${TMP_DIR}/extracted/ntgcalls.h" "${REPO_ROOT}/ntg/ntgcalls.h"
+    echo "--> [ntgcalls] Updated header at ${REPO_ROOT}/ntg/ntgcalls.h"
+fi
 
 if [ "${GOOS}" = "darwin" ]; then
     if [ -f "${TMP_DIR}/extracted/lib/libntgcalls.dylib" ]; then
@@ -91,4 +106,5 @@ else
     fi
 fi
 
-echo "--> [ntgcalls] Successfully installed library at ${TARGET_LIB}"
+echo "${VERSION}" > "${VERSION_FILE}"
+echo "--> [ntgcalls] Successfully installed ${VERSION} library at ${TARGET_LIB}"
