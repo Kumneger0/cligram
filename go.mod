@@ -12,7 +12,7 @@ require (
 	github.com/daixiang0/gci v0.14.0
 	github.com/gen2brain/beeep v0.12.0
 	github.com/go-critic/go-critic v0.15.0
-	github.com/gofrs/flock v0.13.1
+	github.com/gofrs/flock v0.13.2
 	github.com/golangci/golangci-lint v1.59.1
 	github.com/gotd/contrib v0.26.0
 	github.com/gotd/td v0.166.1
