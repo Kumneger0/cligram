@@ -232,6 +232,7 @@ type CallNotification struct {
 	State    CallState
 	Duration int
 	IsRelay  bool
+	Emojis   string
 	Err      error
 }
 

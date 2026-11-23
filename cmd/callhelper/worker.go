@@ -28,7 +28,6 @@ func Run(loopback bool) error {
 		return fmt.Errorf("FD 3 is nil: call-helper must be launched by cligram core")
 	}
 
-	// Verify FD 3 is actually open and valid socket
 	var stat syscall.Stat_t
 	if err := syscall.Fstat(3, &stat); err != nil || (stat.Mode&syscall.S_IFMT) != syscall.S_IFSOCK {
 		fmt.Fprintf(os.Stderr, "Error: FD 3 is not a valid open socket\n")

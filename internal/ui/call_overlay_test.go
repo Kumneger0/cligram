@@ -118,6 +118,23 @@ func TestCallOverlay_Badges(t *testing.T) {
 	}
 }
 
+func TestCallOverlay_Emojis(t *testing.T) {
+	overlay := NewCallOverlay()
+	overlay.SetActive("Alice", 101)
+	overlay.SetRelay(false)
+	overlay.SetEmojis("🍇 🚀 🐘 🔔")
+
+	view := overlay.View()
+	if !strings.Contains(view, "🍇 🚀 🐘 🔔") {
+		t.Errorf("expected emojis in active call view, got %q", view)
+	}
+
+	overlay.SetNone()
+	if overlay.Emojis != "" {
+		t.Errorf("expected emojis reset after SetNone, got %q", overlay.Emojis)
+	}
+}
+
 func TestCallOverlay_Duration(t *testing.T) {
 	overlay := NewCallOverlay()
 	overlay.SetActive("Alice", 101)

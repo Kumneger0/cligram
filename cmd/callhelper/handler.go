@@ -1,37 +1,23 @@
 package callhelper
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
 	"sync"
 
 	"github.com/kumneger0/cligram/internal/voip"
 	"github.com/kumneger0/cligram/ntg"
 )
 
-type playbackSession struct {
-	fifoPath string
-	dumpFile *os.File
-	cancel   context.CancelFunc
-	cmd      *exec.Cmd
-}
-
 type Handler struct {
-	client       *ntg.Client
-	encoder      *json.Encoder
-	decoder      *json.Decoder
-	writeMu      sync.Mutex
-	isP2P        map[int64]bool
-	isP2PMu      sync.RWMutex
-	playbackMu   sync.Mutex
-	playbackSess map[int64]*playbackSession
+	client  *ntg.Client
+	encoder *json.Encoder
+	decoder *json.Decoder
+	writeMu sync.Mutex
+	isP2P   map[int64]bool
+	isP2PMu sync.RWMutex
 }
 
 func GetProtocol() ntg.Protocol {
@@ -40,11 +26,10 @@ func GetProtocol() ntg.Protocol {
 
 func NewHandler(r io.Reader, w io.Writer) *Handler {
 	h := &Handler{
-		client:       ntg.Init(),
-		encoder:      json.NewEncoder(w),
-		decoder:      json.NewDecoder(r),
-		isP2P:        make(map[int64]bool),
-		playbackSess: make(map[int64]*playbackSession),
+		client:  ntg.Init(),
+		encoder: json.NewEncoder(w),
+		decoder: json.NewDecoder(r),
+		isP2P:   make(map[int64]bool),
 	}
 
 	h.setupCallbacks()
@@ -64,12 +49,17 @@ func (h *Handler) setupCallbacks() {
 	h.client.OnConnectionChange(func(chatID int64, info ntg.NetworkInfo) {
 		slog.Info("connection status changed", "chatID", chatID, "state", info.State)
 		stateVal := voip.StateConnecting
+		var emojis string
+
 		switch info.State {
 		case ntg.Connected:
 			stateVal = voip.StateConnected
+			if em, err := h.client.GetEmojisFingerprint(chatID); err == nil && em != "" {
+				emojis = em
+				slog.Info("retrieved call emoji fingerprint", "chatID", chatID, "emojis", emojis)
+			}
 		case ntg.Closed, ntg.Failed:
 			stateVal = voip.StateFailed
-			h.stopPlayback(chatID)
 		case ntg.Timeout:
 			stateVal = voip.StateTimeout
 		}
@@ -82,6 +72,7 @@ func (h *Handler) setupCallbacks() {
 			UserID: chatID,
 			State:  stateVal,
 			IsP2P:  isP2P,
+			Emojis: emojis,
 		})
 		h.notify("call.on_state_change", params)
 	})
@@ -222,8 +213,6 @@ func (h *Handler) handleRequest(req voip.JSONRPCRequest) {
 			return
 		}
 
-		h.stopPlayback(params.UserID)
-
 		if err := h.client.Stop(params.UserID); err != nil {
 			slog.Warn("client.Stop failed", "userID", params.UserID, "error", err)
 		}
@@ -265,10 +254,8 @@ func (h *Handler) handleCallCreate(params voip.CreateCallParams) (*voip.CreateCa
 }
 
 func (h *Handler) handleCallConnect(params voip.ConnectCallParams) error {
-	// Setup audio pipeline right when call connects, avoiding pipe buffer overflow/stale audio during ringing
 	h.setupAudioStreams(params.UserID)
 
-	// Convert voip.RTCServer to ntg.RTCServer
 	var ntgServers []ntg.RTCServer
 	for _, s := range params.Servers {
 		ntgServers = append(ntgServers, ntg.RTCServer{
@@ -317,6 +304,7 @@ func (h *Handler) setupStream(userID int64, streamMode ntg.StreamMode, command s
 	}
 	media := ntg.MediaDescription{
 		Microphone: desc,
+		Speaker:    desc,
 	}
 	if err := h.client.SetStreamSources(userID, streamMode, media); err != nil {
 		slog.Warn("failed to set stream source", "mode", streamMode, "error", err)
@@ -328,110 +316,10 @@ func (h *Handler) setupStream(userID int64, streamMode ntg.StreamMode, command s
 	}
 }
 
-func (h *Handler) stopPlayback(userID int64) {
-	h.playbackMu.Lock()
-	defer h.playbackMu.Unlock()
-	if sess, ok := h.playbackSess[userID]; ok {
-		slog.Info("stopping playback pipeline", "userID", userID)
-		sess.cancel()
-		if sess.dumpFile != nil {
-			_ = sess.dumpFile.Close()
-		}
-		_ = os.Remove(sess.fifoPath)
-		delete(h.playbackSess, userID)
-	}
-}
-
 func (h *Handler) setupAudioStreams(userID int64) {
 	captureCmd, playbackCmd, soundServer := ResolveAudioCommands()
-	slog.Info("🎙️ Setting up audio pipeline with TeeReader", "server", soundServer, "userID", userID)
+	slog.Info("🎙️ Setting up native audio streams", "server", soundServer, "userID", userID)
 
-	// 1. Capture stream (microphone) via subprocess shell command
 	h.setupStream(userID, ntg.CaptureStream, captureCmd)
-
-	// 2. Playback stream: stream to FIFO, tee to /tmp/cligram_incoming.raw, and pipe to player
-	fifoPath := filepath.Join(os.TempDir(), fmt.Sprintf("cligram_playback_%d.fifo", userID))
-	_ = os.Remove(fifoPath)
-	if err := exec.Command("mkfifo", fifoPath).Run(); err != nil {
-		slog.Error("failed to create playback FIFO", "path", fifoPath, "error", err)
-		h.setupStream(userID, ntg.PlaybackStream, playbackCmd)
-		return
-	}
-
-	rawDumpPath := "/tmp/cligram_incoming.raw"
-	dumpFile, err := os.Create(rawDumpPath)
-	if err != nil {
-		slog.Warn("failed to create incoming audio dump file", "path", rawDumpPath, "error", err)
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	sess := &playbackSession{
-		fifoPath: fifoPath,
-		dumpFile: dumpFile,
-		cancel:   cancel,
-	}
-
-	h.playbackMu.Lock()
-	if old, exists := h.playbackSess[userID]; exists {
-		old.cancel()
-		if old.dumpFile != nil {
-			_ = old.dumpFile.Close()
-		}
-		_ = os.Remove(old.fifoPath)
-	}
-	h.playbackSess[userID] = sess
-	h.playbackMu.Unlock()
-
-	// Launch background reader and playback process
-	go func() {
-		fifoReader, err := os.OpenFile(fifoPath, os.O_RDONLY, 0)
-		if err != nil {
-			slog.Warn("failed to open playback FIFO for reading", "error", err)
-			return
-		}
-		defer fifoReader.Close()
-
-		var r io.Reader = fifoReader
-		if dumpFile != nil {
-			r = io.TeeReader(fifoReader, dumpFile)
-		}
-
-		args := strings.Fields(playbackCmd)
-		if len(args) == 0 {
-			return
-		}
-
-		slog.Info("🔊 Spawning audio player with TeeReader", "binary", args[0], "dumpFile", rawDumpPath)
-		cmd := exec.CommandContext(ctx, args[0], args[1:]...)
-		cmd.Stdin = r
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		sess.cmd = cmd
-
-		if err := cmd.Start(); err != nil {
-			slog.Error("failed to start playback command", "cmd", playbackCmd, "error", err)
-			return
-		}
-		_ = cmd.Wait()
-	}()
-
-	// Configure libntgcalls to stream playback into the FIFO
-	speakerDesc := &ntg.AudioDescription{
-		MediaSource:  ntg.MediaSourceFile,
-		Input:        fifoPath,
-		SampleRate:   48000,
-		ChannelCount: 1,
-		KeepOpen:     true,
-	}
-	media := ntg.MediaDescription{
-		Microphone: speakerDesc,
-	}
-	if err := h.client.SetStreamSources(userID, ntg.PlaybackStream, media); err != nil {
-		slog.Error("failed to set playback stream sources", "error", err)
-		params, _ := json.Marshal(voip.AudioErrorEvent{
-			UserID:  userID,
-			Message: fmt.Sprintf("stream %d failed: %v", ntg.PlaybackStream, err),
-		})
-		h.notify("call.on_audio_error", params)
-	}
+	h.setupStream(userID, ntg.PlaybackStream, playbackCmd)
 }
