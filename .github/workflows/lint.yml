@@ -10,9 +10,9 @@ on:
 jobs:
   golangci:
     name: lint
-    runs-on: blacksmith-4vcpu-ubuntu-2604
+    runs-on: ubuntu-latest
     steps:
-      - uses: useblacksmith/checkout@v1
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v7
         with:
