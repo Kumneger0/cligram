@@ -112,6 +112,7 @@ type StateChangeEvent struct {
 	UserID int64           `json:"user_id"`
 	State  ConnectionState `json:"state"`
 	IsP2P  bool            `json:"is_p2p"`
+	Emojis string          `json:"emojis,omitempty"`
 }
 
 type AudioErrorEvent struct {

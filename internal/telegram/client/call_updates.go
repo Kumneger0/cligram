@@ -16,11 +16,9 @@ import (
 func handlePhoneCall(ctx context.Context, phoneCall tg.PhoneCallClass, updateChannel chan types.Notification) error {
 	switch u := phoneCall.(type) {
 	case *tg.PhoneCallRequested:
-		// ---- INCOMING CALL ----
 		userID := u.AdminID
 		slog.Info("incoming call request", "userID", userID)
 
-		// Resolve caller name
 		userName := fmt.Sprintf("User %d", userID)
 		if Cligram != nil && Cligram.API() != nil {
 			userInfo, err := shared.GetUserInfo(ctx, *Cligram.API(), userID)
@@ -32,7 +30,6 @@ func handlePhoneCall(ctx context.Context, phoneCall tg.PhoneCallClass, updateCha
 			}
 		}
 
-		// 1. Call-Waiting Busy Policy: Check if already in an active call
 		p2pStatesMu.Lock()
 		inCall := len(p2pStates) > 0
 		p2pStatesMu.Unlock()
@@ -63,7 +60,6 @@ func handlePhoneCall(ctx context.Context, phoneCall tg.PhoneCallClass, updateCha
 			return nil
 		}
 
-		// 2. Check if call-helper worker is available
 		if _, err := findWorkerExecutable(); err != nil {
 			slog.Warn("incoming call received but call-helper worker is missing", "caller", userName)
 			if Cligram != nil && Cligram.API() != nil {
@@ -91,7 +87,6 @@ func handlePhoneCall(ctx context.Context, phoneCall tg.PhoneCallClass, updateCha
 			return nil
 		}
 
-		// Store pending call data for user to accept/decline
 		pendingIncomingMu.Lock()
 		pendingIncoming[userID] = &pendingIncomingCall{
 			userID:     userID,
@@ -101,10 +96,8 @@ func handlePhoneCall(ctx context.Context, phoneCall tg.PhoneCallClass, updateCha
 		}
 		pendingIncomingMu.Unlock()
 
-		// Alert via desktop notification and audible chime
 		notification.Alert("📞 Incoming Call", fmt.Sprintf("Incoming call from %s", userName))
 
-		// Notify the UI about the incoming call
 		select {
 		case updateChannel <- types.Notification{
 			CallEvent: &types.CallNotification{
@@ -118,7 +111,6 @@ func handlePhoneCall(ctx context.Context, phoneCall tg.PhoneCallClass, updateCha
 		}
 
 	case *tg.PhoneCallAccepted:
-		// ---- OUTGOING CALL: peer accepted ----
 		userID := u.ParticipantID
 		slog.Info("call accepted by peer", "userID", userID)
 
@@ -131,7 +123,6 @@ func handlePhoneCall(ctx context.Context, phoneCall tg.PhoneCallClass, updateCha
 			return nil
 		}
 
-		// Update state with the peer's g_b and the InputPhoneCall
 		p2pStatesMu.Lock()
 		state.gAOrB = u.GB
 		state.inputCall = &tg.InputPhoneCall{
@@ -140,10 +131,8 @@ func handlePhoneCall(ctx context.Context, phoneCall tg.PhoneCallClass, updateCha
 		}
 		p2pStatesMu.Unlock()
 
-		// Signal the waiting goroutine
 		state.waitData <- nil
 
-		// Notify UI that peer accepted and call is now connecting
 		select {
 		case updateChannel <- types.Notification{
 			CallEvent: &types.CallNotification{
@@ -155,42 +144,9 @@ func handlePhoneCall(ctx context.Context, phoneCall tg.PhoneCallClass, updateCha
 		}
 
 	case *tg.PhoneCall:
-		// ---- CALL ACTIVE (both sides) ----
 		slog.Info("call is active", "callID", u.ID)
 
-		var userID int64
-		p2pStatesMu.Lock()
-		for uid, state := range p2pStates {
-			if state.inputCall != nil && state.inputCall.ID == u.ID {
-				userID = uid
-				break
-			}
-		}
-		state := p2pStates[userID]
-		p2pStatesMu.Unlock()
-
-		if state == nil {
-			p2pStatesMu.Lock()
-			if s, ok := p2pStates[u.ParticipantID]; ok {
-				userID = u.ParticipantID
-				state = s
-			} else if s, ok := p2pStates[u.AdminID]; ok {
-				userID = u.AdminID
-				state = s
-			}
-			p2pStatesMu.Unlock()
-		}
-
-		if state == nil && len(p2pStates) == 1 {
-			p2pStatesMu.Lock()
-			for uid, s := range p2pStates {
-				userID = uid
-				state = s
-				slog.Info("matched PhoneCall update to single active call", "userID", userID, "callID", u.ID)
-				break
-			}
-			p2pStatesMu.Unlock()
-		}
+		userID, state := findP2PState(u.ID, u.ParticipantID, u.AdminID)
 
 		if state == nil {
 			slog.Warn("PhoneCallObj but no p2pState found", "callID", u.ID)
@@ -241,7 +197,6 @@ func handlePhoneCall(ctx context.Context, phoneCall tg.PhoneCallClass, updateCha
 			}
 		}
 
-		// Resolve peer name
 		userName := fmt.Sprintf("User %d", userID)
 		if Cligram != nil && Cligram.API() != nil {
 			userInfo, err := shared.GetUserInfo(ctx, *Cligram.API(), userID)
@@ -253,7 +208,6 @@ func handlePhoneCall(ctx context.Context, phoneCall tg.PhoneCallClass, updateCha
 			}
 		}
 
-		// Notify UI that call is connecting (signaling completed, WebRTC establishing)
 		select {
 		case updateChannel <- types.Notification{
 			CallEvent: &types.CallNotification{
@@ -365,4 +319,30 @@ func handlePhoneCall(ctx context.Context, phoneCall tg.PhoneCallClass, updateCha
 	}
 
 	return nil
+}
+
+func findP2PState(callID int64, fallbackUserIDs ...int64) (int64, *p2pCallState) {
+	p2pStatesMu.Lock()
+	defer p2pStatesMu.Unlock()
+
+	for uid, state := range p2pStates {
+		if state.inputCall != nil && state.inputCall.ID == callID {
+			return uid, state
+		}
+	}
+
+	for _, uid := range fallbackUserIDs {
+		if s, ok := p2pStates[uid]; ok {
+			return uid, s
+		}
+	}
+
+	if len(p2pStates) == 1 {
+		for uid, s := range p2pStates {
+			slog.Info("matched call update to single active call", "userID", uid, "callID", callID)
+			return uid, s
+		}
+	}
+
+	return 0, nil
 }

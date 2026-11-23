@@ -1,13 +1,13 @@
 module github.com/kumneger0/cligram
 
-go 1.26.0
+go 1.27.4
 
 require (
 	github.com/atotto/clipboard v0.1.4
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/charmbracelet/x/ansi v0.11.9
+	github.com/charmbracelet/x/ansi v0.11.10
 	github.com/charmbracelet/x/term v0.2.2
 	github.com/daixiang0/gci v0.14.0
 	github.com/gen2brain/beeep v0.12.0
@@ -15,7 +15,7 @@ require (
 	github.com/gofrs/flock v0.13.1
 	github.com/golangci/golangci-lint v1.59.1
 	github.com/gotd/contrib v0.26.0
-	github.com/gotd/td v0.166.0
+	github.com/gotd/td v0.166.1
 	github.com/gotesttools/gotestfmt/v2 v2.5.0
 	github.com/hashicorp/go-version v1.9.0
 	github.com/muesli/mango-cobra v1.3.0

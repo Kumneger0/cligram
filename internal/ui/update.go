@@ -163,6 +163,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.CallOverlay.SetActive(userName, msg.UserID)
 			m.CallOverlay.SetRelay(msg.IsRelay)
+			if msg.Emojis != "" {
+				m.CallOverlay.SetEmojis(msg.Emojis)
+			}
 			m.ActiveCallUserID = msg.UserID
 			return m, tickCall()
 		case types.CallStateMissingHelper:

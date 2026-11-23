@@ -217,6 +217,7 @@ func getVoipBridge(ctx context.Context) (*voip.JSONRPCBridge, error) {
 						UserName: userName,
 						State:    types.CallStateActive,
 						IsRelay:  !event.IsP2P,
+						Emojis:   event.Emojis,
 					},
 				}:
 				default:
@@ -986,14 +987,12 @@ func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64, update
 	}
 	p2pStatesMu.Unlock()
 
-	// Notify UI and handle confirmed call state immediately
 	if updateChannel != nil {
 		if err := handlePhoneCall(ctx, phoneCallObj, updateChannel); err != nil {
 			slog.Warn("handlePhoneCall failed for confirmed outgoing call", "userID", userID, "error", err)
 		}
 	}
 
-	// Connect P2P immediately using the connections from confirmCall result
 	servers := parseRTCServers(phoneCallObj.Connections)
 
 	waitConnectMu.Lock()
@@ -1017,7 +1016,6 @@ func InitiateP2PCall(ctx context.Context, userID int64, accessHash int64, update
 		return fmt.Errorf("bridge ConnectCall: %w", err)
 	}
 
-	// Wait for the connection to be established
 	waitConnectMu.Lock()
 	ch := waitConnect[userID]
 	waitConnectMu.Unlock()
