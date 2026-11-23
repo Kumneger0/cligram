@@ -25,6 +25,7 @@ type CallOverlayModel struct {
 	UserID         int64
 	Muted          bool
 	IsRelay        bool
+	Emojis         string
 	StartTime      time.Time
 	ElapsedSeconds int
 }
@@ -87,7 +88,12 @@ func (m CallOverlayModel) View() string {
 			badge = "[P2P]"
 		}
 
-		status := fmt.Sprintf("📞 In call with %s (%s)  %s", m.UserName, duration, callBadgeStyle.Render(badge))
+		emojiStr := ""
+		if m.Emojis != "" {
+			emojiStr = "  " + m.Emojis
+		}
+
+		status := fmt.Sprintf("📞 In call with %s (%s)  %s%s", m.UserName, duration, callBadgeStyle.Render(badge), emojiStr)
 
 		muteStr := ""
 		muteAction := "Mute"
@@ -156,11 +162,16 @@ func (m *CallOverlayModel) SetRelay(isRelay bool) {
 	m.IsRelay = isRelay
 }
 
+func (m *CallOverlayModel) SetEmojis(emojis string) {
+	m.Emojis = emojis
+}
+
 func (m *CallOverlayModel) SetNone() {
 	m.State = CallOverlayNone
 	m.Muted = false
 	m.StartTime = time.Time{}
 	m.ElapsedSeconds = 0
+	m.Emojis = ""
 }
 
 func (m *CallOverlayModel) ToggleMute() {

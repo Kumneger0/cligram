@@ -10,7 +10,6 @@ import (
 	"sync/atomic"
 )
 
-// JSONRPCBridge provides JSON-RPC communication with the call-helper worker over an io.ReadWriteCloser stream.
 type JSONRPCBridge struct {
 	conn      io.ReadWriteCloser
 	encoder   *json.Encoder
@@ -31,7 +30,6 @@ type JSONRPCBridge struct {
 	once     sync.Once
 }
 
-// NewJSONRPCBridge creates a new bridge wrapping an underlying stream.
 func NewJSONRPCBridge(conn io.ReadWriteCloser) *JSONRPCBridge {
 	return &JSONRPCBridge{
 		conn:    conn,
@@ -42,12 +40,10 @@ func NewJSONRPCBridge(conn io.ReadWriteCloser) *JSONRPCBridge {
 	}
 }
 
-// Start begins the background read pump.
 func (b *JSONRPCBridge) Start() {
 	go b.readLoop()
 }
 
-// Close closes the underlying transport and fails pending requests.
 func (b *JSONRPCBridge) Close() error {
 	var err error
 	b.once.Do(func() {
@@ -174,7 +170,6 @@ func (b *JSONRPCBridge) readLoop() {
 			return
 		}
 
-		// Try as response first
 		var resp JSONRPCResponse
 		if err := json.Unmarshal(raw, &resp); err == nil && resp.ID != nil {
 			b.pendingMu.Lock()
@@ -186,7 +181,6 @@ func (b *JSONRPCBridge) readLoop() {
 			continue
 		}
 
-		// Try as notification / request
 		var req JSONRPCRequest
 		if err := json.Unmarshal(raw, &req); err == nil {
 			b.handleNotification(req)
