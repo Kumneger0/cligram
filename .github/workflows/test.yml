@@ -8,7 +8,7 @@ jobs:
       fail-fast: false
       matrix:
         go-version: [1.27.x]
-        os: [ubuntu-latest, macos-latest]
+        os: [blacksmith-4vcpu-ubuntu-2604, blacksmith-6vcpu-macos-15]
 
     runs-on: ${{ matrix.os }}
     env:
