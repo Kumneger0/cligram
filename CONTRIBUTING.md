@@ -30,7 +30,7 @@ Thank you for considering contributing to Cligram CLI! This project is a Go appl
 
 1. **Go Environment**:
 
-   - Install Go 1.25 or later
+   - Install Go 1.27.4 or later
 
 2. **API Credentials**:
    - Visit [Telegram's API page](https://my.telegram.org/apps) to obtain your API ID and API Hash
