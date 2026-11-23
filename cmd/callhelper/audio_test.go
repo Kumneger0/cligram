@@ -54,7 +54,7 @@ func TestNativeShellStreamSources(t *testing.T) {
 		captureCmd = "echo test"
 	}
 	if playbackCmd == "" {
-		playbackCmd = "cat > /dev/null"
+		playbackCmd = "cat"
 	}
 
 	capDesc := &ntg.AudioDescription{
@@ -80,6 +80,40 @@ func TestNativeShellStreamSources(t *testing.T) {
 	}
 
 	t.Log("SetStreamSources with native shell capture and playback succeeded!")
+}
+
+func TestFallbackShellStreamSources(t *testing.T) {
+	client := ntg.Init()
+	defer client.Destroy()
+
+	userID := int64(99998)
+	if err := client.CreateP2P(userID); err != nil {
+		t.Fatalf("CreateP2P failed: %v", err)
+	}
+
+	capDesc := &ntg.AudioDescription{
+		MediaSource:  ntg.MediaSourceShell,
+		Input:        "echo test",
+		SampleRate:   48000,
+		ChannelCount: 1,
+		KeepOpen:     true,
+	}
+	if err := client.SetStreamSources(userID, ntg.CaptureStream, ntg.MediaDescription{Microphone: capDesc}); err != nil {
+		t.Fatalf("SetStreamSources capture failed: %v", err)
+	}
+
+	playDesc := &ntg.AudioDescription{
+		MediaSource:  ntg.MediaSourceShell,
+		Input:        "cat",
+		SampleRate:   48000,
+		ChannelCount: 1,
+		KeepOpen:     true,
+	}
+	if err := client.SetStreamSources(userID, ntg.PlaybackStream, ntg.MediaDescription{Speaker: playDesc}); err != nil {
+		t.Fatalf("SetStreamSources playback failed: %v", err)
+	}
+
+	t.Log("SetStreamSources with headless fallback shell commands succeeded!")
 }
 
 func TestGetEmojisFingerprint(t *testing.T) {
