@@ -15,7 +15,7 @@ require (
 	github.com/gofrs/flock v0.13.1
 	github.com/golangci/golangci-lint v1.59.1
 	github.com/gotd/contrib v0.26.0
-	github.com/gotd/td v0.166.0
+	github.com/gotd/td v0.166.1
 	github.com/gotesttools/gotestfmt/v2 v2.5.0
 	github.com/hashicorp/go-version v1.9.0
 	github.com/muesli/mango-cobra v1.3.0
