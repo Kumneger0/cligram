@@ -3,6 +3,7 @@ projectname?=cligram
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
 	export CGO_LDFLAGS_ALLOW := (-Wl,.*|-v)
+	DARWIN_ARCH := $(shell go env GOARCH)
 endif
 
 default: help
@@ -12,7 +13,7 @@ help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: deps-voip
-deps-voip: ## Download pre-compiled static libntgcalls if not present
+deps-voip: ## Download pre-compiled libntgcalls if not present
 	@bash scripts/download_ntgcalls.sh
 
 .PHONY: build
@@ -23,7 +24,14 @@ build: deps-voip ## Build cligram binary with embedded call-helper
 .PHONY: install
 install: build ## Install cligram to /usr/local/bin
 	@echo "--> Installing cligram to /usr/local/bin..."
-	@sudo cp $(projectname) /usr/local/bin/
+	@sudo mkdir -p /usr/local/bin
+	@sudo cp $(projectname) /usr/local/bin/$(projectname)
+	@sudo chmod 0755 /usr/local/bin/$(projectname)
+ifeq ($(UNAME_S),Darwin)
+	@echo "--> Installing libntgcalls.dylib to /usr/local/bin..."
+	@sudo cp ntg/lib/darwin_$(DARWIN_ARCH)/libntgcalls.dylib /usr/local/bin/libntgcalls.dylib
+	@sudo chmod 0644 /usr/local/bin/libntgcalls.dylib
+endif
 	@echo "--> Installation complete. Run 'cligram' to start."
 
 .PHONY: run

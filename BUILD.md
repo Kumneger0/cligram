@@ -22,13 +22,13 @@ Before building, ensure you have the following installed on your system:
    ```bash
    make build
    ```
-   *Note:* Pre-compiled static VoIP dependencies are automatically fetched during `make build`.
+   *Note:* Pre-compiled VoIP dependencies (`libntgcalls`) are automatically fetched during `make build`.
 
 3. **(Optional) Install system-wide:**
    ```bash
    sudo make install
    ```
-   Alternatively, copy the generated `cligram` binary to `~/.local/bin/` or `/usr/local/bin/`.
+   Alternatively, copy the generated `cligram` binary to `~/.local/bin/` or `/usr/local/bin/`. On macOS, also copy `ntg/lib/darwin_<arch>/libntgcalls.dylib` next to the `cligram` binary (or into `/usr/local/lib/` or `/opt/homebrew/lib/`).
 
 ## Verifying the Build
 
