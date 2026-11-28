@@ -21,7 +21,7 @@ require (
 	github.com/muesli/mango-cobra v1.3.0
 	github.com/muesli/reflow v0.3.0
 	github.com/muesli/roff v0.1.0
-	github.com/rmhubbert/bubbletea-overlay v0.6.10
+	github.com/rmhubbert/bubbletea-overlay v0.6.11
 	github.com/spf13/cobra v1.10.2
 	go.dalton.dog/bubbleup v1.4.0
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616
