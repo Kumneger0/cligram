@@ -138,14 +138,26 @@ fi
 
 info "Installing to ${INSTALL_DIR}..."
 
-if [ "${USE_SUDO}" -eq 1 ]; then
-  sudo mkdir -p "${INSTALL_DIR}"
-  sudo mv "${TMP_DIR}/cligram" "${INSTALL_DIR}/cligram"
-  sudo chmod +x "${INSTALL_DIR}/cligram"
-else
-  mkdir -p "${INSTALL_DIR}"
-  mv "${TMP_DIR}/cligram" "${INSTALL_DIR}/cligram"
-  chmod +x "${INSTALL_DIR}/cligram"
+run_priv() {
+  if [ "${USE_SUDO}" -eq 1 ]; then
+    sudo "$@"
+  else
+    "$@"
+  fi
+}
+
+run_priv mkdir -p "${INSTALL_DIR}"
+run_priv mv "${TMP_DIR}/cligram" "${INSTALL_DIR}/cligram"
+run_priv chmod +x "${INSTALL_DIR}/cligram"
+
+if [ "${TARGET_OS}" = "Darwin" ]; then
+  if [ -f "${TMP_DIR}/libntgcalls.dylib" ]; then
+    run_priv mv "${TMP_DIR}/libntgcalls.dylib" "${INSTALL_DIR}/libntgcalls.dylib"
+    run_priv chmod 0644 "${INSTALL_DIR}/libntgcalls.dylib"
+    info "Installed libntgcalls.dylib to ${INSTALL_DIR}/libntgcalls.dylib"
+  else
+    warn "Archive did not contain libntgcalls.dylib; VoIP features may fail to load."
+  fi
 fi
 
 # 7. Verification & PATH Check
